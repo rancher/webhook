@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	namespace = "cattle-system"
+	namespace    = "cattle-system"
 	tlsName      = "rancher-webhook.cattle-system.svc"
 	certName     = "cattle-webhook-tls"
 	caName       = "cattle-webhook-ca"
@@ -43,7 +43,7 @@ func ListenAndServe(ctx context.Context, cfg *rest.Config) error {
 	return listenAndServe(ctx, cfg, handler)
 }
 
-func listenAndServe(ctx context.Context, cfg *rest.Config, handler http.Handler) error {
+func listenAndServe(ctx context.Context, cfg *rest.Config, handler http.Handler) (rErr error) {
 	apply, err := apply.NewForConfig(cfg)
 	if err != nil {
 		return err
@@ -99,9 +99,12 @@ func listenAndServe(ctx context.Context, cfg *rest.Config, handler http.Handler)
 		})
 	})
 
-	if err := coreControllers.Start(ctx, 1); err != nil {
-		return err
-	}
+	defer func() {
+		if rErr != nil {
+			return
+		}
+		rErr = coreControllers.Start(ctx, 1)
+	}()
 
 	return server.ListenAndServe(ctx, 9443, 0, handler, &server.ListenOpts{
 		Secrets:       coreControllers.Core().V1().Secret(),

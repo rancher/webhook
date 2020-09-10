@@ -4,5 +4,10 @@ metadata:
   name: rancher-webhook
   namespace: cattle-system
 spec:
+  ports:
+  - port: 443
+    targetPort: 8443
+    protocol: TCP
+    name: https
   selector:
     app: rancher-webhook

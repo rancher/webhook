@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/wrangler/pkg/kubeconfig"
@@ -16,7 +17,7 @@ func main() {
 }
 
 func run() error {
-	cfg, err := kubeconfig.GetNonInteractiveClientConfig("").ClientConfig()
+	cfg, err := kubeconfig.GetNonInteractiveClientConfig(os.Getenv("KUBECONFIG")).ClientConfig()
 	if err != nil {
 		return err
 	}
