@@ -1,0 +1,37 @@
+#!/bin/bash
+set -e
+
+source $(dirname $0)/version
+
+cd $(dirname $0)/..
+
+function build-image() {
+  IMAGE=${REPO}/${1}:${TAG}
+  DOCKERFILE=package/Dockerfile${2}
+  if [ -e ${DOCKERFILE}.${ARCH} ]; then
+      DOCKERFILE=${DOCKERFILE}.${ARCH}
+  fi
+
+  docker build -f ${DOCKERFILE} -t ${IMAGE} .
+  echo Built ${IMAGE}
+
+  if [ "$PUSH" = "true" ]; then
+      docker push ${IMAGE}
+  fi
+}
+
+mkdir -p dist/artifacts
+cp bin/webhook dist/artifacts/webhook-linux${SUFFIX}
+for i in bin/webhook-*; do
+    if [ -e "$i" ]; then
+        if [ "$i" = webhook-windows-amd64 ]; then
+            cp $i dist/artifacts/webhook-windows-amd64.exe
+        else
+            cp $i dist/artifacts
+        fi
+    fi
+done
+
+build-image rancher-webhook
+
+./scripts/package-helm

@@ -1,0 +1,8 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: rancher-webhook
+  namespace: cattle-system
+spec:
+  selector:
+    app: rancher-webhook
