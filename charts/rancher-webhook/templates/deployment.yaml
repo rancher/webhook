@@ -3,6 +3,7 @@ kind: Deployment
 metadata:
   name: rancher-webhook
 spec:
+  replicas: 3
   selector:
     matchLabels:
       app: rancher-webhook
@@ -20,4 +21,7 @@ spec:
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         name: rancher-webhook
         imagePullPolicy: "{{ .Values.image.imagePullPolicy }}"
+        ports:
+        - name: https
+          containerPort: 9443
       serviceAccountName: rancher-webhook

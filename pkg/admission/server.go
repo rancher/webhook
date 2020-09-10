@@ -21,7 +21,7 @@ var (
 	tlsName      = "rancher-webhook.cattle-system.svc"
 	certName     = "cattle-webhook-tls"
 	caName       = "cattle-webhook-ca"
-	port         = int32(9443)
+	port         = int32(443)
 	path         = "/v1/webhook/validation"
 	clusterScope = v1.ClusterScope
 	failPolicy   = v1.Fail
