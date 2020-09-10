@@ -5,6 +5,7 @@ import (
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/webhook"
+	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	v1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -74,12 +75,16 @@ func toExtra(extra map[string]authenticationv1.ExtraValue) map[string]v1.ExtraVa
 }
 
 func clusterObjects(request *webhook.Request) (*v3.Cluster, *v3.Cluster, error) {
-	oldObject, err := request.DecodeOldObject()
+	object, err := request.DecodeObject()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	object, err := request.DecodeObject()
+	if request.Operation == admissionv1.Create {
+		return &v3.Cluster{}, object.(*v3.Cluster), nil
+	}
+
+	oldObject, err := request.DecodeOldObject()
 	if err != nil {
 		return nil, nil, err
 	}
