@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	namespace = "cattle-system"
+	namespace    = "cattle-system"
 	tlsName      = "rancher-webhook.cattle-system.svc"
 	certName     = "cattle-webhook-tls"
 	caName       = "cattle-webhook-ca"
