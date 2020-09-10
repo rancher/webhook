@@ -1,4 +1,4 @@
 image:
-  repository: ibuildthecloud/rancher-webhook
+  repository: rancher/rancher-webhook
   tag: dev
-  imagePullPolicy: Always
+  imagePullPolicy: IfNotPresent
