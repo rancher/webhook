@@ -24,7 +24,7 @@ var (
 	port         = int32(443)
 	path         = "/v1/webhook/validation"
 	clusterScope = v1.ClusterScope
-	failPolicy   = v1.Fail
+	failPolicy   = v1.Ignore
 	sideEffect   = v1.SideEffectClassNone
 )
 

@@ -10,8 +10,8 @@ webhooks:
       name: rancher-webhook
       namespace: cattle-system
       path: /v1/webhook/validation
-      port: 9443
-  failurePolicy: Fail
+      port: 443
+  failurePolicy: Ignore
   matchPolicy: Equivalent
   name: rancher.cattle.io
   sideEffects: None
