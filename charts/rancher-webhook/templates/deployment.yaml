@@ -3,7 +3,6 @@ kind: Deployment
 metadata:
   name: rancher-webhook
 spec:
-  replicas: 3
   selector:
     matchLabels:
       app: rancher-webhook
