@@ -2,3 +2,7 @@ image:
   repository: rancher/rancher-webhook
   tag: latest
   imagePullPolicy: IfNotPresent
+
+global:
+  cattle:
+    systemDefaultRegistry: ""
