@@ -12,20 +12,21 @@ import (
 	v1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
 var (
-	namespace    = "cattle-system"
-	tlsName      = "rancher-webhook.cattle-system.svc"
-	certName     = "cattle-webhook-tls"
-	caName       = "cattle-webhook-ca"
-	port         = int32(443)
-	path         = "/v1/webhook/validation"
-	clusterScope = v1.ClusterScope
-	failPolicy   = v1.Ignore
-	sideEffect   = v1.SideEffectClassNone
+	namespace        = "cattle-system"
+	tlsName          = "rancher-webhook.cattle-system.svc"
+	certName         = "cattle-webhook-tls"
+	caName           = "cattle-webhook-ca"
+	port             = int32(443)
+	path             = "/v1/webhook/validation"
+	clusterScope     = v1.ClusterScope
+	namespaceScope   = v1.NamespacedScope
+	failPolicyFail   = v1.Fail
+	failPolicyIgnore = v1.Ignore
+	sideEffect       = v1.SideEffectClassNone
 )
 
 func ListenAndServe(ctx context.Context, cfg *rest.Config) error {
@@ -33,12 +34,10 @@ func ListenAndServe(ctx context.Context, cfg *rest.Config) error {
 		return err
 	}
 
-	k8s, err := kubernetes.NewForConfig(cfg)
+	handler, err := Validation(cfg)
 	if err != nil {
 		return err
 	}
-
-	handler := Validation(k8s.AuthorizationV1().SubjectAccessReviews())
 
 	return listenAndServe(ctx, cfg, handler)
 }
@@ -91,7 +90,63 @@ func listenAndServe(ctx context.Context, cfg *rest.Config, handler http.Handler)
 							},
 						},
 					},
-					FailurePolicy:           &failPolicy,
+					FailurePolicy:           &failPolicyIgnore,
+					SideEffects:             &sideEffect,
+					AdmissionReviewVersions: []string{"v1"},
+				},
+				{
+					Name: "rancherauth.cattle.io",
+					ClientConfig: v1.WebhookClientConfig{
+						Service: &v1.ServiceReference{
+							Namespace: namespace,
+							Name:      "rancher-webhook",
+							Path:      &path,
+							Port:      &port,
+						},
+						CABundle: secret.Data[corev1.TLSCertKey],
+					},
+					Rules: []v1.RuleWithOperations{
+						{
+							Operations: []v1.OperationType{
+								v1.Create,
+								v1.Update,
+								v1.Delete,
+							},
+							Rule: v1.Rule{
+								APIGroups:   []string{"management.cattle.io"},
+								APIVersions: []string{"v3"},
+								Resources:   []string{"globalrolebindings"},
+								Scope:       &clusterScope,
+							},
+						},
+						{
+							Operations: []v1.OperationType{
+								v1.Create,
+								v1.Update,
+								v1.Delete,
+							},
+							Rule: v1.Rule{
+								APIGroups:   []string{"management.cattle.io"},
+								APIVersions: []string{"v3"},
+								Resources:   []string{"projectroletemplatebindings"},
+								Scope:       &namespaceScope,
+							},
+						},
+						{
+							Operations: []v1.OperationType{
+								v1.Create,
+								v1.Update,
+								v1.Delete,
+							},
+							Rule: v1.Rule{
+								APIGroups:   []string{"management.cattle.io"},
+								APIVersions: []string{"v3"},
+								Resources:   []string{"clusterroletemplatebindings"},
+								Scope:       &namespaceScope,
+							},
+						},
+					},
+					FailurePolicy:           &failPolicyFail,
 					SideEffects:             &sideEffect,
 					AdmissionReviewVersions: []string{"v1"},
 				},
