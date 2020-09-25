@@ -1,4 +1,4 @@
-package admission
+package cluster
 
 import (
 	"net/http"
@@ -12,7 +12,7 @@ import (
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 )
 
-func newClusterValidator(sar authorizationv1.SubjectAccessReviewInterface) webhook.Handler {
+func NewClusterValidator(sar authorizationv1.SubjectAccessReviewInterface) webhook.Handler {
 	return &clusterValidator{
 		sar: sar,
 	}
