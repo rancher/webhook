@@ -1,6 +1,7 @@
 package admission
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/rancher/rancher/pkg/apis/management.cattle.io"
@@ -9,12 +10,13 @@ import (
 	"github.com/rancher/webhook/pkg/cluster"
 	mgmtcontrollers "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io"
 	"github.com/rancher/wrangler-api/pkg/generated/controllers/rbac"
+	"github.com/rancher/wrangler/pkg/start"
 	"github.com/rancher/wrangler/pkg/webhook"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
-func Validation(cfg *rest.Config) (http.Handler, error) {
+func Validation(ctx context.Context, cfg *rest.Config) (http.Handler, error) {
 	grb, err := mgmtcontrollers.NewFactoryFromConfig(cfg)
 	if err != nil {
 		return nil, err
@@ -25,7 +27,7 @@ func Validation(cfg *rest.Config) (http.Handler, error) {
 		return nil, err
 	}
 
-	globalRoleBindings, err := auth.NewGRBValidator(grb.Management().V3().GlobalRole(), r.Rbac())
+	globalRoleBindings, err := auth.NewGRBValidator(grb.Management().V3().GlobalRole().Cache(), r.Rbac())
 	if err != nil {
 		return nil, err
 	}
@@ -47,5 +49,7 @@ func Validation(cfg *rest.Config) (http.Handler, error) {
 	router.Kind("ProjectRoleTemplateBinding").Group(management.GroupName).Type(&v3.ProjectRoleTemplateBinding{}).Handle(prtbs)
 	router.Kind("ClusterRoleTemplateBinding").Group(management.GroupName).Type(&v3.ClusterRoleTemplateBinding{}).Handle(crtbs)
 
+	starters := []start.Starter{r, grb}
+	start.All(ctx, 5, starters...)
 	return router, nil
 }

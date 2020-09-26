@@ -24,7 +24,7 @@ type projectRoleTemplateBindingValidator struct {
 
 func (p *projectRoleTemplateBindingValidator) Admit(response *webhook.Response, request *webhook.Request) error {
 	listTrace := trace.New("projectRoleTemplateBindingValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
-	defer listTrace.LogIfLong(1 * time.Second)
+	defer listTrace.LogIfLong(2 * time.Second)
 
 	prtb, err := prtbObject(request)
 	if err != nil {

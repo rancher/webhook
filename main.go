@@ -8,6 +8,7 @@ import (
 
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/wrangler/pkg/kubeconfig"
+	"github.com/rancher/wrangler/pkg/ratelimit"
 	"github.com/rancher/wrangler/pkg/signals"
 	"github.com/sirupsen/logrus"
 )
@@ -23,6 +24,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
+
+	cfg.RateLimiter = ratelimit.None
 
 	ctx := signals.SetupSignalHandler(context.Background())
 	if err := admission.ListenAndServe(ctx, cfg); err != nil {
