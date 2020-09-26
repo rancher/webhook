@@ -34,7 +34,7 @@ func ListenAndServe(ctx context.Context, cfg *rest.Config) error {
 		return err
 	}
 
-	handler, err := Validation(cfg)
+	handler, err := Validation(ctx, cfg)
 	if err != nil {
 		return err
 	}

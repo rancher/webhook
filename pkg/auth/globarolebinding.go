@@ -23,28 +23,31 @@ import (
 	"k8s.io/utils/trace"
 )
 
-func NewGRBValidator(grClient v3.GlobalRoleClient, r rbac.Interface) (webhook.Handler, error) {
+func NewGRBValidator(grClient v3.GlobalRoleCache, r rbac.Interface) (webhook.Handler, error) {
 	rbacRestGetter := authentication.RBACRestGetter{
-		Interface: r,
+		Roles:               r.V1().Role().Cache(),
+		RoleBindings:        r.V1().RoleBinding().Cache(),
+		ClusterRoles:        r.V1().ClusterRole().Cache(),
+		ClusterRoleBindings: r.V1().ClusterRoleBinding().Cache(),
 	}
 
 	ruleResolver := rbacregistryvalidation.NewDefaultRuleResolver(rbacRestGetter, rbacRestGetter, rbacRestGetter, rbacRestGetter)
 
 	return &globalRoleBindingValidator{
-		globalRoleClient: grClient,
-		ruleSolver:       ruleResolver,
+		globalRoles: grClient,
+		ruleSolver:  ruleResolver,
 	}, nil
 
 }
 
 type globalRoleBindingValidator struct {
-	globalRoleClient v3.GlobalRoleClient
-	ruleSolver       validation.AuthorizationRuleResolver
+	globalRoles v3.GlobalRoleCache
+	ruleSolver  validation.AuthorizationRuleResolver
 }
 
 func (grbv *globalRoleBindingValidator) Admit(response *webhook.Response, request *webhook.Request) error {
 	listTrace := trace.New("globalRoleBindingValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
-	defer listTrace.LogIfLong(1 * time.Second)
+	defer listTrace.LogIfLong(2 * time.Second)
 
 	newGRB, err := grbObject(request)
 	if err != nil {
@@ -52,7 +55,7 @@ func (grbv *globalRoleBindingValidator) Admit(response *webhook.Response, reques
 	}
 
 	// Pull the global role to get the rules
-	globalRole, err := grbv.globalRoleClient.Get(newGRB.GlobalRoleName, metav1.GetOptions{})
+	globalRole, err := grbv.globalRoles.Get(newGRB.GlobalRoleName)
 	if err != nil {
 		return err
 	}

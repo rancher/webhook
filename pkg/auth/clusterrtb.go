@@ -29,7 +29,7 @@ type clusterRoleTemplateBindingValidator struct {
 
 func (c *clusterRoleTemplateBindingValidator) Admit(response *webhook.Response, request *webhook.Request) error {
 	listTrace := trace.New("clusterRoleTemplateBindingValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
-	defer listTrace.LogIfLong(1 * time.Second)
+	defer listTrace.LogIfLong(2 * time.Second)
 
 	crtb, err := crtbObject(request)
 	if err != nil {

@@ -1,43 +1,30 @@
 package authentication
 
 import (
-	"github.com/rancher/wrangler-api/pkg/generated/controllers/rbac"
+	wranglerv1 "github.com/rancher/wrangler-api/pkg/generated/controllers/rbac/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 type RBACRestGetter struct {
-	rbac.Interface
+	Roles               wranglerv1.RoleCache
+	RoleBindings        wranglerv1.RoleBindingCache
+	ClusterRoles        wranglerv1.ClusterRoleCache
+	ClusterRoleBindings wranglerv1.ClusterRoleBindingCache
 }
 
 func (r RBACRestGetter) GetRole(namespace, name string) (*rbacv1.Role, error) {
-	return r.Interface.V1().Role().Get(namespace, name, metav1.GetOptions{})
+	return r.Roles.Get(namespace, name)
 }
 
 func (r RBACRestGetter) ListRoleBindings(namespace string) ([]*rbacv1.RoleBinding, error) {
-	rolebindings, err := r.Interface.V1().RoleBinding().List(namespace, metav1.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-	var rbs []*rbacv1.RoleBinding
-	for i := range rolebindings.Items {
-		rbs = append(rbs, &rolebindings.Items[i])
-	}
-	return rbs, nil
+	return r.RoleBindings.List(namespace, labels.NewSelector())
 }
 
 func (r RBACRestGetter) GetClusterRole(name string) (*rbacv1.ClusterRole, error) {
-	return r.Interface.V1().ClusterRole().Get(name, metav1.GetOptions{})
+	return r.ClusterRoles.Get(name)
 }
 
 func (r RBACRestGetter) ListClusterRoleBindings() ([]*rbacv1.ClusterRoleBinding, error) {
-	clusterrolebindings, err := r.Interface.V1().ClusterRoleBinding().List(metav1.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-	var crbs []*rbacv1.ClusterRoleBinding
-	for i := range clusterrolebindings.Items {
-		crbs = append(crbs, &clusterrolebindings.Items[i])
-	}
-	return crbs, nil
+	return r.ClusterRoleBindings.List(labels.NewSelector())
 }
