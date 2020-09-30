@@ -1,48 +1,27 @@
 package auth
 
 import (
-	"context"
-	"fmt"
-	"net/http"
 	"time"
 
 	rancherv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-	"github.com/rancher/webhook/pkg/authentication"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
-	"github.com/rancher/wrangler-api/pkg/generated/controllers/rbac"
 	"github.com/rancher/wrangler/pkg/webhook"
 	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apiserver/pkg/authentication/user"
-	k8srequest "k8s.io/apiserver/pkg/endpoints/request"
-	"k8s.io/kubernetes/pkg/registry/rbac/validation"
-	rbacregistryvalidation "k8s.io/kubernetes/pkg/registry/rbac/validation"
 	"k8s.io/utils/trace"
 )
 
-func NewGRBValidator(grClient v3.GlobalRoleCache, r rbac.Interface) (webhook.Handler, error) {
-	rbacRestGetter := authentication.RBACRestGetter{
-		Roles:               r.V1().Role().Cache(),
-		RoleBindings:        r.V1().RoleBinding().Cache(),
-		ClusterRoles:        r.V1().ClusterRole().Cache(),
-		ClusterRoleBindings: r.V1().ClusterRoleBinding().Cache(),
-	}
-
-	ruleResolver := rbacregistryvalidation.NewDefaultRuleResolver(rbacRestGetter, rbacRestGetter, rbacRestGetter, rbacRestGetter)
-
+func NewGRBValidator(grClient v3.GlobalRoleCache, escalationChecker *EscalationChecker) webhook.Handler {
 	return &globalRoleBindingValidator{
-		globalRoles: grClient,
-		ruleSolver:  ruleResolver,
-	}, nil
-
+		escalationChecker: escalationChecker,
+		globalRoles:       grClient,
+	}
 }
 
 type globalRoleBindingValidator struct {
-	globalRoles v3.GlobalRoleCache
-	ruleSolver  validation.AuthorizationRuleResolver
+	escalationChecker *EscalationChecker
+	globalRoles       v3.GlobalRoleCache
 }
 
 func (grbv *globalRoleBindingValidator) Admit(response *webhook.Response, request *webhook.Request) error {
@@ -60,34 +39,7 @@ func (grbv *globalRoleBindingValidator) Admit(response *webhook.Response, reques
 		return err
 	}
 
-	userInfo := &user.DefaultInfo{
-		Name:   request.UserInfo.Username,
-		UID:    request.UserInfo.UID,
-		Groups: request.UserInfo.Groups,
-		Extra:  toExtraString(request.UserInfo.Extra),
-	}
-
-	if err := grbv.ConfirmNoEscalation(globalRole.Rules, userInfo); err != nil {
-		response.Result = &metav1.Status{
-			Status:  "Failure",
-			Message: err.Error(),
-			Reason:  metav1.StatusReasonUnauthorized,
-			Code:    http.StatusUnauthorized,
-		}
-		return nil
-	}
-	response.Allowed = true
-	return nil
-}
-
-// ConfirmNoEscalation checks that the user attempting to create the GRB has all the permissions they are attempting
-// to grant through the GRB
-func (grbv *globalRoleBindingValidator) ConfirmNoEscalation(rules []rbacv1.PolicyRule, userInfo *user.DefaultInfo) error {
-	globaleCtx := k8srequest.WithNamespace(k8srequest.WithUser(context.Background(), userInfo), "")
-	if err := rbacregistryvalidation.ConfirmNoEscalation(globaleCtx, grbv.ruleSolver, rules); err != nil {
-		return fmt.Errorf("failed to validate user: %v", err)
-	}
-	return nil
+	return grbv.escalationChecker.confirmNoEscalation(response, request, globalRole.Rules, "")
 }
 
 func grbObject(request *webhook.Request) (*rancherv3.GlobalRoleBinding, error) {
