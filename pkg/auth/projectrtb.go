@@ -5,21 +5,24 @@ import (
 	"time"
 
 	rancherv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/webhook"
 	admissionv1 "k8s.io/api/admission/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/utils/trace"
 )
 
-func NewPRTBalidator(sar authorizationv1.SubjectAccessReviewInterface) webhook.Handler {
+func NewPRTBValidator(rt v3.RoleTemplateCache, escalationChecker *EscalationChecker) webhook.Handler {
 	return &projectRoleTemplateBindingValidator{
-		sar: sar,
+		escalationChecker: escalationChecker,
+		roleTemplates:     rt,
 	}
 }
 
 type projectRoleTemplateBindingValidator struct {
-	sar authorizationv1.SubjectAccessReviewInterface
+	escalationChecker *EscalationChecker
+	roleTemplates     v3.RoleTemplateCache
 }
 
 func (p *projectRoleTemplateBindingValidator) Admit(response *webhook.Response, request *webhook.Request) error {
@@ -31,14 +34,28 @@ func (p *projectRoleTemplateBindingValidator) Admit(response *webhook.Response, 
 		return err
 	}
 
-	clusterID := clusterFromProject(prtb.ProjectName)
+	clusterID, projectNS := clusterFromProject(prtb.ProjectName)
 
 	if clusterID != "local" {
 		response.Allowed = true
 		return nil
 	}
 
-	return adminAccessCheck(p.sar, response, request)
+	rt, err := p.roleTemplates.Get(prtb.RoleTemplateName)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			response.Allowed = true
+			return nil
+		}
+		return err
+	}
+
+	rules, err := p.escalationChecker.rulesFromTemplate(rt)
+	if err != nil {
+		return err
+	}
+
+	return p.escalationChecker.confirmNoEscalation(response, request, rules, projectNS)
 }
 
 func prtbObject(request *webhook.Request) (*rancherv3.ProjectRoleTemplateBinding, error) {
@@ -52,7 +69,7 @@ func prtbObject(request *webhook.Request) (*rancherv3.ProjectRoleTemplateBinding
 	return prtb.(*rancherv3.ProjectRoleTemplateBinding), err
 }
 
-func clusterFromProject(project string) string {
+func clusterFromProject(project string) (string, string) {
 	pieces := strings.Split(project, ":")
-	return pieces[0]
+	return pieces[0], pieces[1]
 }

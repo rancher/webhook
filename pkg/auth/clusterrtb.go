@@ -1,30 +1,27 @@
 package auth
 
 import (
-	"net/http"
 	"time"
 
 	rancherv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/webhook"
 	admissionv1 "k8s.io/api/admission/v1"
-	authenticationv1 "k8s.io/api/authentication/v1"
-	v1 "k8s.io/api/authorization/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/utils/trace"
 )
 
-const adminRole = "admin"
-
-func NewCRTBalidator(sar authorizationv1.SubjectAccessReviewInterface) webhook.Handler {
+func NewCRTBValidator(rt v3.RoleTemplateCache, escalationChecker *EscalationChecker) webhook.Handler {
 	return &clusterRoleTemplateBindingValidator{
-		sar: sar,
+		escalationChecker: escalationChecker,
+		roleTemplates:     rt,
 	}
 }
 
 type clusterRoleTemplateBindingValidator struct {
-	sar authorizationv1.SubjectAccessReviewInterface
+	escalationChecker *EscalationChecker
+	roleTemplates     v3.RoleTemplateCache
 }
 
 func (c *clusterRoleTemplateBindingValidator) Admit(response *webhook.Response, request *webhook.Request) error {
@@ -41,7 +38,21 @@ func (c *clusterRoleTemplateBindingValidator) Admit(response *webhook.Response, 
 		return nil
 	}
 
-	return adminAccessCheck(c.sar, response, request)
+	rt, err := c.roleTemplates.Get(crtb.RoleTemplateName)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			response.Allowed = true
+			return nil
+		}
+		return err
+	}
+
+	rules, err := c.escalationChecker.rulesFromTemplate(rt)
+	if err != nil {
+		return err
+	}
+
+	return c.escalationChecker.confirmNoEscalation(response, request, rules, "local")
 }
 
 func crtbObject(request *webhook.Request) (*rancherv3.ClusterRoleTemplateBinding, error) {
@@ -53,44 +64,4 @@ func crtbObject(request *webhook.Request) (*rancherv3.ClusterRoleTemplateBinding
 		crtb, err = request.DecodeObject()
 	}
 	return crtb.(*rancherv3.ClusterRoleTemplateBinding), err
-}
-
-func toExtra(extra map[string]authenticationv1.ExtraValue) map[string]v1.ExtraValue {
-	result := map[string]v1.ExtraValue{}
-	for k, v := range extra {
-		result[k] = v1.ExtraValue(v)
-	}
-	return result
-}
-
-// adminAccessCheck checks that the user submitting the request has ** access in the local cluster
-func adminAccessCheck(sar authorizationv1.SubjectAccessReviewInterface, response *webhook.Response, request *webhook.Request) error {
-	resp, err := sar.Create(request.Context, &v1.SubjectAccessReview{
-		Spec: v1.SubjectAccessReviewSpec{
-			ResourceAttributes: &v1.ResourceAttributes{
-				Group:    "*",
-				Verb:     "*",
-				Resource: "*",
-			},
-			User:   request.UserInfo.Username,
-			Groups: request.UserInfo.Groups,
-			Extra:  toExtra(request.UserInfo.Extra),
-			UID:    request.UserInfo.UID,
-		},
-	}, metav1.CreateOptions{})
-	if err != nil {
-		return err
-	}
-
-	if resp.Status.Allowed {
-		response.Allowed = true
-	} else {
-		response.Result = &metav1.Status{
-			Status:  "Failure",
-			Message: resp.Status.Reason,
-			Reason:  metav1.StatusReasonUnauthorized,
-			Code:    http.StatusUnauthorized,
-		}
-	}
-	return nil
 }

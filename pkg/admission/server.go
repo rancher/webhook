@@ -129,7 +129,18 @@ func listenAndServe(ctx context.Context, cfg *rest.Config, handler http.Handler)
 							Operations: []v1.OperationType{
 								v1.Create,
 								v1.Update,
-								v1.Delete,
+							},
+							Rule: v1.Rule{
+								APIGroups:   []string{"management.cattle.io"},
+								APIVersions: []string{"v3"},
+								Resources:   []string{"roletemplates"},
+								Scope:       &clusterScope,
+							},
+						},
+						{
+							Operations: []v1.OperationType{
+								v1.Create,
+								v1.Update,
 							},
 							Rule: v1.Rule{
 								APIGroups:   []string{"management.cattle.io"},
@@ -142,7 +153,6 @@ func listenAndServe(ctx context.Context, cfg *rest.Config, handler http.Handler)
 							Operations: []v1.OperationType{
 								v1.Create,
 								v1.Update,
-								v1.Delete,
 							},
 							Rule: v1.Rule{
 								APIGroups:   []string{"management.cattle.io"},
