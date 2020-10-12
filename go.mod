@@ -29,9 +29,9 @@ replace (
 
 require (
 	github.com/rancher/dynamiclistener v0.2.1-0.20200910203214-85f32491cb09
-	github.com/rancher/lasso v0.0.0-20200820172840-0e4cc0ef5cb0
+	github.com/rancher/lasso v0.0.0-20200905045615-7fcb07d6a20b
 	github.com/rancher/rancher/pkg/apis v0.0.0-20200910005616-198ec5bdf52d
-	github.com/rancher/wrangler v0.6.2-0.20200909050541-7465f10bdac7
+	github.com/rancher/wrangler v0.7.3-0.20201004050240-264809ad4ab9
 	github.com/rancher/wrangler-api v0.6.1-0.20200427172631-a7c2f09b783e
 	github.com/sirupsen/logrus v1.6.0
 	k8s.io/api v0.19.0
