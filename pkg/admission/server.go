@@ -98,7 +98,7 @@ func listenAndServe(ctx context.Context, cfg *rest.Config, handler http.Handler)
 					},
 					FailurePolicy:           &failPolicyIgnore,
 					SideEffects:             &sideEffect,
-					AdmissionReviewVersions: []string{"v1"},
+					AdmissionReviewVersions: []string{"v1", "v1beta1"},
 				},
 				{
 					Name: "rancherauth.cattle.io",
@@ -164,7 +164,7 @@ func listenAndServe(ctx context.Context, cfg *rest.Config, handler http.Handler)
 					},
 					FailurePolicy:           &failPolicyFail,
 					SideEffects:             &sideEffect,
-					AdmissionReviewVersions: []string{"v1"},
+					AdmissionReviewVersions: []string{"v1", "v1beta1"},
 				},
 			},
 		})
