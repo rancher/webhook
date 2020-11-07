@@ -1,23 +1,24 @@
-package auth
+package roletemplate
 
 import (
 	"time"
 
 	rancherv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/auth"
 	"github.com/rancher/wrangler/pkg/webhook"
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/trace"
 )
 
-func NewRoleTemplateValidator(escalationChecker *EscalationChecker) webhook.Handler {
+func NewValidator(escalationChecker *auth.EscalationChecker) webhook.Handler {
 	return &roleTemplateValidator{
 		escalationChecker: escalationChecker,
 	}
 }
 
 type roleTemplateValidator struct {
-	escalationChecker *EscalationChecker
+	escalationChecker *auth.EscalationChecker
 }
 
 func (r *roleTemplateValidator) Admit(response *webhook.Response, request *webhook.Request) error {
@@ -29,12 +30,12 @@ func (r *roleTemplateValidator) Admit(response *webhook.Response, request *webho
 		return err
 	}
 
-	rules, err := r.escalationChecker.rulesFromTemplate(rt)
+	rules, err := r.escalationChecker.RulesFromTemplate(rt)
 	if err != nil {
 		return err
 	}
 
-	return r.escalationChecker.confirmNoEscalation(response, request, rules, "")
+	return r.escalationChecker.ConfirmNoEscalation(response, request, rules, "")
 }
 
 func roleTemplateObject(request *webhook.Request) (*rancherv3.RoleTemplate, error) {

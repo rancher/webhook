@@ -1,18 +1,18 @@
-package auth
+package globalrolebinding
 
 import (
 	"time"
 
 	rancherv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/auth"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/webhook"
 	admissionv1 "k8s.io/api/admission/v1"
-	authenticationv1 "k8s.io/api/authentication/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/trace"
 )
 
-func NewGRBValidator(grClient v3.GlobalRoleCache, escalationChecker *EscalationChecker) webhook.Handler {
+func NewValidator(grClient v3.GlobalRoleCache, escalationChecker *auth.EscalationChecker) webhook.Handler {
 	return &globalRoleBindingValidator{
 		escalationChecker: escalationChecker,
 		globalRoles:       grClient,
@@ -20,7 +20,7 @@ func NewGRBValidator(grClient v3.GlobalRoleCache, escalationChecker *EscalationC
 }
 
 type globalRoleBindingValidator struct {
-	escalationChecker *EscalationChecker
+	escalationChecker *auth.EscalationChecker
 	globalRoles       v3.GlobalRoleCache
 }
 
@@ -39,7 +39,7 @@ func (grbv *globalRoleBindingValidator) Admit(response *webhook.Response, reques
 		return err
 	}
 
-	return grbv.escalationChecker.confirmNoEscalation(response, request, globalRole.Rules, "")
+	return grbv.escalationChecker.ConfirmNoEscalation(response, request, globalRole.Rules, "")
 }
 
 func grbObject(request *webhook.Request) (*rancherv3.GlobalRoleBinding, error) {
@@ -51,12 +51,4 @@ func grbObject(request *webhook.Request) (*rancherv3.GlobalRoleBinding, error) {
 		grb, err = request.DecodeObject()
 	}
 	return grb.(*rancherv3.GlobalRoleBinding), err
-}
-
-func toExtraString(extra map[string]authenticationv1.ExtraValue) map[string][]string {
-	result := make(map[string][]string)
-	for k, v := range extra {
-		result[k] = v
-	}
-	return result
 }

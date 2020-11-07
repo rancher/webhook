@@ -1,15 +1,14 @@
-package admission
+package server
 
 import (
 	"context"
 	"net/http"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/rancher/dynamiclistener"
 	"github.com/rancher/dynamiclistener/server"
-	"github.com/rancher/wrangler/pkg/apply"
-	"github.com/rancher/wrangler/pkg/generated/controllers/core"
-	"github.com/rancher/wrangler/pkg/schemes"
+	"github.com/rancher/webhook/pkg/clients"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -18,47 +17,42 @@ import (
 )
 
 var (
-	namespace        = "cattle-system"
-	tlsName          = "rancher-webhook.cattle-system.svc"
-	certName         = "cattle-webhook-tls"
-	caName           = "cattle-webhook-ca"
-	port             = int32(443)
-	path             = "/v1/webhook/validation"
-	clusterScope     = v1.ClusterScope
-	namespaceScope   = v1.NamespacedScope
-	failPolicyFail   = v1.Fail
-	failPolicyIgnore = v1.Ignore
-	sideEffect       = v1.SideEffectClassNone
+	namespace           = "cattle-system"
+	tlsName             = "rancher-webhook.cattle-system.svc"
+	certName            = "cattle-webhook-tls"
+	caName              = "cattle-webhook-ca"
+	port                = int32(443)
+	validationPath      = "/v1/webhook/validation"
+	mutationPath        = "/v1/webhook/mutation"
+	clusterScope        = v1.ClusterScope
+	namespaceScope      = v1.NamespacedScope
+	failPolicyFail      = v1.Fail
+	failPolicyIgnore    = v1.Ignore
+	sideEffectClassNone = v1.SideEffectClassNone
 )
 
 func ListenAndServe(ctx context.Context, cfg *rest.Config) error {
-	if err := schemes.Register(v1.AddToScheme); err != nil {
-		return err
-	}
-
-	handler, err := Validation(ctx, cfg)
+	clients, err := clients.New(cfg)
 	if err != nil {
 		return err
 	}
 
-	return listenAndServe(ctx, cfg, handler)
+	validation, err := Validation(clients)
+	if err != nil {
+		return err
+	}
+
+	router := mux.NewRouter()
+	router.Handle(validationPath, validation)
+
+	return listenAndServe(ctx, clients, router)
 }
 
-func listenAndServe(ctx context.Context, cfg *rest.Config, handler http.Handler) (rErr error) {
-	apply, err := apply.NewForConfig(cfg)
-	if err != nil {
-		return err
-	}
+func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.Handler) (rErr error) {
+	apply := clients.Apply.WithDynamicLookup()
 
-	apply = apply.WithDynamicLookup()
-
-	coreControllers, err := core.NewFactoryFromConfigWithNamespace(cfg, namespace)
-	if err != nil {
-		return err
-	}
-
-	coreControllers.Core().V1().Secret().OnChange(ctx, "secrets", func(key string, secret *corev1.Secret) (*corev1.Secret, error) {
-		if secret == nil || secret.Name != caName || len(secret.Data[corev1.TLSCertKey]) == 0 {
+	clients.Core.Secret().OnChange(ctx, "secrets", func(key string, secret *corev1.Secret) (*corev1.Secret, error) {
+		if secret == nil || secret.Name != caName || secret.Namespace != namespace || len(secret.Data[corev1.TLSCertKey]) == 0 {
 			return nil, nil
 		}
 
@@ -77,7 +71,7 @@ func listenAndServe(ctx context.Context, cfg *rest.Config, handler http.Handler)
 						Service: &v1.ServiceReference{
 							Namespace: namespace,
 							Name:      "rancher-webhook",
-							Path:      &path,
+							Path:      &validationPath,
 							Port:      &port,
 						},
 						CABundle: secret.Data[corev1.TLSCertKey],
@@ -97,7 +91,7 @@ func listenAndServe(ctx context.Context, cfg *rest.Config, handler http.Handler)
 						},
 					},
 					FailurePolicy:           &failPolicyIgnore,
-					SideEffects:             &sideEffect,
+					SideEffects:             &sideEffectClassNone,
 					AdmissionReviewVersions: []string{"v1", "v1beta1"},
 				},
 				{
@@ -106,7 +100,7 @@ func listenAndServe(ctx context.Context, cfg *rest.Config, handler http.Handler)
 						Service: &v1.ServiceReference{
 							Namespace: namespace,
 							Name:      "rancher-webhook",
-							Path:      &path,
+							Path:      &validationPath,
 							Port:      &port,
 						},
 						CABundle: secret.Data[corev1.TLSCertKey],
@@ -163,42 +157,23 @@ func listenAndServe(ctx context.Context, cfg *rest.Config, handler http.Handler)
 						},
 					},
 					FailurePolicy:           &failPolicyFail,
-					SideEffects:             &sideEffect,
+					SideEffects:             &sideEffectClassNone,
 					AdmissionReviewVersions: []string{"v1", "v1beta1"},
 				},
 			},
 		})
 	})
 
-	defer func() {
-		if rErr != nil {
-			return
-		}
-		rErr = coreControllers.Start(ctx, 1)
-	}()
-
 	return server.ListenAndServe(ctx, 9443, 0, handler, &server.ListenOpts{
-		Secrets:       coreControllers.Core().V1().Secret(),
+		Secrets:       clients.Core.Secret(),
 		CertNamespace: namespace,
 		CertName:      certName,
 		CAName:        caName,
 		TLSListenerConfig: dynamiclistener.Config{
 			SANs: []string{
-				"rancher-webhook",
+				tlsName,
 			},
-			CloseConnOnCertChange: false,
-			FilterCN:              only(tlsName),
+			FilterCN: dynamiclistener.OnlyAllow(tlsName),
 		},
 	})
-}
-
-func only(str string) func(...string) []string {
-	return func(s2 ...string) []string {
-		for _, s := range s2 {
-			if s == str {
-				return []string{s}
-			}
-		}
-		return nil
-	}
 }
