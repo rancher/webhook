@@ -30,6 +30,7 @@ func init() {
 }
 
 type Interface interface {
+	Cluster() ClusterController
 	GlobalRole() GlobalRoleController
 	RoleTemplate() RoleTemplateController
 }
@@ -44,6 +45,9 @@ type version struct {
 	controllerFactory controller.SharedControllerFactory
 }
 
+func (c *version) Cluster() ClusterController {
+	return NewClusterController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Cluster"}, "clusters", false, c.controllerFactory)
+}
 func (c *version) GlobalRole() GlobalRoleController {
 	return NewGlobalRoleController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "GlobalRole"}, "globalroles", false, c.controllerFactory)
 }
