@@ -17,22 +17,23 @@ import (
 )
 
 var (
-	namespace           = "cattle-system"
-	tlsName             = "rancher-webhook.cattle-system.svc"
-	certName            = "cattle-webhook-tls"
-	caName              = "cattle-webhook-ca"
-	port                = int32(443)
-	validationPath      = "/v1/webhook/validation"
-	mutationPath        = "/v1/webhook/mutation"
-	clusterScope        = v1.ClusterScope
-	namespaceScope      = v1.NamespacedScope
-	failPolicyFail      = v1.Fail
-	failPolicyIgnore    = v1.Ignore
-	sideEffectClassNone = v1.SideEffectClassNone
+	namespace                   = "cattle-system"
+	tlsName                     = "rancher-webhook.cattle-system.svc"
+	certName                    = "cattle-webhook-tls"
+	caName                      = "cattle-webhook-ca"
+	port                        = int32(443)
+	validationPath              = "/v1/webhook/validation"
+	mutationPath                = "/v1/webhook/mutation"
+	clusterScope                = v1.ClusterScope
+	namespaceScope              = v1.NamespacedScope
+	failPolicyFail              = v1.Fail
+	failPolicyIgnore            = v1.Ignore
+	sideEffectClassNone         = v1.SideEffectClassNone
+	sideEffectClassNoneOnDryRun = v1.SideEffectClassNoneOnDryRun
 )
 
 func ListenAndServe(ctx context.Context, cfg *rest.Config) error {
-	clients, err := clients.New(cfg)
+	clients, err := clients.New(ctx, cfg)
 	if err != nil {
 		return err
 	}
@@ -42,8 +43,14 @@ func ListenAndServe(ctx context.Context, cfg *rest.Config) error {
 		return err
 	}
 
+	mutation, err := Mutation(clients)
+	if err != nil {
+		return err
+	}
+
 	router := mux.NewRouter()
 	router.Handle(validationPath, validation)
+	router.Handle(mutationPath, mutation)
 
 	return listenAndServe(ctx, clients, router)
 }
@@ -161,8 +168,49 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 					AdmissionReviewVersions: []string{"v1", "v1beta1"},
 				},
 			},
+		}, &v1.MutatingWebhookConfiguration{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "rancher.cattle.io",
+			},
+			Webhooks: []v1.MutatingWebhook{
+				{
+					Name: "rancherfleet.cattle.io",
+					ClientConfig: v1.WebhookClientConfig{
+						Service: &v1.ServiceReference{
+							Namespace: namespace,
+							Name:      "rancher-webhook",
+							Path:      &mutationPath,
+							Port:      &port,
+						},
+						CABundle: secret.Data[corev1.TLSCertKey],
+					},
+					Rules: []v1.RuleWithOperations{
+						{
+							Operations: []v1.OperationType{
+								v1.Create,
+							},
+							Rule: v1.Rule{
+								APIGroups:   []string{"management.cattle.io"},
+								APIVersions: []string{"v3"},
+								Resources:   []string{"fleetworkspaces"},
+								Scope:       &clusterScope,
+							},
+						},
+					},
+					FailurePolicy:           &failPolicyFail,
+					SideEffects:             &sideEffectClassNoneOnDryRun,
+					AdmissionReviewVersions: []string{"v1", "v1beta1"},
+				},
+			},
 		})
 	})
+
+	defer func() {
+		if rErr != nil {
+			return
+		}
+		rErr = clients.Start(ctx)
+	}()
 
 	return server.ListenAndServe(ctx, 9443, 0, handler, &server.ListenOpts{
 		Secrets:       clients.Core.Secret(),

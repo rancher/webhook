@@ -1,12 +1,14 @@
 package clients
 
 import (
-	v1 "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
+	"context"
+
 	"github.com/rancher/webhook/pkg/auth"
 	"github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io"
 	managementv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/clients"
 	"github.com/rancher/wrangler/pkg/schemes"
+	v1 "k8s.io/api/admissionregistration/v1"
 	"k8s.io/client-go/rest"
 	rbacregistryvalidation "k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
@@ -18,7 +20,7 @@ type Clients struct {
 	EscalationChecker *auth.EscalationChecker
 }
 
-func New(rest *rest.Config) (*Clients, error) {
+func New(ctx context.Context, rest *rest.Config) (*Clients, error) {
 	clients, err := clients.NewFromConfig(rest, nil)
 	if err != nil {
 		return nil, err
@@ -30,6 +32,10 @@ func New(rest *rest.Config) (*Clients, error) {
 
 	mgmt, err := management.NewFactoryFromConfigWithOptions(rest, clients.FactoryOptions)
 	if err != nil {
+		return nil, err
+	}
+
+	if err = mgmt.Start(ctx, 5); err != nil {
 		return nil, err
 	}
 
