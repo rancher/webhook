@@ -39,7 +39,7 @@ func (c *clusterValidator) Admit(response *webhook.Response, request *webhook.Re
 			ResourceAttributes: &v1.ResourceAttributes{
 				Verb:     "fleetaddcluster",
 				Version:  "v1",
-				Resource: "namespaces",
+				Resource: "fleetworkspace",
 				Name:     newCluster.Spec.FleetWorkspaceName,
 			},
 			User:   request.UserInfo.Username,

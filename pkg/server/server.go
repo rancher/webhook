@@ -42,8 +42,14 @@ func ListenAndServe(ctx context.Context, cfg *rest.Config) error {
 		return err
 	}
 
+	mutation, err := Mutation(clients)
+	if err != nil {
+		return err
+	}
+
 	router := mux.NewRouter()
 	router.Handle(validationPath, validation)
+	router.Handle(mutationPath, mutation)
 
 	return listenAndServe(ctx, clients, router)
 }
@@ -153,6 +159,40 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 								APIVersions: []string{"v3"},
 								Resources:   []string{"clusterroletemplatebindings"},
 								Scope:       &namespaceScope,
+							},
+						},
+					},
+					FailurePolicy:           &failPolicyFail,
+					SideEffects:             &sideEffectClassNone,
+					AdmissionReviewVersions: []string{"v1", "v1beta1"},
+				},
+			},
+		}, &v1.MutatingWebhookConfiguration{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "rancher.cattle.io",
+			},
+			Webhooks: []v1.MutatingWebhook{
+				{
+					Name: "rancher.cattle.io",
+					ClientConfig: v1.WebhookClientConfig{
+						Service: &v1.ServiceReference{
+							Namespace: namespace,
+							Name:      "rancher-webhook",
+							Path:      &mutationPath,
+							Port:      &port,
+						},
+						CABundle: secret.Data[corev1.TLSCertKey],
+					},
+					Rules: []v1.RuleWithOperations{
+						{
+							Operations: []v1.OperationType{
+								v1.Create,
+							},
+							Rule: v1.Rule{
+								APIGroups:   []string{"management.cattle.io"},
+								APIVersions: []string{"v3"},
+								Resources:   []string{"fleetworkspaces"},
+								Scope:       &clusterScope,
 							},
 						},
 					},
