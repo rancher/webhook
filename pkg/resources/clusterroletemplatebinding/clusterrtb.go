@@ -1,9 +1,10 @@
-package auth
+package clusterroletemplatebinding
 
 import (
 	"time"
 
 	rancherv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/auth"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/webhook"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -12,7 +13,7 @@ import (
 	"k8s.io/utils/trace"
 )
 
-func NewCRTBValidator(rt v3.RoleTemplateCache, escalationChecker *EscalationChecker) webhook.Handler {
+func NewValidator(rt v3.RoleTemplateCache, escalationChecker *auth.EscalationChecker) webhook.Handler {
 	return &clusterRoleTemplateBindingValidator{
 		escalationChecker: escalationChecker,
 		roleTemplates:     rt,
@@ -20,7 +21,7 @@ func NewCRTBValidator(rt v3.RoleTemplateCache, escalationChecker *EscalationChec
 }
 
 type clusterRoleTemplateBindingValidator struct {
-	escalationChecker *EscalationChecker
+	escalationChecker *auth.EscalationChecker
 	roleTemplates     v3.RoleTemplateCache
 }
 
@@ -47,12 +48,12 @@ func (c *clusterRoleTemplateBindingValidator) Admit(response *webhook.Response, 
 		return err
 	}
 
-	rules, err := c.escalationChecker.rulesFromTemplate(rt)
+	rules, err := c.escalationChecker.RulesFromTemplate(rt)
 	if err != nil {
 		return err
 	}
 
-	return c.escalationChecker.confirmNoEscalation(response, request, rules, "local")
+	return c.escalationChecker.ConfirmNoEscalation(response, request, rules, "local")
 }
 
 func crtbObject(request *webhook.Request) (*rancherv3.ClusterRoleTemplateBinding, error) {

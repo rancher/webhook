@@ -6,7 +6,8 @@ import (
 	"context"
 	"os"
 
-	"github.com/rancher/webhook/pkg/admission"
+	"github.com/rancher/webhook/pkg/server"
+	_ "github.com/rancher/wrangler/pkg/generated/controllers/admissionregistration.k8s.io"
 	"github.com/rancher/wrangler/pkg/kubeconfig"
 	"github.com/rancher/wrangler/pkg/ratelimit"
 	"github.com/rancher/wrangler/pkg/signals"
@@ -28,7 +29,7 @@ func run() error {
 	cfg.RateLimiter = ratelimit.None
 
 	ctx := signals.SetupSignalHandler(context.Background())
-	if err := admission.ListenAndServe(ctx, cfg); err != nil {
+	if err := server.ListenAndServe(ctx, cfg); err != nil {
 		return err
 	}
 

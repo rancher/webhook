@@ -12,7 +12,7 @@ import (
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 )
 
-func NewClusterValidator(sar authorizationv1.SubjectAccessReviewInterface) webhook.Handler {
+func NewValidator(sar authorizationv1.SubjectAccessReviewInterface) webhook.Handler {
 	return &clusterValidator{
 		sar: sar,
 	}
@@ -39,7 +39,7 @@ func (c *clusterValidator) Admit(response *webhook.Response, request *webhook.Re
 			ResourceAttributes: &v1.ResourceAttributes{
 				Verb:     "fleetaddcluster",
 				Version:  "v1",
-				Resource: "namespaces",
+				Resource: "fleetworkspace",
 				Name:     newCluster.Spec.FleetWorkspaceName,
 			},
 			User:   request.UserInfo.Username,

@@ -1,10 +1,11 @@
-package auth
+package projectroletemplatebinding
 
 import (
 	"strings"
 	"time"
 
 	rancherv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/auth"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/webhook"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -13,7 +14,7 @@ import (
 	"k8s.io/utils/trace"
 )
 
-func NewPRTBValidator(rt v3.RoleTemplateCache, escalationChecker *EscalationChecker) webhook.Handler {
+func NewValidator(rt v3.RoleTemplateCache, escalationChecker *auth.EscalationChecker) webhook.Handler {
 	return &projectRoleTemplateBindingValidator{
 		escalationChecker: escalationChecker,
 		roleTemplates:     rt,
@@ -21,7 +22,7 @@ func NewPRTBValidator(rt v3.RoleTemplateCache, escalationChecker *EscalationChec
 }
 
 type projectRoleTemplateBindingValidator struct {
-	escalationChecker *EscalationChecker
+	escalationChecker *auth.EscalationChecker
 	roleTemplates     v3.RoleTemplateCache
 }
 
@@ -50,12 +51,12 @@ func (p *projectRoleTemplateBindingValidator) Admit(response *webhook.Response, 
 		return err
 	}
 
-	rules, err := p.escalationChecker.rulesFromTemplate(rt)
+	rules, err := p.escalationChecker.RulesFromTemplate(rt)
 	if err != nil {
 		return err
 	}
 
-	return p.escalationChecker.confirmNoEscalation(response, request, rules, projectNS)
+	return p.escalationChecker.ConfirmNoEscalation(response, request, rules, projectNS)
 }
 
 func prtbObject(request *webhook.Request) (*rancherv3.ProjectRoleTemplateBinding, error) {

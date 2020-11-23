@@ -6,8 +6,9 @@ import (
 
 	rancherv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
-	k8srbacv1 "github.com/rancher/webhook/pkg/generated/controllers/rbac.authorization.k8s.io/v1"
+	k8srbacv1 "github.com/rancher/wrangler/pkg/generated/controllers/rbac/v1"
 	"github.com/rancher/wrangler/pkg/webhook"
+	authenticationv1 "k8s.io/api/authentication/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apiserver/pkg/authentication/user"
@@ -30,14 +31,14 @@ type EscalationChecker struct {
 	ruleSolver    validation.AuthorizationRuleResolver
 }
 
-// confirmNoEscalation checks that the user attempting to create a binding/role has all the permissions they are attempting
+// ConfirmNoEscalation checks that the user attempting to create a binding/role has all the permissions they are attempting
 // to grant
-func (ec *EscalationChecker) confirmNoEscalation(response *webhook.Response, request *webhook.Request, rules []rbacv1.PolicyRule, namespace string) error {
+func (ec *EscalationChecker) ConfirmNoEscalation(response *webhook.Response, request *webhook.Request, rules []rbacv1.PolicyRule, namespace string) error {
 	userInfo := &user.DefaultInfo{
 		Name:   request.UserInfo.Username,
 		UID:    request.UserInfo.UID,
 		Groups: request.UserInfo.Groups,
-		Extra:  toExtraString(request.UserInfo.Extra),
+		Extra:  ToExtraString(request.UserInfo.Extra),
 	}
 
 	globaleCtx := k8srequest.WithNamespace(k8srequest.WithUser(context.Background(), userInfo), namespace)
@@ -55,8 +56,8 @@ func (ec *EscalationChecker) confirmNoEscalation(response *webhook.Response, req
 	return nil
 }
 
-// rulesFromTemplate gets all rules from the template and all referenced templates
-func (ec *EscalationChecker) rulesFromTemplate(rt *rancherv3.RoleTemplate) ([]rbacv1.PolicyRule, error) {
+// RulesFromTemplate gets all rules from the template and all referenced templates
+func (ec *EscalationChecker) RulesFromTemplate(rt *rancherv3.RoleTemplate) ([]rbacv1.PolicyRule, error) {
 	var rules []rbacv1.PolicyRule
 	var err error
 	templatesSeen := make(map[string]bool)
@@ -98,4 +99,12 @@ func (ec *EscalationChecker) gatherRules(rt *rancherv3.RoleTemplate, rules []rba
 		}
 	}
 	return rules, nil
+}
+
+func ToExtraString(extra map[string]authenticationv1.ExtraValue) map[string][]string {
+	result := make(map[string][]string)
+	for k, v := range extra {
+		result[k] = v
+	}
+	return result
 }
