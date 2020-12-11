@@ -8,3 +8,4 @@ annotations:
   catalog.cattle.io/hidden: "true"
   catalog.cattle.io/namespace: cattle-system
   catalog.cattle.io/release-name: rancher-webhook
+  catalog.cattle.io/os: linux
