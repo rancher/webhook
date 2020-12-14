@@ -38,8 +38,9 @@ func (c *clusterValidator) Admit(response *webhook.Response, request *webhook.Re
 		Spec: v1.SubjectAccessReviewSpec{
 			ResourceAttributes: &v1.ResourceAttributes{
 				Verb:     "fleetaddcluster",
-				Version:  "v1",
-				Resource: "fleetworkspace",
+				Version:  "v3",
+				Resource: "fleetworkspaces",
+				Group:    "management.cattle.io",
 				Name:     newCluster.Spec.FleetWorkspaceName,
 			},
 			User:   request.UserInfo.Username,
