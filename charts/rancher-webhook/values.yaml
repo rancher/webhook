@@ -6,3 +6,6 @@ image:
 global:
   cattle:
     systemDefaultRegistry: ""
+
+capi:
+  enabled: false

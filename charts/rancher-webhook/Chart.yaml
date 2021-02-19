@@ -1,11 +1,14 @@
 apiVersion: v2
 name: rancher-webhook
 description: ValidatingAdmissionWebhook for Rancher types
-version: 0.0.0
-appVersion: 0.0.0
+version: 999
+appVersion: 999
 annotations:
   catalog.cattle.io/certified: rancher
   catalog.cattle.io/hidden: "true"
   catalog.cattle.io/namespace: cattle-system
   catalog.cattle.io/release-name: rancher-webhook
   catalog.cattle.io/os: linux
+dependencies:
+- name: capi
+  condition: capi.enabled

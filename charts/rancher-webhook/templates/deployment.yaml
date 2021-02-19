@@ -11,8 +11,16 @@ spec:
       labels:
         app: rancher-webhook
     spec:
+      volumes:
+      - name: tls
+        secret:
+          secretName: rancher-webhook-tls
       containers:
       - env:
+        - name: STAMP
+          value: "{{.Values.stamp}}"
+        - name: ENABLE_CAPI
+          value: "{{.Values.capi.enabled}}"
         - name: NAMESPACE
           valueFrom:
             fieldRef:
@@ -23,4 +31,9 @@ spec:
         ports:
         - name: https
           containerPort: 9443
+        - name: capi-https
+          containerPort: 8777
+        volumeMounts:
+        - name: tls
+          mountPath: /tmp/k8s-webhook-server/serving-certs
       serviceAccountName: rancher-webhook
