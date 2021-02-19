@@ -8,6 +8,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/rancher/dynamiclistener"
 	"github.com/rancher/dynamiclistener/server"
+	"github.com/rancher/webhook/pkg/capi"
 	"github.com/rancher/webhook/pkg/clients"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/admissionregistration/v1"
@@ -32,7 +33,7 @@ var (
 	sideEffectClassNoneOnDryRun = v1.SideEffectClassNoneOnDryRun
 )
 
-func ListenAndServe(ctx context.Context, cfg *rest.Config) error {
+func ListenAndServe(ctx context.Context, cfg *rest.Config, capiEnabled bool) error {
 	clients, err := clients.New(ctx, cfg)
 	if err != nil {
 		return err
@@ -48,11 +49,34 @@ func ListenAndServe(ctx context.Context, cfg *rest.Config) error {
 		return err
 	}
 
+	var (
+		capiStart func(context.Context) error
+	)
+	if capiEnabled {
+		capiStart, err = capi.Register(ctx, clients)
+		if err != nil {
+			return err
+		}
+	}
+
 	router := mux.NewRouter()
 	router.Handle(validationPath, validation)
 	router.Handle(mutationPath, mutation)
+	if err := listenAndServe(ctx, clients, router); err != nil {
+		return err
+	}
 
-	return listenAndServe(ctx, clients, router)
+	if err := clients.Start(ctx); err != nil {
+		return err
+	}
+
+	if capiStart != nil {
+		if err := capiStart(ctx); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.Handler) (rErr error) {

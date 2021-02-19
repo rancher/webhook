@@ -29,7 +29,7 @@ func run() error {
 	cfg.RateLimiter = ratelimit.None
 
 	ctx := signals.SetupSignalHandler(context.Background())
-	if err := server.ListenAndServe(ctx, cfg); err != nil {
+	if err := server.ListenAndServe(ctx, cfg, os.Getenv("ENABLE_CAPI") == "true"); err != nil {
 		return err
 	}
 
