@@ -10,7 +10,7 @@ GIT_TAG=${DRONE_TAG:-$(git tag -l --contains HEAD | head -n 1)}
 if [[ -z "$DIRTY" && -n "$GIT_TAG" ]]; then
     VERSION=$GIT_TAG
 else
-    VERSION="${COMMIT}${DIRTY}"
+    VERSION="0.0.0-${COMMIT}${DIRTY}"
 fi
 
 if [ -z "$ARCH" ]; then
