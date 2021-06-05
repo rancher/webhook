@@ -6,6 +6,7 @@ image:
 global:
   cattle:
     systemDefaultRegistry: ""
+  hostNetwork: true
 
 capi:
   enabled: false
