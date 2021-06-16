@@ -16,11 +16,12 @@ import (
 type Clients struct {
 	clients.Clients
 
-	Management        managementv3.Interface
-	EscalationChecker *auth.EscalationChecker
+	MultiClusterManagement bool
+	Management             managementv3.Interface
+	EscalationChecker      *auth.EscalationChecker
 }
 
-func New(ctx context.Context, rest *rest.Config) (*Clients, error) {
+func New(ctx context.Context, rest *rest.Config, mcmEnabled bool) (*Clients, error) {
 	clients, err := clients.NewFromConfig(rest, nil)
 	if err != nil {
 		return nil, err
@@ -47,12 +48,17 @@ func New(ctx context.Context, rest *rest.Config) (*Clients, error) {
 	}
 
 	ruleResolver := rbacregistryvalidation.NewDefaultRuleResolver(rbacRestGetter, rbacRestGetter, rbacRestGetter, rbacRestGetter)
-	escalationChecker := auth.NewEscalationChecker(ruleResolver,
-		mgmt.Management().V3().RoleTemplate().Cache(), clients.RBAC.ClusterRole().Cache())
 
-	return &Clients{
-		Clients:           *clients,
-		Management:        mgmt.Management().V3(),
-		EscalationChecker: escalationChecker,
-	}, nil
+	result := &Clients{
+		Clients:                *clients,
+		Management:             mgmt.Management().V3(),
+		MultiClusterManagement: mcmEnabled,
+	}
+
+	if result.MultiClusterManagement {
+		result.EscalationChecker = auth.NewEscalationChecker(ruleResolver,
+			mgmt.Management().V3().RoleTemplate().Cache(), clients.RBAC.ClusterRole().Cache())
+	}
+
+	return result, nil
 }

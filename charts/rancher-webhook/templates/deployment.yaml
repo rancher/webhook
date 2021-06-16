@@ -21,6 +21,8 @@ spec:
           value: "{{.Values.stamp}}"
         - name: ENABLE_CAPI
           value: "{{.Values.capi.enabled}}"
+        - name: ENABLE_MCM
+          value: "{{.Values.mcm.enabled}}"
         - name: NAMESPACE
           valueFrom:
             fieldRef:
