@@ -33,8 +33,8 @@ var (
 	sideEffectClassNoneOnDryRun = v1.SideEffectClassNoneOnDryRun
 )
 
-func ListenAndServe(ctx context.Context, cfg *rest.Config, capiEnabled bool) error {
-	clients, err := clients.New(ctx, cfg)
+func ListenAndServe(ctx context.Context, cfg *rest.Config, capiEnabled, mcmEnabled bool) error {
+	clients, err := clients.New(ctx, cfg, mcmEnabled)
 	if err != nil {
 		return err
 	}

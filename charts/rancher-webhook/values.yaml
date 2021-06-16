@@ -10,3 +10,6 @@ global:
 
 capi:
   enabled: false
+
+mcm:
+  enabled: true
