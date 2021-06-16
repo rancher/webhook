@@ -15,6 +15,9 @@ spec:
       - name: tls
         secret:
           secretName: rancher-webhook-tls
+      {{- if .Values.global.hostNetwork }}
+      hostNetwork: true
+      {{- end }}
       containers:
       - env:
         - name: STAMP
