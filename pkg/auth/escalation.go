@@ -41,9 +41,9 @@ func (ec *EscalationChecker) ConfirmNoEscalation(response *webhook.Response, req
 		Extra:  ToExtraString(request.UserInfo.Extra),
 	}
 
-	globaleCtx := k8srequest.WithNamespace(k8srequest.WithUser(context.Background(), userInfo), namespace)
+	globalCtx := k8srequest.WithNamespace(k8srequest.WithUser(context.Background(), userInfo), namespace)
 
-	if err := rbacregistryvalidation.ConfirmNoEscalation(globaleCtx, ec.ruleSolver, rules); err != nil {
+	if err := rbacregistryvalidation.ConfirmNoEscalation(globalCtx, ec.ruleSolver, rules); err != nil {
 		response.Result = &metav1.Status{
 			Status:  "Failure",
 			Message: err.Error(),
