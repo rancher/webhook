@@ -16,11 +16,15 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+const (
+	namespace = "cattle-system"
+	tlsName   = "rancher-webhook.cattle-system.svc"
+	certName  = "cattle-webhook-tls"
+	caName    = "cattle-webhook-ca"
+)
+
 var (
-	namespace                   = "cattle-system"
-	tlsName                     = "rancher-webhook.cattle-system.svc"
-	certName                    = "cattle-webhook-tls"
-	caName                      = "cattle-webhook-ca"
+	// These have to remain as vars since we need the address below
 	port                        = int32(443)
 	validationPath              = "/v1/webhook/validation"
 	mutationPath                = "/v1/webhook/mutation"
