@@ -1,19 +1,22 @@
-webhook
+Rancher Webhook
 ========
+ Rancher webhook is both a validating admission webhook and mutating admission webhook for Kubernetes. 
 
-## ***FILL THIS OUT WITH A USEFUL DESCRIPTION OF THIS REPO***
+
+[Explanation of Webhooks in Kubernetes](
+https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/)
+
 
 ## Building
 
 `make`
-
 
 ## Running
 
 `./bin/webhook`
 
 ## License
-Copyright (c) 2019 [Rancher Labs, Inc.](http://rancher.com)
+Copyright (c) 2019-2021 [Rancher Labs, Inc.](http://rancher.com)
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

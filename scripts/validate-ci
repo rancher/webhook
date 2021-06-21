@@ -3,13 +3,22 @@ set -e
 
 cd $(dirname $0)/..
 
+echo Running go mod checks
+
+echo Running: go generate
 go generate
+
+echo Running: go mod tidy
+go mod tidy
+
+echo Running: go mod verify
+go mod verify
 
 source ./scripts/version
 
 if [ -n "$DIRTY" ]; then
     echo Git is dirty
     git status
-    git diff
+    git --no-pager diff
     exit 1
 fi
