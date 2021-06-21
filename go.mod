@@ -1,6 +1,6 @@
 module github.com/rancher/webhook
 
-go 1.14
+go 1.16
 
 replace (
 	k8s.io/api => k8s.io/api v0.21.0
