@@ -4,14 +4,21 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/rancher/webhook/pkg/server"
 	_ "github.com/rancher/wrangler/pkg/generated/controllers/admissionregistration.k8s.io"
+	"github.com/rancher/wrangler/pkg/k8scheck"
 	"github.com/rancher/wrangler/pkg/kubeconfig"
 	"github.com/rancher/wrangler/pkg/ratelimit"
 	"github.com/rancher/wrangler/pkg/signals"
 	"github.com/sirupsen/logrus"
+)
+
+var (
+	Version   = "dev"
+	GitCommit = "HEAD"
 )
 
 func main() {
@@ -21,6 +28,8 @@ func main() {
 }
 
 func run() error {
+	logrus.Infof("Rancher-webhook version %s is starting", fmt.Sprintf("%s (%s)", Version, GitCommit))
+
 	cfg, err := kubeconfig.GetNonInteractiveClientConfig(os.Getenv("KUBECONFIG")).ClientConfig()
 	if err != nil {
 		return err
@@ -29,6 +38,12 @@ func run() error {
 	cfg.RateLimiter = ratelimit.None
 
 	ctx := signals.SetupSignalHandler(context.Background())
+
+	err = k8scheck.Wait(ctx, *cfg)
+	if err != nil {
+		return err
+	}
+
 	if err := server.ListenAndServe(ctx, cfg, os.Getenv("ENABLE_CAPI") == "true", os.Getenv("ENABLE_MCM") != "false"); err != nil {
 		return err
 	}
