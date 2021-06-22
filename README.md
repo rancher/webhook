@@ -9,12 +9,38 @@ https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-con
 
 ## Building
 
-`make`
+```bash
+make
+```
 
 ## Running
 
-`./bin/webhook`
+```bash
+./bin/webhook
+```
 
+## Development
+
+To direct traffic to a locally running instance ngrok can be used:
+
+```bash
+ngrok http https://localhost:9443
+```
+
+Update the `WebhookClientConfig` by adding a `URL` and removing the `Service` and `CABundle` fields. Update the `URL` with the ngrok url `https://<myngrok>.ngrok.io/v1/webhook/validation`
+
+```go
+url := "https://<myngrok>.ngrok.io/v1/webhook/validation"
+{
+	Name: "rancherauth.cattle.io",
+	ClientConfig: v1.WebhookClientConfig{
+		URL: &url,
+	},
+....
+}
+```
+
+The webhook will update the `ValidatingWebhookConfiguration` in Kubernetes to then point at the locally running instance.
 ## License
 Copyright (c) 2019-2021 [Rancher Labs, Inc.](http://rancher.com)
 
