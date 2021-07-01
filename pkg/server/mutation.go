@@ -14,6 +14,6 @@ func Mutation(client *clients.Clients) (http.Handler, error) {
 	fleetworkspaceMutator := fleetworkspace.NewMutator(client)
 
 	router := webhook.NewRouter()
-	router.Kind("FleetWorkspace").Group(management.GroupName).Type(&v3.FleetWorkspace{}).Handle(fleetworkspaceMutator)
+	router.Kind("FleetWorkspace").Group(management.GroupName).Type(&v3.FleetWorkspace{}).Handle(access(fleetworkspaceMutator))
 	return router, nil
 }
