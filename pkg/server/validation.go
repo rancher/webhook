@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/webhook/pkg/clients"
 	"github.com/rancher/webhook/pkg/resources/validation/cluster"
 	"github.com/rancher/webhook/pkg/resources/validation/clusterroletemplatebinding"
+	"github.com/rancher/webhook/pkg/resources/validation/globalrole"
 	"github.com/rancher/webhook/pkg/resources/validation/globalrolebinding"
 	"github.com/rancher/webhook/pkg/resources/validation/projectroletemplatebinding"
 	"github.com/rancher/webhook/pkg/resources/validation/roletemplate"
