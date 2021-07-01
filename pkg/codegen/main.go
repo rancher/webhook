@@ -19,6 +19,7 @@ func main() {
 					v3.Cluster{},
 					v3.GlobalRole{},
 					v3.RoleTemplate{},
+					v3.GlobalRoleBinding{},
 				},
 			},
 		},

@@ -32,6 +32,7 @@ func init() {
 type Interface interface {
 	Cluster() ClusterController
 	GlobalRole() GlobalRoleController
+	GlobalRoleBinding() GlobalRoleBindingController
 	RoleTemplate() RoleTemplateController
 }
 
@@ -50,6 +51,9 @@ func (c *version) Cluster() ClusterController {
 }
 func (c *version) GlobalRole() GlobalRoleController {
 	return NewGlobalRoleController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "GlobalRole"}, "globalroles", false, c.controllerFactory)
+}
+func (c *version) GlobalRoleBinding() GlobalRoleBindingController {
+	return NewGlobalRoleBindingController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "GlobalRoleBinding"}, "globalrolebindings", false, c.controllerFactory)
 }
 func (c *version) RoleTemplate() RoleTemplateController {
 	return NewRoleTemplateController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "RoleTemplate"}, "roletemplates", false, c.controllerFactory)

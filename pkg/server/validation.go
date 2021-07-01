@@ -19,7 +19,7 @@ func Validation(clients *clients.Clients) (http.Handler, error) {
 	clusters := cluster.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews())
 	roleTemplates := roletemplate.NewValidator(clients.EscalationChecker)
 	globalRoles := globalrole.NewValidator()
-	globalRoleBindings := globalrolebinding.NewValidator(clients.Management.GlobalRole().Cache(), clients.EscalationChecker)
+	globalRoleBindings := globalrolebinding.NewValidator(clients.Management.GlobalRole().Cache(), clients.Management.GlobalRoleBinding().Cache(), clients.EscalationChecker)
 	crtbs := clusterroletemplatebinding.NewValidator(clients.Management.RoleTemplate().Cache(), clients.EscalationChecker)
 	prtbs := projectroletemplatebinding.NewValidator(clients.Management.RoleTemplate().Cache(), clients.EscalationChecker)
 
