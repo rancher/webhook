@@ -18,10 +18,11 @@ import (
 )
 
 const (
-	namespace = "cattle-system"
-	tlsName   = "rancher-webhook.cattle-system.svc"
-	certName  = "cattle-webhook-tls"
-	caName    = "cattle-webhook-ca"
+	serviceName = "rancher-webhook"
+	namespace   = "cattle-system"
+	tlsName     = "rancher-webhook.cattle-system.svc"
+	certName    = "cattle-webhook-tls"
+	caName      = "cattle-webhook-ca"
 )
 
 var (
@@ -95,22 +96,34 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 		// Sleep here to make sure server is listening and all caches are primed
 		time.Sleep(15 * time.Second)
 
+		validationClientConfig := v1.WebhookClientConfig{
+			Service: &v1.ServiceReference{
+				Namespace: namespace,
+				Name:      serviceName,
+				Path:      &validationPath,
+				Port:      &port,
+			},
+			CABundle: secret.Data[corev1.TLSCertKey],
+		}
+
+		mutationClientConfig := v1.WebhookClientConfig{
+			Service: &v1.ServiceReference{
+				Namespace: namespace,
+				Name:      serviceName,
+				Path:      &validationPath,
+				Port:      &port,
+			},
+			CABundle: secret.Data[corev1.TLSCertKey],
+		}
+
 		return secret, apply.WithOwner(secret).ApplyObjects(&v1.ValidatingWebhookConfiguration{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "rancher.cattle.io",
 			},
 			Webhooks: []v1.ValidatingWebhook{
 				{
-					Name: "rancher.cattle.io",
-					ClientConfig: v1.WebhookClientConfig{
-						Service: &v1.ServiceReference{
-							Namespace: namespace,
-							Name:      "rancher-webhook",
-							Path:      &validationPath,
-							Port:      &port,
-						},
-						CABundle: secret.Data[corev1.TLSCertKey],
-					},
+					Name:         "rancher.cattle.io",
+					ClientConfig: validationClientConfig,
 					Rules: []v1.RuleWithOperations{
 						{
 							Operations: []v1.OperationType{
@@ -130,16 +143,8 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 					AdmissionReviewVersions: []string{"v1", "v1beta1"},
 				},
 				{
-					Name: "rancherauth.cattle.io",
-					ClientConfig: v1.WebhookClientConfig{
-						Service: &v1.ServiceReference{
-							Namespace: namespace,
-							Name:      "rancher-webhook",
-							Path:      &validationPath,
-							Port:      &port,
-						},
-						CABundle: secret.Data[corev1.TLSCertKey],
-					},
+					Name:         "rancherauth.cattle.io",
+					ClientConfig: validationClientConfig,
 					Rules: []v1.RuleWithOperations{
 						{
 							Operations: []v1.OperationType{
@@ -202,6 +207,18 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 								Scope:       &clusterScope,
 							},
 						},
+						{
+							Operations: []v1.OperationType{
+								v1.Create,
+								v1.Update,
+							},
+							Rule: v1.Rule{
+								APIGroups:   []string{"provisioning.cattle.io"},
+								APIVersions: []string{"v1"},
+								Resources:   []string{"clusters"},
+								Scope:       &namespaceScope,
+							},
+						},
 					},
 					FailurePolicy:           &failPolicyFail,
 					SideEffects:             &sideEffectClassNone,
@@ -214,16 +231,8 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 			},
 			Webhooks: []v1.MutatingWebhook{
 				{
-					Name: "rancherfleet.cattle.io",
-					ClientConfig: v1.WebhookClientConfig{
-						Service: &v1.ServiceReference{
-							Namespace: namespace,
-							Name:      "rancher-webhook",
-							Path:      &mutationPath,
-							Port:      &port,
-						},
-						CABundle: secret.Data[corev1.TLSCertKey],
-					},
+					Name:         "rancherfleet.cattle.io",
+					ClientConfig: mutationClientConfig,
 					Rules: []v1.RuleWithOperations{
 						{
 							Operations: []v1.OperationType{
@@ -234,6 +243,26 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 								APIVersions: []string{"v3"},
 								Resources:   []string{"fleetworkspaces"},
 								Scope:       &clusterScope,
+							},
+						},
+					},
+					FailurePolicy:           &failPolicyFail,
+					SideEffects:             &sideEffectClassNoneOnDryRun,
+					AdmissionReviewVersions: []string{"v1", "v1beta1"},
+				},
+				{
+					Name:         "rancher.cattle.io",
+					ClientConfig: mutationClientConfig,
+					Rules: []v1.RuleWithOperations{
+						{
+							Operations: []v1.OperationType{
+								v1.Create,
+							},
+							Rule: v1.Rule{
+								APIGroups:   []string{"provisioning.cattle.io"},
+								APIVersions: []string{"v1"},
+								Resources:   []string{"clusters"},
+								Scope:       &namespaceScope,
 							},
 						},
 					},

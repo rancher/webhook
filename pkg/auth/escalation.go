@@ -17,6 +17,10 @@ import (
 	rbacregistryvalidation "k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
 
+const (
+	CreatorIDAnn = "field.cattle.io/creatorId"
+)
+
 func NewEscalationChecker(ruleSolver validation.AuthorizationRuleResolver, roleTemplates v3.RoleTemplateCache, clusterRoles k8srbacv1.ClusterRoleCache) *EscalationChecker {
 	return &EscalationChecker{
 		clusterRoles:  clusterRoles,

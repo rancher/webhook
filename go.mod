@@ -33,11 +33,11 @@ replace (
 require (
 	github.com/gorilla/mux v1.8.0
 	github.com/rancher/dynamiclistener v0.2.1-0.20201110045217-9b1b7d3132e8
-	github.com/rancher/lasso v0.0.0-20210408231703-9ddd9378d08d
-	github.com/rancher/lasso/controller-runtime v0.0.0-20210408231703-9ddd9378d08d
-	github.com/rancher/rancher/pkg/apis v0.0.0-20210503205929-f695b78a6108
-	github.com/rancher/wrangler v0.8.1-0.20210429171250-3bef7a4bfeef
-	github.com/sirupsen/logrus v1.7.0
+	github.com/rancher/lasso v0.0.0-20210616224652-fc3ebd901c08
+	github.com/rancher/lasso/controller-runtime v0.0.0-20210616224652-fc3ebd901c08
+	github.com/rancher/rancher/pkg/apis v0.0.0-20210628154046-7a2fc74f9598
+	github.com/rancher/wrangler v0.8.1-0.20210623142126-9fabb3073c5e
+	github.com/sirupsen/logrus v1.8.1
 	k8s.io/api v0.21.0
 	k8s.io/apiextensions-apiserver v0.21.0
 	k8s.io/apimachinery v0.21.0
