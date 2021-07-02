@@ -28,6 +28,10 @@ func main() {
 }
 
 func run() error {
+	if os.Getenv("CATTLE_DEBUG") == "true" || os.Getenv("RANCHER_DEBUG") == "true" {
+		logrus.SetLevel(logrus.DebugLevel)
+	}
+
 	logrus.Infof("Rancher-webhook version %s is starting", fmt.Sprintf("%s (%s)", Version, GitCommit))
 
 	cfg, err := kubeconfig.GetNonInteractiveClientConfig(os.Getenv("KUBECONFIG")).ClientConfig()

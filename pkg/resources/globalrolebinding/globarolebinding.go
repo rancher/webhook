@@ -52,16 +52,15 @@ func (grbv *globalRoleBindingValidator) Admit(response *webhook.Response, reques
 				response.Allowed = true
 				return nil
 			}
-			fallthrough
-		default: // other operations not allowed when GR is not found
-			response.Result = &metav1.Status{
-				Status:  "Failure",
-				Message: fmt.Sprintf("referenced globalRole %s not found, only deletions allowed", newGRB.Name),
-				Reason:  metav1.StatusReasonUnauthorized,
-				Code:    http.StatusUnauthorized,
-			}
-			return nil
 		}
+		// other operations not allowed
+		response.Result = &metav1.Status{
+			Status:  "Failure",
+			Message: fmt.Sprintf("referenced globalRole %s not found, only deletions allowed", newGRB.Name),
+			Reason:  metav1.StatusReasonUnauthorized,
+			Code:    http.StatusUnauthorized,
+		}
+		return nil
 	}
 
 	return grbv.escalationChecker.ConfirmNoEscalation(response, request, globalRole.Rules, "")
