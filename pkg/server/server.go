@@ -110,7 +110,7 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 			Service: &v1.ServiceReference{
 				Namespace: namespace,
 				Name:      serviceName,
-				Path:      &validationPath,
+				Path:      &mutationPath,
 				Port:      &port,
 			},
 			CABundle: secret.Data[corev1.TLSCertKey],
