@@ -27,6 +27,13 @@ func (grv *globalRoleValidator) Admit(response *webhook.Response, request *webho
 		return err
 	}
 
+	// object is in the process of being deleted, so admit it
+	// this admits update operations that happen to remove finalizers
+	if newGR.DeletionTimestamp != nil {
+		response.Allowed = true
+		return nil
+	}
+
 	// ensure all PolicyRules have at least one verb, otherwise RBAC controllers may encounter issues when creating Roles and ClusterRoles
 	for _, rule := range newGR.Rules {
 		if len(rule.Verbs) == 0 {

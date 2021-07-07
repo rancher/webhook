@@ -32,6 +32,13 @@ func (r *roleTemplateValidator) Admit(response *webhook.Response, request *webho
 		return err
 	}
 
+	// object is in the process of being deleted, so admit it
+	// this admits update operations that happen to remove finalizers
+	if rt.DeletionTimestamp != nil {
+		response.Allowed = true
+		return nil
+	}
+
 	rules, err := r.escalationChecker.RulesFromTemplate(rt)
 	if err != nil {
 		return err
