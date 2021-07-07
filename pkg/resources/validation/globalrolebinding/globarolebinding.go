@@ -1,7 +1,12 @@
 package globalrolebinding
 
 import (
+	"fmt"
+	"net/http"
 	"time"
+
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	rancherv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/auth"
@@ -36,7 +41,27 @@ func (grbv *globalRoleBindingValidator) Admit(response *webhook.Response, reques
 	// Pull the global role to get the rules
 	globalRole, err := grbv.globalRoles.Get(newGRB.GlobalRoleName)
 	if err != nil {
-		return err
+		if !errors.IsNotFound(err) {
+			return err
+		}
+		switch request.Operation {
+		case admissionv1.Delete: // allow delete operations if the GR is not found
+			response.Allowed = true
+			return nil
+		case admissionv1.Update: // only allow updates to the finalizers if the GR is not found
+			if newGRB.DeletionTimestamp != nil {
+				response.Allowed = true
+				return nil
+			}
+		}
+		// other operations not allowed
+		response.Result = &metav1.Status{
+			Status:  "Failure",
+			Message: fmt.Sprintf("referenced globalRole %s not found, only deletions allowed", newGRB.Name),
+			Reason:  metav1.StatusReasonUnauthorized,
+			Code:    http.StatusUnauthorized,
+		}
+		return nil
 	}
 
 	return grbv.escalationChecker.ConfirmNoEscalation(response, request, globalRole.Rules, "")
