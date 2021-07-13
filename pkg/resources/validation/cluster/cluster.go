@@ -3,9 +3,8 @@ package cluster
 import (
 	"net/http"
 
-	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/webhook"
-	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	v1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,7 +22,7 @@ type clusterValidator struct {
 }
 
 func (c *clusterValidator) Admit(response *webhook.Response, request *webhook.Request) error {
-	oldCluster, newCluster, err := clusterObjects(request)
+	oldCluster, newCluster, err := objectsv3.ClusterOldAndNewFromRequest(request)
 	if err != nil {
 		return err
 	}
@@ -73,22 +72,4 @@ func toExtra(extra map[string]authenticationv1.ExtraValue) map[string]v1.ExtraVa
 		result[k] = v1.ExtraValue(v)
 	}
 	return result
-}
-
-func clusterObjects(request *webhook.Request) (*v3.Cluster, *v3.Cluster, error) {
-	object, err := request.DecodeObject()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if request.Operation == admissionv1.Create {
-		return &v3.Cluster{}, object.(*v3.Cluster), nil
-	}
-
-	oldObject, err := request.DecodeOldObject()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return oldObject.(*v3.Cluster), object.(*v3.Cluster), nil
 }

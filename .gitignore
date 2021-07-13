@@ -5,4 +5,5 @@
 /dist
 *.swp
 .idea
+.vscode
 /webhook

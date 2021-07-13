@@ -6,12 +6,15 @@ import (
 
 	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/webhook/pkg/auth"
+	objectsv1 "github.com/rancher/webhook/pkg/generated/objects/provisioning.cattle.io/v1"
 	"github.com/rancher/wrangler/pkg/webhook"
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/trace"
 )
+
+// The validator functions to call for v1.Clusters requests
+var v1ClusterValidators = []objectsv1.ClusterValidationFunc{validateCreatorID, validateACEConfig}
 
 func NewProvisioningClusterValidator() webhook.Handler {
 	return &provisioningClusterValidator{}
@@ -22,63 +25,65 @@ type provisioningClusterValidator struct{}
 func (p *provisioningClusterValidator) Admit(response *webhook.Response, request *webhook.Request) error {
 	listTrace := trace.New("provisioningClusterValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(2 * time.Second)
-	cluster, err := clusterObject(request)
+	oldCluster, cluster, err := objectsv1.ClusterOldAndNewFromRequest(request)
 	if err != nil {
 		return err
 	}
 
-	if request.Operation == admissionv1.Create {
-		// When creating the cluster the annotation must match the user creating it
-		if cluster.Annotations[auth.CreatorIDAnn] != request.UserInfo.Username {
-			response.Result = &metav1.Status{
-				Status:  "Failure",
-				Message: "creatorID annotation does not match user",
-				Reason:  metav1.StatusReasonInvalid,
-				Code:    http.StatusUnprocessableEntity,
-			}
+	for _, validator := range v1ClusterValidators {
+		if status, err := validator(request, oldCluster, cluster); err != nil {
+			return err
+		} else if status != nil {
+			response.Result = status
 			return nil
 		}
-		response.Allowed = true
-		return nil
-	}
-
-	// Check that the anno doesn't exist on the update object, the only allowed
-	// update to this field is deleting it.
-	if _, ok := cluster.Annotations[auth.CreatorIDAnn]; !ok {
-		response.Allowed = true
-		return nil
-	}
-
-	c, err := request.DecodeOldObject()
-	if err != nil {
-		return err
-	}
-
-	oldCluster := c.(*v1.Cluster)
-
-	// Compare old vs new because they need to be the same, no updates are allowed for
-	// the CreatorIDAnn
-	if oldCluster.GetAnnotations()[auth.CreatorIDAnn] != cluster.GetAnnotations()[auth.CreatorIDAnn] {
-		response.Result = &metav1.Status{
-			Status:  "Failure",
-			Message: "creatorID annotation cannot be changed",
-			Reason:  metav1.StatusReasonInvalid,
-			Code:    http.StatusUnprocessableEntity,
-		}
-		return nil
 	}
 
 	response.Allowed = true
 	return nil
 }
 
-func clusterObject(request *webhook.Request) (*v1.Cluster, error) {
-	var cluster runtime.Object
-	var err error
-	if request.Operation == admissionv1.Delete {
-		cluster, err = request.DecodeOldObject()
-	} else {
-		cluster, err = request.DecodeObject()
+func validateCreatorID(request *webhook.Request, oldCluster, cluster *v1.Cluster) (*metav1.Status, error) {
+	status := &metav1.Status{
+		Status: "Failure",
+		Reason: metav1.StatusReasonInvalid,
+		Code:   http.StatusUnprocessableEntity,
 	}
-	return cluster.(*v1.Cluster), err
+
+	if request.Operation == admissionv1.Create {
+		// When creating the cluster the annotation must match the user creating it
+		if cluster.Annotations[auth.CreatorIDAnn] != request.UserInfo.Username {
+			status.Message = "creatorID annotation does not match user"
+			return status, nil
+		}
+		return nil, nil
+	}
+
+	// Check that the anno doesn't exist on the update object, the only allowed
+	// update to this field is deleting it.
+	if _, ok := cluster.Annotations[auth.CreatorIDAnn]; !ok {
+		return nil, nil
+	}
+
+	// Compare old vs new because they need to be the same, no updates are allowed for
+	// the CreatorIDAnn
+	if oldCluster.GetAnnotations()[auth.CreatorIDAnn] != cluster.GetAnnotations()[auth.CreatorIDAnn] {
+		status.Message = "creatorID annotation cannot be changed"
+		return status, nil
+	}
+
+	return nil, nil
+}
+
+func validateACEConfig(_ *webhook.Request, _, cluster *v1.Cluster) (*metav1.Status, error) {
+	if cluster.Spec.RKEConfig.LocalClusterAuthEndpoint.Enabled && cluster.Spec.RKEConfig.LocalClusterAuthEndpoint.CACerts != "" && cluster.Spec.RKEConfig.LocalClusterAuthEndpoint.FQDN == "" {
+		return &metav1.Status{
+			Status:  "Failure",
+			Message: "CACerts defined by FQDN is not defined",
+			Reason:  metav1.StatusReasonInvalid,
+			Code:    http.StatusUnprocessableEntity,
+		}, nil
+	}
+
+	return nil, nil
 }

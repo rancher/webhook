@@ -38,6 +38,7 @@ require (
 	github.com/rancher/rancher/pkg/apis v0.0.0-20210628154046-7a2fc74f9598
 	github.com/rancher/wrangler v0.8.3
 	github.com/sirupsen/logrus v1.8.1
+	golang.org/x/tools v0.1.0
 	k8s.io/api v0.21.0
 	k8s.io/apiextensions-apiserver v0.21.0
 	k8s.io/apimachinery v0.21.0
