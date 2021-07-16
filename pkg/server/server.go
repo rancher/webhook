@@ -265,6 +265,17 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 								Scope:       &namespaceScope,
 							},
 						},
+						{
+							Operations: []v1.OperationType{
+								v1.Create,
+							},
+							Rule: v1.Rule{
+								APIGroups:   []string{""},
+								APIVersions: []string{"v1"},
+								Resources:   []string{"secrets"},
+								Scope:       &namespaceScope,
+							},
+						},
 					},
 					FailurePolicy:           &failPolicyFail,
 					SideEffects:             &sideEffectClassNoneOnDryRun,
