@@ -5,9 +5,11 @@ import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/auth"
 	"github.com/rancher/webhook/pkg/clients"
+	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	corev1controller "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	rbacvacontroller "github.com/rancher/wrangler/pkg/generated/controllers/rbac/v1"
 	"github.com/rancher/wrangler/pkg/webhook"
+	admissionv1 "k8s.io/api/admission/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -41,12 +43,12 @@ type mutator struct {
 // 2. fleetworkspace ClusterRole. It will create the cluster role that has * permission only to the current workspace
 // 3. Two roleBinding to bind the current user to fleet-admin roles and fleetworkspace roles
 func (m *mutator) Admit(response *webhook.Response, request *webhook.Request) error {
-	if request.DryRun != nil && *request.DryRun {
+	if (request.DryRun != nil && *request.DryRun) || request.Operation == admissionv1.Delete {
 		response.Allowed = true
 		return nil
 	}
 
-	fw, err := fleetworkspaceObjects(request)
+	fw, err := objectsv3.FleetWorkspaceFromRequest(request)
 	if err != nil {
 		return err
 	}
@@ -171,13 +173,4 @@ func (m *mutator) createOwnRoleAndBinding(request *webhook.Request, fw *v3.Fleet
 		return err
 	}
 	return nil
-}
-
-func fleetworkspaceObjects(request *webhook.Request) (*v3.FleetWorkspace, error) {
-	object, err := request.DecodeObject()
-	if err != nil {
-		return nil, err
-	}
-
-	return object.(*v3.FleetWorkspace), nil
 }

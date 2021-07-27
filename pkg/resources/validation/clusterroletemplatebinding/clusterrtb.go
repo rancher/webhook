@@ -3,13 +3,11 @@ package clusterroletemplatebinding
 import (
 	"time"
 
-	rancherv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/auth"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
+	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/webhook"
-	admissionv1 "k8s.io/api/admission/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/trace"
 )
 
@@ -29,7 +27,7 @@ func (c *clusterRoleTemplateBindingValidator) Admit(response *webhook.Response, 
 	listTrace := trace.New("clusterRoleTemplateBindingValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(2 * time.Second)
 
-	crtb, err := crtbObject(request)
+	crtb, err := objectsv3.ClusterRoleTemplateBindingFromRequest(request)
 	if err != nil {
 		return err
 	}
@@ -54,15 +52,4 @@ func (c *clusterRoleTemplateBindingValidator) Admit(response *webhook.Response, 
 	}
 
 	return c.escalationChecker.ConfirmNoEscalation(response, request, rules, "local")
-}
-
-func crtbObject(request *webhook.Request) (*rancherv3.ClusterRoleTemplateBinding, error) {
-	var crtb runtime.Object
-	var err error
-	if request.Operation == admissionv1.Delete {
-		crtb, err = request.DecodeOldObject()
-	} else {
-		crtb, err = request.DecodeObject()
-	}
-	return crtb.(*rancherv3.ClusterRoleTemplateBinding), err
 }

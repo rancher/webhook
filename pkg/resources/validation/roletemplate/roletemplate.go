@@ -4,12 +4,10 @@ import (
 	"net/http"
 	"time"
 
-	rancherv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/auth"
+	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/webhook"
-	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/trace"
 )
 
@@ -27,7 +25,7 @@ func (r *roleTemplateValidator) Admit(response *webhook.Response, request *webho
 	listTrace := trace.New("roleTemplateValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(2 * time.Second)
 
-	rt, err := roleTemplateObject(request)
+	rt, err := objectsv3.RoleTemplateFromRequest(request)
 	if err != nil {
 		return err
 	}
@@ -59,15 +57,4 @@ func (r *roleTemplateValidator) Admit(response *webhook.Response, request *webho
 	}
 
 	return r.escalationChecker.ConfirmNoEscalation(response, request, rules, "")
-}
-
-func roleTemplateObject(request *webhook.Request) (*rancherv3.RoleTemplate, error) {
-	var rt runtime.Object
-	var err error
-	if request.Operation == admissionv1.Delete {
-		rt, err = request.DecodeOldObject()
-	} else {
-		rt, err = request.DecodeObject()
-	}
-	return rt.(*rancherv3.RoleTemplate), err
 }
