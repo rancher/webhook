@@ -72,7 +72,7 @@ func validateCreatorID(request *webhook.Request, oldCluster, cluster *v1.Cluster
 }
 
 func validateACEConfig(cluster *v1.Cluster) *metav1.Status {
-	if cluster.Spec.RKEConfig.LocalClusterAuthEndpoint.Enabled && cluster.Spec.RKEConfig.LocalClusterAuthEndpoint.CACerts != "" && cluster.Spec.RKEConfig.LocalClusterAuthEndpoint.FQDN == "" {
+	if cluster.Spec.RKEConfig != nil && cluster.Spec.RKEConfig.LocalClusterAuthEndpoint.Enabled && cluster.Spec.RKEConfig.LocalClusterAuthEndpoint.CACerts != "" && cluster.Spec.RKEConfig.LocalClusterAuthEndpoint.FQDN == "" {
 		return &metav1.Status{
 			Status:  "Failure",
 			Message: "CACerts defined but FQDN is not defined",
