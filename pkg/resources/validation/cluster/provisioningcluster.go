@@ -7,17 +7,26 @@ import (
 	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/webhook/pkg/auth"
 	objectsv1 "github.com/rancher/webhook/pkg/generated/objects/provisioning.cattle.io/v1"
+	"github.com/rancher/wrangler/pkg/kv"
 	"github.com/rancher/wrangler/pkg/webhook"
 	admissionv1 "k8s.io/api/admission/v1"
+	authv1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/utils/trace"
 )
 
-func NewProvisioningClusterValidator() webhook.Handler {
-	return &provisioningClusterValidator{}
+const globalNamespace = "cattle-global-data"
+
+func NewProvisioningClusterValidator(sar authorizationv1.SubjectAccessReviewInterface) webhook.Handler {
+	return &provisioningClusterValidator{
+		sar: sar,
+	}
 }
 
-type provisioningClusterValidator struct{}
+type provisioningClusterValidator struct {
+	sar authorizationv1.SubjectAccessReviewInterface
+}
 
 func (p *provisioningClusterValidator) Admit(response *webhook.Response, request *webhook.Request) error {
 	listTrace := trace.New("provisioningClusterValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
@@ -35,8 +44,63 @@ func (p *provisioningClusterValidator) Admit(response *webhook.Response, request
 		return nil
 	}
 
+	if err := p.validateCloudCredentialAccess(request, response, oldCluster, cluster); err != nil || response.Result != nil {
+		return err
+	}
+
 	response.Allowed = true
 	return nil
+}
+
+func (p *provisioningClusterValidator) validateCloudCredentialAccess(request *webhook.Request, response *webhook.Response, oldCluster, newCluster *v1.Cluster) error {
+	if newCluster.Spec.CloudCredentialSecretName == "" ||
+		oldCluster.Spec.CloudCredentialSecretName == newCluster.Spec.CloudCredentialSecretName {
+		return nil
+	}
+
+	secretNamespace, secretName := getCloudCredentialSecretInfo(newCluster.Namespace, newCluster.Spec.CloudCredentialSecretName)
+
+	resp, err := p.sar.Create(request.Context, &authv1.SubjectAccessReview{
+		Spec: authv1.SubjectAccessReviewSpec{
+			ResourceAttributes: &authv1.ResourceAttributes{
+				Verb:      "get",
+				Version:   "v1",
+				Resource:  "secrets",
+				Group:     "",
+				Name:      secretName,
+				Namespace: secretNamespace,
+			},
+			User:   request.UserInfo.Username,
+			Groups: request.UserInfo.Groups,
+			Extra:  toExtra(request.UserInfo.Extra),
+			UID:    request.UserInfo.UID,
+		},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		return err
+	}
+
+	if resp.Status.Allowed {
+		return nil
+	}
+
+	response.Result = &metav1.Status{
+		Status:  "Failure",
+		Message: resp.Status.Reason,
+		Reason:  metav1.StatusReasonUnauthorized,
+		Code:    http.StatusUnauthorized,
+	}
+	return nil
+}
+
+// getCloudCredentialSecretInfo returns the namespace and name of the secret based off the old cloud cred or new style
+// cloud cred
+func getCloudCredentialSecretInfo(namespace, name string) (string, string) {
+	globalNS, globalName := kv.Split(name, ":")
+	if globalName != "" && globalNS == globalNamespace {
+		return globalNS, globalName
+	}
+	return namespace, name
 }
 
 func validateCreatorID(request *webhook.Request, oldCluster, cluster *v1.Cluster) *metav1.Status {
