@@ -28,7 +28,7 @@ func Validation(clients *clients.Clients) (http.Handler, error) {
 		prtbs := projectroletemplatebinding.NewValidator(clients.Management.RoleTemplate().Cache(), clients.EscalationChecker)
 		crtbs := clusterroletemplatebinding.NewValidator(clients.Management.RoleTemplate().Cache(), clients.EscalationChecker)
 		roleTemplates := roletemplate.NewValidator(clients.EscalationChecker)
-		provisioningCluster := cluster.NewProvisioningClusterValidator()
+		provisioningCluster := cluster.NewProvisioningClusterValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews())
 
 		router.Kind("RoleTemplate").Group(management.GroupName).Type(&v3.RoleTemplate{}).Handle(roleTemplates)
 		router.Kind("GlobalRoleBinding").Group(management.GroupName).Type(&v3.GlobalRoleBinding{}).Handle(globalRoleBindings)
