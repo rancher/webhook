@@ -13,3 +13,9 @@ capi:
 
 mcm:
   enabled: true
+
+preDelete:
+  enabled: true
+  image:
+    repository: rancher/kubectl
+    tag: v1.20.2
