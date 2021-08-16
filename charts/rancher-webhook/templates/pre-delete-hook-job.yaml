@@ -19,8 +19,8 @@ spec:
       serviceAccountName: rancher-webhook-pre-delete
       restartPolicy: OnFailure
       containers:
-        - name:  rancher-webhook-pre-delete
+        - name: rancher-webhook-pre-delete
           image: "{{ include "system_default_registry" . }}{{ .Values.preDelete.image.repository }}:{{ .Values.preDelete.image.tag }}"
           imagePullPolicy: IfNotPresent
-          command: ["kubectl", "delete", "mutatingwebhookconfigurations.admissionregistration.k8s.io", "rancher.cattle.io" ]
+          command: [ "kubectl", "delete", "--ignore-not-found=true", "mutatingwebhookconfigurations", "rancher.cattle.io" ]
 {{- end }}
