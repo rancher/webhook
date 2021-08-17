@@ -12,5 +12,12 @@ rules:
   - apiGroups: [ "admissionregistration.k8s.io" ]
     resources: [ "mutatingwebhookconfigurations" ]
     verbs: [ "delete" ]
-    resourceNames: [ "rancher.cattle.io"]
+    resourceNames: [ "rancher.cattle.io" ]
+  - apiGroups: [ "" ]
+    resources: [ "serviceaccounts" ]
+    verbs: [ "get" ]
+  - apiGroups: [ "policy" ]
+    resources: [ "podsecuritypolicies" ]
+    verbs: [ "use" ]
+    resourceNames: [ "rancher-webhook-pre-delete" ]
 {{- end }}
