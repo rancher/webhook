@@ -18,7 +18,7 @@ sed -i \
     build/charts/rancher-webhook/Chart.yaml
 
 sed -i \
-    -e 's/tag:.*/tag: '${HELM_TAG}'/' \
+    -e 's/tag: latest/tag: '${HELM_TAG}'/' \
     build/charts/rancher-webhook/values.yaml
 
 helm package -d ./dist/artifacts ./build/charts/rancher-webhook
