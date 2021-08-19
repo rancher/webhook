@@ -99,6 +99,52 @@ func ClusterRoleTemplateBindingFromRequest(request *webhook.Request) (*v3.Cluste
 	return object.(*v3.ClusterRoleTemplateBinding), nil
 }
 
+// FeatureOldAndNewFromRequest gets the old and new Feature objects, respectively, from the webhook request.
+// If the request is a Delete operation, then the new object is the zero value for Feature.
+// Similarly, if the request is a Create operation, then the old object is the zero value for Feature.
+func FeatureOldAndNewFromRequest(request *webhook.Request) (*v3.Feature, *v3.Feature, error) {
+	var object runtime.Object
+	var err error
+	if request.Operation != admissionv1.Delete {
+		object, err = request.DecodeObject()
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		object = &v3.Feature{}
+	}
+
+	if request.Operation == admissionv1.Create {
+		return &v3.Feature{}, object.(*v3.Feature), nil
+	}
+
+	oldObject, err := request.DecodeOldObject()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return oldObject.(*v3.Feature), object.(*v3.Feature), nil
+}
+
+// FeatureFromRequest returns a Feature object from the webhook request.
+// If the operation is a Delete operation, then the old object is returned.
+// Otherwise, the new object is returned.
+func FeatureFromRequest(request *webhook.Request) (*v3.Feature, error) {
+	var object runtime.Object
+	var err error
+	if request.Operation == admissionv1.Delete {
+		object, err = request.DecodeOldObject()
+	} else {
+		object, err = request.DecodeObject()
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return object.(*v3.Feature), nil
+}
+
 // FleetWorkspaceOldAndNewFromRequest gets the old and new FleetWorkspace objects, respectively, from the webhook request.
 // If the request is a Delete operation, then the new object is the zero value for FleetWorkspace.
 // Similarly, if the request is a Create operation, then the old object is the zero value for FleetWorkspace.

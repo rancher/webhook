@@ -42,6 +42,7 @@ func main() {
 			Types: []interface{}{
 				&v3.Cluster{},
 				&v3.ClusterRoleTemplateBinding{},
+				&v3.Feature{},
 				&v3.FleetWorkspace{},
 				&v3.GlobalRole{},
 				&v3.GlobalRoleBinding{},
