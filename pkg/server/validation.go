@@ -20,15 +20,16 @@ import (
 
 func Validation(clients *clients.Clients) (http.Handler, error) {
 	clusters := cluster.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews())
+	features := feature.NewValidator()
 	router := webhook.NewRouter()
 	router.Kind("Cluster").Group(management.GroupName).Type(&v3.Cluster{}).Handle(clusters)
+	router.Kind("Feature").Group(management.GroupName).Type(&v3.Feature{}).Handle(features)
 
 	if clients.MultiClusterManagement {
 		globalRoleBindings := globalrolebinding.NewValidator(clients.Management.GlobalRole().Cache(), clients.EscalationChecker)
 		globalRoles := globalrole.NewValidator()
 		prtbs := projectroletemplatebinding.NewValidator(clients.Management.RoleTemplate().Cache(), clients.EscalationChecker)
 		crtbs := clusterroletemplatebinding.NewValidator(clients.Management.RoleTemplate().Cache(), clients.EscalationChecker)
-		f := feature.NewValidator()
 		roleTemplates := roletemplate.NewValidator(clients.EscalationChecker)
 		provisioningCluster := cluster.NewProvisioningClusterValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews())
 
@@ -37,7 +38,6 @@ func Validation(clients *clients.Clients) (http.Handler, error) {
 		router.Kind("GlobalRole").Group(management.GroupName).Type(&v3.GlobalRole{}).Handle(globalRoles)
 		router.Kind("ClusterRoleTemplateBinding").Group(management.GroupName).Type(&v3.ClusterRoleTemplateBinding{}).Handle(crtbs)
 		router.Kind("ProjectRoleTemplateBinding").Group(management.GroupName).Type(&v3.ProjectRoleTemplateBinding{}).Handle(prtbs)
-		router.Kind("Feature").Group(management.GroupName).Type(&v3.Feature{}).Handle(f)
 		router.Kind("Cluster").Group(provisioning.GroupName).Type(&v1.Cluster{}).Handle(provisioningCluster)
 	}
 
