@@ -6,3 +6,9 @@ image:
 global:
   cattle:
     systemDefaultRegistry: ""
+
+preDelete:
+  enabled: true
+  image:
+    repository: rancher/kubectl
+    tag: v1.20.2
