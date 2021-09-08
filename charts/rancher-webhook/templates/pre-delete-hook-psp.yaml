@@ -1,4 +1,4 @@
-
+{{- if .Values.preDelete.enabled }}
 apiVersion: policy/v1beta1
 kind: PodSecurityPolicy
 metadata:
@@ -30,3 +30,4 @@ spec:
   readOnlyRootFilesystem: false
   volumes:
     - 'secret'
+{{- end }}
