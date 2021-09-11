@@ -2,15 +2,19 @@ package cluster
 
 import (
 	"net/http"
+	"regexp"
 	"time"
 
 	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/webhook/pkg/auth"
+	"github.com/rancher/webhook/pkg/clients"
+	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv1 "github.com/rancher/webhook/pkg/generated/objects/provisioning.cattle.io/v1"
 	"github.com/rancher/wrangler/pkg/kv"
 	"github.com/rancher/wrangler/pkg/webhook"
 	admissionv1 "k8s.io/api/admission/v1"
 	authv1 "k8s.io/api/authorization/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/utils/trace"
@@ -18,14 +22,18 @@ import (
 
 const globalNamespace = "cattle-global-data"
 
-func NewProvisioningClusterValidator(sar authorizationv1.SubjectAccessReviewInterface) webhook.Handler {
+var mgmtNameRegex = regexp.MustCompile("^c-[a-z0-9]{5}$")
+
+func NewProvisioningClusterValidator(client *clients.Clients) webhook.Handler {
 	return &provisioningClusterValidator{
-		sar: sar,
+		sar:               client.K8s.AuthorizationV1().SubjectAccessReviews(),
+		mgmtClusterClient: client.Management.Cluster(),
 	}
 }
 
 type provisioningClusterValidator struct {
-	sar authorizationv1.SubjectAccessReviewInterface
+	sar               authorizationv1.SubjectAccessReviewInterface
+	mgmtClusterClient v3.ClusterClient
 }
 
 func (p *provisioningClusterValidator) Admit(response *webhook.Response, request *webhook.Request) error {
@@ -33,6 +41,10 @@ func (p *provisioningClusterValidator) Admit(response *webhook.Response, request
 	defer listTrace.LogIfLong(2 * time.Second)
 	oldCluster, cluster, err := objectsv1.ClusterOldAndNewFromRequest(request)
 	if err != nil {
+		return err
+	}
+
+	if err := p.validateClusterName(request, response, cluster); err != nil || response.Result != nil {
 		return err
 	}
 
@@ -135,6 +147,31 @@ func validateCreatorID(request *webhook.Request, oldCluster, cluster *v1.Cluster
 	return nil
 }
 
+func (p *provisioningClusterValidator) validateClusterName(request *webhook.Request, response *webhook.Response, cluster *v1.Cluster) error {
+	if request.Operation != admissionv1.Create {
+		return nil
+	}
+
+	// Look for an existing management cluster with the same name. If a management cluster with the given name does not
+	// exists, then it should be checked that the provisioning cluster the user is trying to create is not of the form
+	// "c-xxxxx" because names of that form are reserved for "legacy" management clusters.
+	_, err := p.mgmtClusterClient.Get(cluster.Name, metav1.GetOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	if !isValidName(cluster.Name, cluster.Namespace, err == nil) {
+		response.Result = &metav1.Status{
+			Status:  "Failure",
+			Message: "cluster name cannot be \"local\" nor of the form \"c-xxxxx\"",
+			Reason:  metav1.StatusReasonInvalid,
+			Code:    http.StatusUnprocessableEntity,
+		}
+	}
+
+	return nil
+}
+
 func validateACEConfig(cluster *v1.Cluster) *metav1.Status {
 	if cluster.Spec.RKEConfig != nil && cluster.Spec.RKEConfig.LocalClusterAuthEndpoint.Enabled && cluster.Spec.RKEConfig.LocalClusterAuthEndpoint.CACerts != "" && cluster.Spec.RKEConfig.LocalClusterAuthEndpoint.FQDN == "" {
 		return &metav1.Status{
@@ -146,4 +183,20 @@ func validateACEConfig(cluster *v1.Cluster) *metav1.Status {
 	}
 
 	return nil
+}
+
+func isValidName(clusterName, clusterNamespace string, clusterExists bool) bool {
+	// A provisioning cluster with name "local" is only expected to be created in the "fleet-local" namespace.
+	if clusterName == "local" {
+		return clusterNamespace == "fleet-local"
+	}
+
+	if mgmtNameRegex.MatchString(clusterName) {
+		// A provisioning cluster with name of the form "c-xxxxx" is expected to be created if a management cluster
+		// of the same name already exists because Rancher will create such a provisioning cluster.
+		// Therefore, a cluster with name of the form "c-xxxxx" is only valid if it was found.
+		return clusterExists
+	}
+
+	return true
 }

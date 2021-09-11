@@ -23,7 +23,7 @@ func Validation(clients *clients.Clients) (http.Handler, error) {
 
 	features := feature.NewValidator()
 	clusters := cluster.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews())
-	provisioningCluster := cluster.NewProvisioningClusterValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews())
+	provisioningCluster := cluster.NewProvisioningClusterValidator(clients)
 
 	router.Kind("Feature").Group(management.GroupName).Type(&v3.Feature{}).Handle(features)
 	router.Kind("Cluster").Group(management.GroupName).Type(&v3.Cluster{}).Handle(clusters)
