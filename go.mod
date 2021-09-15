@@ -36,7 +36,7 @@ require (
 	github.com/rancher/lasso v0.0.0-20210616224652-fc3ebd901c08
 	github.com/rancher/lasso/controller-runtime v0.0.0-20210616224652-fc3ebd901c08
 	github.com/rancher/rancher/pkg/apis v0.0.0-20210628154046-7a2fc74f9598
-	github.com/rancher/wrangler v0.8.3
+	github.com/rancher/wrangler v0.8.6
 	github.com/sirupsen/logrus v1.8.1
 	golang.org/x/tools v0.1.0
 	k8s.io/api v0.21.0

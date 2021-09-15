@@ -96,6 +96,11 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 		// Sleep here to make sure server is listening and all caches are primed
 		time.Sleep(15 * time.Second)
 
+		rancherAuthRules := rancherAuthBaseRules
+		if clients.MultiClusterManagement { // register additional rbac rules if mcm is enabled
+			rancherAuthRules = append(rancherAuthRules, rancherAuthMCMRules...)
+		}
+
 		validationClientConfig := v1.WebhookClientConfig{
 			Service: &v1.ServiceReference{
 				Namespace: namespace,
@@ -122,115 +127,17 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 			},
 			Webhooks: []v1.ValidatingWebhook{
 				{
-					Name:         "rancher.cattle.io",
-					ClientConfig: validationClientConfig,
-					Rules: []v1.RuleWithOperations{
-						{
-							Operations: []v1.OperationType{
-								v1.Create,
-								v1.Update,
-							},
-							Rule: v1.Rule{
-								APIGroups:   []string{"management.cattle.io"},
-								APIVersions: []string{"v3"},
-								Resources:   []string{"clusters"},
-								Scope:       &clusterScope,
-							},
-						},
-						{
-							Operations: []v1.OperationType{
-								v1.Update,
-							},
-							Rule: v1.Rule{
-								APIGroups:   []string{"management.cattle.io"},
-								APIVersions: []string{"v3"},
-								Resources:   []string{"features"},
-								Scope:       &clusterScope,
-							},
-						},
-					},
+					Name:                    "rancher.cattle.io",
+					ClientConfig:            validationClientConfig,
+					Rules:                   rancherRules,
 					FailurePolicy:           &failPolicyIgnore,
 					SideEffects:             &sideEffectClassNone,
 					AdmissionReviewVersions: []string{"v1", "v1beta1"},
 				},
 				{
-					Name:         "rancherauth.cattle.io",
-					ClientConfig: validationClientConfig,
-					Rules: []v1.RuleWithOperations{
-						{
-							Operations: []v1.OperationType{
-								v1.Create,
-								v1.Update,
-								v1.Delete,
-							},
-							Rule: v1.Rule{
-								APIGroups:   []string{"management.cattle.io"},
-								APIVersions: []string{"v3"},
-								Resources:   []string{"globalrolebindings"},
-								Scope:       &clusterScope,
-							},
-						},
-						{
-							Operations: []v1.OperationType{
-								v1.Create,
-								v1.Update,
-							},
-							Rule: v1.Rule{
-								APIGroups:   []string{"management.cattle.io"},
-								APIVersions: []string{"v3"},
-								Resources:   []string{"roletemplates"},
-								Scope:       &clusterScope,
-							},
-						},
-						{
-							Operations: []v1.OperationType{
-								v1.Create,
-								v1.Update,
-							},
-							Rule: v1.Rule{
-								APIGroups:   []string{"management.cattle.io"},
-								APIVersions: []string{"v3"},
-								Resources:   []string{"projectroletemplatebindings"},
-								Scope:       &namespaceScope,
-							},
-						},
-						{
-							Operations: []v1.OperationType{
-								v1.Create,
-								v1.Update,
-							},
-							Rule: v1.Rule{
-								APIGroups:   []string{"management.cattle.io"},
-								APIVersions: []string{"v3"},
-								Resources:   []string{"clusterroletemplatebindings"},
-								Scope:       &namespaceScope,
-							},
-						},
-						{
-							Operations: []v1.OperationType{
-								v1.Create,
-								v1.Update,
-							},
-							Rule: v1.Rule{
-								APIGroups:   []string{"management.cattle.io"},
-								APIVersions: []string{"v3"},
-								Resources:   []string{"globalroles"},
-								Scope:       &clusterScope,
-							},
-						},
-						{
-							Operations: []v1.OperationType{
-								v1.Create,
-								v1.Update,
-							},
-							Rule: v1.Rule{
-								APIGroups:   []string{"provisioning.cattle.io"},
-								APIVersions: []string{"v1"},
-								Resources:   []string{"clusters"},
-								Scope:       &namespaceScope,
-							},
-						},
-					},
+					Name:                    "rancherauth.cattle.io",
+					ClientConfig:            validationClientConfig,
+					Rules:                   rancherAuthRules,
 					FailurePolicy:           &failPolicyFail,
 					SideEffects:             &sideEffectClassNone,
 					AdmissionReviewVersions: []string{"v1", "v1beta1"},
@@ -242,52 +149,25 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 			},
 			Webhooks: []v1.MutatingWebhook{
 				{
-					Name:         "rancherfleet.cattle.io",
-					ClientConfig: mutationClientConfig,
-					Rules: []v1.RuleWithOperations{
-						{
-							Operations: []v1.OperationType{
-								v1.Create,
-							},
-							Rule: v1.Rule{
-								APIGroups:   []string{"management.cattle.io"},
-								APIVersions: []string{"v3"},
-								Resources:   []string{"fleetworkspaces"},
-								Scope:       &clusterScope,
-							},
-						},
-					},
+					Name:                    "rancherfleet.cattle.io",
+					ClientConfig:            mutationClientConfig,
+					Rules:                   fleetMutationRules,
 					FailurePolicy:           &failPolicyFail,
 					SideEffects:             &sideEffectClassNoneOnDryRun,
 					AdmissionReviewVersions: []string{"v1", "v1beta1"},
 				},
 				{
-					Name:         "rancher.cattle.io",
-					ClientConfig: mutationClientConfig,
-					Rules: []v1.RuleWithOperations{
-						{
-							Operations: []v1.OperationType{
-								v1.Create,
-							},
-							Rule: v1.Rule{
-								APIGroups:   []string{"provisioning.cattle.io"},
-								APIVersions: []string{"v1"},
-								Resources:   []string{"clusters"},
-								Scope:       &namespaceScope,
-							},
-						},
-						{
-							Operations: []v1.OperationType{
-								v1.Create,
-							},
-							Rule: v1.Rule{
-								APIGroups:   []string{""},
-								APIVersions: []string{"v1"},
-								Resources:   []string{"secrets"},
-								Scope:       &namespaceScope,
-							},
-						},
-					},
+					Name:                    "rancher.cattle.io",
+					ClientConfig:            mutationClientConfig,
+					Rules:                   rancherMutationRules,
+					FailurePolicy:           &failPolicyFail,
+					SideEffects:             &sideEffectClassNoneOnDryRun,
+					AdmissionReviewVersions: []string{"v1", "v1beta1"},
+				},
+				{
+					Name:                    "rancherauth.cattle.io",
+					ClientConfig:            mutationClientConfig,
+					Rules:                   rancherAuthMutationRules,
 					FailurePolicy:           &failPolicyFail,
 					SideEffects:             &sideEffectClassNoneOnDryRun,
 					AdmissionReviewVersions: []string{"v1", "v1beta1"},
