@@ -164,14 +164,6 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 					SideEffects:             &sideEffectClassNoneOnDryRun,
 					AdmissionReviewVersions: []string{"v1", "v1beta1"},
 				},
-				{
-					Name:                    "rancherauth.cattle.io",
-					ClientConfig:            mutationClientConfig,
-					Rules:                   rancherAuthMutationRules,
-					FailurePolicy:           &failPolicyFail,
-					SideEffects:             &sideEffectClassNoneOnDryRun,
-					AdmissionReviewVersions: []string{"v1", "v1beta1"},
-				},
 			},
 		})
 	})
