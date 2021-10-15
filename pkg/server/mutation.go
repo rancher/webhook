@@ -18,7 +18,7 @@ import (
 func Mutation(client *clients.Clients) (http.Handler, error) {
 	fleetworkspaceMutator := fleetworkspace.NewMutator(client)
 	provisioningCluster := cluster.NewMutator(client)
-	secret := secret.NewMutator(client)
+	secret := secret.NewMutator()
 
 	router := webhook.NewRouter()
 	router.Kind("FleetWorkspace").Group(management.GroupName).Type(&v3.FleetWorkspace{}).Handle(fleetworkspaceMutator)

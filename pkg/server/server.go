@@ -2,9 +2,7 @@ package server
 
 import (
 	"context"
-	"net/http"
-	"time"
-
+	"crypto/x509"
 	"github.com/gorilla/mux"
 	"github.com/rancher/dynamiclistener"
 	"github.com/rancher/dynamiclistener/server"
@@ -13,8 +11,12 @@ import (
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
+	"net/http"
+	"os"
+	"time"
 )
 
 const (
@@ -38,11 +40,36 @@ var (
 	sideEffectClassNoneOnDryRun = v1.SideEffectClassNoneOnDryRun
 )
 
+func deleteTLSCertOnFailedVerification(clients *clients.Clients, secret *corev1.Secret)  {
+	cert := x509.Certificate{
+		Raw: secret.Data[corev1.TLSCertKey],
+	}
+	if _, err := cert.Verify(x509.VerifyOptions{}); err != nil {
+		logrus.Errorf("[handleExpiredCerts] certificate verification failed: %v", err)
+
+		if err := clients.Core.Secret().Delete(secret.Namespace, secret.Name, &metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			logrus.Errorf("[handleExpiredCerts] encountered error while attempting to delete %s in namespace %s: %v", secret.Name, secret.Namespace, err)
+		} else {
+			// Only exit to trigger pod restart upon successful TLS secret deletion or if the secret does not exist.
+			logrus.Info("[handleExpiredCerts] exiting with exit code 0 in order to trigger pod restart ")
+			os.Exit(0)
+		}
+	}
+}
+
 func ListenAndServe(ctx context.Context, cfg *rest.Config, capiEnabled, mcmEnabled bool) error {
 	clients, err := clients.New(ctx, cfg, mcmEnabled)
 	if err != nil {
 		return err
 	}
+
+	secret, err := clients.Core.Secret().Get(namespace, certName, metav1.GetOptions{})
+	if err == nil {
+		deleteTLSCertOnFailedVerification(clients, secret)
+	} else if !apierrors.IsNotFound(err) {
+		logrus.Errorf("[ListenAndServe] could not get secret %s in namespace %s: %v", certName, namespace, err)
+	}
+
 
 	validation, err := Validation(clients)
 	if err != nil {
