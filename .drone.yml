@@ -205,7 +205,7 @@ steps:
         path: /var/run/docker.sock
 
   - name: github_binary_release
-    image: plugins/github-release
+    image: rancher/drone-images:github-release-s390x
     settings:
       api_key:
         from_secret: github_token
@@ -226,7 +226,7 @@ steps:
         - tag
 
   - name: docker-publish
-    image: plugins/docker
+    image: rancher/drone-images:docker-s390x
     settings:
       dockerfile: package/Dockerfile
       password:
