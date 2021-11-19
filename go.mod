@@ -33,7 +33,7 @@ replace (
 
 require (
 	github.com/gorilla/mux v1.8.0
-	github.com/rancher/dynamiclistener v0.2.1-0.20201110045217-9b1b7d3132e8
+	github.com/rancher/dynamiclistener v0.3.1-0.20211119182849-962b63526960
 	github.com/rancher/lasso v0.0.0-20210709145333-6c6cd7fd6607
 	github.com/rancher/lasso/controller-runtime v0.0.0-20210608205930-775fcaf2f523
 	github.com/rancher/rancher/pkg/apis v0.0.0-20210628154046-7a2fc74f9598
