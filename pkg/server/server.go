@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -44,6 +45,13 @@ func ListenAndServe(ctx context.Context, cfg *rest.Config, capiEnabled, mcmEnabl
 		return err
 	}
 
+	if err := setCertificateExpirationDays(); err != nil {
+		// If this error occurs, certificate creation will still work. However, our override will likely not have worked.
+		// This will not affect functionality of the webhook, but users may have to perform the workaround:
+		// https://github.com/rancher/docs/issues/3637
+		logrus.Infof("[ListenAndServe] could not set certificate expiration days via environment variable: %v", err)
+	}
+
 	validation, err := Validation(clients)
 	if err != nil {
 		return err
@@ -81,6 +89,17 @@ func ListenAndServe(ctx context.Context, cfg *rest.Config, capiEnabled, mcmEnabl
 		}
 	}
 
+	return nil
+}
+
+// By default, dynamiclistener sets newly signed certificates to expire after 365 days. Since the
+// self-signed certificate for webhook does not need to be rotated, we increase expiration time
+// beyond relevance. In this case, that's 3650 days (10 years).
+func setCertificateExpirationDays() error {
+	certExpirationDaysKey := "CATTLE_NEW_SIGNED_CERT_EXPIRATION_DAYS"
+	if os.Getenv(certExpirationDaysKey) == "" {
+		return os.Setenv(certExpirationDaysKey, "3650")
+	}
 	return nil
 }
 
