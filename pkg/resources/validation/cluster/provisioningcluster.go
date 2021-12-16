@@ -6,10 +6,10 @@ import (
 	"time"
 
 	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
-	"github.com/rancher/webhook/pkg/auth"
 	"github.com/rancher/webhook/pkg/clients"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv1 "github.com/rancher/webhook/pkg/generated/objects/provisioning.cattle.io/v1"
+	"github.com/rancher/webhook/pkg/resources/validation"
 	"github.com/rancher/wrangler/pkg/kv"
 	"github.com/rancher/wrangler/pkg/webhook"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -48,7 +48,7 @@ func (p *provisioningClusterValidator) Admit(response *webhook.Response, request
 		return err
 	}
 
-	if response.Result = validateCreatorID(request, oldCluster, cluster); response.Result != nil {
+	if response.Result = validation.CheckCreatorID(request, oldCluster, cluster); response.Result != nil {
 		return nil
 	}
 
@@ -113,38 +113,6 @@ func getCloudCredentialSecretInfo(namespace, name string) (string, string) {
 		return globalNS, globalName
 	}
 	return namespace, name
-}
-
-func validateCreatorID(request *webhook.Request, oldCluster, cluster *v1.Cluster) *metav1.Status {
-	status := &metav1.Status{
-		Status: "Failure",
-		Reason: metav1.StatusReasonInvalid,
-		Code:   http.StatusUnprocessableEntity,
-	}
-
-	if request.Operation == admissionv1.Create {
-		// When creating the cluster the annotation must match the user creating it
-		if cluster.Annotations[auth.CreatorIDAnn] != request.UserInfo.Username {
-			status.Message = "creatorID annotation does not match user"
-			return status
-		}
-		return nil
-	}
-
-	// Check that the anno doesn't exist on the update object, the only allowed
-	// update to this field is deleting it.
-	if _, ok := cluster.Annotations[auth.CreatorIDAnn]; !ok {
-		return nil
-	}
-
-	// Compare old vs new because they need to be the same, no updates are allowed for
-	// the CreatorIDAnn
-	if oldCluster.GetAnnotations()[auth.CreatorIDAnn] != cluster.GetAnnotations()[auth.CreatorIDAnn] {
-		status.Message = "creatorID annotation cannot be changed"
-		return status
-	}
-
-	return nil
 }
 
 func (p *provisioningClusterValidator) validateClusterName(request *webhook.Request, response *webhook.Response, cluster *v1.Cluster) error {

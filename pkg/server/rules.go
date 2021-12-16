@@ -41,6 +41,18 @@ var rancherAuthBaseRules = []v1.RuleWithOperations{
 			Scope:       &namespaceScope,
 		},
 	},
+	{
+		Operations: []v1.OperationType{
+			v1.Create,
+			v1.Update,
+		},
+		Rule: v1.Rule{
+			APIGroups:   []string{"rke-machine-config.cattle.io"},
+			APIVersions: []string{"v1"},
+			Resources:   []string{"*"},
+			Scope:       &namespaceScope,
+		},
+	},
 }
 
 var rancherAuthMCMRules = []v1.RuleWithOperations{
@@ -130,6 +142,17 @@ var rancherMutationRules = []v1.RuleWithOperations{
 			APIGroups:   []string{"provisioning.cattle.io"},
 			APIVersions: []string{"v1"},
 			Resources:   []string{"clusters"},
+			Scope:       &namespaceScope,
+		},
+	},
+	{
+		Operations: []v1.OperationType{
+			v1.Create,
+		},
+		Rule: v1.Rule{
+			APIGroups:   []string{"rke-machine-config.cattle.io"},
+			APIVersions: []string{"v1"},
+			Resources:   []string{"*"},
 			Scope:       &namespaceScope,
 		},
 	},
