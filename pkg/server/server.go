@@ -66,7 +66,7 @@ func ListenAndServe(ctx context.Context, cfg *rest.Config, capiEnabled, mcmEnabl
 		capiStart func(context.Context) error
 	)
 	if capiEnabled {
-		capiStart, err = capi.Register(ctx, clients)
+		capiStart, err = capi.Register(clients)
 		if err != nil {
 			return err
 		}
