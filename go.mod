@@ -39,14 +39,14 @@ require (
 	github.com/rancher/rancher/pkg/apis v0.0.0-20210628154046-7a2fc74f9598
 	github.com/rancher/wrangler v0.8.7
 	github.com/sirupsen/logrus v1.8.1
-	golang.org/x/tools v0.1.2
+	golang.org/x/tools v0.1.5
 	k8s.io/api v0.22.3
 	k8s.io/apiextensions-apiserver v0.22.2
 	k8s.io/apimachinery v0.22.3
 	k8s.io/apiserver v0.22.3
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/kubernetes v1.22.0
-	k8s.io/utils v0.0.0-20210819203725-bdf08cb9a70a
-	sigs.k8s.io/cluster-api v0.4.4
-	sigs.k8s.io/controller-runtime v0.10.2
+	k8s.io/utils v0.0.0-20210930125809-cb0fa318a74b
+	sigs.k8s.io/cluster-api v1.0.2
+	sigs.k8s.io/controller-runtime v0.10.3
 )

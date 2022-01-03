@@ -13,8 +13,13 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	clusterv1alpha3 "sigs.k8s.io/cluster-api/api/v1alpha3"
 	clusterv1alpha4 "sigs.k8s.io/cluster-api/api/v1alpha4"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	addonsv1alpha3 "sigs.k8s.io/cluster-api/exp/addons/api/v1alpha3"
+	addonsv1alpha4 "sigs.k8s.io/cluster-api/exp/addons/api/v1alpha4"
+	addonsv1beta1 "sigs.k8s.io/cluster-api/exp/addons/api/v1beta1"
 	expv1alpha3 "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
+	expv1alpha4 "sigs.k8s.io/cluster-api/exp/api/v1alpha4"
+	expv1beta1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -23,8 +28,13 @@ func init() {
 	_ = clientgoscheme.AddToScheme(schemes.All)
 	_ = clusterv1alpha3.AddToScheme(schemes.All)
 	_ = clusterv1alpha4.AddToScheme(schemes.All)
+	_ = clusterv1beta1.AddToScheme(schemes.All)
 	_ = expv1alpha3.AddToScheme(schemes.All)
+	_ = expv1alpha4.AddToScheme(schemes.All)
+	_ = expv1beta1.AddToScheme(schemes.All)
 	_ = addonsv1alpha3.AddToScheme(schemes.All)
+	_ = addonsv1alpha4.AddToScheme(schemes.All)
+	_ = addonsv1beta1.AddToScheme(schemes.All)
 	_ = apiextensionsv1.AddToScheme(schemes.All)
 }
 
@@ -32,7 +42,7 @@ const (
 	tlsCert = "/tmp/k8s-webhook-server/serving-certs/tls.crt"
 )
 
-func Register(ctx context.Context, clients *clients.Clients) (func(ctx context.Context) error, error) {
+func Register(clients *clients.Clients) (func(ctx context.Context) error, error) {
 	mgr, err := ctrl.NewManager(clients.RESTConfig, ctrl.Options{
 		MetricsBindAddress: "0",
 		NewCache: controllerruntime.NewNewCacheFunc(clients.SharedControllerFactory.SharedCacheFactory(),
@@ -67,11 +77,11 @@ func Register(ctx context.Context, clients *clients.Clients) (func(ctx context.C
 
 func webhooks() []webhook {
 	return []webhook{
-		&clusterv1alpha4.Cluster{},
-		&clusterv1alpha4.Machine{},
-		&clusterv1alpha4.MachineHealthCheck{},
-		&clusterv1alpha4.MachineSet{},
-		&clusterv1alpha4.MachineDeployment{},
+		&clusterv1beta1.Cluster{},
+		&clusterv1beta1.Machine{},
+		&clusterv1beta1.MachineHealthCheck{},
+		&clusterv1beta1.MachineSet{},
+		&clusterv1beta1.MachineDeployment{},
 	}
 }
 
