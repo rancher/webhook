@@ -29,10 +29,10 @@ replace (
 
 require (
 	github.com/gorilla/mux v1.7.3
-	github.com/rancher/dynamiclistener v0.2.1-0.20201110045217-9b1b7d3132e8
+	github.com/rancher/dynamiclistener v0.2.8-0.20220107182323-a73b7d7f4c0c
 	github.com/rancher/lasso v0.0.0-20210616224652-fc3ebd901c08
 	github.com/rancher/rancher/pkg/apis v0.0.0-20200910005616-198ec5bdf52d
-	github.com/rancher/wrangler v0.8.3
+	github.com/rancher/wrangler v0.8.9
 	github.com/sirupsen/logrus v1.6.0
 	k8s.io/api v0.19.0
 	k8s.io/apimachinery v0.19.0
