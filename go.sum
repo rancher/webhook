@@ -774,8 +774,8 @@ github.com/rancher/aks-operator v1.0.1-rc11 h1:OGxwaQ+MmqTNl/45wfS0PuI78mvo/FXfB
 github.com/rancher/aks-operator v1.0.1-rc11/go.mod h1:V43rw+oKpjQ2tlIITgejlatpNBGi61DdB+RldJyrh/8=
 github.com/rancher/client-go v1.22.3-rancher.1 h1:aNVLaIY5YGah1i9wRVXLOGRbLyekohjQAKHXeQm6Cxo=
 github.com/rancher/client-go v1.22.3-rancher.1/go.mod h1:ElDjYf8gvZsKDYexmsmnMQ0DYO8W9RwBjfQ1PI53yow=
-github.com/rancher/dynamiclistener v0.3.1-0.20211119182849-962b63526960 h1:ahE9XbsyFzWteQB5etFl9OacXzVGtm0XJe1tHoOtC+4=
-github.com/rancher/dynamiclistener v0.3.1-0.20211119182849-962b63526960/go.mod h1:xbxyiF1/UaPrOrFUOZeYMQW82RPgZIe5UfiT9CyE3Ks=
+github.com/rancher/dynamiclistener v0.3.2-0.20211221223804-148d38076d3e h1:gMljKQit2fkG6b+YjH3GeXoy+9i3iKPYTU6r/sCDjGY=
+github.com/rancher/dynamiclistener v0.3.2-0.20211221223804-148d38076d3e/go.mod h1:k+C1+rfUr5SlIyEQnDxSpu0NaBlmTLKc1s3KmyS8gXA=
 github.com/rancher/eks-operator v1.1.1-rc3 h1:I52WG985NvawYW7mKTlv1SpeucOkYtk8nathPiqtItU=
 github.com/rancher/eks-operator v1.1.1-rc3/go.mod h1:hoVQqXsC02Yk3Xy5jGH/rqJX5KUVvvQBrYAJdRh+kgQ=
 github.com/rancher/fleet/pkg/apis v0.0.0-20210608014113-99e848822739 h1:EjFWJZH42LoYCRV56ZPNzaiIPO6cfFDP7+LlyY3b20Y=
@@ -808,10 +808,9 @@ github.com/rancher/wrangler v0.6.2-0.20200515155908-1923f3f8ec3f/go.mod h1:Nmtml
 github.com/rancher/wrangler v0.6.2-0.20200820173016-2068de651106/go.mod h1:iKqQcYs4YSDjsme52OZtQU4jHPmLlIiM93aj2c8c/W8=
 github.com/rancher/wrangler v0.6.2-0.20200829053106-7e1dd4260224/go.mod h1:I7qe4DZNMOLKVa9ax7DJdBZ0XtKOppLF/dalhPX3vaE=
 github.com/rancher/wrangler v0.7.3-0.20201020003736-e86bc912dfac/go.mod h1:goezjesEKwMxHLfltdjg9DW0xWV7txQee6vOuSDqXAI=
-github.com/rancher/wrangler v0.8.0/go.mod h1:zSV5oh3+YZboilwcJmFHO3J6FZba82BTQft1b6ijx2I=
 github.com/rancher/wrangler v0.8.1-0.20210618171953-ab479ee75244/go.mod h1:aj/stIidTzU6UEKKRB8JyrrqNMJAfDMziL1+zhG8lc0=
-github.com/rancher/wrangler v0.8.7 h1:WN9EWycceZ9gP5hEqIRJMrwi7cprxETMyKk/qXl+9ZU=
-github.com/rancher/wrangler v0.8.7/go.mod h1:dKEaHNB4izxmPUtpq1Hvr3z3Oh+9k5pCZyFO9sUhlaY=
+github.com/rancher/wrangler v0.8.9 h1:qNHBUw7jHdQKBVX4ksmY9ckth6oZaL2tRUKMwtERZw8=
+github.com/rancher/wrangler v0.8.9/go.mod h1:Lte9WjPtGYxYacIWeiS9qawvu2R4NujFU9xuXWJvc/0=
 github.com/rancher/wrangler-api v0.6.1-0.20200427172631-a7c2f09b783e/go.mod h1:2lcWR98q8HU3U4mVETnXc8quNG0uXxrt8vKd6cAa/30=
 github.com/rcrowley/go-metrics v0.0.0-20181016184325-3113b8401b8a/go.mod h1:bCqnVzQkZxMG4s8nGwiZ5l3QUCyqpo9Y+/ZMZ9VjZe4=
 github.com/remyoudompheng/bigfft v0.0.0-20170806203942-52369c62f446/go.mod h1:uYEyJGbgTkfkS4+E/PavXkNJcbFIpEtjt2B0KDQ5+9M=

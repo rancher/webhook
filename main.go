@@ -3,7 +3,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 
@@ -41,7 +40,7 @@ func run() error {
 
 	cfg.RateLimiter = ratelimit.None
 
-	ctx := signals.SetupSignalHandler(context.Background())
+	ctx := signals.SetupSignalContext()
 
 	err = k8scheck.Wait(ctx, *cfg)
 	if err != nil {
