@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/rancher/webhook/pkg/auth"
-	"github.com/rancher/webhook/pkg/clients"
 	"github.com/rancher/webhook/pkg/patch"
 	"github.com/rancher/wrangler/pkg/webhook"
 	"github.com/sirupsen/logrus"
@@ -14,7 +13,7 @@ import (
 	"k8s.io/utils/trace"
 )
 
-func NewMutator(client *clients.Clients) webhook.Handler {
+func NewMutator() webhook.Handler {
 	return &mutator{}
 }
 

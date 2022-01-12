@@ -14,6 +14,7 @@ import (
 	controllergen "github.com/rancher/wrangler/pkg/controller-gen"
 	"github.com/rancher/wrangler/pkg/controller-gen/args"
 	"golang.org/x/tools/imports"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 type typeInfo struct {
@@ -53,6 +54,11 @@ func main() {
 		"provisioning.cattle.io": {
 			Types: []interface{}{
 				&v1.Cluster{},
+			},
+		},
+		"core": {
+			Types: []interface{}{
+				&unstructured.Unstructured{},
 			},
 		}}); err != nil {
 		fmt.Printf("ERROR: %v\n", err)

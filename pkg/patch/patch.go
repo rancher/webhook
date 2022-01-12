@@ -4,13 +4,12 @@ import (
 	"encoding/json"
 
 	"github.com/rancher/wrangler/pkg/webhook"
-	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
 // CreatePatch accepts an old and a new object and creates a patch of the differences as
 // specified in http://jsonpatch.com/ and updates the response accordingly.
-func CreatePatch(old runtime.Object, new runtime.Object, response *webhook.Response) error {
+func CreatePatch(old, new interface{}, response *webhook.Response) error {
 	oldJSON, err := json.Marshal(old)
 	if err != nil {
 		return err
