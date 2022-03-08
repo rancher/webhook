@@ -30,7 +30,7 @@ func Validation(clients *clients.Clients) (http.Handler, error) {
 
 	if clients.MultiClusterManagement {
 		globalRoleBindings := globalrolebinding.NewValidator(clients.Management.GlobalRole().Cache(), clients.EscalationChecker)
-		globalRoles := globalrole.NewValidator()
+		globalRoles := globalrole.NewValidator(clients.EscalationChecker)
 		prtbs := projectroletemplatebinding.NewValidator(clients.Management.RoleTemplate().Cache(), clients.EscalationChecker)
 		crtbs := clusterroletemplatebinding.NewValidator(clients.Management.RoleTemplate().Cache(), clients.EscalationChecker)
 		roleTemplates := roletemplate.NewValidator(clients.EscalationChecker)
