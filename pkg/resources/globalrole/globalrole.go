@@ -5,6 +5,7 @@ import (
 	"time"
 
 	rancherv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/auth"
 	"github.com/rancher/wrangler/pkg/webhook"
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,11 +13,15 @@ import (
 	"k8s.io/utils/trace"
 )
 
-func NewValidator() webhook.Handler {
-	return &globalRoleValidator{}
+func NewValidator(escalationChecker *auth.EscalationChecker) webhook.Handler {
+	return &globalRoleValidator{
+		escalationChecker: escalationChecker,
+	}
 }
 
-type globalRoleValidator struct{}
+type globalRoleValidator struct {
+	escalationChecker *auth.EscalationChecker
+}
 
 func (grv *globalRoleValidator) Admit(response *webhook.Response, request *webhook.Request) error {
 	listTrace := trace.New("globalRoleValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
@@ -48,8 +53,7 @@ func (grv *globalRoleValidator) Admit(response *webhook.Response, request *webho
 		}
 	}
 
-	response.Allowed = true
-	return nil
+	return grv.escalationChecker.ConfirmNoEscalation(response, request, newGR.Rules, "")
 }
 
 func grObject(request *webhook.Request) (*rancherv3.GlobalRole, error) {

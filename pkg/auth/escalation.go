@@ -47,8 +47,8 @@ func (ec *EscalationChecker) ConfirmNoEscalation(response *webhook.Response, req
 		response.Result = &metav1.Status{
 			Status:  "Failure",
 			Message: err.Error(),
-			Reason:  metav1.StatusReasonUnauthorized,
-			Code:    http.StatusUnauthorized,
+			Reason:  metav1.StatusReasonInvalid,
+			Code:    http.StatusUnprocessableEntity,
 		}
 		return nil
 	}
