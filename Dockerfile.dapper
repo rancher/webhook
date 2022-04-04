@@ -1,10 +1,9 @@
-FROM golang:1.17
+FROM registry.suse.com/bci/golang:1.17-11.51
 
 ARG DAPPER_HOST_ARCH
 ENV ARCH $DAPPER_HOST_ARCH
 
-RUN apt update && \
-    apt install -y bash git gcc docker.io vim less file curl wget ca-certificates
+RUN zypper -n install git docker vim less file curl wget
 RUN if [ "${ARCH}" = "amd64" ]; then \
     curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.44.0; \
     fi
@@ -15,6 +14,7 @@ ENV DAPPER_SOURCE /go/src/github.com/rancher/webhook/
 ENV DAPPER_OUTPUT ./bin ./dist
 ENV DAPPER_DOCKER_SOCKET true
 ENV DAPPER_RUN_ARGS "-v webhook-pkg:/go/pkg -v webhook-cache:/root/.cache"
+ENV GOPATH /go
 WORKDIR ${DAPPER_SOURCE}
 
 ENTRYPOINT ["./scripts/entry"]
