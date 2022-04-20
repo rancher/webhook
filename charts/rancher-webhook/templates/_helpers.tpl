@@ -9,3 +9,7 @@
 {{- define "rancher-webhook.labels" -}}
 app: rancher-webhook
 {{- end }}
+
+{{- define "linux-node-selector" -}}
+kubernetes.io/os: linux
+{{- end -}}

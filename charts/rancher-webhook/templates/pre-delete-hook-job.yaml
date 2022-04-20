@@ -22,6 +22,10 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      nodeSelector: {{ include "linux-node-selector" . | nindent 8 }}
+{{- if .Values.nodeSelector }}
+{{ toYaml .Values.nodeSelector | indent 8 }}
+{{- end }}
       containers:
         - name: rancher-webhook-pre-delete
           image: "{{ include "system_default_registry" . }}{{ .Values.preDelete.image.repository }}:{{ .Values.preDelete.image.tag }}"

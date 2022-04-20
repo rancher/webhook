@@ -46,3 +46,7 @@ spec:
         - name: tls
           mountPath: /tmp/k8s-webhook-server/serving-certs
       serviceAccountName: rancher-webhook
+      nodeSelector: {{ include "linux-node-selector" . | nindent 8 }}
+{{- if .Values.nodeSelector }}
+{{ toYaml .Values.nodeSelector | indent 8 }}
+{{- end }}
