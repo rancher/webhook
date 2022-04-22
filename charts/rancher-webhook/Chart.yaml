@@ -9,6 +9,7 @@ annotations:
   catalog.cattle.io/namespace: cattle-system
   catalog.cattle.io/release-name: rancher-webhook
   catalog.cattle.io/os: linux
+  catalog.cattle.io/permits-os: linux,windows
 dependencies:
 - name: capi
   condition: capi.enabled

@@ -22,3 +22,4 @@ preDelete:
 
 # tolerations for the webhook deployment. See https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/ for more info
 tolerations: []
+nodeSelector: {}
