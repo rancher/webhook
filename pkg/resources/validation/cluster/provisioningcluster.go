@@ -131,7 +131,7 @@ func (p *provisioningClusterValidator) validateClusterName(request *webhook.Requ
 	if !isValidName(cluster.Name, cluster.Namespace, err == nil) {
 		response.Result = &metav1.Status{
 			Status:  "Failure",
-			Message: "cluster name cannot be \"local\" nor of the form \"c-xxxxx\"",
+			Message: "cluster name must be 63 characters or fewer, cannot be \"local\" nor of the form \"c-xxxxx\"",
 			Reason:  metav1.StatusReasonInvalid,
 			Code:    http.StatusUnprocessableEntity,
 		}
@@ -166,5 +166,8 @@ func isValidName(clusterName, clusterNamespace string, clusterExists bool) bool 
 		return clusterExists
 	}
 
-	return true
+	// Even though the name of the provisioning cluster object can be 253 characters, the name of the cluster is put in
+	// various labels, by Rancher controllers and CAPI controllers. Because of this, the name of the cluster object should
+	// be limited to 63 characters instead.
+	return len(clusterName) <= 63
 }
