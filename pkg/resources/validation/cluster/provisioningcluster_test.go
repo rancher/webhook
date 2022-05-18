@@ -73,6 +73,27 @@ func Test_isValidName(t *testing.T) {
 			clusterExists:    false,
 			want:             true,
 		},
+		{
+			name:             "name length is exactly 63 characters",
+			clusterName:      "Cq8Oh6UVnTyPOITcfwrXFjJRuZ4KV2q6ItimQkcGeX1ZQGm7oa3jbLd9N0diIka",
+			clusterNamespace: "fleet-default",
+			clusterExists:    false,
+			want:             true,
+		},
+		{
+			name:             "name length is 64 characters",
+			clusterName:      "xD0PeGoO51IsWFKx173UPikNoT0dsgp0JKUauSssk2VwunJRWaLB2rAYpJntVTPA",
+			clusterNamespace: "fleet-default",
+			clusterExists:    false,
+			want:             false,
+		},
+		{
+			name:             "name length is 253 characters",
+			clusterName:      "DxHt2WGXBASk8LPj4nFqMYCyKCsmZV6bWTL7xeo3NUXnW6tK07voFJJJmEpY6AvDhd03oR2hnW8UQJTDh2LVBPrh4V0rJoChGeaLMPTz4sQt3pt5sTcce4EiRk37YtjFQuHOdXKnQQzpIdll6TXReIQ9pPaASWuwpQ8opadHQITFlN2txSgOwc80WWGkgikcZh6f8fuihvviZF65tn2WBeySuDyEOFgLTaduG1CJwohm7n9Yovrd0fiYxM0BK",
+			clusterNamespace: "fleet-default",
+			clusterExists:    false,
+			want:             false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
