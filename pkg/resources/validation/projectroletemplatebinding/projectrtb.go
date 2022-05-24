@@ -54,11 +54,7 @@ func (p *projectRoleTemplateBindingValidator) Admit(response *webhook.Response, 
 		return err
 	}
 
-	clusterID, projectNS := clusterFromProject(prtb.ProjectName)
-	if clusterID != "local" {
-		response.Allowed = true
-		return nil
-	}
+	_, projectNS := clusterFromProject(prtb.ProjectName)
 
 	rt, err := p.roleTemplates.Get(prtb.RoleTemplateName)
 	if err != nil {
