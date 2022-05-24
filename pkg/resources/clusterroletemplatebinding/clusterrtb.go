@@ -34,11 +34,6 @@ func (c *clusterRoleTemplateBindingValidator) Admit(response *webhook.Response, 
 		return err
 	}
 
-	if crtb.ClusterName != "local" {
-		response.Allowed = true
-		return nil
-	}
-
 	rt, err := c.roleTemplates.Get(crtb.RoleTemplateName)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -53,7 +48,7 @@ func (c *clusterRoleTemplateBindingValidator) Admit(response *webhook.Response, 
 		return err
 	}
 
-	return c.escalationChecker.ConfirmNoEscalation(response, request, rules, "local")
+	return c.escalationChecker.ConfirmNoEscalation(response, request, rules, crtb.ClusterName)
 }
 
 func crtbObject(request *webhook.Request) (*rancherv3.ClusterRoleTemplateBinding, error) {
