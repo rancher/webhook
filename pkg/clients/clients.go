@@ -57,7 +57,7 @@ func New(ctx context.Context, rest *rest.Config, mcmEnabled bool) (*Clients, err
 
 	if result.MultiClusterManagement {
 		result.EscalationChecker = auth.NewEscalationChecker(ruleResolver,
-			mgmt.Management().V3().RoleTemplate().Cache(), clients.RBAC.ClusterRole().Cache())
+			mgmt.Management().V3().RoleTemplate().Cache(), clients.RBAC.ClusterRole().Cache(), result.K8s.AuthorizationV1().SubjectAccessReviews())
 	}
 
 	return result, nil
