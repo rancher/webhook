@@ -1,8 +1,11 @@
+// Package capi is used to run a CAPI webhook server
 package capi
 
 import (
 	"context"
+	"crypto/tls"
 	"os"
+	"path/filepath"
 
 	controllerruntime "github.com/rancher/lasso/controller-runtime"
 	"github.com/rancher/webhook/pkg/clients"
@@ -20,8 +23,10 @@ import (
 	expv1alpha3 "sigs.k8s.io/cluster-api/exp/api/v1alpha3"
 	expv1alpha4 "sigs.k8s.io/cluster-api/exp/api/v1alpha4"
 	expv1beta1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
+	"sigs.k8s.io/cluster-api/webhooks"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
 func init() {
@@ -38,11 +43,13 @@ func init() {
 	_ = apiextensionsv1.AddToScheme(schemes.All)
 }
 
-const (
-	tlsCert = "/tmp/k8s-webhook-server/serving-certs/tls.crt"
+var (
+	tlsCert  = filepath.Join(os.TempDir(), "k8s-webhook-server", "serving-certs", "tls.crt")
+	capiPort = 8777
 )
 
-func Register(clients *clients.Clients) (func(ctx context.Context) error, error) {
+// Register registers a new CAPI webhook server and returns a start function.
+func Register(clients *clients.Clients, tlsOpts ...func(*tls.Config)) (func(ctx context.Context) error, error) {
 	mgr, err := ctrl.NewManager(clients.RESTConfig, ctrl.Options{
 		MetricsBindAddress: "0",
 		NewCache: controllerruntime.NewNewCacheFunc(clients.SharedControllerFactory.SharedCacheFactory(),
@@ -52,14 +59,19 @@ func Register(clients *clients.Clients) (func(ctx context.Context) error, error)
 			&corev1.ConfigMap{},
 			&corev1.Secret{},
 		},
-		Port: 8777,
+		WebhookServer: &webhook.Server{
+			Port:          capiPort,
+			TLSMinVersion: "1.2",
+			TLSOpts:       tlsOpts,
+		},
 	})
+
 	if err != nil {
 		return nil, err
 	}
 
-	for _, webhook := range webhooks() {
-		if err := webhook.SetupWebhookWithManager(mgr); err != nil {
+	for _, capiWebhook := range capiWebhooks() {
+		if err := capiWebhook.SetupWebhookWithManager(mgr); err != nil {
 			return nil, err
 		}
 	}
@@ -75,9 +87,9 @@ func Register(clients *clients.Clients) (func(ctx context.Context) error, error)
 	}, nil
 }
 
-func webhooks() []webhook {
-	return []webhook{
-		&clusterv1beta1.Cluster{},
+func capiWebhooks() []capiWebhook {
+	return []capiWebhook{
+		&webhooks.Cluster{},
 		&clusterv1beta1.Machine{},
 		&clusterv1beta1.MachineHealthCheck{},
 		&clusterv1beta1.MachineSet{},
@@ -85,6 +97,6 @@ func webhooks() []webhook {
 	}
 }
 
-type webhook interface {
+type capiWebhook interface {
 	SetupWebhookWithManager(mgr ctrl.Manager) error
 }
