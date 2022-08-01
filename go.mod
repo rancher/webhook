@@ -39,6 +39,7 @@ require (
 	github.com/rancher/rancher/pkg/apis v0.0.0-20210628154046-7a2fc74f9598
 	github.com/rancher/wrangler v0.8.11-0.20220217210408-3ecd23dfea3b
 	github.com/sirupsen/logrus v1.8.1
+	github.com/stretchr/testify v1.7.0
 	golang.org/x/tools v0.1.6-0.20210820212750-d4cc65f0b2ff
 	k8s.io/api v0.23.3
 	k8s.io/apiextensions-apiserver v0.23.0
@@ -75,6 +76,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/onsi/gomega v1.17.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.12.2 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.32.1 // indirect

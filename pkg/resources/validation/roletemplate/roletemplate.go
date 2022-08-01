@@ -1,10 +1,13 @@
 package roletemplate
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
+	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/auth"
+	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/webhook"
 	"github.com/sirupsen/logrus"
@@ -19,14 +22,16 @@ var roleTemplateGVR = schema.GroupVersionResource{
 	Resource: "roletemplates",
 }
 
-func NewValidator(escalationChecker *auth.EscalationChecker) webhook.Handler {
+func NewValidator(templates controllerv3.RoleTemplateCache, escalationChecker *auth.EscalationChecker) webhook.Handler {
 	return &roleTemplateValidator{
 		escalationChecker: escalationChecker,
+		templates:         templates,
 	}
 }
 
 type roleTemplateValidator struct {
 	escalationChecker *auth.EscalationChecker
+	templates         controllerv3.RoleTemplateCache
 }
 
 func (r *roleTemplateValidator) Admit(response *webhook.Response, request *webhook.Request) error {
@@ -42,6 +47,22 @@ func (r *roleTemplateValidator) Admit(response *webhook.Response, request *webho
 	// this admits update operations that happen to remove finalizers
 	if roleTemplate.DeletionTimestamp != nil {
 		response.Allowed = true
+		return nil
+	}
+	//check for circular references produced by this role
+	circularTemplate, err := r.checkCircularRef(roleTemplate)
+	if err != nil {
+		logrus.Errorf("Error when trying to check for a circular ref: %s", err)
+		return err
+	}
+	if circularTemplate != nil {
+		response.Result = &metav1.Status{
+			Status:  "Failure",
+			Message: fmt.Sprintf("Circular Reference: RoleTemplate %s already inherits RoleTemplate %s", circularTemplate.Name, roleTemplate.Name),
+			Reason:  metav1.StatusReasonBadRequest,
+			Code:    http.StatusBadRequest,
+		}
+		response.Allowed = false
 		return nil
 	}
 
@@ -76,4 +97,35 @@ func (r *roleTemplateValidator) Admit(response *webhook.Response, request *webho
 	}
 
 	return r.escalationChecker.ConfirmNoEscalation(response, request, rules, "")
+}
+
+// checkCircularRef looks for a circular ref between this role template and any role template that it inherits
+// for example - template 1 inherits template 2 which inherits template 1. These setups can cause high cpu usage/crashes
+// If a circular ref was found, returns the first template which inherits this role template. Returns nil otherwise.
+// Can return an error if any role template was not found.
+func (r *roleTemplateValidator) checkCircularRef(template *v3.RoleTemplate) (*v3.RoleTemplate, error) {
+	seen := make(map[string]struct{})
+	queue := []*v3.RoleTemplate{template}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		for _, inherited := range current.RoleTemplateNames {
+			// if we found a circular reference, exit here and go no further
+			if inherited == template.Name {
+				// note: we only look for circular references to this role. We don't check for circular dependencies which
+				// don't have this role as one of the targets. Those should have been taken care of when they were originally made
+				return current, nil
+			}
+			// if we haven't seen this yet, we add to the queue to process
+			if _, ok := seen[inherited]; !ok {
+				newTemplate, err := r.templates.Get(inherited)
+				if err != nil {
+					return nil, fmt.Errorf("unable to get roletemplate %s with error %w", inherited, err)
+				}
+				seen[inherited] = struct{}{}
+				queue = append(queue, newTemplate)
+			}
+		}
+	}
+	return nil, nil
 }
