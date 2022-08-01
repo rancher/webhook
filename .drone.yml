@@ -240,4 +240,9 @@ steps:
       from_secret: FOSSA_API_KEY
     when:
       instance:
-        - drone-publish.rancher.io
+      - drone-publish.rancher.io
+      ref:
+      - refs/head/master
+      - refs/tags/*
+      event:
+      - tag
