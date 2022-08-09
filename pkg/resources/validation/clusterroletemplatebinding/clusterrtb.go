@@ -9,11 +9,19 @@ import (
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/webhook"
+	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/trace"
 )
+
+var clusterRoleTemplateBindingGVR = schema.GroupVersionResource{
+	Group:    "management.cattle.io",
+	Version:  "v3",
+	Resource: "clusterroletemplatebindings",
+}
 
 func NewValidator(rt v3.RoleTemplateCache, escalationChecker *auth.EscalationChecker) webhook.Handler {
 	return &clusterRoleTemplateBindingValidator{
@@ -65,6 +73,16 @@ func (c *clusterRoleTemplateBindingValidator) Admit(response *webhook.Response, 
 	rules, err := c.escalationChecker.RulesFromTemplate(rt)
 	if err != nil {
 		return err
+	}
+
+	allowed, err := c.escalationChecker.EscalationAuthorized(response, request, clusterRoleTemplateBindingGVR, crtb.ClusterName)
+	if err != nil {
+		logrus.Warnf("Failed to check for the 'escalate' verb on ClusterRoleTemplateBinding: %v", err)
+	}
+
+	if allowed {
+		response.Allowed = true
+		return nil
 	}
 
 	return c.escalationChecker.ConfirmNoEscalation(response, request, rules, crtb.ClusterName)
