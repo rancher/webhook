@@ -9,19 +9,24 @@ import (
 	k8srbacv1 "github.com/rancher/wrangler/pkg/generated/controllers/rbac/v1"
 	"github.com/rancher/wrangler/pkg/webhook"
 	authenticationv1 "k8s.io/api/authentication/v1"
+	v1 "k8s.io/api/authorization/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/authentication/user"
 	k8srequest "k8s.io/apiserver/pkg/endpoints/request"
+	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 	rbacregistryvalidation "k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
 
-func NewEscalationChecker(ruleSolver validation.AuthorizationRuleResolver, roleTemplates v3.RoleTemplateCache, clusterRoles k8srbacv1.ClusterRoleCache) *EscalationChecker {
+func NewEscalationChecker(ruleSolver validation.AuthorizationRuleResolver, roleTemplates v3.RoleTemplateCache, clusterRoles k8srbacv1.ClusterRoleCache,
+	sar authorizationv1.SubjectAccessReviewInterface) *EscalationChecker {
 	return &EscalationChecker{
 		clusterRoles:  clusterRoles,
 		roleTemplates: roleTemplates,
 		ruleSolver:    ruleSolver,
+		sar:           sar,
 	}
 }
 
@@ -29,6 +34,7 @@ type EscalationChecker struct {
 	clusterRoles  k8srbacv1.ClusterRoleCache
 	roleTemplates v3.RoleTemplateCache
 	ruleSolver    validation.AuthorizationRuleResolver
+	sar           authorizationv1.SubjectAccessReviewInterface
 }
 
 // ConfirmNoEscalation checks that the user attempting to create a binding/role has all the permissions they are attempting
@@ -107,4 +113,33 @@ func ToExtraString(extra map[string]authenticationv1.ExtraValue) map[string][]st
 		result[k] = v
 	}
 	return result
+}
+
+// EscalationAuthorized checks if the user associated with the context is explicitly authorized to escalate the given GVR.
+func (ec *EscalationChecker) EscalationAuthorized(response *webhook.Response, request *webhook.Request, gvr schema.GroupVersionResource, namespace string) (bool, error) {
+	extras := map[string]v1.ExtraValue{}
+	for k, v := range request.UserInfo.Extra {
+		extras[k] = v1.ExtraValue(v)
+	}
+
+	resp, err := ec.sar.Create(request.Context, &v1.SubjectAccessReview{
+		Spec: v1.SubjectAccessReviewSpec{
+			ResourceAttributes: &v1.ResourceAttributes{
+				Verb:      "escalate",
+				Namespace: namespace,
+				Version:   gvr.Version,
+				Resource:  gvr.Resource,
+				Group:     gvr.Group,
+			},
+			User:   request.UserInfo.Username,
+			Groups: request.UserInfo.Groups,
+			Extra:  extras,
+			UID:    request.UserInfo.UID,
+		},
+	}, metav1.CreateOptions{})
+	if err != nil {
+		return false, err
+	}
+
+	return resp.Status.Allowed, nil
 }
