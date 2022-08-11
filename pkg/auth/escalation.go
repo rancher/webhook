@@ -123,7 +123,7 @@ func ToExtraString(extra map[string]authenticationv1.ExtraValue) map[string][]st
 }
 
 // EscalationAuthorized checks if the user associated with the context is explicitly authorized to escalate the given GVR.
-func (ec *EscalationChecker) EscalationAuthorized(response *webhook.Response, request *webhook.Request, gvr schema.GroupVersionResource) (bool, error) {
+func (ec *EscalationChecker) EscalationAuthorized(response *webhook.Response, request *webhook.Request, gvr schema.GroupVersionResource, namespace string) (bool, error) {
 	extras := map[string]v1.ExtraValue{}
 	for k, v := range request.UserInfo.Extra {
 		extras[k] = v1.ExtraValue(v)
@@ -132,10 +132,11 @@ func (ec *EscalationChecker) EscalationAuthorized(response *webhook.Response, re
 	resp, err := ec.sar.Create(request.Context, &v1.SubjectAccessReview{
 		Spec: v1.SubjectAccessReviewSpec{
 			ResourceAttributes: &v1.ResourceAttributes{
-				Verb:     "escalate",
-				Version:  gvr.Version,
-				Resource: gvr.Resource,
-				Group:    gvr.Group,
+				Verb:      "escalate",
+				Namespace: namespace,
+				Version:   gvr.Version,
+				Resource:  gvr.Resource,
+				Group:     gvr.Group,
 			},
 			User:   request.UserInfo.Username,
 			Groups: request.UserInfo.Groups,

@@ -65,7 +65,7 @@ func (r *roleTemplateValidator) Admit(response *webhook.Response, request *webho
 		}
 	}
 
-	allowed, err := r.escalationChecker.EscalationAuthorized(response, request, roleTemplateGVR)
+	allowed, err := r.escalationChecker.EscalationAuthorized(response, request, roleTemplateGVR, "")
 	if err != nil {
 		logrus.Warnf("Failed to check for the 'escalate' verb on RoleTemplates: %v", err)
 	}
