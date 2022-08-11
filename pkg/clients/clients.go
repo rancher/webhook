@@ -48,7 +48,7 @@ func New(ctx context.Context, rest *rest.Config) (*Clients, error) {
 
 	ruleResolver := rbacregistryvalidation.NewDefaultRuleResolver(rbacRestGetter, rbacRestGetter, rbacRestGetter, rbacRestGetter)
 	escalationChecker := auth.NewEscalationChecker(ruleResolver,
-		mgmt.Management().V3().RoleTemplate().Cache(), clients.RBAC.ClusterRole().Cache())
+		mgmt.Management().V3().RoleTemplate().Cache(), clients.RBAC.ClusterRole().Cache(), clients.K8s.AuthorizationV1().SubjectAccessReviews())
 
 	return &Clients{
 		Clients:           *clients,
