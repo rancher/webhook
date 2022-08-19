@@ -6,9 +6,11 @@ import (
 	"strings"
 	"time"
 
+	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/auth"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/resources/validation"
 	"github.com/rancher/wrangler/pkg/webhook"
 	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -42,14 +44,15 @@ func (p *projectRoleTemplateBindingValidator) Admit(response *webhook.Response, 
 
 	// disallow updates to the referenced role template
 	if request.Operation == admissionv1.Update {
-		oldPrtb, newPrtb, err := objectsv3.ProjectRoleTemplateBindingOldAndNewFromRequest(request)
+		oldPRTB, newPRTB, err := objectsv3.ProjectRoleTemplateBindingOldAndNewFromRequest(request)
 		if err != nil {
 			return err
 		}
-		if oldPrtb.RoleTemplateName != newPrtb.RoleTemplateName {
+
+		if err = validateUpdateFields(oldPRTB, newPRTB); err != nil {
 			response.Result = &metav1.Status{
 				Status:  "Failure",
-				Message: fmt.Sprintf("cannot update referenced roleTemplate for projectRoleTemplateBinding %s", oldPrtb.Name),
+				Message: err.Error(),
 				Reason:  metav1.StatusReasonBadRequest,
 				Code:    http.StatusBadRequest,
 			}
@@ -60,6 +63,18 @@ func (p *projectRoleTemplateBindingValidator) Admit(response *webhook.Response, 
 	prtb, err := objectsv3.ProjectRoleTemplateBindingFromRequest(request)
 	if err != nil {
 		return err
+	}
+
+	if request.Operation == admissionv1.Create {
+		if err = p.validateCreateFields(prtb); err != nil {
+			response.Result = &metav1.Status{
+				Status:  "Failure",
+				Message: err.Error(),
+				Reason:  metav1.StatusReasonBadRequest,
+				Code:    http.StatusBadRequest,
+			}
+			return nil
+		}
 	}
 
 	_, projectNS := clusterFromProject(prtb.ProjectName)
@@ -94,4 +109,48 @@ func (p *projectRoleTemplateBindingValidator) Admit(response *webhook.Response, 
 func clusterFromProject(project string) (string, string) {
 	pieces := strings.Split(project, ":")
 	return pieces[0], pieces[1]
+}
+
+// validUpdateFields checks if the fields being changed are valid update fields.
+func validateUpdateFields(oldPRTB, newPRTB *apisv3.ProjectRoleTemplateBinding) error {
+	var invalidFieldName string
+	switch {
+	case oldPRTB.RoleTemplateName != newPRTB.RoleTemplateName:
+		invalidFieldName = "referenced roleTemplate"
+	case oldPRTB.UserName != newPRTB.UserName && oldPRTB.UserName != "":
+		invalidFieldName = "userName"
+	case oldPRTB.UserPrincipalName != newPRTB.UserPrincipalName && oldPRTB.UserPrincipalName != "":
+		invalidFieldName = "userPrincipalName"
+	case oldPRTB.GroupName != newPRTB.GroupName && oldPRTB.GroupName != "":
+		invalidFieldName = "groupName"
+	case oldPRTB.GroupPrincipalName != newPRTB.GroupPrincipalName && oldPRTB.GroupPrincipalName != "":
+		invalidFieldName = "groupPrincipalName"
+	case (newPRTB.GroupName != "" || oldPRTB.GroupPrincipalName != "") && (newPRTB.UserName != "" || oldPRTB.UserPrincipalName != ""):
+		invalidFieldName = "both user and group"
+	default:
+		return nil
+	}
+
+	return fmt.Errorf("cannot update %s for clusterRoleTemplateBinding %s: %w", invalidFieldName, oldPRTB.Name, validation.ErrInvalidRequest)
+}
+
+// validateCreateFields checks if all required fields are present and valid.
+func (p *projectRoleTemplateBindingValidator) validateCreateFields(newPRTB *apisv3.ProjectRoleTemplateBinding) error {
+	hasUserTarget := newPRTB.UserName != "" || newPRTB.UserPrincipalName != ""
+	hasGroupTarget := newPRTB.GroupName != "" || newPRTB.GroupPrincipalName != ""
+
+	if (hasUserTarget && hasGroupTarget) || (!hasUserTarget && !hasGroupTarget) {
+		return fmt.Errorf("binding must target either a user [userId]/[userPrincipalId] OR a group [groupId]/[groupPrincipalId]: %w", validation.ErrInvalidRequest)
+	}
+
+	roleTemplate, err := p.roleTemplates.Get(newPRTB.RoleTemplateName)
+	if err != nil {
+		return fmt.Errorf("unknown reference roleTemplate '%s': %w", newPRTB.RoleTemplateName, err)
+	}
+
+	if roleTemplate.Locked {
+		return fmt.Errorf("referenced role '%s' is locked and cannot be assigned: %w", roleTemplate.DisplayName, validation.ErrInvalidRequest)
+	}
+
+	return nil
 }
