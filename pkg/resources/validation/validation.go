@@ -1,6 +1,7 @@
 package validation
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/rancher/webhook/pkg/auth"
@@ -8,6 +9,9 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// ErrInvalidRequest error returned when the requested operation with the requested fields are invalid.
+var ErrInvalidRequest = fmt.Errorf("invalid request")
 
 func CheckCreatorID(request *webhook.Request, oldObj, newObj metav1.Object) *metav1.Status {
 	status := &metav1.Status{
