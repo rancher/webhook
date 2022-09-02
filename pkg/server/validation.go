@@ -33,7 +33,7 @@ func Validation(clients *clients.Clients) (http.Handler, error) {
 		globalRoles := globalrole.NewValidator(clients.EscalationChecker)
 		prtbs := projectroletemplatebinding.NewValidator(clients.Management.RoleTemplate().Cache(), clients.EscalationChecker)
 		crtbs := clusterroletemplatebinding.NewValidator(clients.Management.RoleTemplate().Cache(), clients.EscalationChecker)
-		roleTemplates := roletemplate.NewValidator(clients.EscalationChecker)
+		roleTemplates := roletemplate.NewValidator(clients.Management.RoleTemplate().Cache(), clients.EscalationChecker)
 
 		router.Kind("RoleTemplate").Group(management.GroupName).Type(&v3.RoleTemplate{}).Handle(roleTemplates)
 		router.Kind("GlobalRoleBinding").Group(management.GroupName).Type(&v3.GlobalRoleBinding{}).Handle(globalRoleBindings)
