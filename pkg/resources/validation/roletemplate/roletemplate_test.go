@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/auth"
 	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/mocks"
 	"github.com/stretchr/testify/assert"
@@ -138,6 +139,6 @@ func createRoleTemplate(name string, rules []rbacv1.PolicyRule) *v3.RoleTemplate
 
 func createValidator(cache controllerv3.RoleTemplateCache) *roleTemplateValidator {
 	return &roleTemplateValidator{
-		templates: cache,
+		roleTemplateResolver: auth.NewRoleTemplateResolver(cache, nil),
 	}
 }
