@@ -7,12 +7,13 @@ import (
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/auth"
-	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/webhook"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
+	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 	"k8s.io/utils/trace"
 )
 
@@ -22,16 +23,19 @@ var roleTemplateGVR = schema.GroupVersionResource{
 	Resource: "roletemplates",
 }
 
-func NewValidator(templates controllerv3.RoleTemplateCache, escalationChecker *auth.EscalationChecker) webhook.Handler {
+func NewValidator(resolver validation.AuthorizationRuleResolver, roleTemplateResolver *auth.RoleTemplateResolver,
+	sar authorizationv1.SubjectAccessReviewInterface) webhook.Handler {
 	return &roleTemplateValidator{
-		escalationChecker: escalationChecker,
-		templates:         templates,
+		resolver:             resolver,
+		roleTemplateResolver: roleTemplateResolver,
+		sar:                  sar,
 	}
 }
 
 type roleTemplateValidator struct {
-	escalationChecker *auth.EscalationChecker
-	templates         controllerv3.RoleTemplateCache
+	resolver             validation.AuthorizationRuleResolver
+	roleTemplateResolver *auth.RoleTemplateResolver
+	sar                  authorizationv1.SubjectAccessReviewInterface
 }
 
 func (r *roleTemplateValidator) Admit(response *webhook.Response, request *webhook.Request) error {
@@ -66,7 +70,7 @@ func (r *roleTemplateValidator) Admit(response *webhook.Response, request *webho
 		return nil
 	}
 
-	rules, err := r.escalationChecker.RulesFromTemplate(roleTemplate)
+	rules, err := r.roleTemplateResolver.RulesFromTemplate(roleTemplate)
 	if err != nil {
 		return err
 	}
@@ -86,7 +90,7 @@ func (r *roleTemplateValidator) Admit(response *webhook.Response, request *webho
 		}
 	}
 
-	allowed, err := r.escalationChecker.EscalationAuthorized(response, request, roleTemplateGVR, "")
+	allowed, err := auth.EscalationAuthorized(request, roleTemplateGVR, r.sar, "")
 	if err != nil {
 		logrus.Warnf("Failed to check for the 'escalate' verb on RoleTemplates: %v", err)
 	}
@@ -96,7 +100,8 @@ func (r *roleTemplateValidator) Admit(response *webhook.Response, request *webho
 		return nil
 	}
 
-	return r.escalationChecker.ConfirmNoEscalation(response, request, rules, "")
+	auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, rules, "", r.resolver))
+	return nil
 }
 
 // checkCircularRef looks for a circular ref between this role template and any role template that it inherits
@@ -118,7 +123,7 @@ func (r *roleTemplateValidator) checkCircularRef(template *v3.RoleTemplate) (*v3
 			}
 			// if we haven't seen this yet, we add to the queue to process
 			if _, ok := seen[inherited]; !ok {
-				newTemplate, err := r.templates.Get(inherited)
+				newTemplate, err := r.roleTemplateResolver.RoleTemplateCache().Get(inherited)
 				if err != nil {
 					return nil, fmt.Errorf("unable to get roletemplate %s with error %w", inherited, err)
 				}

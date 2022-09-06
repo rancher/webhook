@@ -8,17 +8,18 @@ import (
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/rancher/wrangler/pkg/webhook"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 	"k8s.io/utils/trace"
 )
 
-func NewValidator(escalationChecker *auth.EscalationChecker) webhook.Handler {
+func NewValidator(resolver validation.AuthorizationRuleResolver) webhook.Handler {
 	return &globalRoleValidator{
-		escalationChecker: escalationChecker,
+		resolver: resolver,
 	}
 }
 
 type globalRoleValidator struct {
-	escalationChecker *auth.EscalationChecker
+	resolver validation.AuthorizationRuleResolver
 }
 
 func (grv *globalRoleValidator) Admit(response *webhook.Response, request *webhook.Request) error {
@@ -51,5 +52,7 @@ func (grv *globalRoleValidator) Admit(response *webhook.Response, request *webho
 		}
 	}
 
-	return grv.escalationChecker.ConfirmNoEscalation(response, request, newGR.Rules, "")
+	auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, newGR.Rules, "", grv.resolver))
+
+	return nil
 }
