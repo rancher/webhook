@@ -1,7 +1,10 @@
+// Package server is used to create and run the webhook server
 package server
 
 import (
 	"context"
+	"crypto/tls"
+	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -19,18 +22,20 @@ import (
 )
 
 const (
-	serviceName = "rancher-webhook"
-	namespace   = "cattle-system"
-	tlsName     = "rancher-webhook.cattle-system.svc"
-	certName    = "cattle-webhook-tls"
-	caName      = "cattle-webhook-ca"
+	serviceName      = "rancher-webhook"
+	namespace        = "cattle-system"
+	tlsName          = "rancher-webhook.cattle-system.svc"
+	certName         = "cattle-webhook-tls"
+	caName           = "cattle-webhook-ca"
+	webhookHTTPPort  = 0 // value of 0 indicates we do not want to use http.
+	webhookHTTPSPort = 9433
 )
 
 var (
-	// These have to remain as vars since we need the address below
-	port                        = int32(443)
+	// These strings have to remain as vars since we need the address below.
 	validationPath              = "/v1/webhook/validation"
 	mutationPath                = "/v1/webhook/mutation"
+	clientPort                  = int32(443)
 	clusterScope                = v1.ClusterScope
 	namespaceScope              = v1.NamespacedScope
 	failPolicyFail              = v1.Fail
@@ -39,13 +44,27 @@ var (
 	sideEffectClassNoneOnDryRun = v1.SideEffectClassNoneOnDryRun
 )
 
+// tlsOpt option function applied to all webhook servers.
+var tlsOpt = func(config *tls.Config) {
+	config.MinVersion = tls.VersionTLS12
+	config.CipherSuites = []uint16{
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+	}
+}
+
+// ListenAndServe starts the webhook server.
 func ListenAndServe(ctx context.Context, cfg *rest.Config, capiEnabled, mcmEnabled bool) error {
 	clients, err := clients.New(ctx, cfg, mcmEnabled)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create a new client: %w", err)
 	}
 
-	if err := setCertificateExpirationDays(); err != nil {
+	if err = setCertificateExpirationDays(); err != nil {
 		// If this error occurs, certificate creation will still work. However, our override will likely not have worked.
 		// This will not affect functionality of the webhook, but users may have to perform the workaround:
 		// https://github.com/rancher/docs/issues/3637
@@ -62,30 +81,30 @@ func ListenAndServe(ctx context.Context, cfg *rest.Config, capiEnabled, mcmEnabl
 		return err
 	}
 
-	var (
-		capiStart func(context.Context) error
-	)
+	var capiStart func(context.Context) error
+
 	if capiEnabled {
-		capiStart, err = capi.Register(clients)
+		capiStart, err = capi.Register(clients, tlsOpt)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to register capi: %w", err)
 		}
 	}
 
 	router := mux.NewRouter()
 	router.Handle(validationPath, validation)
 	router.Handle(mutationPath, mutation)
-	if err := listenAndServe(ctx, clients, router); err != nil {
+
+	if err = listenAndServe(ctx, clients, router); err != nil {
 		return err
 	}
 
-	if err := clients.Start(ctx); err != nil {
-		return err
+	if err = clients.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start client: %w", err)
 	}
 
 	if capiStart != nil {
-		if err := capiStart(ctx); err != nil {
-			return err
+		if err = capiStart(ctx); err != nil {
+			return fmt.Errorf("failed to start capi: %w", err)
 		}
 	}
 
@@ -125,7 +144,7 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 				Namespace: namespace,
 				Name:      serviceName,
 				Path:      &validationPath,
-				Port:      &port,
+				Port:      &clientPort,
 			},
 			CABundle: secret.Data[corev1.TLSCertKey],
 		}
@@ -135,7 +154,7 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 				Namespace: namespace,
 				Name:      serviceName,
 				Path:      &mutationPath,
-				Port:      &port,
+				Port:      &clientPort,
 			},
 			CABundle: secret.Data[corev1.TLSCertKey],
 		}
@@ -194,7 +213,10 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 		rErr = clients.Start(ctx)
 	}()
 
-	return server.ListenAndServe(ctx, 9443, 0, handler, &server.ListenOpts{
+	tlsConfig := &tls.Config{}
+	tlsOpt(tlsConfig)
+
+	return server.ListenAndServe(ctx, webhookHTTPSPort, webhookHTTPPort, handler, &server.ListenOpts{
 		Secrets:       clients.Core.Secret(),
 		CertNamespace: namespace,
 		CertName:      certName,
@@ -203,7 +225,8 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 			SANs: []string{
 				tlsName,
 			},
-			FilterCN: dynamiclistener.OnlyAllow(tlsName),
+			FilterCN:  dynamiclistener.OnlyAllow(tlsName),
+			TLSConfig: tlsConfig,
 		},
 	})
 }
