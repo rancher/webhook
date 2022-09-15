@@ -50,3 +50,6 @@ spec:
         - name: tls
           mountPath: /tmp/k8s-webhook-server/serving-certs
       serviceAccountName: rancher-webhook
+      {{- if .Values.priorityClassName }}
+      priorityClassName: "{{.Values.priorityClassName}}"
+      {{- end }}
