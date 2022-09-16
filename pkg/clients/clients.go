@@ -10,7 +10,7 @@ import (
 	"github.com/rancher/wrangler/pkg/schemes"
 	v1 "k8s.io/api/admissionregistration/v1"
 	"k8s.io/client-go/rest"
-	rbacregistryvalidation "k8s.io/kubernetes/pkg/registry/rbac/validation"
+	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
 
 type Clients struct {
@@ -18,7 +18,8 @@ type Clients struct {
 
 	MultiClusterManagement bool
 	Management             managementv3.Interface
-	EscalationChecker      *auth.EscalationChecker
+	RoleTemplateResolver   *auth.RoleTemplateResolver
+	DefaultResolver        validation.AuthorizationRuleResolver
 }
 
 func New(ctx context.Context, rest *rest.Config, mcmEnabled bool) (*Clients, error) {
@@ -47,17 +48,12 @@ func New(ctx context.Context, rest *rest.Config, mcmEnabled bool) (*Clients, err
 		ClusterRoleBindings: clients.RBAC.ClusterRoleBinding().Cache(),
 	}
 
-	ruleResolver := rbacregistryvalidation.NewDefaultRuleResolver(rbacRestGetter, rbacRestGetter, rbacRestGetter, rbacRestGetter)
-
 	result := &Clients{
 		Clients:                *clients,
 		Management:             mgmt.Management().V3(),
 		MultiClusterManagement: mcmEnabled,
-	}
-
-	if result.MultiClusterManagement {
-		result.EscalationChecker = auth.NewEscalationChecker(ruleResolver,
-			mgmt.Management().V3().RoleTemplate().Cache(), clients.RBAC.ClusterRole().Cache(), result.K8s.AuthorizationV1().SubjectAccessReviews())
+		DefaultResolver:        validation.NewDefaultRuleResolver(rbacRestGetter, rbacRestGetter, rbacRestGetter, rbacRestGetter),
+		RoleTemplateResolver:   auth.NewRoleTemplateResolver(mgmt.Management().V3().RoleTemplate().Cache(), clients.RBAC.ClusterRole().Cache()),
 	}
 
 	return result, nil

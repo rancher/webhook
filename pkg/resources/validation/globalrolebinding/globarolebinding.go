@@ -7,6 +7,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 
 	"github.com/rancher/webhook/pkg/auth"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
@@ -16,16 +17,16 @@ import (
 	"k8s.io/utils/trace"
 )
 
-func NewValidator(grClient v3.GlobalRoleCache, escalationChecker *auth.EscalationChecker) webhook.Handler {
+func NewValidator(grClient v3.GlobalRoleCache, resolver validation.AuthorizationRuleResolver) webhook.Handler {
 	return &globalRoleBindingValidator{
-		escalationChecker: escalationChecker,
-		globalRoles:       grClient,
+		resolver:    resolver,
+		globalRoles: grClient,
 	}
 }
 
 type globalRoleBindingValidator struct {
-	escalationChecker *auth.EscalationChecker
-	globalRoles       v3.GlobalRoleCache
+	resolver    validation.AuthorizationRuleResolver
+	globalRoles v3.GlobalRoleCache
 }
 
 func (grbv *globalRoleBindingValidator) Admit(response *webhook.Response, request *webhook.Request) error {
@@ -63,5 +64,7 @@ func (grbv *globalRoleBindingValidator) Admit(response *webhook.Response, reques
 		return nil
 	}
 
-	return grbv.escalationChecker.ConfirmNoEscalation(response, request, globalRole.Rules, "")
+	auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, globalRole.Rules, "", grbv.resolver))
+
+	return nil
 }
