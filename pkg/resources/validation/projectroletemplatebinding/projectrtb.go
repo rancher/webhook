@@ -9,41 +9,35 @@ import (
 
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/auth"
+	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/resolvers"
 	"github.com/rancher/webhook/pkg/resources/validation"
 	"github.com/rancher/wrangler/pkg/webhook"
-	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	k8validation "k8s.io/kubernetes/pkg/registry/rbac/validation"
 	"k8s.io/utils/trace"
 )
 
-var projectRoleTemplateBindingGVR = schema.GroupVersionResource{
-	Group:    "management.cattle.io",
-	Version:  "v3",
-	Resource: "projectroletemplatebindings",
-}
-
 // NewValidator returns a new validator used for validation PRTB.
-func NewValidator(defaultResolver k8validation.AuthorizationRuleResolver, roleTemplateResolver *auth.RoleTemplateResolver,
-	sar authorizationv1.SubjectAccessReviewInterface) *Validator {
-	resolver := defaultResolver
+func NewValidator(prtb v3.ProjectRoleTemplateBindingCache, crtb v3.ClusterRoleTemplateBindingCache,
+	defaultResolver k8validation.AuthorizationRuleResolver, roleTemplateResolver *auth.RoleTemplateResolver) *Validator {
+	clusterResolver := resolvers.NewAggregateRuleResolver(defaultResolver, resolvers.NewCRTBRuleResolver(crtb, roleTemplateResolver))
+	projectResolver := resolvers.NewAggregateRuleResolver(defaultResolver, resolvers.NewPRTBRuleResolver(prtb, roleTemplateResolver))
 	return &Validator{
-		resolver:             resolver,
+		clusterResolver:      clusterResolver,
+		projectResolver:      projectResolver,
 		roleTemplateResolver: roleTemplateResolver,
-		sar:                  sar,
 	}
 }
 
 // Validator validates PRTB admission request.
 type Validator struct {
-	resolver             k8validation.AuthorizationRuleResolver
+	clusterResolver      k8validation.AuthorizationRuleResolver
+	projectResolver      k8validation.AuthorizationRuleResolver
 	roleTemplateResolver *auth.RoleTemplateResolver
-	sar                  authorizationv1.SubjectAccessReviewInterface
 }
 
 // Admit is the entrypoint for the validator. Admit will return an error if it unable to process the request.
@@ -86,7 +80,7 @@ func (v *Validator) Admit(response *webhook.Response, request *webhook.Request) 
 		}
 	}
 
-	_, projectNS := clusterFromProject(prtb.ProjectName)
+	clusterNS, projectNS := clusterFromProject(prtb.ProjectName)
 
 	roleTemplate, err := v.roleTemplateResolver.RoleTemplateCache().Get(prtb.RoleTemplateName)
 	if err != nil {
@@ -101,16 +95,14 @@ func (v *Validator) Admit(response *webhook.Response, request *webhook.Request) 
 	if err != nil {
 		return fmt.Errorf("failed to get rules from referenced roleTemplate '%s': %w", roleTemplate.Name, err)
 	}
-	allowed, err := auth.EscalationAuthorized(request, projectRoleTemplateBindingGVR, v.sar, projectNS)
-	if err != nil {
-		logrus.Warnf("Failed to check for the 'escalate' verb on %v: %v", projectRoleTemplateBindingGVR.Resource, err)
-	}
 
-	if allowed {
+	err = auth.ConfirmNoEscalation(request, rules, clusterNS, v.clusterResolver)
+	if err == nil {
 		response.Allowed = true
 		return nil
 	}
-	auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, rules, projectNS, v.resolver))
+
+	auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, rules, projectNS, v.projectResolver))
 
 	return nil
 }

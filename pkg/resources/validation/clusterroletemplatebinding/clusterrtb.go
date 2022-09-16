@@ -8,32 +8,25 @@ import (
 
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/auth"
+	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/resolvers"
 	"github.com/rancher/webhook/pkg/resources/validation"
 	"github.com/rancher/wrangler/pkg/webhook"
-	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	k8validation "k8s.io/kubernetes/pkg/registry/rbac/validation"
 	"k8s.io/utils/trace"
 )
 
-var clusterRoleTemplateBindingGVR = schema.GroupVersionResource{
-	Group:    "management.cattle.io",
-	Version:  "v3",
-	Resource: "clusterroletemplatebindings",
-}
-
 // NewValidator will create a newly allocated Validator.
-func NewValidator(defaultResolver k8validation.AuthorizationRuleResolver, roleTemplateResolver *auth.RoleTemplateResolver,
-	sar authorizationv1.SubjectAccessReviewInterface) *Validator {
+func NewValidator(crtb v3.ClusterRoleTemplateBindingCache, defaultResolver k8validation.AuthorizationRuleResolver,
+	roleTemplateResolver *auth.RoleTemplateResolver) *Validator {
+	resolver := resolvers.NewAggregateRuleResolver(defaultResolver, resolvers.NewCRTBRuleResolver(crtb, roleTemplateResolver))
 	return &Validator{
-		resolver:             defaultResolver,
+		resolver:             resolver,
 		roleTemplateResolver: roleTemplateResolver,
-		sar:                  sar,
 	}
 }
 
@@ -41,7 +34,6 @@ func NewValidator(defaultResolver k8validation.AuthorizationRuleResolver, roleTe
 type Validator struct {
 	resolver             k8validation.AuthorizationRuleResolver
 	roleTemplateResolver *auth.RoleTemplateResolver
-	sar                  authorizationv1.SubjectAccessReviewInterface
 }
 
 // Admit is the entrypoint for the validator. Admit will return an error if it unable to process the request.
@@ -98,15 +90,6 @@ func (v *Validator) Admit(response *webhook.Response, request *webhook.Request) 
 		return fmt.Errorf("failed to resolve rules from roletemplate '%s': %w", crtb.RoleTemplateName, err)
 	}
 
-	allowed, err := auth.EscalationAuthorized(request, clusterRoleTemplateBindingGVR, v.sar, crtb.ClusterName)
-	if err != nil {
-		logrus.Warnf("Failed to check for the 'escalate' verb on ClusterRoleTemplateBinding: %v", err)
-	}
-
-	if allowed {
-		response.Allowed = true
-		return nil
-	}
 	auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, rules, crtb.ClusterName, v.resolver))
 
 	return nil
