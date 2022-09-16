@@ -17,6 +17,9 @@ spec:
       labels: {{ include "rancher-webhook.labels" . | nindent 8 }}
     spec:
       serviceAccountName: rancher-webhook-pre-delete
+      {{- if .Values.priorityClassName }}
+      priorityClassName: "{{.Values.priorityClassName}}"
+      {{- end }}
       restartPolicy: OnFailure
       nodeSelector: {{ include "linux-node-selector" . | nindent 8 }}
       {{- if .Values.nodeSelector }}
