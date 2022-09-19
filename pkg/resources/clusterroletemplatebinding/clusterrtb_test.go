@@ -18,12 +18,9 @@ import (
 	"github.com/stretchr/testify/suite"
 	v1 "k8s.io/api/admission/v1"
 	v1authentication "k8s.io/api/authentication/v1"
-	k8authrizationv1 "k8s.io/api/authorization/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	k8fake "k8s.io/client-go/kubernetes/typed/authorization/v1/fake"
-	k8testing "k8s.io/client-go/testing"
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
 
@@ -112,7 +109,7 @@ func (c *ClusterRoleTemplateBindingSuite) Test_PrivilegeEscalation() {
 	const adminUser = "admin-userid"
 	const testUser = "test-userid"
 	const errorUser = "error-userid"
-	const escalateUser = "escalate-userid"
+	const crtbUser = "escalate-userid"
 	roles := []*rbacv1.Role{c.readServiceRole}
 	clusterRoles := []*rbacv1.ClusterRole{c.adminCR, c.writeNodeCR}
 	roleBindings := []*rbacv1.RoleBinding{
@@ -135,30 +132,20 @@ func (c *ClusterRoleTemplateBindingSuite) Test_PrivilegeEscalation() {
 	}
 	resolver, _ := validation.NewTestRuleResolver(roles, roleBindings, clusterRoles, clusterRoleBindings)
 
-	k8Fake := &k8testing.Fake{}
-	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
-	k8Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (handled bool, ret runtime.Object, err error) {
-		createAction := action.(k8testing.CreateActionImpl)
-		review := createAction.GetObject().(*k8authrizationv1.SubjectAccessReview)
-		if review.Spec.User == errorUser {
-			return true, nil, errExpected
-		}
-		if review.Spec.User == escalateUser {
-			review.Status.Allowed = true
-		}
-
-		return true, review, nil
-	})
-
 	ctrl := gomock.NewController(c.T())
 	roleTemplateCache := fakes.NewMockRoleTemplateCache(ctrl)
 	roleTemplateCache.EXPECT().Get(c.adminRT.Name).Return(c.adminRT, nil).AnyTimes()
 	clusterRoleCache := fakes.NewMockClusterRoleCache(ctrl)
 	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
-
-	validator := clusterroletemplatebinding.NewValidator(resolver,
+	crtbCache := fakes.NewMockClusterRoleTemplateBindingCache(ctrl)
+	crtbCache.EXPECT().List(newDefaultCRTB().ClusterName, gomock.Any()).Return([]*apisv3.ClusterRoleTemplateBinding{
+		{
+			UserName:         crtbUser,
+			RoleTemplateName: c.adminRT.Name,
+		},
+	}, nil).AnyTimes()
+	validator := clusterroletemplatebinding.NewValidator(crtbCache, resolver,
 		roleResolver,
-		fakeSAR,
 	)
 	type args struct {
 		oldCRTB  func() *apisv3.ClusterRoleTemplateBinding
@@ -187,11 +174,11 @@ func (c *ClusterRoleTemplateBindingSuite) Test_PrivilegeEscalation() {
 			allowed: true,
 		},
 
-		// Users escalating privileges with the escalate verb {PASS}.
+		// Users privileges evaluated via CRTB {PASS}.
 		{
-			name: "escalate verb test",
+			name: "crtb check test",
 			args: args{
-				username: escalateUser,
+				username: crtbUser,
 				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
 					baseCRTB := newDefaultCRTB()
 					baseCRTB.UserName = testUser
@@ -210,7 +197,7 @@ func (c *ClusterRoleTemplateBindingSuite) Test_PrivilegeEscalation() {
 				username: testUser,
 				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
 					baseCRTB := newDefaultCRTB()
-					baseCRTB.UserName = escalateUser
+					baseCRTB.UserName = crtbUser
 					baseCRTB.RoleTemplateName = c.adminRT.Name
 					return baseCRTB
 				},
@@ -255,6 +242,7 @@ func (c *ClusterRoleTemplateBindingSuite) Test_PrivilegeEscalation() {
 	for i := range tests {
 		test := tests[i]
 		c.Run(test.name, func() {
+			c.T().Parallel()
 			//create test vars for routing request
 			req := createCRTBRequest(c.T(), test.args.oldCRTB(), test.args.newCRTB(), test.args.username)
 			router := webhook.NewRouter()
@@ -302,19 +290,17 @@ func (c *ClusterRoleTemplateBindingSuite) Test_UpdateValidation() {
 	}
 	resolver, _ := validation.NewTestRuleResolver(nil, nil, clusterRoles, clusterRoleBindings)
 
-	k8Fake := &k8testing.Fake{}
-	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
-
 	ctrl := gomock.NewController(c.T())
 	roleTemplateCache := fakes.NewMockRoleTemplateCache(ctrl)
 	roleTemplateCache.EXPECT().Get(c.adminRT.Name).Return(c.adminRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().List(gomock.Any()).Return([]*apisv3.RoleTemplate{c.adminRT}, nil).AnyTimes()
 	clusterRoleCache := fakes.NewMockClusterRoleCache(ctrl)
 	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
+	crtbCache := fakes.NewMockClusterRoleTemplateBindingCache(ctrl)
+	crtbCache.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
-	validator := clusterroletemplatebinding.NewValidator(resolver,
+	validator := clusterroletemplatebinding.NewValidator(crtbCache, resolver,
 		roleResolver,
-		fakeSAR,
 	)
 	type args struct {
 		oldCRTB  func() *apisv3.ClusterRoleTemplateBinding
@@ -618,9 +604,6 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 	}
 	resolver, _ := validation.NewTestRuleResolver(nil, nil, clusterRoles, clusterRoleBindings)
 
-	k8Fake := &k8testing.Fake{}
-	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
-
 	ctrl := gomock.NewController(c.T())
 	roleTemplateCache := fakes.NewMockRoleTemplateCache(ctrl)
 	roleTemplateCache.EXPECT().Get(c.adminRT.Name).Return(c.adminRT, nil).AnyTimes()
@@ -629,10 +612,11 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 	roleTemplateCache.EXPECT().Get("").Return(nil, errExpected).AnyTimes()
 	clusterRoleCache := fakes.NewMockClusterRoleCache(ctrl)
 	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
+	crtbCache := fakes.NewMockClusterRoleTemplateBindingCache(ctrl)
+	crtbCache.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
-	validator := clusterroletemplatebinding.NewValidator(resolver,
+	validator := clusterroletemplatebinding.NewValidator(crtbCache, resolver,
 		roleResolver,
-		fakeSAR,
 	)
 	type args struct {
 		oldCRTB  func() *apisv3.ClusterRoleTemplateBinding

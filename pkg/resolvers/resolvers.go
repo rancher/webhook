@@ -7,9 +7,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 )
 
-// ErrUnimplemented is an error returned when a function is not implemented.
-var ErrUnimplemented = fmt.Errorf("not implemented")
-
 // ruleAccumulator based off kubernetes struct
 // https://github.com/kubernetes/kubernetes/blob/d5fdf3135e7c99e5f81e67986ae930f6a2ffb047/pkg/registry/rbac/validation/rule.go#L124#L137
 type ruleAccumulator struct {
@@ -45,12 +42,12 @@ func (r *ruleAccumulator) getError() error {
 
 // visitRules calls visitor on each rule in the list with the given Stringer and error.
 func visitRules(source fmt.Stringer, rules []rbacv1.PolicyRule, err error, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) bool {
-	if err != nil && rules == nil {
-		return visitor(source, nil, err)
+	// add the error separately
+	if !visitor(source, nil, err) {
+		return false
 	}
 	for i := range rules {
-		// we do not care about the return here
-		if !visitor(source, &rules[i], err) {
+		if !visitor(source, &rules[i], nil) {
 			return false
 		}
 	}

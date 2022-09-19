@@ -25,9 +25,9 @@ func NewPRTBRuleResolver(prtb v3.ProjectRoleTemplateBindingCache, roleTemplateRe
 }
 
 // GetRoleReferenceRules is used to find which roles are granted by a rolebinding/clusterrolebinding. Since we don't
-// use these primitives to refer to role templates, we don't have to implement this method.
+// use these primitives to refer to role templates return empty list.
 func (p *PRTBRuleResolver) GetRoleReferenceRules(roleRef rbacv1.RoleRef, namespace string) ([]rbacv1.PolicyRule, error) {
-	return nil, ErrUnimplemented
+	return []rbacv1.PolicyRule{}, nil
 }
 
 // RulesFor returns the list of rules that apply to a given user in a given namespace and error. If an error is returned, the slice of
