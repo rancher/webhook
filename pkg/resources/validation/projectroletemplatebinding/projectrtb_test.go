@@ -546,6 +546,22 @@ func (p *ProjectRoleTemplateBindingSuite) Test_UpdateValidation() {
 			},
 			allowed: true,
 		},
+		{
+			name: "update previously set group projectName",
+			args: args{
+				username: adminUser,
+				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					return basePRTB
+				},
+				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.ProjectName = "newName"
+					return basePRTB
+				},
+			},
+			allowed: false,
+		},
 	}
 
 	for i := range tests {
@@ -686,6 +702,21 @@ func (p *ProjectRoleTemplateBindingSuite) Test_Create() {
 				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
 					basePRTB := newBasePRTB()
 					basePRTB.RoleTemplateName = p.lockedRT.Name
+					return basePRTB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "create with unset group projectName",
+			args: args{
+				username: adminUser,
+				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					return nil
+				},
+				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.ProjectName = ""
 					return basePRTB
 				},
 			},

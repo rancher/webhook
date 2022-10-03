@@ -121,6 +121,8 @@ func validateUpdateFields(oldPRTB, newPRTB *apisv3.ProjectRoleTemplateBinding) e
 	switch {
 	case oldPRTB.RoleTemplateName != newPRTB.RoleTemplateName:
 		invalidFieldName = "referenced roleTemplate"
+	case oldPRTB.ProjectName != newPRTB.ProjectName:
+		invalidFieldName = "projectName"
 	case oldPRTB.UserName != newPRTB.UserName && oldPRTB.UserName != "":
 		invalidFieldName = "userName"
 	case oldPRTB.UserPrincipalName != newPRTB.UserPrincipalName && oldPRTB.UserPrincipalName != "":
@@ -145,6 +147,10 @@ func (v *Validator) validateCreateFields(newPRTB *apisv3.ProjectRoleTemplateBind
 
 	if (hasUserTarget && hasGroupTarget) || (!hasUserTarget && !hasGroupTarget) {
 		return fmt.Errorf("binding must target either a user [userId]/[userPrincipalId] OR a group [groupId]/[groupPrincipalId]: %w", validation.ErrInvalidRequest)
+	}
+
+	if newPRTB.ProjectName == "" {
+		return fmt.Errorf("binding must have field projectName set: %w", validation.ErrInvalidRequest)
 	}
 
 	roleTemplate, err := v.roleTemplateResolver.RoleTemplateCache().Get(newPRTB.RoleTemplateName)
