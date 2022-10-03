@@ -15,9 +15,8 @@ RUN yum-config-manager --enable ol7_optional_latest && \
     yum-config-manager --enable ol7_developer_golang117 && \
     yum -y install golang-1.17.13-1.0.1.el7.x86_64 && \
     yum -y install docker-engine-18.09.8.ol-1.0.4.el7.x86_64 && \
-    yum-config-manager --add-repo https://yum.oracle.com/repo/OracleLinux/OL7/olcne12/x86_64/ && \
-    yum -y install kubectl-1.20.11-3.el7.x86_64 \
-    yum -y install helm-3.5.4-1.el7.x86_64 && \
+    yum-config-manager --add-repo https://yum.oracle.com/repo/OracleLinux/OL7/olcne14/x86_64/ && \
+    yum -y install helm-3.6.3-1.el7.x86_64 && \
     yum clean all && \
     rm -rf /var/cache/yum
 
