@@ -1,4 +1,6 @@
-FROM registry.suse.com/bci/bci-micro:15.4.13.4
+# Copyright (C) 2022, Oracle and/or its affiliates.
+
+FROM ghcr.io/oracle/oraclelinux:7-slim
 
 ARG user=webhook
 

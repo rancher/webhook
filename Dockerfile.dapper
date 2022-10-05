@@ -1,13 +1,26 @@
-FROM registry.suse.com/bci/golang:1.17-17.62
+# Copyright (C) 2022, Oracle and/or its affiliates.
+
+FROM ghcr.io/oracle/oraclelinux:7-slim
 
 ARG DAPPER_HOST_ARCH
 ENV ARCH $DAPPER_HOST_ARCH
 
-RUN zypper -n install git docker vim less file curl wget
-RUN if [ "${ARCH}" = "amd64" ]; then \
-    curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.44.0; \
-    fi
-RUN curl -sL https://get.helm.sh/helm-v3.8.0-linux-${ARCH}.tar.gz | tar xvzf - -C /usr/local/bin --strip-components=1
+RUN yum-config-manager --enable ol7_optional_latest && \
+    yum-config-manager --enable ol7_addons && \
+    yum -y install git && \
+    yum -y install libxml2-2.9.1-6.0.3.el7_9.6.x86_64 && \
+    yum -y install libxml2-python-2.9.1-6.0.3.el7_9.6.x86_64 && \
+    yum -y install openssl-libs-1.0.2k-22.el7_9.x86_64 && \
+    yum -y install glib2-2.56.1-9.el7_9.x86_64 && \
+    yum -y install krb5-libs-1.15.1-50.0.1.el7.x86_64 && \
+    yum -y install oracle-golang-release-el7 && \
+    yum-config-manager --enable ol7_developer_golang117 && \
+    yum -y install golang-1.17.13-1.0.1.el7.x86_64 && \
+    yum -y install docker-engine-18.09.8.ol-1.0.4.el7.x86_64 && \
+    yum-config-manager --add-repo https://yum.oracle.com/repo/OracleLinux/OL7/olcne14/x86_64/ && \
+    yum -y install helm-3.6.3-1.el7.x86_64 && \
+    yum clean all && \
+    rm -rf /var/cache/yum
 
 ENV DAPPER_ENV REPO TAG DRONE_TAG CROSS
 ENV DAPPER_SOURCE /go/src/github.com/rancher/webhook/
