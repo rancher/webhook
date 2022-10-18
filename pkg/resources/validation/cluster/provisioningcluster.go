@@ -23,6 +23,7 @@ import (
 const globalNamespace = "cattle-global-data"
 
 var mgmtNameRegex = regexp.MustCompile("^c-[a-z0-9]{5}$")
+var fleetNameRegex = regexp.MustCompile("^[^-][-a-z0-9]+$")
 
 func NewProvisioningClusterValidator(client *clients.Clients) webhook.Handler {
 	return &provisioningClusterValidator{
@@ -121,7 +122,7 @@ func (p *provisioningClusterValidator) validateClusterName(request *webhook.Requ
 	}
 
 	// Look for an existing management cluster with the same name. If a management cluster with the given name does not
-	// exists, then it should be checked that the provisioning cluster the user is trying to create is not of the form
+	// exist, then it should be checked that the provisioning cluster the user is trying to create is not of the form
 	// "c-xxxxx" because names of that form are reserved for "legacy" management clusters.
 	_, err := p.mgmtClusterClient.Get(cluster.Name, metav1.GetOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
@@ -131,7 +132,7 @@ func (p *provisioningClusterValidator) validateClusterName(request *webhook.Requ
 	if !isValidName(cluster.Name, cluster.Namespace, err == nil) {
 		response.Result = &metav1.Status{
 			Status:  "Failure",
-			Message: "cluster name must be 63 characters or fewer, cannot be \"local\" nor of the form \"c-xxxxx\"",
+			Message: "cluster name must be 63 characters or fewer, must not begin with a hyphen, cannot be \"local\" nor of the form \"c-xxxxx\", and can only contain lowercase alphanumeric characters or ' - '",
 			Reason:  metav1.StatusReasonInvalid,
 			Code:    http.StatusUnprocessableEntity,
 		}
@@ -160,14 +161,15 @@ func isValidName(clusterName, clusterNamespace string, clusterExists bool) bool 
 	}
 
 	if mgmtNameRegex.MatchString(clusterName) {
-		// A provisioning cluster with name of the form "c-xxxxx" is expected to be created if a management cluster
+		// A provisioning cluster with a name of the form "c-xxxxx" is expected to be created if a management cluster
 		// of the same name already exists because Rancher will create such a provisioning cluster.
-		// Therefore, a cluster with name of the form "c-xxxxx" is only valid if it was found.
+		// Therefore, a provisioning cluster with a name of the form "c-xxxxx" is only valid if its management cluster was found under the same name.
 		return clusterExists
 	}
 
 	// Even though the name of the provisioning cluster object can be 253 characters, the name of the cluster is put in
 	// various labels, by Rancher controllers and CAPI controllers. Because of this, the name of the cluster object should
-	// be limited to 63 characters instead.
-	return len(clusterName) <= 63
+	// be limited to 63 characters instead. Additionally, a provisioning cluster with a name that does not conform to
+	// RFC-1123 will fail to deploy required fleet components and should not be accepted.
+	return len(clusterName) <= 63 && fleetNameRegex.MatchString(clusterName)
 }
