@@ -117,6 +117,18 @@ var rancherAuthMCMRules = []v1.RuleWithOperations{
 			Scope:       &clusterScope,
 		},
 	},
+	{
+		Operations: []v1.OperationType{
+			v1.Create,
+			v1.Update,
+		},
+		Rule: v1.Rule{
+			APIGroups:   []string{"management.cattle.io"},
+			APIVersions: []string{"v3"},
+			Resources:   []string{"podsecuritypolicytemplateprojectbindings"},
+			Scope:       &namespaceScope,
+		},
+	},
 }
 
 var fleetMutationRules = []v1.RuleWithOperations{

@@ -374,3 +374,49 @@ func ProjectRoleTemplateBindingFromRequest(request *webhook.Request) (*v3.Projec
 
 	return object.(*v3.ProjectRoleTemplateBinding), nil
 }
+
+// PodSecurityPolicyTemplateProjectBindingOldAndNewFromRequest gets the old and new PodSecurityPolicyTemplateProjectBinding objects, respectively, from the webhook request.
+// If the request is a Delete operation, then the new object is the zero value for PodSecurityPolicyTemplateProjectBinding.
+// Similarly, if the request is a Create operation, then the old object is the zero value for PodSecurityPolicyTemplateProjectBinding.
+func PodSecurityPolicyTemplateProjectBindingOldAndNewFromRequest(request *webhook.Request) (*v3.PodSecurityPolicyTemplateProjectBinding, *v3.PodSecurityPolicyTemplateProjectBinding, error) {
+	var object runtime.Object
+	var err error
+	if request.Operation != admissionv1.Delete {
+		object, err = request.DecodeObject()
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		object = &v3.PodSecurityPolicyTemplateProjectBinding{}
+	}
+
+	if request.Operation == admissionv1.Create {
+		return &v3.PodSecurityPolicyTemplateProjectBinding{}, object.(*v3.PodSecurityPolicyTemplateProjectBinding), nil
+	}
+
+	oldObject, err := request.DecodeOldObject()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return oldObject.(*v3.PodSecurityPolicyTemplateProjectBinding), object.(*v3.PodSecurityPolicyTemplateProjectBinding), nil
+}
+
+// PodSecurityPolicyTemplateProjectBindingFromRequest returns a PodSecurityPolicyTemplateProjectBinding object from the webhook request.
+// If the operation is a Delete operation, then the old object is returned.
+// Otherwise, the new object is returned.
+func PodSecurityPolicyTemplateProjectBindingFromRequest(request *webhook.Request) (*v3.PodSecurityPolicyTemplateProjectBinding, error) {
+	var object runtime.Object
+	var err error
+	if request.Operation == admissionv1.Delete {
+		object, err = request.DecodeOldObject()
+	} else {
+		object, err = request.DecodeObject()
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return object.(*v3.PodSecurityPolicyTemplateProjectBinding), nil
+}

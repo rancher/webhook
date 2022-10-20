@@ -34,6 +34,7 @@ replace (
 require (
 	github.com/golang/mock v1.6.0
 	github.com/gorilla/mux v1.8.0
+	github.com/pkg/errors v0.9.1
 	github.com/rancher/dynamiclistener v0.3.2-0.20211221223804-148d38076d3e
 	github.com/rancher/lasso v0.0.0-20220627205005-00d9c8e9dda6
 	github.com/rancher/lasso/controller-runtime v0.0.0-20220110204826-724e3e57c47d
@@ -95,7 +96,6 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/onsi/gomega v1.19.0 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.12.1 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect

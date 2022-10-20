@@ -51,6 +51,7 @@ func main() {
 				&v3.GlobalRoleBinding{},
 				&v3.RoleTemplate{},
 				&v3.ProjectRoleTemplateBinding{},
+				&v3.PodSecurityPolicyTemplateProjectBinding{},
 			},
 		},
 		"provisioning.cattle.io": {
