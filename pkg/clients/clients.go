@@ -53,7 +53,10 @@ func New(ctx context.Context, rest *rest.Config, mcmEnabled bool) (*Clients, err
 		Management:             mgmt.Management().V3(),
 		MultiClusterManagement: mcmEnabled,
 		DefaultResolver:        validation.NewDefaultRuleResolver(rbacRestGetter, rbacRestGetter, rbacRestGetter, rbacRestGetter),
-		RoleTemplateResolver:   auth.NewRoleTemplateResolver(mgmt.Management().V3().RoleTemplate().Cache(), clients.RBAC.ClusterRole().Cache()),
+	}
+
+	if mcmEnabled {
+		result.RoleTemplateResolver = auth.NewRoleTemplateResolver(mgmt.Management().V3().RoleTemplate().Cache(), clients.RBAC.ClusterRole().Cache())
 	}
 
 	return result, nil
