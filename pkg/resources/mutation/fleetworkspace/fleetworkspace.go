@@ -49,7 +49,7 @@ func (m *mutator) Admit(response *webhook.Response, request *webhook.Request) er
 		return nil
 	}
 
-	fw, err := objectsv3.FleetWorkspaceFromRequest(request)
+	fw, err := objectsv3.FleetWorkspaceFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return err
 	}

@@ -33,7 +33,7 @@ func (grbv *globalRoleBindingValidator) Admit(response *webhook.Response, reques
 	listTrace := trace.New("globalRoleBindingValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(2 * time.Second)
 
-	newGRB, err := objectsv3.GlobalRoleBindingFromRequest(request)
+	newGRB, err := objectsv3.GlobalRoleBindingFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return err
 	}

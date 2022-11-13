@@ -39,7 +39,7 @@ type provisioningClusterValidator struct {
 func (p *provisioningClusterValidator) Admit(response *webhook.Response, request *webhook.Request) error {
 	listTrace := trace.New("provisioningClusterValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(2 * time.Second)
-	oldCluster, cluster, err := objectsv1.ClusterOldAndNewFromRequest(request)
+	oldCluster, cluster, err := objectsv1.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return err
 	}

@@ -43,7 +43,7 @@ func (v *Validator) Admit(response *webhook.Response, request *webhook.Request) 
 	defer listTrace.LogIfLong(2 * time.Second)
 
 	if request.Operation == admissionv1.Update {
-		oldCRTB, newCRTB, err := objectsv3.ClusterRoleTemplateBindingOldAndNewFromRequest(request)
+		oldCRTB, newCRTB, err := objectsv3.ClusterRoleTemplateBindingOldAndNewFromRequest(&request.AdmissionRequest)
 		if err != nil {
 			return fmt.Errorf("failed to get old and new CRTB from request: %w", err)
 		}
@@ -59,7 +59,7 @@ func (v *Validator) Admit(response *webhook.Response, request *webhook.Request) 
 		}
 	}
 
-	crtb, err := objectsv3.ClusterRoleTemplateBindingFromRequest(request)
+	crtb, err := objectsv3.ClusterRoleTemplateBindingFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return fmt.Errorf("failed to get binding crtb from request: %w", err)
 	}

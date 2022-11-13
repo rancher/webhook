@@ -22,7 +22,7 @@ type clusterValidator struct {
 }
 
 func (c *clusterValidator) Admit(response *webhook.Response, request *webhook.Request) error {
-	oldCluster, newCluster, err := objectsv3.ClusterOldAndNewFromRequest(request)
+	oldCluster, newCluster, err := objectsv3.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return err
 	}

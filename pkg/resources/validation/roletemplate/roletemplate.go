@@ -42,7 +42,7 @@ func (r *roleTemplateValidator) Admit(response *webhook.Response, request *webho
 	listTrace := trace.New("roleTemplateValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(2 * time.Second)
 
-	roleTemplate, err := objectsv3.RoleTemplateFromRequest(request)
+	roleTemplate, err := objectsv3.RoleTemplateFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return err
 	}

@@ -25,7 +25,7 @@ func (m *mutator) Admit(response *webhook.Response, request *webhook.Request) er
 	listTrace := trace.New("provisioningCluster Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(2 * time.Second)
 
-	cluster, err := objectsv1.ClusterFromRequest(request)
+	cluster, err := objectsv1.ClusterFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return err
 	}

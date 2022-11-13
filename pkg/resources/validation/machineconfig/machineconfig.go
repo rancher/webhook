@@ -20,7 +20,7 @@ func (p *machineConfigValidator) Admit(response *webhook.Response, request *webh
 	listTrace := trace.New("machineConfigValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(2 * time.Second)
 
-	oldUnstrConfig, unstrConfig, err := unstructured.UnstructuredOldAndNewFromRequest(request)
+	oldUnstrConfig, unstrConfig, err := unstructured.UnstructuredOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return err
 	}

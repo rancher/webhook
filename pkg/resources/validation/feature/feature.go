@@ -21,7 +21,7 @@ func (fv *featureValidator) Admit(response *webhook.Response, request *webhook.R
 	listTrace := trace.New("featureValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(2 * time.Second)
 
-	oldFeature, newFeature, err := objectsv3.FeatureOldAndNewFromRequest(request)
+	oldFeature, newFeature, err := objectsv3.FeatureOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return err
 	}

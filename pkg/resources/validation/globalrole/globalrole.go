@@ -26,7 +26,7 @@ func (grv *globalRoleValidator) Admit(response *webhook.Response, request *webho
 	listTrace := trace.New("globalRoleValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(2 * time.Second)
 
-	newGR, err := objectsv3.GlobalRoleFromRequest(request)
+	newGR, err := objectsv3.GlobalRoleFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return err
 	}

@@ -25,7 +25,7 @@ func (m *mutator) Admit(response *webhook.Response, request *webhook.Request) er
 	listTrace := trace.New("machine config Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(2 * time.Second)
 
-	config, err := unstructured.UnstructuredFromRequest(request)
+	config, err := unstructured.UnstructuredFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return err
 	}

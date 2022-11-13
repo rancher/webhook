@@ -47,7 +47,7 @@ func (v *Validator) Admit(response *webhook.Response, request *webhook.Request) 
 	defer listTrace.LogIfLong(2 * time.Second)
 
 	if request.Operation == admissionv1.Update {
-		oldPRTB, newPRTB, err := objectsv3.ProjectRoleTemplateBindingOldAndNewFromRequest(request)
+		oldPRTB, newPRTB, err := objectsv3.ProjectRoleTemplateBindingOldAndNewFromRequest(&request.AdmissionRequest)
 		if err != nil {
 			return fmt.Errorf("failed to decode PRTB objects from request: %w", err)
 		}
@@ -63,7 +63,7 @@ func (v *Validator) Admit(response *webhook.Response, request *webhook.Request) 
 		}
 	}
 
-	prtb, err := objectsv3.ProjectRoleTemplateBindingFromRequest(request)
+	prtb, err := objectsv3.ProjectRoleTemplateBindingFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return fmt.Errorf("failed to decode PRTB object from request: %w", err)
 	}
