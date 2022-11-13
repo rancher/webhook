@@ -1,6 +1,7 @@
 package secret
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/rancher/webhook/pkg/auth"
@@ -46,8 +47,11 @@ func (m *mutator) Admit(response *webhook.Response, request *webhook.Request) er
 	}
 
 	newSecret.Annotations[auth.CreatorIDAnn] = request.UserInfo.Username
-
-	return patch.CreatePatch(secret, newSecret, response)
+	if err := patch.CreatePatch(request.Object.Raw, newSecret, response); err != nil {
+		return fmt.Errorf("failed to create patch: %w", err)
+	}
+	response.Allowed = true
+	return nil
 }
 
 func secretObject(request *webhook.Request) (*v1.Secret, error) {

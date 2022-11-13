@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"fmt"
 	"time"
 
 	objectsv1 "github.com/rancher/webhook/pkg/generated/objects/provisioning.cattle.io/v1"
@@ -29,6 +30,9 @@ func (m *mutator) Admit(response *webhook.Response, request *webhook.Request) er
 	if err != nil {
 		return err
 	}
-
-	return mutation.SetCreatorIDAnnotation(request, response, cluster, cluster.DeepCopy())
+	if err := mutation.SetCreatorIDAnnotation(request, response, request.Object, cluster.DeepCopy()); err != nil {
+		return fmt.Errorf("failed to set creatorIDAnnotation: %w", err)
+	}
+	response.Allowed = true
+	return nil
 }

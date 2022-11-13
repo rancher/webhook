@@ -2,6 +2,7 @@ package patch
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/rancher/wrangler/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -9,25 +10,21 @@ import (
 
 // CreatePatch accepts an old and a new object and creates a patch of the differences as
 // specified in http://jsonpatch.com/ and updates the response accordingly.
-func CreatePatch(old, new interface{}, response *webhook.Response) error {
-	oldJSON, err := json.Marshal(old)
+// The old object should be the Raw object received in the original request
+func CreatePatch(oldJSON []byte, newObj interface{}, response *webhook.Response) error {
+	newJSON, err := json.Marshal(newObj)
 	if err != nil {
-		return err
-	}
-	newJSON, err := json.Marshal(new)
-	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal newObj to JSON: %w", err)
 	}
 
 	patch := admission.PatchResponseFromRaw(oldJSON, newJSON)
 
 	patchJSON, err := json.Marshal(patch.Patches)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal generated patch to JSON: %w", err)
 	}
 
 	response.Patch = patchJSON
 	response.PatchType = patch.PatchType
-	response.Allowed = patch.Allowed
 	return nil
 }

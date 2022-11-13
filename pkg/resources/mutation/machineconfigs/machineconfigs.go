@@ -1,6 +1,7 @@
 package machineconfigs
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/rancher/webhook/pkg/generated/objects/core/unstructured"
@@ -27,8 +28,11 @@ func (m *mutator) Admit(response *webhook.Response, request *webhook.Request) er
 
 	config, err := unstructured.UnstructuredFromRequest(&request.AdmissionRequest)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get object from request: %w", err)
 	}
-
-	return mutation.SetCreatorIDAnnotation(request, response, config, config.DeepCopy())
+	if err := mutation.SetCreatorIDAnnotation(request, response, request.Object, config.DeepCopy()); err != nil {
+		return fmt.Errorf("failed to set creatorIDAnnotation: %w", err)
+	}
+	response.Allowed = true
+	return nil
 }
