@@ -6,7 +6,7 @@ cd $(dirname $0)/..
 echo Running go mod checks
 
 echo Running: go generate
-go generate
+go generate ./...
 
 echo Running: go mod tidy
 go mod tidy

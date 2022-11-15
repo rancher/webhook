@@ -141,7 +141,7 @@ func (p *provisioningClusterValidator) validateClusterName(request *webhook.Requ
 }
 
 func validateACEConfig(cluster *v1.Cluster) *metav1.Status {
-	if cluster.Spec.RKEConfig != nil && cluster.Spec.RKEConfig.LocalClusterAuthEndpoint.Enabled && cluster.Spec.RKEConfig.LocalClusterAuthEndpoint.CACerts != "" && cluster.Spec.RKEConfig.LocalClusterAuthEndpoint.FQDN == "" {
+	if cluster.Spec.RKEConfig != nil && cluster.Spec.LocalClusterAuthEndpoint.Enabled && cluster.Spec.LocalClusterAuthEndpoint.CACerts != "" && cluster.Spec.LocalClusterAuthEndpoint.FQDN == "" {
 		return &metav1.Status{
 			Status:  "Failure",
 			Message: "CACerts defined but FQDN is not defined",
