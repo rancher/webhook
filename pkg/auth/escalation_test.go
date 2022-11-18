@@ -6,12 +6,12 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
-	"github.com/rancher/wrangler/pkg/webhook"
 	"github.com/stretchr/testify/suite"
 	v1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
-	authrizationv1 "k8s.io/api/authorization/v1"
+	authorizationv1 "k8s.io/api/authorization/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -75,8 +75,8 @@ func (e *EscalationSuite) SetupSuite() {
 	}
 }
 
-func (e *EscalationSuite) newDefaultRequest(userName string) *webhook.Request {
-	return &webhook.Request{
+func (e *EscalationSuite) newDefaultRequest(userName string) *admission.Request {
+	return &admission.Request{
 		AdmissionRequest: v1.AdmissionRequest{
 			UID:       "1",
 			Name:      "default",
@@ -116,7 +116,7 @@ func (e *EscalationSuite) TestConfirmNoEscalation() {
 	}
 	resolver, _ := validation.NewTestRuleResolver(roles, roleBindings, clusterRoles, clusterRoleBindings)
 	type args struct {
-		request *webhook.Request
+		request *admission.Request
 		rules   []rbacv1.PolicyRule
 	}
 	tests := []struct {
@@ -146,13 +146,12 @@ func (e *EscalationSuite) TestConfirmNoEscalation() {
 		test := tests[i]
 		e.Run(test.name, func() {
 			err := auth.ConfirmNoEscalation(test.args.request, test.args.rules, test.args.request.Namespace, resolver)
-			resp := &webhook.Response{
-				AdmissionResponse: v1.AdmissionResponse{
-					UID:     test.args.request.UID,
-					Allowed: false,
-					Result:  &metav1.Status{},
-				},
+			resp := &v1.AdmissionResponse{
+				UID:     test.args.request.UID,
+				Allowed: false,
+				Result:  &metav1.Status{},
 			}
+
 			auth.SetEscalationResponse(resp, err)
 			if test.wantErr {
 				e.Error(err, "expected tests to have error.")
@@ -182,7 +181,7 @@ func (e *EscalationSuite) TestEscalationAuthorized() {
 	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
 	k8Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (handled bool, ret runtime.Object, err error) {
 		createAction := action.(k8testing.CreateActionImpl)
-		review := createAction.GetObject().(*authrizationv1.SubjectAccessReview)
+		review := createAction.GetObject().(*authorizationv1.SubjectAccessReview)
 		spec := review.Spec
 		if spec.User == errorUser {
 			return true, nil, errExpected
@@ -200,7 +199,7 @@ func (e *EscalationSuite) TestEscalationAuthorized() {
 	})
 	tests := []struct {
 		name    string
-		request *webhook.Request
+		request *admission.Request
 		want    bool
 		wantErr bool
 	}{

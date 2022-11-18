@@ -14,6 +14,7 @@ import (
 	controllergen "github.com/rancher/wrangler/pkg/controller-gen"
 	"github.com/rancher/wrangler/pkg/controller-gen/args"
 	"golang.org/x/tools/imports"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -61,6 +62,7 @@ func main() {
 		"core": {
 			Types: []interface{}{
 				&unstructured.Unstructured{},
+				&corev1.Secret{},
 			},
 		}}); err != nil {
 		fmt.Printf("ERROR: %v\n", err)

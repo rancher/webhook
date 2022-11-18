@@ -1,34 +1,54 @@
 package machineconfig
 
 import (
-	"time"
-
-	"github.com/rancher/webhook/pkg/generated/objects/core/unstructured"
+	"github.com/rancher/webhook/pkg/admission"
+	v1 "github.com/rancher/webhook/pkg/generated/objects/core/v1"
 	"github.com/rancher/webhook/pkg/resources/validation"
-	"github.com/rancher/wrangler/pkg/webhook"
+	admissionv1 "k8s.io/api/admission/v1"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/trace"
 )
 
-func NewMachineConfigValidator() webhook.Handler {
-	return &machineConfigValidator{}
+var gvr = schema.GroupVersionResource{
+	Group:    "rke-machine-config.cattle.io",
+	Version:  "v1",
+	Resource: "*",
 }
 
-type machineConfigValidator struct {
+// Validator for validating machineconfigs.
+type Validator struct{}
+
+// GVR returns the GroupVersionKind for this CRD.
+func (v *Validator) GVR() schema.GroupVersionResource {
+	return gvr
 }
 
-func (p *machineConfigValidator) Admit(response *webhook.Response, request *webhook.Request) error {
+// Operations returns list of operations handled by this validator.
+func (v *Validator) Operations() []admissionregistrationv1.OperationType {
+	return []admissionregistrationv1.OperationType{admissionregistrationv1.Update}
+}
+
+// ValidatingWebhook returns the ValidatingWebhook used for this CRD.
+func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.WebhookClientConfig) *admissionregistrationv1.ValidatingWebhook {
+	return admission.NewDefaultValidatingWebhook(v, clientConfig, admissionregistrationv1.NamespacedScope)
+}
+
+// Admit handles the webhook admission request sent to this webhook.
+func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	listTrace := trace.New("machineConfigValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
-	defer listTrace.LogIfLong(2 * time.Second)
+	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
-	oldUnstrConfig, unstrConfig, err := unstructured.UnstructuredOldAndNewFromRequest(&request.AdmissionRequest)
+	oldUnstrConfig, unstrConfig, err := v1.UnstructuredOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
+	response := &admissionv1.AdmissionResponse{}
 	if response.Result = validation.CheckCreatorID(request, oldUnstrConfig, unstrConfig); response.Result != nil {
-		return nil
+		return response, nil
 	}
 
 	response.Allowed = true
-	return nil
+	return response, nil
 }

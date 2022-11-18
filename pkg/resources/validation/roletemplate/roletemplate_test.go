@@ -137,8 +137,8 @@ func createRoleTemplate(name string, rules []rbacv1.PolicyRule) *v3.RoleTemplate
 	}
 }
 
-func createValidator(cache controllerv3.RoleTemplateCache) *roleTemplateValidator {
-	return &roleTemplateValidator{
+func createValidator(cache controllerv3.RoleTemplateCache) *Validator {
+	return &Validator{
 		roleTemplateResolver: auth.NewRoleTemplateResolver(cache, nil),
 	}
 }

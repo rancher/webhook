@@ -9,10 +9,10 @@ import (
 
 	"github.com/golang/mock/gomock"
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
 	"github.com/rancher/webhook/pkg/fakes"
 	"github.com/rancher/webhook/pkg/resources/validation/projectroletemplatebinding"
-	"github.com/rancher/wrangler/pkg/webhook"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	v1 "k8s.io/api/admission/v1"
@@ -271,8 +271,8 @@ func (p *ProjectRoleTemplateBindingSuite) Test_PrivilegeEscalation() {
 		test := tests[i]
 		p.Run(test.name, func() {
 			p.T().Parallel()
-			resp, req := createPRTBRequestAndResponse(p.T(), test.args.oldPRTB(), test.args.newPRTB(), test.args.username)
-			err := validator.Admit(resp, req)
+			req := createPRTBRequest(p.T(), test.args.oldPRTB(), test.args.newPRTB(), test.args.username)
+			resp, err := validator.Admit(req)
 			p.NoError(err, "Admit failed")
 			if resp.Allowed != test.allowed {
 				p.Failf("Response was incorrectly validated", "Wanted response.Allowed = '%v' got %v: result=%+v", test.allowed, resp.Allowed, resp.Result)
@@ -568,8 +568,8 @@ func (p *ProjectRoleTemplateBindingSuite) Test_UpdateValidation() {
 		test := tests[i]
 		p.Run(test.name, func() {
 			p.T().Parallel()
-			resp, req := createPRTBRequestAndResponse(p.T(), test.args.oldPRTB(), test.args.newPRTB(), test.args.username)
-			err := validator.Admit(resp, req)
+			req := createPRTBRequest(p.T(), test.args.oldPRTB(), test.args.newPRTB(), test.args.username)
+			resp, err := validator.Admit(req)
 			p.NoError(err, "Admit failed")
 			if resp.Allowed != test.allowed {
 				p.Failf("Response was incorrectly validated", "Wanted response.Allowed = '%v' got %v: result=%+v", test.allowed, resp.Allowed, resp.Result)
@@ -728,8 +728,8 @@ func (p *ProjectRoleTemplateBindingSuite) Test_Create() {
 		test := tests[i]
 		p.Run(test.name, func() {
 			p.T().Parallel()
-			resp, req := createPRTBRequestAndResponse(p.T(), test.args.oldPRTB(), test.args.newPRTB(), test.args.username)
-			err := validator.Admit(resp, req)
+			req := createPRTBRequest(p.T(), test.args.oldPRTB(), test.args.newPRTB(), test.args.username)
+			resp, err := validator.Admit(req)
 			p.NoError(err, "Admit failed")
 			if resp.Allowed != test.allowed {
 				p.Failf("Response was incorrectly validated", "Wanted response.Allowed = '%v' got %v: result=%+v", test.allowed, resp.Allowed, resp.Result)
@@ -741,11 +741,11 @@ func (p *ProjectRoleTemplateBindingSuite) Test_Create() {
 // createPRTBRequest will return a new webhookRequest with the using the given PRTBs
 // if oldPRTB is nil then a request will be returned as a create operation.
 // else the request will look like ana update operation.
-func createPRTBRequestAndResponse(t *testing.T, oldPRTB, newPRTB *apisv3.ProjectRoleTemplateBinding, username string) (*webhook.Response, *webhook.Request) {
+func createPRTBRequest(t *testing.T, oldPRTB, newPRTB *apisv3.ProjectRoleTemplateBinding, username string) *admission.Request {
 	t.Helper()
 	gvk := metav1.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "ProjectRoleTemplateBinding"}
 	gvr := metav1.GroupVersionResource{Group: "management.cattle.io", Version: "v3", Resource: "projectroletemplatebindings"}
-	req := &webhook.Request{
+	req := &admission.Request{
 		AdmissionRequest: v1.AdmissionRequest{
 			UID:             "1",
 			Kind:            gvk,
@@ -759,8 +759,7 @@ func createPRTBRequestAndResponse(t *testing.T, oldPRTB, newPRTB *apisv3.Project
 			Object:          runtime.RawExtension{},
 			OldObject:       runtime.RawExtension{},
 		},
-		Context:     context.Background(),
-		ObjTemplate: &apisv3.ProjectRoleTemplateBinding{},
+		Context: context.Background(),
 	}
 	var err error
 	req.Object.Raw, err = json.Marshal(newPRTB)
@@ -770,14 +769,8 @@ func createPRTBRequestAndResponse(t *testing.T, oldPRTB, newPRTB *apisv3.Project
 		req.OldObject.Raw, err = json.Marshal(oldPRTB)
 		assert.NoError(t, err, "Failed to marshal PRTB while creating request")
 	}
-	resp := &webhook.Response{
-		AdmissionResponse: v1.AdmissionResponse{
-			UID:     req.UID,
-			Allowed: false,
-			Result:  &metav1.Status{},
-		},
-	}
-	return resp, req
+
+	return req
 }
 
 func newBasePRTB() *apisv3.ProjectRoleTemplateBinding {

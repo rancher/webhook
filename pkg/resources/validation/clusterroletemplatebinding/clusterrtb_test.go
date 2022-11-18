@@ -8,10 +8,10 @@ import (
 
 	"github.com/golang/mock/gomock"
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
 	"github.com/rancher/webhook/pkg/fakes"
 	"github.com/rancher/webhook/pkg/resources/validation/clusterroletemplatebinding"
-	"github.com/rancher/wrangler/pkg/webhook"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	v1 "k8s.io/api/admission/v1"
@@ -240,8 +240,8 @@ func (c *ClusterRoleTemplateBindingSuite) Test_PrivilegeEscalation() {
 	for i := range tests {
 		test := tests[i]
 		c.Run(test.name, func() {
-			resp, req := createCRTBRequestAndResponse(c.T(), test.args.oldCRTB(), test.args.newCRTB(), test.args.username)
-			err := validator.Admit(resp, req)
+			req := createCRTBRequest(c.T(), test.args.oldCRTB(), test.args.newCRTB(), test.args.username)
+			resp, err := validator.Admit(req)
 			c.NoError(err, "Admit failed")
 			if resp.Allowed != test.allowed {
 				c.Failf("Response was incorrectly validated", "Wanted response.Allowed = '%v' got %v: result=%+v", test.allowed, resp.Allowed, resp.Result)
@@ -540,8 +540,8 @@ func (c *ClusterRoleTemplateBindingSuite) Test_UpdateValidation() {
 		test := tests[i]
 		c.Run(test.name, func() {
 			c.T().Parallel()
-			resp, req := createCRTBRequestAndResponse(c.T(), test.args.oldCRTB(), test.args.newCRTB(), test.args.username)
-			err := validator.Admit(resp, req)
+			req := createCRTBRequest(c.T(), test.args.oldCRTB(), test.args.newCRTB(), test.args.username)
+			resp, err := validator.Admit(req)
 			c.NoError(err, "Admit failed")
 			if resp.Allowed != test.allowed {
 				c.Failf("Response was incorrectly validated", "Wanted response.Allowed = '%v' got %v: result=%+v", test.allowed, resp.Allowed, resp.Result)
@@ -700,8 +700,8 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 		test := tests[i]
 		c.Run(test.name, func() {
 			c.T().Parallel()
-			resp, req := createCRTBRequestAndResponse(c.T(), test.args.oldCRTB(), test.args.newCRTB(), test.args.username)
-			err := validator.Admit(resp, req)
+			req := createCRTBRequest(c.T(), test.args.oldCRTB(), test.args.newCRTB(), test.args.username)
+			resp, err := validator.Admit(req)
 			c.NoError(err, "Admit failed")
 			if resp.Allowed != test.allowed {
 				c.Failf("Response was incorrectly validated", "Wanted response.Allowed = '%v' got %v: result=%+v", test.allowed, resp.Allowed, resp.Result)
@@ -713,11 +713,11 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 // createCRTBRequest will return a new webhookRequest with the using the given CRTBs
 // if oldCRTB is nil then a request will be returned as a create operation.
 // else the request will look like and update operation.
-func createCRTBRequestAndResponse(t *testing.T, oldCRTB, newCRTB *apisv3.ClusterRoleTemplateBinding, username string) (*webhook.Response, *webhook.Request) {
+func createCRTBRequest(t *testing.T, oldCRTB, newCRTB *apisv3.ClusterRoleTemplateBinding, username string) *admission.Request {
 	t.Helper()
 	gvk := metav1.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "ClusterRoleTemplateBinding"}
 	gvr := metav1.GroupVersionResource{Group: "management.cattle.io", Version: "v3", Resource: "clusterroletemplatebindings"}
-	req := &webhook.Request{
+	req := &admission.Request{
 		AdmissionRequest: v1.AdmissionRequest{
 			UID:             "1",
 			Kind:            gvk,
@@ -731,8 +731,7 @@ func createCRTBRequestAndResponse(t *testing.T, oldCRTB, newCRTB *apisv3.Cluster
 			Object:          runtime.RawExtension{},
 			OldObject:       runtime.RawExtension{},
 		},
-		Context:     context.Background(),
-		ObjTemplate: &apisv3.ClusterRoleTemplateBinding{},
+		Context: context.Background(),
 	}
 	var err error
 	req.Object.Raw, err = json.Marshal(newCRTB)
@@ -742,14 +741,7 @@ func createCRTBRequestAndResponse(t *testing.T, oldCRTB, newCRTB *apisv3.Cluster
 		req.OldObject.Raw, err = json.Marshal(oldCRTB)
 		assert.NoError(t, err, "Failed to marshal CRTB while creating request")
 	}
-	resp := &webhook.Response{
-		AdmissionResponse: v1.AdmissionResponse{
-			UID:     req.UID,
-			Allowed: false,
-			Result:  &metav1.Status{},
-		},
-	}
-	return resp, req
+	return req
 }
 
 func newDefaultCRTB() *apisv3.ClusterRoleTemplateBinding {
