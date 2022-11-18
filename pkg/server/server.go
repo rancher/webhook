@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/dynamiclistener/server"
 	"github.com/rancher/webhook/pkg/capi"
 	"github.com/rancher/webhook/pkg/clients"
+	"github.com/rancher/webhook/pkg/health"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -93,8 +94,9 @@ func ListenAndServe(ctx context.Context, cfg *rest.Config, capiEnabled, mcmEnabl
 	router := mux.NewRouter()
 	router.Handle(validationPath, validation)
 	router.Handle(mutationPath, mutation)
-
-	if err = listenAndServe(ctx, clients, router); err != nil {
+	applyErrChecker := health.NewErrorChecker("Config Applied")
+	health.RegisterHealthCheckers(router, applyErrChecker)
+	if err = listenAndServe(ctx, clients, router, applyErrChecker); err != nil {
 		return err
 	}
 
@@ -122,7 +124,7 @@ func setCertificateExpirationDays() error {
 	return nil
 }
 
-func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.Handler) (rErr error) {
+func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.Handler, applyErrChecker *health.ErrorChecker) (rErr error) {
 	apply := clients.Apply.WithDynamicLookup()
 
 	clients.Core.Secret().OnChange(ctx, "secrets", func(key string, secret *corev1.Secret) (*corev1.Secret, error) {
@@ -159,7 +161,7 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 			CABundle: secret.Data[corev1.TLSCertKey],
 		}
 
-		return secret, apply.WithOwner(secret).ApplyObjects(&v1.ValidatingWebhookConfiguration{
+		applyErr := apply.WithOwner(secret).ApplyObjects(&v1.ValidatingWebhookConfiguration{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "rancher.cattle.io",
 			},
@@ -204,6 +206,9 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 				},
 			},
 		})
+
+		applyErrChecker.Store(applyErr)
+		return secret, applyErr
 	})
 
 	defer func() {
