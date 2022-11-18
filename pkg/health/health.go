@@ -39,8 +39,7 @@ func (e *ErrorChecker) Name() string { return e.name }
 func (e *ErrorChecker) Check(_ *http.Request) error {
 	e.mutex.RLock()
 	defer e.mutex.RUnlock()
-	retError := e.lastError
-	return retError
+	return e.lastError
 }
 
 // Store the given error as the last seen error
