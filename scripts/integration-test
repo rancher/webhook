@@ -1,0 +1,50 @@
+#!/bin/bash
+set -e
+export KUBECONFIG=
+export CATTLE_DEV_MODE=yes
+export CATTLE_SERVER_URL="https://$(ip route get 8.8.8.8 | awk '{print $7}'):443"
+export CATTLE_BOOTSTRAP_PASSWORD="admin"
+export CATTLE_FEATURES="harvester=false"
+
+echo "Starting Rancher Server"
+entrypoint.sh >./rancher.log 2>&1 &
+
+echo "Waiting for Rancher health check..."
+while ! curl -sf http://localhost:80/healthz; do
+    sleep 2
+done
+
+echo "Waiting for Rancher install and rollout rancher-webhook..."
+while ! kubectl rollout status -w -n cattle-system deploy/rancher-webhook; do
+    sleep 2
+done
+
+###### Replace the installed webhook image with the one we created
+IMAGE_FILE=$(dirname ${0})/../dist/rancher-webhook-image.tar
+# import image to containerd and get the image name
+WEBHOOK_IMAGE=$(ctr image import ${IMAGE_FILE} | cut -d ' ' -f 2)
+
+# patch the webhook deployment so that it uses are newly created image
+kubectl patch deployment -n cattle-system rancher-webhook --patch \
+    "{ \"spec\": { \"template\": {\"spec\": { \"containers\": [
+    {
+        \"name\": \"rancher-webhook\",
+        \"image\" :\"${WEBHOOK_IMAGE}\",
+        \"startupProbe\": {
+            \"failureThreshold\": 360,
+            \"httpGet\": {
+                \"path\": \"/healthz\",
+                \"port\": \"https\",
+                \"scheme\": \"HTTPS\"
+            },
+            \"periodSeconds\": 5,
+            \"successThreshold\": 1,
+            \"timeoutSeconds\": 1
+        }
+    }]}}}}"
+
+while ! kubectl rollout status -w -n cattle-system deploy/rancher-webhook; do
+    sleep 2
+done
+
+./bin/webhook-integration.test -test.v
