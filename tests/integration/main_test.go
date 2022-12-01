@@ -49,6 +49,7 @@ func (m *IntegrationSuite) SetupSuite() {
 
 	schemes.Register(v3.AddToScheme)
 	schemes.Register(provisioningv1.AddToScheme)
+	schemes.Register(corev1.AddToScheme)
 
 	ns := &corev1.Namespace{
 		ObjectMeta: v1.ObjectMeta{
