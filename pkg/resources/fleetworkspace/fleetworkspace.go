@@ -12,6 +12,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
 
 var (
@@ -24,7 +25,7 @@ func NewMutator(client *clients.Clients) webhook.Handler {
 		rolebindings:        client.RBAC.RoleBinding(),
 		clusterrolebindings: client.RBAC.ClusterRoleBinding(),
 		clusterroles:        client.RBAC.ClusterRole(),
-		escalationChecker:   client.EscalationChecker,
+		resolver:            client.DefaultResolver,
 	}
 }
 
@@ -33,7 +34,7 @@ type mutator struct {
 	rolebindings        rbacvacontroller.RoleBindingController
 	clusterrolebindings rbacvacontroller.ClusterRoleBindingController
 	clusterroles        rbacvacontroller.ClusterRoleController
-	escalationChecker   *auth.EscalationChecker
+	resolver            validation.AuthorizationRuleResolver
 }
 
 // When fleetworkspace is created, it will create the following resources:
@@ -66,9 +67,9 @@ func (m *mutator) Admit(response *webhook.Response, request *webhook.Request) er
 		if err != nil {
 			return err
 		}
-		if err := m.escalationChecker.ConfirmNoEscalation(response, request, cr.Rules, namespace.Name); err != nil {
-			return err
-		}
+
+		auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, cr.Rules, namespace.Name, m.resolver))
+
 		ns, err = m.namespaces.Get(namespace.Name, metav1.GetOptions{})
 		if err != nil {
 			return err

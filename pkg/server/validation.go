@@ -17,11 +17,14 @@ import (
 
 func Validation(clients *clients.Clients) (http.Handler, error) {
 	clusters := cluster.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews())
-	roleTemplates := roletemplate.NewValidator(clients.EscalationChecker)
-	globalRoles := globalrole.NewValidator(clients.EscalationChecker)
-	globalRoleBindings := globalrolebinding.NewValidator(clients.Management.GlobalRole().Cache(), clients.EscalationChecker)
-	crtbs := clusterroletemplatebinding.NewValidator(clients.Management.RoleTemplate().Cache(), clients.EscalationChecker)
-	prtbs := projectroletemplatebinding.NewValidator(clients.Management.RoleTemplate().Cache(), clients.EscalationChecker)
+
+	globalRoleBindings := globalrolebinding.NewValidator(clients.Management.GlobalRole().Cache(), clients.DefaultResolver)
+	globalRoles := globalrole.NewValidator(clients.DefaultResolver)
+	prtbs := projectroletemplatebinding.NewValidator(clients.Management.ProjectRoleTemplateBinding().Cache(),
+		clients.Management.ClusterRoleTemplateBinding().Cache(), clients.DefaultResolver, clients.RoleTemplateResolver)
+	crtbs := clusterroletemplatebinding.NewValidator(clients.Management.ClusterRoleTemplateBinding().Cache(),
+		clients.DefaultResolver, clients.RoleTemplateResolver)
+	roleTemplates := roletemplate.NewValidator(clients.DefaultResolver, clients.RoleTemplateResolver, clients.K8s.AuthorizationV1().SubjectAccessReviews())
 
 	router := webhook.NewRouter()
 	router.Kind("Cluster").Group(management.GroupName).Type(&v3.Cluster{}).Handle(clusters)
