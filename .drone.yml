@@ -140,7 +140,7 @@ steps:
     path: /var/run/docker.sock
 
 - name: github_binary_release
-  image: plugins/github-release
+  image: plugins/github-release@sha256:fffa518fb430e8e890ec9fcf616d0ef6930a9b3fb67fd6de9c3171b6d921a944 
   settings:
     api_key:
       from_secret: github_token
