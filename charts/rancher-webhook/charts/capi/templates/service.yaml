@@ -2,8 +2,6 @@ kind: Service
 apiVersion: v1
 metadata:
   name: webhook-service
-  annotations:
-    need-a-cert.cattle.io/secret-name: rancher-webhook-tls
 spec:
   ports:
   - name: https
