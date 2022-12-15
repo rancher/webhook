@@ -3,42 +3,67 @@ package feature
 import (
 	"fmt"
 	"net/http"
-	"time"
 
+	"github.com/rancher/webhook/pkg/admission"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
-	"github.com/rancher/wrangler/pkg/webhook"
+	admissionv1 "k8s.io/api/admission/v1"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/trace"
 )
 
-func NewValidator() webhook.Handler {
-	return &featureValidator{}
+var gvr = schema.GroupVersionResource{
+	Group:    "management.cattle.io",
+	Version:  "v3",
+	Resource: "features",
 }
 
-type featureValidator struct{}
+// Validator for validating features.
+type Validator struct{}
 
-func (fv *featureValidator) Admit(response *webhook.Response, request *webhook.Request) error {
+// GVR returns the GroupVersionKind for this CRD.
+func (v *Validator) GVR() schema.GroupVersionResource {
+	return gvr
+}
+
+// Operations returns list of operations handled by this validator.
+func (v *Validator) Operations() []admissionregistrationv1.OperationType {
+	return []admissionregistrationv1.OperationType{admissionregistrationv1.Update}
+}
+
+// ValidatingWebhook returns the ValidatingWebhook used for this CRD.
+func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.WebhookClientConfig) *admissionregistrationv1.ValidatingWebhook {
+	valWebhook := admission.NewDefaultValidatingWebhook(v, clientConfig, admissionregistrationv1.ClusterScope)
+	valWebhook.FailurePolicy = admission.Ptr(admissionregistrationv1.Ignore)
+	return valWebhook
+}
+
+// Admit handles the webhook admission request sent to this webhook.
+func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	listTrace := trace.New("featureValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
-	defer listTrace.LogIfLong(2 * time.Second)
+	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
-	oldFeature, newFeature, err := objectsv3.FeatureOldAndNewFromRequest(request)
+	oldFeature, newFeature, err := objectsv3.FeatureOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if !isValidFeatureValue(newFeature.Status.LockedValue, oldFeature.Spec.Value, newFeature.Spec.Value) {
-		response.Result = &metav1.Status{
-			Status:  "Failure",
-			Message: fmt.Sprintf("feature flag cannot be changed from current value: %v", *newFeature.Status.LockedValue),
-			Reason:  metav1.StatusReasonInvalid,
-			Code:    http.StatusBadRequest,
-		}
-		response.Allowed = false
-		return nil
+		return &admissionv1.AdmissionResponse{
+			Result: &metav1.Status{
+				Status:  "Failure",
+				Message: fmt.Sprintf("feature flag cannot be changed from current value: %v", *newFeature.Status.LockedValue),
+				Reason:  metav1.StatusReasonInvalid,
+				Code:    http.StatusBadRequest,
+			},
+			Allowed: false,
+		}, nil
 	}
 
-	response.Allowed = true
-	return nil
+	return &admissionv1.AdmissionResponse{
+		Allowed: true,
+	}, nil
 }
 
 // isValidFeatureValue checks that desired value does not change value on spec unless lockedValue

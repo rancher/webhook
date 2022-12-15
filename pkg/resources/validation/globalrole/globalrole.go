@@ -2,57 +2,87 @@ package globalrole
 
 import (
 	"net/http"
-	"time"
 
+	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
-	"github.com/rancher/wrangler/pkg/webhook"
+	admissionv1 "k8s.io/api/admission/v1"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 	"k8s.io/utils/trace"
 )
 
-func NewValidator(resolver validation.AuthorizationRuleResolver) webhook.Handler {
-	return &globalRoleValidator{
+var gvr = schema.GroupVersionResource{
+	Group:    "management.cattle.io",
+	Version:  "v3",
+	Resource: "globalroles",
+}
+
+// NewValidator returns a new validator used for validation globalRoles.
+func NewValidator(resolver validation.AuthorizationRuleResolver) *Validator {
+	return &Validator{
 		resolver: resolver,
 	}
 }
 
-type globalRoleValidator struct {
+// Validator implements admission.ValidatingAdmissionHandler
+type Validator struct {
 	resolver validation.AuthorizationRuleResolver
 }
 
-func (grv *globalRoleValidator) Admit(response *webhook.Response, request *webhook.Request) error {
-	listTrace := trace.New("globalRoleValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
-	defer listTrace.LogIfLong(2 * time.Second)
+// GVR returns the GroupVersionKind for this CRD.
+func (v *Validator) GVR() schema.GroupVersionResource {
+	return gvr
+}
 
-	newGR, err := objectsv3.GlobalRoleFromRequest(request)
+// Operations returns list of operations handled by this validator.
+func (v *Validator) Operations() []admissionregistrationv1.OperationType {
+	return []admissionregistrationv1.OperationType{admissionregistrationv1.Update, admissionregistrationv1.Create}
+}
+
+// ValidatingWebhook returns the ValidatingWebhook used for this CRD.
+func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.WebhookClientConfig) *admissionregistrationv1.ValidatingWebhook {
+	return admission.NewDefaultValidatingWebhook(v, clientConfig, admissionregistrationv1.ClusterScope)
+}
+
+// Admit is the entrypoint for the validator. Admit will return an error if it unable to process the request.
+// If this function is called without NewValidator(..) calls will panic.
+func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+	listTrace := trace.New("globalRoleValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
+	defer listTrace.LogIfLong(admission.SlowTraceDuration)
+
+	newGR, err := objectsv3.GlobalRoleFromRequest(&request.AdmissionRequest)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// object is in the process of being deleted, so admit it
 	// this admits update operations that happen to remove finalizers
 	if newGR.DeletionTimestamp != nil {
-		response.Allowed = true
-		return nil
+		return &admissionv1.AdmissionResponse{
+			Allowed: true,
+		}, nil
 	}
 
 	// ensure all PolicyRules have at least one verb, otherwise RBAC controllers may encounter issues when creating Roles and ClusterRoles
 	for _, rule := range newGR.Rules {
 		if len(rule.Verbs) == 0 {
-			response.Result = &metav1.Status{
-				Status:  "Failure",
-				Message: "GlobalRole.Rules: PolicyRules must have at least one verb",
-				Reason:  metav1.StatusReasonBadRequest,
-				Code:    http.StatusBadRequest,
-			}
-			response.Allowed = false
-			return nil
+			return &admissionv1.AdmissionResponse{
+				Result: &metav1.Status{
+					Status:  "Failure",
+					Message: "GlobalRole.Rules: PolicyRules must have at least one verb",
+					Reason:  metav1.StatusReasonBadRequest,
+					Code:    http.StatusBadRequest,
+				},
+				Allowed: false,
+			}, nil
 		}
 	}
 
-	auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, newGR.Rules, "", grv.resolver))
+	response := &admissionv1.AdmissionResponse{}
+	auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, newGR.Rules, "", v.resolver))
 
-	return nil
+	return response, nil
 }

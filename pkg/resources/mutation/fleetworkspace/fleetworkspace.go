@@ -3,26 +3,35 @@ package fleetworkspace
 import (
 	"github.com/rancher/rancher/pkg/apis/management.cattle.io"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
 	"github.com/rancher/webhook/pkg/clients"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	corev1controller "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	rbacvacontroller "github.com/rancher/wrangler/pkg/generated/controllers/rbac/v1"
-	"github.com/rancher/wrangler/pkg/webhook"
 	admissionv1 "k8s.io/api/admission/v1"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
 
 var (
 	fleetAdminRole = "fleetworkspace-admin"
+
+	gvr = schema.GroupVersionResource{
+		Group:    "management.cattle.io",
+		Version:  "v3",
+		Resource: "fleetworkspaces",
+	}
 )
 
-func NewMutator(client *clients.Clients) webhook.Handler {
-	return &mutator{
+// NewMutator returns an initialized Mutator.
+func NewMutator(client *clients.Clients) *Mutator {
+	return &Mutator{
 		namespaces:          client.Core.Namespace(),
 		rolebindings:        client.RBAC.RoleBinding(),
 		clusterrolebindings: client.RBAC.ClusterRoleBinding(),
@@ -31,7 +40,8 @@ func NewMutator(client *clients.Clients) webhook.Handler {
 	}
 }
 
-type mutator struct {
+// Mutator implements admission.MutatingAdmissionWebhook.
+type Mutator struct {
 	namespaces          corev1controller.NamespaceController
 	rolebindings        rbacvacontroller.RoleBindingController
 	clusterrolebindings rbacvacontroller.ClusterRoleBindingController
@@ -39,19 +49,37 @@ type mutator struct {
 	resolver            validation.AuthorizationRuleResolver
 }
 
+// GVR returns the GroupVersionKind for this CRD.
+func (m *Mutator) GVR() schema.GroupVersionResource {
+	return gvr
+}
+
+// Operations returns list of operations handled by this mutator.
+func (m *Mutator) Operations() []admissionregistrationv1.OperationType {
+	return []admissionregistrationv1.OperationType{admissionregistrationv1.Create}
+}
+
+// MutatingWebhook returns the MutatingWebhook used for this CRD.
+func (m *Mutator) MutatingWebhook(clientConfig admissionregistrationv1.WebhookClientConfig) *admissionregistrationv1.MutatingWebhook {
+	mutatingWebhook := admission.NewDefaultMutatingWebhook(m, clientConfig, admissionregistrationv1.ClusterScope)
+	mutatingWebhook.SideEffects = admission.Ptr(admissionregistrationv1.SideEffectClassNoneOnDryRun)
+	return mutatingWebhook
+}
+
 // When fleetworkspace is created, it will create the following resources:
 // 1. Namespace. It will have the same name as fleetworkspace
 // 2. fleetworkspace ClusterRole. It will create the cluster role that has * permission only to the current workspace
 // 3. Two roleBinding to bind the current user to fleet-admin roles and fleetworkspace roles
-func (m *mutator) Admit(response *webhook.Response, request *webhook.Request) error {
+func (m *Mutator) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	if (request.DryRun != nil && *request.DryRun) || request.Operation == admissionv1.Delete {
-		response.Allowed = true
-		return nil
+		return &admissionv1.AdmissionResponse{
+			Allowed: true,
+		}, nil
 	}
 
-	fw, err := objectsv3.FleetWorkspaceFromRequest(request)
+	fw, err := objectsv3.FleetWorkspaceFromRequest(&request.AdmissionRequest)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	namespace := v1.Namespace{
@@ -62,37 +90,38 @@ func (m *mutator) Admit(response *webhook.Response, request *webhook.Request) er
 	ns, err := m.namespaces.Create(&namespace)
 	if err != nil {
 		if !errors.IsAlreadyExists(err) {
-			return err
+			return nil, err
 		}
 		// check if user has enough privilege to create fleet admin rolebinding in the namespace
 		cr, err := m.clusterroles.Cache().Get(fleetAdminRole)
 		if err != nil {
-			return err
+			return nil, err
 		}
-
+		response := &admissionv1.AdmissionResponse{}
 		auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, cr.Rules, namespace.Name, m.resolver))
 
 		ns, err = m.namespaces.Get(namespace.Name, metav1.GetOptions{})
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	// create rolebinding to bind current user with fleetworkspace-admin role in current namespace
 	if err := m.createAdminRoleAndBindings(request, fw); err != nil && !errors.IsAlreadyExists(err) {
-		return err
+		return nil, err
 	}
 
 	// create an own clusterRole and clusterRoleBindings to make sure the creator has full permission to its own fleetworkspace
 	if err := m.createOwnRoleAndBinding(request, fw, ns); err != nil {
-		return err
+		return nil, err
 	}
 
-	response.Allowed = true
-	return nil
+	return &admissionv1.AdmissionResponse{
+		Allowed: true,
+	}, nil
 }
 
-func (m *mutator) createAdminRoleAndBindings(request *webhook.Request, fw *v3.FleetWorkspace) error {
+func (m *Mutator) createAdminRoleAndBindings(request *admission.Request, fw *v3.FleetWorkspace) error {
 	rolebinding := rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "fleetworkspace-admin-binding-" + fw.Name,
@@ -117,7 +146,7 @@ func (m *mutator) createAdminRoleAndBindings(request *webhook.Request, fw *v3.Fl
 	return nil
 }
 
-func (m *mutator) createOwnRoleAndBinding(request *webhook.Request, fw *v3.FleetWorkspace, ns *v1.Namespace) error {
+func (m *Mutator) createOwnRoleAndBinding(request *admission.Request, fw *v3.FleetWorkspace, ns *v1.Namespace) error {
 	clusterrole := rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "fleetworkspace-own-" + fw.Name,

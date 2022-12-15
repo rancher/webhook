@@ -3,19 +3,20 @@ package cluster
 import (
 	"net/http"
 	"regexp"
-	"time"
 
 	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
+	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/clients"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv1 "github.com/rancher/webhook/pkg/generated/objects/provisioning.cattle.io/v1"
 	"github.com/rancher/webhook/pkg/resources/validation"
 	"github.com/rancher/wrangler/pkg/kv"
-	"github.com/rancher/wrangler/pkg/webhook"
 	admissionv1 "k8s.io/api/admission/v1"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	authv1 "k8s.io/api/authorization/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/utils/trace"
 )
@@ -24,47 +25,70 @@ const globalNamespace = "cattle-global-data"
 
 var mgmtNameRegex = regexp.MustCompile("^c-[a-z0-9]{5}$")
 
-func NewProvisioningClusterValidator(client *clients.Clients) webhook.Handler {
-	return &provisioningClusterValidator{
+var provisioningGVR = schema.GroupVersionResource{
+	Group:    "provisioning.cattle.io",
+	Version:  "v1",
+	Resource: "clusters",
+}
+
+// NewValidator returns a new validator for provisioning clusters
+func NewProvisioningClusterValidator(client *clients.Clients) *ProvisioningClusterValidator {
+	return &ProvisioningClusterValidator{
 		sar:               client.K8s.AuthorizationV1().SubjectAccessReviews(),
 		mgmtClusterClient: client.Management.Cluster(),
 	}
 }
 
-type provisioningClusterValidator struct {
+type ProvisioningClusterValidator struct {
 	sar               authorizationv1.SubjectAccessReviewInterface
 	mgmtClusterClient v3.ClusterClient
 }
 
-func (p *provisioningClusterValidator) Admit(response *webhook.Response, request *webhook.Request) error {
-	listTrace := trace.New("provisioningClusterValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
-	defer listTrace.LogIfLong(2 * time.Second)
-	oldCluster, cluster, err := objectsv1.ClusterOldAndNewFromRequest(request)
-	if err != nil {
-		return err
-	}
+// GVR returns the GroupVersionKind for this CRD.
+func (p *ProvisioningClusterValidator) GVR() schema.GroupVersionResource {
+	return provisioningGVR
+}
 
+// Operations returns list of operations handled by this validator.
+func (p *ProvisioningClusterValidator) Operations() []admissionregistrationv1.OperationType {
+	return []admissionregistrationv1.OperationType{admissionregistrationv1.Update, admissionregistrationv1.Create}
+}
+
+// ValidatingWebhook returns the ValidatingWebhook used for this CRD.
+func (p *ProvisioningClusterValidator) ValidatingWebhook(clientConfig admissionregistrationv1.WebhookClientConfig) *admissionregistrationv1.ValidatingWebhook {
+	return admission.NewDefaultValidatingWebhook(p, clientConfig, admissionregistrationv1.NamespacedScope)
+}
+
+// Admit handles the webhook admission request sent to this webhook.
+func (p *ProvisioningClusterValidator) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+	listTrace := trace.New("provisioningClusterValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
+	defer listTrace.LogIfLong(admission.SlowTraceDuration)
+	oldCluster, cluster, err := objectsv1.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
+	if err != nil {
+		return nil, err
+	}
+	response := &admissionv1.AdmissionResponse{}
 	if err := p.validateClusterName(request, response, cluster); err != nil || response.Result != nil {
-		return err
+		return nil, err
 	}
 
 	if response.Result = validation.CheckCreatorID(request, oldCluster, cluster); response.Result != nil {
-		return nil
+		return response, nil
 	}
 
 	if response.Result = validateACEConfig(cluster); response.Result != nil {
-		return nil
+		return response, nil
 	}
 
 	if err := p.validateCloudCredentialAccess(request, response, oldCluster, cluster); err != nil || response.Result != nil {
-		return err
+		return nil, err
 	}
 
 	response.Allowed = true
-	return nil
+	return response, nil
 }
 
-func (p *provisioningClusterValidator) validateCloudCredentialAccess(request *webhook.Request, response *webhook.Response, oldCluster, newCluster *v1.Cluster) error {
+func (p *ProvisioningClusterValidator) validateCloudCredentialAccess(request *admission.Request, response *admissionv1.AdmissionResponse, oldCluster, newCluster *v1.Cluster) error {
 	if newCluster.Spec.CloudCredentialSecretName == "" ||
 		oldCluster.Spec.CloudCredentialSecretName == newCluster.Spec.CloudCredentialSecretName {
 		return nil
@@ -115,7 +139,7 @@ func getCloudCredentialSecretInfo(namespace, name string) (string, string) {
 	return namespace, name
 }
 
-func (p *provisioningClusterValidator) validateClusterName(request *webhook.Request, response *webhook.Response, cluster *v1.Cluster) error {
+func (p *ProvisioningClusterValidator) validateClusterName(request *admission.Request, response *admissionv1.AdmissionResponse, cluster *v1.Cluster) error {
 	if request.Operation != admissionv1.Create {
 		return nil
 	}

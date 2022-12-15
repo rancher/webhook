@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/rancher/wrangler/pkg/webhook"
+	"github.com/rancher/webhook/pkg/admission"
+	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	v1 "k8s.io/api/authorization/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -24,7 +25,7 @@ const (
 )
 
 // EscalationAuthorized checks if the user associated with the context is explicitly authorized to escalate the given GVR.
-func EscalationAuthorized(request *webhook.Request, gvr schema.GroupVersionResource, sar authorizationv1.SubjectAccessReviewInterface, namespace string) (bool, error) {
+func EscalationAuthorized(request *admission.Request, gvr schema.GroupVersionResource, sar authorizationv1.SubjectAccessReviewInterface, namespace string) (bool, error) {
 	extras := map[string]v1.ExtraValue{}
 	for k, v := range request.UserInfo.Extra {
 		extras[k] = v1.ExtraValue(v)
@@ -54,7 +55,7 @@ func EscalationAuthorized(request *webhook.Request, gvr schema.GroupVersionResou
 
 // ConfirmNoEscalation checks that the user attempting to create a binding/role has all the permissions they are attempting
 // to grant.
-func ConfirmNoEscalation(request *webhook.Request, rules []rbacv1.PolicyRule, namespace string, ruleResolver validation.AuthorizationRuleResolver) error {
+func ConfirmNoEscalation(request *admission.Request, rules []rbacv1.PolicyRule, namespace string, ruleResolver validation.AuthorizationRuleResolver) error {
 	userInfo := &user.DefaultInfo{
 		Name:   request.UserInfo.Username,
 		UID:    request.UserInfo.UID,
@@ -77,7 +78,7 @@ func ToExtraString(extra map[string]authenticationv1.ExtraValue) map[string][]st
 }
 
 // SetEscalationResponse will update the given webhook response based on the provided error from an escalation request.
-func SetEscalationResponse(response *webhook.Response, err error) {
+func SetEscalationResponse(response *admissionv1.AdmissionResponse, err error) {
 	if err == nil {
 		response.Allowed = true
 		return

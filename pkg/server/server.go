@@ -5,16 +5,17 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"net/http"
 	"os"
 	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/rancher/dynamiclistener"
 	"github.com/rancher/dynamiclistener/server"
+	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/capi"
 	"github.com/rancher/webhook/pkg/clients"
 	"github.com/rancher/webhook/pkg/health"
+	"github.com/rancher/wrangler/pkg/apply"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -34,15 +35,9 @@ const (
 
 var (
 	// These strings have to remain as vars since we need the address below.
-	validationPath              = "/v1/webhook/validation"
-	mutationPath                = "/v1/webhook/mutation"
-	clientPort                  = int32(443)
-	clusterScope                = v1.ClusterScope
-	namespaceScope              = v1.NamespacedScope
-	failPolicyFail              = v1.Fail
-	failPolicyIgnore            = v1.Ignore
-	sideEffectClassNone         = v1.SideEffectClassNone
-	sideEffectClassNoneOnDryRun = v1.SideEffectClassNoneOnDryRun
+	validationPath = "/v1/webhook/validation"
+	mutationPath   = "/v1/webhook/mutation"
+	clientPort     = int32(443)
 )
 
 // tlsOpt option function applied to all webhook servers.
@@ -72,12 +67,12 @@ func ListenAndServe(ctx context.Context, cfg *rest.Config, capiEnabled, mcmEnabl
 		logrus.Infof("[ListenAndServe] could not set certificate expiration days via environment variable: %v", err)
 	}
 
-	validation, err := Validation(clients)
+	validators, err := Validation(clients)
 	if err != nil {
 		return err
 	}
 
-	mutation, err := Mutation(clients)
+	mutators, err := Mutation(clients)
 	if err != nil {
 		return err
 	}
@@ -91,12 +86,7 @@ func ListenAndServe(ctx context.Context, cfg *rest.Config, capiEnabled, mcmEnabl
 		}
 	}
 
-	router := mux.NewRouter()
-	router.Handle(validationPath, validation)
-	router.Handle(mutationPath, mutation)
-	applyErrChecker := health.NewErrorChecker("Config Applied")
-	health.RegisterHealthCheckers(router, applyErrChecker)
-	if err = listenAndServe(ctx, clients, router, applyErrChecker); err != nil {
+	if err = listenAndServe(ctx, clients, validators, mutators); err != nil {
 		return err
 	}
 
@@ -124,10 +114,54 @@ func setCertificateExpirationDays() error {
 	return nil
 }
 
-func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.Handler, applyErrChecker *health.ErrorChecker) (rErr error) {
+func listenAndServe(ctx context.Context, clients *clients.Clients, validators []admission.ValidatingAdmissionHandler, mutators []admission.MutatingAdmissionHandler) (rErr error) {
+	router := mux.NewRouter()
+	applyErrChecker := health.NewErrorChecker("Config Applied")
+	health.RegisterHealthCheckers(router, applyErrChecker)
+
+	logrus.Debug("Creating Webhook routes")
+	for _, webhook := range validators {
+		route := router.HandleFunc(admission.Path(validationPath, webhook), admission.NewHandlerFunc(webhook))
+		path, _ := route.GetPathTemplate()
+		logrus.Debugf("creating route: %s", path)
+	}
+	for _, webhook := range mutators {
+		route := router.HandleFunc(admission.Path(mutationPath, webhook), admission.NewHandlerFunc(webhook))
+		path, _ := route.GetPathTemplate()
+		logrus.Debugf("creating route: %s", path)
+	}
+
 	apply := clients.Apply.WithDynamicLookup()
 
-	clients.Core.Secret().OnChange(ctx, "secrets", func(key string, secret *corev1.Secret) (*corev1.Secret, error) {
+	clients.Core.Secret().OnChange(ctx, "secrets", updateWebhookConfigs(apply, applyErrChecker, validators, mutators))
+
+	defer func() {
+		if rErr != nil {
+			return
+		}
+		rErr = clients.Start(ctx)
+	}()
+
+	tlsConfig := &tls.Config{}
+	tlsOpt(tlsConfig)
+
+	return server.ListenAndServe(ctx, webhookHTTPSPort, webhookHTTPPort, router, &server.ListenOpts{
+		Secrets:       clients.Core.Secret(),
+		CertNamespace: namespace,
+		CertName:      certName,
+		CAName:        caName,
+		TLSListenerConfig: dynamiclistener.Config{
+			SANs: []string{
+				tlsName,
+			},
+			FilterCN:  dynamiclistener.OnlyAllow(tlsName),
+			TLSConfig: tlsConfig,
+		},
+	})
+}
+
+func updateWebhookConfigs(applier apply.Apply, applyErrChecker *health.ErrorChecker, validators []admission.ValidatingAdmissionHandler, mutators []admission.MutatingAdmissionHandler) func(key string, secret *corev1.Secret) (*corev1.Secret, error) {
+	return func(key string, secret *corev1.Secret) (*corev1.Secret, error) {
 		if secret == nil || secret.Name != caName || secret.Namespace != namespace || len(secret.Data[corev1.TLSCertKey]) == 0 {
 			return nil, nil
 		}
@@ -135,11 +169,6 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 		logrus.Info("Sleeping for 15 seconds then applying webhook config")
 		// Sleep here to make sure server is listening and all caches are primed
 		time.Sleep(15 * time.Second)
-
-		rancherAuthRules := rancherAuthBaseRules
-		if clients.MultiClusterManagement { // register additional rbac rules if mcm is enabled
-			rancherAuthRules = append(rancherAuthRules, rancherAuthMCMRules...)
-		}
 
 		validationClientConfig := v1.WebhookClientConfig{
 			Service: &v1.ServiceReference{
@@ -160,78 +189,38 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 			},
 			CABundle: secret.Data[corev1.TLSCertKey],
 		}
-
-		applyErr := apply.WithOwner(secret).ApplyObjects(&v1.ValidatingWebhookConfiguration{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "rancher.cattle.io",
-			},
-			Webhooks: []v1.ValidatingWebhook{
-				{
-					Name:                    "rancher.cattle.io",
-					ClientConfig:            validationClientConfig,
-					Rules:                   rancherRules,
-					FailurePolicy:           &failPolicyIgnore,
-					SideEffects:             &sideEffectClassNone,
-					AdmissionReviewVersions: []string{"v1", "v1beta1"},
+		if devURL, ok := os.LookupEnv("CATTLE_WEBHOOK_URL"); ok {
+			validationURL := devURL + validationPath
+			mutationURL := devURL + mutationPath
+			validationClientConfig = v1.WebhookClientConfig{
+				URL: &validationURL,
+			}
+			mutationClientConfig = v1.WebhookClientConfig{
+				URL: &mutationURL,
+			}
+		}
+		validatingWebhooks := make([]v1.ValidatingWebhook, 0, len(validators))
+		for _, webhook := range validators {
+			validatingWebhooks = append(validatingWebhooks, *webhook.ValidatingWebhook(validationClientConfig))
+		}
+		mutatingWebhooks := make([]v1.MutatingWebhook, 0, len(mutators))
+		for _, webhook := range mutators {
+			mutatingWebhooks = append(mutatingWebhooks, *webhook.MutatingWebhook(mutationClientConfig))
+		}
+		applyErr := applier.WithOwner(secret).ApplyObjects(
+			&v1.ValidatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "rancher.cattle.io",
 				},
-				{
-					Name:                    "rancherauth.cattle.io",
-					ClientConfig:            validationClientConfig,
-					Rules:                   rancherAuthRules,
-					FailurePolicy:           &failPolicyFail,
-					SideEffects:             &sideEffectClassNone,
-					AdmissionReviewVersions: []string{"v1", "v1beta1"},
+				Webhooks: validatingWebhooks,
+			}, &v1.MutatingWebhookConfiguration{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "rancher.cattle.io",
 				},
-			},
-		}, &v1.MutatingWebhookConfiguration{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "rancher.cattle.io",
-			},
-			Webhooks: []v1.MutatingWebhook{
-				{
-					Name:                    "rancherfleet.cattle.io",
-					ClientConfig:            mutationClientConfig,
-					Rules:                   fleetMutationRules,
-					FailurePolicy:           &failPolicyFail,
-					SideEffects:             &sideEffectClassNoneOnDryRun,
-					AdmissionReviewVersions: []string{"v1", "v1beta1"},
-				},
-				{
-					Name:                    "rancher.cattle.io",
-					ClientConfig:            mutationClientConfig,
-					Rules:                   rancherMutationRules,
-					FailurePolicy:           &failPolicyFail,
-					SideEffects:             &sideEffectClassNoneOnDryRun,
-					AdmissionReviewVersions: []string{"v1", "v1beta1"},
-				},
-			},
-		})
+				Webhooks: mutatingWebhooks,
+			})
 
 		applyErrChecker.Store(applyErr)
 		return secret, applyErr
-	})
-
-	defer func() {
-		if rErr != nil {
-			return
-		}
-		rErr = clients.Start(ctx)
-	}()
-
-	tlsConfig := &tls.Config{}
-	tlsOpt(tlsConfig)
-
-	return server.ListenAndServe(ctx, webhookHTTPSPort, webhookHTTPPort, handler, &server.ListenOpts{
-		Secrets:       clients.Core.Secret(),
-		CertNamespace: namespace,
-		CertName:      certName,
-		CAName:        caName,
-		TLSListenerConfig: dynamiclistener.Config{
-			SANs: []string{
-				tlsName,
-			},
-			FilterCN:  dynamiclistener.OnlyAllow(tlsName),
-			TLSConfig: tlsConfig,
-		},
-	})
+	}
 }
