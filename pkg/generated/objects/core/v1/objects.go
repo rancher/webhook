@@ -114,3 +114,56 @@ func SecretFromRequest(request *admissionv1.AdmissionRequest) (*v1.Secret, error
 
 	return object, nil
 }
+
+// NamespaceOldAndNewFromRequest gets the old and new Namespace objects, respectively, from the webhook request.
+// If the request is a Delete operation, then the new object is the zero value for Namespace.
+// Similarly, if the request is a Create operation, then the old object is the zero value for Namespace.
+func NamespaceOldAndNewFromRequest(request *admissionv1.AdmissionRequest) (*v1.Namespace, *v1.Namespace, error) {
+	if request == nil {
+		return nil, nil, fmt.Errorf("nil request")
+	}
+
+	object := &v1.Namespace{}
+	oldObject := &v1.Namespace{}
+
+	if request.Operation != admissionv1.Delete {
+		err := json.Unmarshal(request.Object.Raw, object)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to unmarshal request object: %w", err)
+		}
+	}
+
+	if request.Operation == admissionv1.Create {
+		return oldObject, object, nil
+	}
+
+	err := json.Unmarshal(request.OldObject.Raw, oldObject)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal request oldObject: %w", err)
+	}
+
+	return oldObject, object, nil
+}
+
+// NamespaceFromRequest returns a Namespace object from the webhook request.
+// If the operation is a Delete operation, then the old object is returned.
+// Otherwise, the new object is returned.
+func NamespaceFromRequest(request *admissionv1.AdmissionRequest) (*v1.Namespace, error) {
+	if request == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	object := &v1.Namespace{}
+	raw := request.Object.Raw
+
+	if request.Operation == admissionv1.Delete {
+		raw = request.OldObject.Raw
+	}
+
+	err := json.Unmarshal(raw, object)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal request object: %w", err)
+	}
+
+	return object, nil
+}

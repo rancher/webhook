@@ -63,6 +63,7 @@ func main() {
 			Types: []interface{}{
 				&unstructured.Unstructured{},
 				&corev1.Secret{},
+				&corev1.Namespace{},
 			},
 		}}); err != nil {
 		fmt.Printf("ERROR: %v\n", err)
