@@ -16,6 +16,9 @@ go mod verify
 
 source ./scripts/version
 
+echo Running helm lint
+helm lint ./charts/rancher-webhook
+
 if [ -n "$DIRTY" ]; then
     echo Git is dirty
     git status
