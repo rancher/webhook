@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/webhook/pkg/resources/validation/globalrolebinding"
 	"github.com/rancher/webhook/pkg/resources/validation/machineconfig"
 	nshandler "github.com/rancher/webhook/pkg/resources/validation/namespace"
+	"github.com/rancher/webhook/pkg/resources/validation/podsecurityadmissionconfigurationtemplate"
 	"github.com/rancher/webhook/pkg/resources/validation/projectroletemplatebinding"
 	"github.com/rancher/webhook/pkg/resources/validation/roletemplate"
 )
@@ -26,7 +27,10 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		cluster.NewProvisioningClusterValidator(clients),
 		&machineconfig.Validator{},
 		nshandler.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews()),
+		podsecurityadmissionconfigurationtemplate.NewValidator(clients.Management.Cluster().Cache(),
+			clients.Provisioning.Cluster().Cache()),
 	}
+
 	if clients.MultiClusterManagement {
 		globalRoles := globalrole.NewValidator(clients.DefaultResolver)
 		globalRoleBindings := globalrolebinding.NewValidator(clients.Management.GlobalRole().Cache(), clients.DefaultResolver)

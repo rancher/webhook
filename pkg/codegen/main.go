@@ -37,6 +37,11 @@ func main() {
 					v3.ProjectRoleTemplateBinding{},
 				},
 			},
+			"provisioning.cattle.io": {
+				Types: []interface{}{
+					&v1.Cluster{},
+				},
+			},
 		},
 	})
 
@@ -48,6 +53,7 @@ func main() {
 				&v3.ClusterRoleTemplateBinding{},
 				&v3.Feature{},
 				&v3.FleetWorkspace{},
+				&v3.PodSecurityAdmissionConfigurationTemplate{},
 				&v3.GlobalRole{},
 				&v3.GlobalRoleBinding{},
 				&v3.RoleTemplate{},
