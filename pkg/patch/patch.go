@@ -23,7 +23,11 @@ func CreatePatch(oldJSON []byte, newObj interface{}, response *v1.AdmissionRespo
 	if err != nil {
 		return fmt.Errorf("failed to marshal generated patch to JSON: %w", err)
 	}
-
+	// json.Marshal() function treats an empty slice as "[]" and a nil pointer as "null" when performing the marshal,
+	// both cases need to be ignored to avoid the error of "webhook returned response.patch but not response.patchType"
+	if string(patchJSON) == "[]" || string(patchJSON) == "null" {
+		return nil
+	}
 	response.Patch = patchJSON
 	response.PatchType = patch.PatchType
 	return nil

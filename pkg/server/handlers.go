@@ -23,7 +23,7 @@ import (
 func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandler, error) {
 	handlers := []admission.ValidatingAdmissionHandler{
 		&feature.Validator{},
-		cluster.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews()),
+		cluster.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache()),
 		cluster.NewProvisioningClusterValidator(clients),
 		&machineconfig.Validator{},
 		nshandler.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews()),
@@ -49,6 +49,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 func Mutation(clients *clients.Clients) ([]admission.MutatingAdmissionHandler, error) {
 	return []admission.MutatingAdmissionHandler{
 		&mutationCluster.Mutator{},
+		mutationCluster.NewManagementClusterMutator(clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache()),
 		fleetworkspace.NewMutator(clients),
 		&secret.Mutator{},
 		&machineconfigs.Mutator{},
