@@ -39,6 +39,7 @@ require (
 	github.com/rancher/lasso v0.0.0-20221206162308-10123d5719ad
 	github.com/rancher/lasso/controller-runtime v0.0.0-20221206162308-10123d5719ad
 	github.com/rancher/rancher/pkg/apis v0.0.0-20221223210045-28a84c710edf
+	github.com/rancher/rke v1.4.3-rc1
 	github.com/rancher/wrangler v1.0.1-0.20221202234327-1cafffeaa9a1
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.8.0
@@ -108,7 +109,6 @@ require (
 	github.com/rancher/fleet/pkg/apis v0.0.0-20221220171827-374ed17d8499 // indirect
 	github.com/rancher/gke-operator v1.1.5 // indirect
 	github.com/rancher/norman v0.0.0-20221205184727-32ef2e185b99 // indirect
-	github.com/rancher/rke v1.4.3-rc1 // indirect
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
