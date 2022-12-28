@@ -33,7 +33,7 @@ var managementGVR = schema.GroupVersionResource{
 	Resource: "clusters",
 }
 
-var parsedRangeAtLeast125 = semver.MustParseRange(">= 1.25.0-rancher0")
+var parsedRangeLessThan125 = semver.MustParseRange("< 1.25.0-rancher0")
 
 // NewValidator returns a new validator for management clusters.
 func NewValidator(sar authorizationv1.SubjectAccessReviewInterface, cache v3.PodSecurityAdmissionConfigurationTemplateCache) *Validator {
@@ -77,9 +77,26 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 	}
 
 	if request.Operation == admissionv1.Create || request.Operation == admissionv1.Update {
+		_, newCluster, err := objectsv3.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get old and new clusters from request: %w", err)
+		}
+		if newCluster.Name == "local" {
+			return psa.AdmissionResponseAllowed(), nil
+		}
+		if newCluster.Spec.RancherKubernetesEngineConfig == nil {
+			return psa.AdmissionResponseBadRequest("rancher_kubernetes_engine_config can not be nil"), nil
+		}
 		response, err = v.validatePSACT(request)
 		if err != nil {
-			return nil, fmt.Errorf("failed to validate PodSecurityAdmissionConfigurationTemplate: %w", err)
+			return nil, fmt.Errorf("failed to validate PodSecurityAdmissionConfigurationTemplate(PSACT): %w", err)
+		}
+		if !response.Allowed {
+			return response, nil
+		}
+		response, err = v.validatePSP(request)
+		if err != nil {
+			return nil, fmt.Errorf("failed to validate PSP: %w", err)
 		}
 		if !response.Allowed {
 			return response, nil
@@ -146,20 +163,14 @@ func (v *Validator) validatePSACT(request *admission.Request) (*admissionv1.Admi
 	if err != nil {
 		return nil, fmt.Errorf("failed to get old and new clusters from request: %w", err)
 	}
-	if newCluster.Name == "local" {
-		return psa.AdmissionResponseAllowed(), nil
-	}
-	if newCluster.Spec.RancherKubernetesEngineConfig == nil {
-		return psa.AdmissionResponseBadRequest("rancher_kubernetes_engine_config can not be nil"), nil
-	}
 	newTemplateName := newCluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName
 	oldTemplateName := oldCluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName
 	parsedVersion, err := getClusterVersion(newCluster.Spec.RancherKubernetesEngineConfig.Version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse cluster version: %w", err)
 	}
-	if !parsedRangeAtLeast125(parsedVersion) && newTemplateName != "" {
-		msg := "PodSecurityAdmissionConfigurationTemplate is only supported in Kubernetes version 1.25 and above"
+	if parsedRangeLessThan125(parsedVersion) && newTemplateName != "" {
+		msg := "PodSecurityAdmissionConfigurationTemplate(PSACT) is only supported in Kubernetes version 1.25 and above"
 		return psa.AdmissionResponseBadRequest(msg), nil
 	}
 	if newTemplateName != "" {
@@ -241,6 +252,27 @@ func (v *Validator) checkPSAConfigOnCluster(cluster *apisv3.Cluster) (*admission
 			"the content of the PodSecurityAdmissionConfigurationTemplate"
 		return psa.AdmissionResponseBadRequest(msg), nil
 	}
+	return psa.AdmissionResponseAllowed(), nil
+}
+
+// validatePSP validates if the PSP feature is enabled in a cluster which version is 1.25 or above
+func (v *Validator) validatePSP(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+	_, newCluster, err := objectsv3.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get old and new clusters from request: %w", err)
+	}
+	parsedVersion, err := getClusterVersion(newCluster.Spec.RancherKubernetesEngineConfig.Version)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse cluster version: %w", err)
+	}
+	if parsedRangeLessThan125(parsedVersion) {
+		return psa.AdmissionResponseAllowed(), nil
+	}
+	if newCluster.Spec.DefaultPodSecurityPolicyTemplateName != "" || newCluster.Spec.RancherKubernetesEngineConfig.Services.KubeAPI.PodSecurityPolicy {
+		msg := "cannot enable PodSecurityPolicy(PSP) or use PSP Template in cluster which k8s version is 1.25 and above"
+		return psa.AdmissionResponseBadRequest(msg), nil
+	}
+
 	return psa.AdmissionResponseAllowed(), nil
 }
 
