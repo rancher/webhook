@@ -220,6 +220,59 @@ func FleetWorkspaceFromRequest(request *admissionv1.AdmissionRequest) (*v3.Fleet
 	return object, nil
 }
 
+// PodSecurityAdmissionConfigurationTemplateOldAndNewFromRequest gets the old and new PodSecurityAdmissionConfigurationTemplate objects, respectively, from the webhook request.
+// If the request is a Delete operation, then the new object is the zero value for PodSecurityAdmissionConfigurationTemplate.
+// Similarly, if the request is a Create operation, then the old object is the zero value for PodSecurityAdmissionConfigurationTemplate.
+func PodSecurityAdmissionConfigurationTemplateOldAndNewFromRequest(request *admissionv1.AdmissionRequest) (*v3.PodSecurityAdmissionConfigurationTemplate, *v3.PodSecurityAdmissionConfigurationTemplate, error) {
+	if request == nil {
+		return nil, nil, fmt.Errorf("nil request")
+	}
+
+	object := &v3.PodSecurityAdmissionConfigurationTemplate{}
+	oldObject := &v3.PodSecurityAdmissionConfigurationTemplate{}
+
+	if request.Operation != admissionv1.Delete {
+		err := json.Unmarshal(request.Object.Raw, object)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to unmarshal request object: %w", err)
+		}
+	}
+
+	if request.Operation == admissionv1.Create {
+		return oldObject, object, nil
+	}
+
+	err := json.Unmarshal(request.OldObject.Raw, oldObject)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal request oldObject: %w", err)
+	}
+
+	return oldObject, object, nil
+}
+
+// PodSecurityAdmissionConfigurationTemplateFromRequest returns a PodSecurityAdmissionConfigurationTemplate object from the webhook request.
+// If the operation is a Delete operation, then the old object is returned.
+// Otherwise, the new object is returned.
+func PodSecurityAdmissionConfigurationTemplateFromRequest(request *admissionv1.AdmissionRequest) (*v3.PodSecurityAdmissionConfigurationTemplate, error) {
+	if request == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	object := &v3.PodSecurityAdmissionConfigurationTemplate{}
+	raw := request.Object.Raw
+
+	if request.Operation == admissionv1.Delete {
+		raw = request.OldObject.Raw
+	}
+
+	err := json.Unmarshal(raw, object)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal request object: %w", err)
+	}
+
+	return object, nil
+}
+
 // GlobalRoleOldAndNewFromRequest gets the old and new GlobalRole objects, respectively, from the webhook request.
 // If the request is a Delete operation, then the new object is the zero value for GlobalRole.
 // Similarly, if the request is a Create operation, then the old object is the zero value for GlobalRole.
