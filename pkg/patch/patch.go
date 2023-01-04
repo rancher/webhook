@@ -18,12 +18,13 @@ func CreatePatch(oldJSON []byte, newObj interface{}, response *v1.AdmissionRespo
 	}
 
 	patch := admission.PatchResponseFromRaw(oldJSON, newJSON)
-
+	if len(patch.Patches) == 0 {
+		return nil
+	}
 	patchJSON, err := json.Marshal(patch.Patches)
 	if err != nil {
 		return fmt.Errorf("failed to marshal generated patch to JSON: %w", err)
 	}
-
 	response.Patch = patchJSON
 	response.PatchType = patch.PatchType
 	return nil

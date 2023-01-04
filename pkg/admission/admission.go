@@ -14,6 +14,7 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	v1 "k8s.io/api/admissionregistration/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -241,4 +242,25 @@ func resourceString(ns, name string) string {
 		return name
 	}
 	return fmt.Sprintf("%s/%s", ns, name)
+}
+
+// ResponseAllowed returns a minimal AdmissionResponse in which Allowed is true
+func ResponseAllowed() *admissionv1.AdmissionResponse {
+	return &admissionv1.AdmissionResponse{
+		Allowed: true,
+	}
+}
+
+// ResponseBadRequest returns an AdmissionResponse for BadRequest(err code 400)
+// the message is used as the message in the response
+func ResponseBadRequest(message string) *admissionv1.AdmissionResponse {
+	return &admissionv1.AdmissionResponse{
+		Result: &metav1.Status{
+			Status:  "Failure",
+			Message: message,
+			Reason:  metav1.StatusReasonBadRequest,
+			Code:    http.StatusBadRequest,
+		},
+		Allowed: false,
+	}
 }
