@@ -5,10 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"net/http"
-
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
@@ -61,10 +58,10 @@ func GetPluginConfigFromTemplate(template *apisv3.PodSecurityAdmissionConfigurat
 	return plugin, nil
 }
 
-// GetPlugConfigFromCluster generates a PluginConfig for PodSecurity from a Cluster,
+// GetPluginConfigFromCluster generates a PluginConfig for PodSecurity from a Cluster,
 // or a new one with default values if the cluster does not have one.
 // True is returned if a PluginConfig is found in the cluster.
-func GetPlugConfigFromCluster(cluster *apisv3.Cluster) (apiserverv1.AdmissionPluginConfiguration, bool) {
+func GetPluginConfigFromCluster(cluster *apisv3.Cluster) (apiserverv1.AdmissionPluginConfiguration, bool) {
 	admissionConfig := GetAdmissionConfigFromCluster(cluster)
 	for _, item := range admissionConfig.Plugins {
 		if item.Name == "PodSecurity" {
@@ -79,8 +76,8 @@ func GetPlugConfigFromCluster(cluster *apisv3.Cluster) (apiserverv1.AdmissionPlu
 	}, false
 }
 
-// DropPSAPlugConfigFromAdmissionConfig removes the PluginConfig for PodSecurity from a Cluster if it has one.
-func DropPSAPlugConfigFromAdmissionConfig(cluster *apisv3.Cluster) {
+// DropPSAPluginConfigFromAdmissionConfig removes the PluginConfig for PodSecurity from a Cluster if it has one.
+func DropPSAPluginConfigFromAdmissionConfig(cluster *apisv3.Cluster) {
 	var plugins []apiserverv1.AdmissionPluginConfiguration
 	admissionConfig := GetAdmissionConfigFromCluster(cluster)
 	for _, item := range admissionConfig.Plugins {
@@ -90,25 +87,4 @@ func DropPSAPlugConfigFromAdmissionConfig(cluster *apisv3.Cluster) {
 	}
 	cluster.Spec.RancherKubernetesEngineConfig.Services.KubeAPI.AdmissionConfiguration.Plugins = plugins
 	return
-}
-
-// AdmissionResponseAllowed returns a minimal AdmissionResponse in which Allowed is true
-func AdmissionResponseAllowed() *admissionv1.AdmissionResponse {
-	return &admissionv1.AdmissionResponse{
-		Allowed: true,
-	}
-}
-
-// AdmissionResponseBadRequest returns an AdmissionResponse for BadRequest(err code 400)
-// the message is used as the message in the response
-func AdmissionResponseBadRequest(message string) *admissionv1.AdmissionResponse {
-	return &admissionv1.AdmissionResponse{
-		Result: &metav1.Status{
-			Status:  "Failure",
-			Message: message,
-			Reason:  metav1.StatusReasonBadRequest,
-			Code:    http.StatusBadRequest,
-		},
-		Allowed: false,
-	}
 }

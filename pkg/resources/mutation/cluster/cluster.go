@@ -53,18 +53,18 @@ func (m *ManagementClusterMutator) MutatingWebhook(clientConfig admissionregistr
 // Admit is the entrypoint for the mutator. Admit will return an error if it is unable to process the request.
 func (m *ManagementClusterMutator) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	if request.DryRun != nil && *request.DryRun {
-		return psa.AdmissionResponseAllowed(), nil
+		return admission.ResponseAllowed(), nil
 	}
 	oldCluster, newCluster, err := objectsv3.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get old and new clusters from request: %w", err)
 	}
 	if newCluster.Name == "local" {
-		return psa.AdmissionResponseAllowed(), nil
+		return admission.ResponseAllowed(), nil
 	}
 	if newCluster.Spec.RancherKubernetesEngineConfig == nil {
 		// do nothing and leave it to the validator to reject the request
-		return psa.AdmissionResponseAllowed(), nil
+		return admission.ResponseAllowed(), nil
 	}
 	newTemplateName := newCluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName
 	oldTemplateName := oldCluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName
@@ -78,18 +78,18 @@ func (m *ManagementClusterMutator) Admit(request *admission.Request) (*admission
 	} else {
 		switch request.Operation {
 		case admissionv1.Create:
-			return psa.AdmissionResponseAllowed(), nil
+			return admission.ResponseAllowed(), nil
 		case admissionv1.Update:
 			// It is a valid use case where user switches from using PSACT to putting a PluginConfig for PSA under kube-api.AdmissionConfiguration,
 			// but it is not a valid use case where the PluginConfig for PSA has the same content as the one in the previous-set PSACT,
 			// so we need to drop it in this case.
 			if oldTemplateName != "" {
-				newConfig, found := psa.GetPlugConfigFromCluster(newCluster)
+				newConfig, found := psa.GetPluginConfigFromCluster(newCluster)
 				if found {
 					// found means there is a Plugin Config for PSA under the kube-api.admission_configuration section
-					oldConfig, _ := psa.GetPlugConfigFromCluster(oldCluster)
+					oldConfig, _ := psa.GetPluginConfigFromCluster(oldCluster)
 					if reflect.DeepEqual(newConfig, oldConfig) {
-						psa.DropPSAPlugConfigFromAdmissionConfig(newCluster)
+						psa.DropPSAPluginConfigFromAdmissionConfig(newCluster)
 					}
 				}
 			}
@@ -121,6 +121,7 @@ func (m *ManagementClusterMutator) setPSAConfig(cluster *apisv3.Cluster) error {
 		if item.Name == "PodSecurity" {
 			admissionConfig.Plugins[i] = plugin
 			found = true
+			break
 		}
 	}
 	if !found {
