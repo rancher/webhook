@@ -59,11 +59,8 @@ func (m *ManagementClusterMutator) Admit(request *admission.Request) (*admission
 	if err != nil {
 		return nil, fmt.Errorf("failed to get old and new clusters from request: %w", err)
 	}
-	if newCluster.Name == "local" {
-		return admission.ResponseAllowed(), nil
-	}
-	if newCluster.Spec.RancherKubernetesEngineConfig == nil {
-		// do nothing and leave it to the validator to reject the request
+	// no need to mutate the local cluster, or imported cluster which represents a KEv2 cluster (GKE/EKS/AKS) or v1 Provisioning Cluster
+	if newCluster.Name == "local" || newCluster.Spec.RancherKubernetesEngineConfig == nil {
 		return admission.ResponseAllowed(), nil
 	}
 	newTemplateName := newCluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName
