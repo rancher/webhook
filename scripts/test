@@ -3,7 +3,7 @@ set -e
 
 cd $(dirname $0)/..
 
-go test ./tests/integration/... -c -o ./bin/webhook-integration.test
+go test ./tests/integration/... -c -o ./bin/rancher-webhook-integration.test
 
 echo "Running tests"
 go test --coverpkg=./pkg/... -coverprofile=coverage.out --count=1 ./pkg/...
