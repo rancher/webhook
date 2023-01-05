@@ -47,4 +47,4 @@ while ! kubectl rollout status -w -n cattle-system deploy/rancher-webhook; do
     sleep 2
 done
 
-./bin/webhook-integration.test -test.v
+./bin/rancher-webhook-integration.test -test.v
