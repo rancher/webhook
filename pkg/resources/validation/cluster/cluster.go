@@ -82,11 +82,9 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 		if err != nil {
 			return nil, fmt.Errorf("failed to get cluster from request: %w", err)
 		}
-		if cluster.Name == "local" {
+		// no need to validate the local cluster, or imported cluster which represents a KEv2 cluster (GKE/EKS/AKS) or v1 Provisioning Cluster
+		if cluster.Name == "local" || cluster.Spec.RancherKubernetesEngineConfig == nil {
 			return admission.ResponseAllowed(), nil
-		}
-		if cluster.Spec.RancherKubernetesEngineConfig == nil {
-			return admission.ResponseBadRequest("rancher_kubernetes_engine_config can not be nil"), nil
 		}
 		response, err = v.validatePSACT(request)
 		if err != nil {
