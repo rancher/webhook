@@ -3,15 +3,16 @@ package podsecurityadmission
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
-
-	psav1 "k8s.io/pod-security-admission/admission/api/v1"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/rke/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	v1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
+	psav1 "k8s.io/pod-security-admission/admission/api/v1"
+	psav1beta1 "k8s.io/pod-security-admission/admission/api/v1beta1"
 )
 
 func TestGetAdmissionConfigFromCluster(t *testing.T) {
@@ -48,20 +49,40 @@ func TestGetAdmissionConfigFromCluster(t *testing.T) {
 
 func TestGetPluginConfigFromTemplate(t *testing.T) {
 	tests := []struct {
-		testName string
-		source   *v3.PodSecurityAdmissionConfigurationTemplate
-		expected v1.AdmissionPluginConfiguration
+		testName       string
+		source         *v3.PodSecurityAdmissionConfigurationTemplate
+		clusterVersion string
+		expected       v1.AdmissionPluginConfiguration
 	}{
 		{
-			testName: "PSACT Restricted",
-			source:   getPsactRestricted(),
-			expected: getApcRestricted(),
+			testName:       "PSACT Restricted in k8s v1.23",
+			source:         getPsactRestricted(),
+			clusterVersion: "v1.23.14-rancher1-1",
+			expected:       getApcRestrictedPSAv1beta1(),
+		},
+		{
+			testName:       "PSACT Restricted in k8s v1.24",
+			source:         getPsactRestricted(),
+			clusterVersion: "v1.24.8-rancher1-1",
+			expected:       getApcRestrictedPSAv1beta1(),
+		},
+		{
+			testName:       "PSACT Restricted in k8s v1.25",
+			source:         getPsactRestricted(),
+			clusterVersion: "v1.25.5-rancher1-1",
+			expected:       getApcRestrictedPSAv1(),
+		},
+		{
+			testName:       "PSACT Restricted - invalid version",
+			source:         getPsactRestricted(),
+			clusterVersion: "invalid.b-c",
+			expected:       getApcBasic(),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
-			output, err := GetPluginConfigFromTemplate(tt.source)
-			if err != nil {
+			output, err := GetPluginConfigFromTemplate(tt.source, tt.clusterVersion)
+			if err != nil && !strings.Contains(err.Error(), "failed to parse cluster version") {
 				t.Errorf("failed to invoke GetPluginConfigFromTemplate: %v", err)
 			}
 			if !reflect.DeepEqual(output, tt.expected) {
@@ -200,7 +221,7 @@ func getApcBasic() v1.AdmissionPluginConfiguration {
 	}
 }
 
-func getApcRestricted() v1.AdmissionPluginConfiguration {
+func getApcRestrictedPSAv1() v1.AdmissionPluginConfiguration {
 	psaConfig := psav1.PodSecurityConfiguration{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: psav1.SchemeGroupVersion.String(),
@@ -215,6 +236,32 @@ func getApcRestricted() v1.AdmissionPluginConfiguration {
 			WarnVersion:    "latest",
 		},
 		Exemptions: psav1.PodSecurityExemptions{
+			Usernames:      []string{},
+			RuntimeClasses: []string{},
+			Namespaces:     []string{"ingress-nginx", "kube-system"},
+		},
+	}
+	cBytes, _ := json.Marshal(psaConfig)
+	plugin := getApcBasic()
+	plugin.Configuration.Raw = cBytes
+	return plugin
+}
+
+func getApcRestrictedPSAv1beta1() v1.AdmissionPluginConfiguration {
+	psaConfig := psav1beta1.PodSecurityConfiguration{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: psav1beta1.SchemeGroupVersion.String(),
+			Kind:       "PodSecurityConfiguration",
+		},
+		Defaults: psav1beta1.PodSecurityDefaults{
+			Enforce:        "restricted",
+			EnforceVersion: "latest",
+			Audit:          "restricted",
+			AuditVersion:   "latest",
+			Warn:           "restricted",
+			WarnVersion:    "latest",
+		},
+		Exemptions: psav1beta1.PodSecurityExemptions{
 			Usernames:      []string{},
 			RuntimeClasses: []string{},
 			Namespaces:     []string{"ingress-nginx", "kube-system"},

@@ -5,14 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
-	"strings"
 
 	"github.com/blang/semver"
-
-	psav1 "k8s.io/pod-security-admission/admission/api/v1"
-
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
@@ -22,6 +16,8 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	v1 "k8s.io/api/authorization/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
@@ -112,7 +108,7 @@ func toExtra(extra map[string]authenticationv1.ExtraValue) map[string]v1.ExtraVa
 	return result
 }
 
-// validateFleetPermissions validates whether the request maker has required permissions around FleetWorkspace
+// validateFleetPermissions validates whether the request maker has required permissions around FleetWorkspace.
 func (v *Validator) validateFleetPermissions(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	oldCluster, newCluster, err := objectsv3.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
@@ -158,7 +154,7 @@ func (v *Validator) validateFleetPermissions(request *admission.Request) (*admis
 	return admission.ResponseAllowed(), nil
 }
 
-// validatePSACT validates the cluster spec when PodSecurityAdmissionConfigurationTemplate is used
+// validatePSACT validates the cluster spec when PodSecurityAdmissionConfigurationTemplate is used.
 func (v *Validator) validatePSACT(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	oldCluster, newCluster, err := objectsv3.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
@@ -166,7 +162,7 @@ func (v *Validator) validatePSACT(request *admission.Request) (*admissionv1.Admi
 	}
 	newTemplateName := newCluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName
 	oldTemplateName := oldCluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName
-	parsedVersion, err := getClusterVersion(newCluster.Spec.RancherKubernetesEngineConfig.Version)
+	parsedVersion, err := psa.GetClusterVersion(newCluster.Spec.RancherKubernetesEngineConfig.Version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse cluster version: %w", err)
 	}
@@ -208,7 +204,7 @@ func (v *Validator) validatePSACT(request *admission.Request) (*admissionv1.Admi
 	return admission.ResponseAllowed(), nil
 }
 
-// checkPSAConfigOnCluster validates the cluster spec when DefaultPodSecurityAdmissionConfigurationTemplateName is set
+// checkPSAConfigOnCluster validates the cluster spec when DefaultPodSecurityAdmissionConfigurationTemplateName is set.
 func (v *Validator) checkPSAConfigOnCluster(cluster *apisv3.Cluster) (*admissionv1.AdmissionResponse, error) {
 	// validate that extra_args.admission-control-config-file is not set at the same time
 	_, found := cluster.Spec.RancherKubernetesEngineConfig.Services.KubeAPI.ExtraArgs["admission-control-config-file"]
@@ -225,7 +221,7 @@ func (v *Validator) checkPSAConfigOnCluster(cluster *apisv3.Cluster) (*admission
 		}
 		return nil, fmt.Errorf("failed to get PodSecurityAdmissionConfigurationTemplate [%s]: %w", name, err)
 	}
-	fromTemplate, err := psa.GetPluginConfigFromTemplate(template)
+	fromTemplate, err := psa.GetPluginConfigFromTemplate(template, cluster.Spec.RancherKubernetesEngineConfig.Version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get the PluginConfig: %w", err)
 	}
@@ -233,31 +229,29 @@ func (v *Validator) checkPSAConfigOnCluster(cluster *apisv3.Cluster) (*admission
 	if !found {
 		return admission.ResponseBadRequest("PodSecurity Configuration is not found under kube-api.admission_configuration"), nil
 	}
-	psaConfig := &psav1.PodSecurityConfiguration{}
-	err = json.Unmarshal(fromTemplate.Configuration.Raw, psaConfig)
+	var psaConfig, psaConfig2 any
+	err = json.Unmarshal(fromTemplate.Configuration.Raw, &psaConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal PodSecurityConfiguration: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal PodSecurityConfiguration from template: %w", err)
 	}
-
-	psaConfig2 := &psav1.PodSecurityConfiguration{}
-	err = json.Unmarshal(fromAdmissionConfig.Configuration.Raw, psaConfig2)
+	err = json.Unmarshal(fromAdmissionConfig.Configuration.Raw, &psaConfig2)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal PodSecurityConfiguration: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal PodSecurityConfiguration from admissionConfig: %w", err)
 	}
-	if !reflect.DeepEqual(psaConfig, psaConfig2) {
+	if !equality.Semantic.DeepEqual(psaConfig, psaConfig2) {
 		return admission.ResponseBadRequest("PodSecurity Configuration under kube-api.admission_configuration " +
 			"does not match the content of the PodSecurityAdmissionConfigurationTemplate"), nil
 	}
 	return admission.ResponseAllowed(), nil
 }
 
-// validatePSP validates if the PSP feature is enabled in a cluster which version is 1.25 or above
+// validatePSP validates if the PSP feature is enabled in a cluster which version is 1.25 or above.
 func (v *Validator) validatePSP(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	cluster, err := objectsv3.ClusterFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cluster from request: %w", err)
 	}
-	parsedVersion, err := getClusterVersion(cluster.Spec.RancherKubernetesEngineConfig.Version)
+	parsedVersion, err := psa.GetClusterVersion(cluster.Spec.RancherKubernetesEngineConfig.Version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse cluster version: %w", err)
 	}
@@ -269,16 +263,4 @@ func (v *Validator) validatePSP(request *admission.Request) (*admissionv1.Admiss
 	}
 
 	return admission.ResponseAllowed(), nil
-}
-
-func getClusterVersion(version string) (semver.Version, error) {
-	var parsedVersion semver.Version
-	if len(version) <= 1 || !strings.HasPrefix(version, "v") {
-		return parsedVersion, fmt.Errorf("%s is not valid k8s version", version)
-	}
-	parsedVersion, err := semver.Parse(version[1:])
-	if err != nil {
-		return parsedVersion, fmt.Errorf("%s is not valid semver", version)
-	}
-	return parsedVersion, nil
 }

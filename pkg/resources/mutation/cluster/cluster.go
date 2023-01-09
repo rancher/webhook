@@ -108,7 +108,7 @@ func (m *ManagementClusterMutator) setPSAConfig(cluster *apisv3.Cluster) error {
 	if err != nil {
 		return fmt.Errorf("failed to get PodSecurityAdmissionConfigurationTemplate: %w", err)
 	}
-	plugin, err := psa.GetPluginConfigFromTemplate(template)
+	plugin, err := psa.GetPluginConfigFromTemplate(template, cluster.Spec.RancherKubernetesEngineConfig.Version)
 	if err != nil {
 		return fmt.Errorf("failed to get plugin config from template: %w", err)
 	}
