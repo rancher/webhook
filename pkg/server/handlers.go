@@ -27,11 +27,10 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		cluster.NewProvisioningClusterValidator(clients),
 		&machineconfig.Validator{},
 		nshandler.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews()),
-		podsecurityadmissionconfigurationtemplate.NewValidator(clients.Management.Cluster().Cache(),
-			clients.Provisioning.Cluster().Cache()),
 	}
 
 	if clients.MultiClusterManagement {
+		psact := podsecurityadmissionconfigurationtemplate.NewValidator(clients.Management.Cluster().Cache(), clients.Provisioning.Cluster().Cache())
 		globalRoles := globalrole.NewValidator(clients.DefaultResolver)
 		globalRoleBindings := globalrolebinding.NewValidator(clients.Management.GlobalRole().Cache(), clients.DefaultResolver)
 		prtbs := projectroletemplatebinding.NewValidator(clients.Management.ProjectRoleTemplateBinding().Cache(),
@@ -40,7 +39,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			clients.DefaultResolver, clients.RoleTemplateResolver)
 		roleTemplates := roletemplate.NewValidator(clients.DefaultResolver, clients.RoleTemplateResolver, clients.K8s.AuthorizationV1().SubjectAccessReviews())
 
-		handlers = append(handlers, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates)
+		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates)
 	}
 	return handlers, nil
 }
