@@ -70,7 +70,7 @@ func (p *ProvisioningClusterValidator) Admit(request *admission.Request) (*admis
 	}
 	response := &admissionv1.AdmissionResponse{}
 	if err := p.validateClusterName(request, response, cluster); err != nil || response.Result != nil {
-		return nil, err
+		return response, err
 	}
 
 	if response.Result = validation.CheckCreatorID(request, oldCluster, cluster); response.Result != nil {
@@ -82,7 +82,7 @@ func (p *ProvisioningClusterValidator) Admit(request *admission.Request) (*admis
 	}
 
 	if err := p.validateCloudCredentialAccess(request, response, oldCluster, cluster); err != nil || response.Result != nil {
-		return nil, err
+		return response, err
 	}
 
 	response.Allowed = true
@@ -152,7 +152,6 @@ func (p *ProvisioningClusterValidator) validateClusterName(request *admission.Re
 	if err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
-
 	if !isValidName(cluster.Name, cluster.Namespace, err == nil) {
 		response.Result = &metav1.Status{
 			Status:  "Failure",
