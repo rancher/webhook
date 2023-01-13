@@ -24,11 +24,9 @@ var psaLabels = []string{
 // IsUpdatingPSAConfig will indicate whether or not the labels being passed in
 // are attempting to update PSA-related configuration.
 func IsUpdatingPSAConfig(old map[string]string, new map[string]string) bool {
-	for label := range new {
-		if slices.Contains(psaLabels, label) {
-			if old[label] != new[label] {
-				return true
-			}
+	for _, label := range psaLabels {
+		if old[label] != new[label] {
+			return true
 		}
 	}
 	return false
