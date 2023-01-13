@@ -70,7 +70,8 @@ func TestValidator_Admit(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "anynamespace",
 					Labels: map[string]string{
-						"someotherlabelkey": "somevalue",
+						"someotherlabelkey":     "somevalue",
+						validation.EnforceLabel: "baseline",
 					},
 				},
 			},
@@ -106,6 +107,50 @@ func TestValidator_Admit(t *testing.T) {
 			},
 			wantErr: false,
 			allowed: false,
+		},
+		{
+			name:        "Delete update PSA for NON admin user-should not be allowed",
+			userName:    failSarUser,
+			clusterName: "validcluster",
+			operation:   admissionv1.Update,
+			namespace: v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "anynamespace",
+					Labels: map[string]string{},
+				},
+			},
+			oldNamespace: v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "anynamespace",
+					Labels: map[string]string{
+						validation.EnforceLabel: "baseline",
+					},
+				},
+			},
+			wantErr: false,
+			allowed: false,
+		},
+		{
+			name:        "Delete update PSA for admin user should be allowed",
+			userName:    allowSarUser,
+			clusterName: "validcluster",
+			operation:   admissionv1.Update,
+			namespace: v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "anynamespace",
+					Labels: map[string]string{},
+				},
+			},
+			oldNamespace: v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "anynamespace",
+					Labels: map[string]string{
+						validation.EnforceLabel: "baseline",
+					},
+				},
+			},
+			wantErr: false,
+			allowed: true,
 		},
 		{
 			name:        "Update multiple PSA for allowed user",
