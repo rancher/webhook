@@ -177,27 +177,27 @@ func (v *Validator) handleDeletion(oldTemplate *mgmtv3.PodSecurityAdmissionConfi
 }
 
 func (v *Validator) validateConfiguration(configurationTemplate *mgmtv3.PodSecurityAdmissionConfigurationTemplate) error {
-	configuration := configurationTemplate.Configuration
-	// validate defaults
-	if err := validateLevel(field.NewPath("defaults", "enforce"), configuration.Defaults.Enforce).ToAggregate(); err != nil {
+	defaults := configurationTemplate.Configuration.Defaults
+
+	// validate any provided defaults
+	if err := validateLevel(field.NewPath("defaults", "enforce"), defaults.Enforce).ToAggregate(); err != nil {
+		return err
+	}
+	if err := validateVersion(field.NewPath("defaults", "enforce-version"), defaults.EnforceVersion).ToAggregate(); err != nil {
 		return err
 	}
 
-	if err := validateVersion(field.NewPath("defaults", "enforce-version"), configuration.Defaults.EnforceVersion).ToAggregate(); err != nil {
+	if err := validateLevel(field.NewPath("defaults", "warn"), defaults.Warn).ToAggregate(); err != nil {
 		return err
 	}
-	if err := validateLevel(field.NewPath("defaults", "warn"), configuration.Defaults.Warn).ToAggregate(); err != nil {
-		return err
-	}
-
-	if err := validateVersion(field.NewPath("defaults", "warn-version"), configuration.Defaults.WarnVersion).ToAggregate(); err != nil {
-		return err
-	}
-	if err := validateLevel(field.NewPath("defaults", "audit"), configuration.Defaults.Audit).ToAggregate(); err != nil {
+	if err := validateVersion(field.NewPath("defaults", "warn-version"), defaults.WarnVersion).ToAggregate(); err != nil {
 		return err
 	}
 
-	if err := validateVersion(field.NewPath("defaults", "audit-version"), configuration.Defaults.AuditVersion).ToAggregate(); err != nil {
+	if err := validateLevel(field.NewPath("defaults", "audit"), defaults.Audit).ToAggregate(); err != nil {
+		return err
+	}
+	if err := validateVersion(field.NewPath("defaults", "audit-version"), defaults.AuditVersion).ToAggregate(); err != nil {
 		return err
 	}
 
@@ -218,6 +218,9 @@ func (v *Validator) validateConfiguration(configurationTemplate *mgmtv3.PodSecur
 }
 
 func validateLevel(p *field.Path, value string) field.ErrorList {
+	if value == "" {
+		return nil
+	}
 	errs := field.ErrorList{}
 	_, err := api.ParseLevel(value)
 	if err != nil {
@@ -227,6 +230,9 @@ func validateLevel(p *field.Path, value string) field.ErrorList {
 }
 
 func validateVersion(p *field.Path, value string) field.ErrorList {
+	if value == "" {
+		return nil
+	}
 	errs := field.ErrorList{}
 	_, err := api.ParseVersion(value)
 	if err != nil {
