@@ -142,6 +142,72 @@ func TestAdmit(t *testing.T) {
 			wantAllowed: true,
 		},
 		{
+			testName: "Completely Valid Template Test With a Level And Version Omitted",
+			template: &v3.PodSecurityAdmissionConfigurationTemplate{
+				Description: "a valid test template",
+				Configuration: v3.PodSecurityAdmissionConfigurationTemplateSpec{
+					Defaults: v3.PodSecurityAdmissionConfigurationTemplateDefaults{
+						Enforce:        "",
+						EnforceVersion: "",
+						Audit:          string(api.LevelBaseline),
+						AuditVersion:   "v1.25",
+						Warn:           string(api.LevelBaseline),
+						WarnVersion:    "v1.25",
+					},
+					Exemptions: v3.PodSecurityAdmissionConfigurationTemplateExemptions{
+						Usernames:      nil,
+						RuntimeClasses: nil,
+						Namespaces:     nil,
+					},
+				},
+			},
+			wantAllowed: true,
+		},
+		{
+			testName: "Completely Valid Template Test With a Level Omitted",
+			template: &v3.PodSecurityAdmissionConfigurationTemplate{
+				Description: "a valid test template",
+				Configuration: v3.PodSecurityAdmissionConfigurationTemplateSpec{
+					Defaults: v3.PodSecurityAdmissionConfigurationTemplateDefaults{
+						Enforce:        "",
+						EnforceVersion: "v1.25",
+						Audit:          string(api.LevelBaseline),
+						AuditVersion:   "v1.25",
+						Warn:           string(api.LevelBaseline),
+						WarnVersion:    "v1.25",
+					},
+					Exemptions: v3.PodSecurityAdmissionConfigurationTemplateExemptions{
+						Usernames:      nil,
+						RuntimeClasses: nil,
+						Namespaces:     nil,
+					},
+				},
+			},
+			wantAllowed: true,
+		},
+		{
+			testName: "Completely Valid Template Test With a Version Omitted",
+			template: &v3.PodSecurityAdmissionConfigurationTemplate{
+				Description: "a valid test template",
+				Configuration: v3.PodSecurityAdmissionConfigurationTemplateSpec{
+					Defaults: v3.PodSecurityAdmissionConfigurationTemplateDefaults{
+						Enforce:        string(api.LevelBaseline),
+						EnforceVersion: "",
+						Audit:          string(api.LevelBaseline),
+						AuditVersion:   "v1.25",
+						Warn:           string(api.LevelBaseline),
+						WarnVersion:    "v1.25",
+					},
+					Exemptions: v3.PodSecurityAdmissionConfigurationTemplateExemptions{
+						Usernames:      nil,
+						RuntimeClasses: nil,
+						Namespaces:     nil,
+					},
+				},
+			},
+			wantAllowed: true,
+		},
+		{
 			testName: "Ensure a bad enforce level is caught",
 			template: &v3.PodSecurityAdmissionConfigurationTemplate{
 				Description: "a test template",
