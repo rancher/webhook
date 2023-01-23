@@ -130,7 +130,13 @@ platform:
   os: linux
   arch: arm
 
+clone:
+  disable: true
+
 steps:
+- name: clone
+  image: drone/git@sha256:1f1f49be1057cc0e6785f24fe37c3254a2265598bf08924329cc6d168a1495be
+
 - name: build
   image: rancher/dapper:v0.4.1
   commands:
