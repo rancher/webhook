@@ -7,7 +7,7 @@ global:
   cattle:
     systemDefaultRegistry: ""
     psp:
-      enabled: true #PSPs enablement should default to true
+      enabled: false #PSPs enablement should default to false for the webhook
   hostNetwork: false
 
 capi:
