@@ -1,32 +1,34 @@
-// Package namespace holds the Admit handler for webhook validation of requests modifying namespace objects
+// Package namespace holds the Admitters and Validator for webhook validation of requests modifying namespace objects.
 package namespace
 
 import (
-	"fmt"
-	"net/http"
-
 	"github.com/rancher/webhook/pkg/admission"
-	objectsv1 "github.com/rancher/webhook/pkg/generated/objects/core/v1"
-	"github.com/rancher/webhook/pkg/resources/common"
-	admissionv1 "k8s.io/api/admission/v1"
-	admv1 "k8s.io/api/admissionregistration/v1"
-	v1 "k8s.io/api/authorization/v1"
+	admissionv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
-	"k8s.io/utils/trace"
 )
+
+var projectsGVR = schema.GroupVersionResource{
+	Group:    "management.cattle.io",
+	Version:  "v3",
+	Resource: "projects",
+}
 
 // Validator validates the namespace admission request.
 type Validator struct {
-	admitter admitter
+	psaAdmitter              psaLabelAdmitter
+	projectNamespaceAdmitter projectNamespaceAdmitter
 }
 
 // NewValidator returns a new validator used for validation of namespace requests.
 func NewValidator(sar authorizationv1.SubjectAccessReviewInterface) *Validator {
 	return &Validator{
-		admitter: admitter{
+		psaAdmitter: psaLabelAdmitter{
+			sar: sar,
+		},
+		projectNamespaceAdmitter: projectNamespaceAdmitter{
 			sar: sar,
 		},
 	}
@@ -41,22 +43,22 @@ func (v *Validator) GVR() schema.GroupVersionResource {
 }
 
 // Operations returns list of operations handled by this validator.
-func (v *Validator) Operations() []admv1.OperationType {
-	return []admv1.OperationType{
-		admv1.Update,
-		admv1.Create,
+func (v *Validator) Operations() []admissionv1.OperationType {
+	return []admissionv1.OperationType{
+		admissionv1.Update,
+		admissionv1.Create,
 	}
 }
 
 // ValidatingWebhook returns the ValidatingWebhook used for this CRD.
-func (v *Validator) ValidatingWebhook(clientConfig admv1.WebhookClientConfig) []admv1.ValidatingWebhook {
+func (v *Validator) ValidatingWebhook(clientConfig admissionv1.WebhookClientConfig) []admissionv1.ValidatingWebhook {
 	// Note that namespaces are actually CLUSTER scoped
 
 	// standardWebhook validates all operations specified by (*Validator).Operations() other than the create operation on all namespaces.
-	standardWebhook := admission.NewDefaultValidatingWebhook(v, clientConfig, admv1.ClusterScope, []admv1.OperationType{admv1.Update})
+	standardWebhook := admission.NewDefaultValidatingWebhook(v, clientConfig, admissionv1.ClusterScope, []admissionv1.OperationType{admissionv1.Update})
 
 	// Default configuration for all create operations except those belonging to the kube-system namespace.
-	createWebhook := admission.NewDefaultValidatingWebhook(v, clientConfig, admv1.ClusterScope, []admv1.OperationType{admv1.Create})
+	createWebhook := admission.NewDefaultValidatingWebhook(v, clientConfig, admissionv1.ClusterScope, []admissionv1.OperationType{admissionv1.Create})
 	createWebhook.Name = admission.CreateWebhookName(v, "create-non-kubesystem")
 	createWebhook.NamespaceSelector = &metav1.LabelSelector{
 		MatchExpressions: []metav1.LabelSelectorRequirement{
@@ -70,7 +72,7 @@ func (v *Validator) ValidatingWebhook(clientConfig admv1.WebhookClientConfig) []
 
 	// kubeSystemOnlyWebhook is a separate webhook configuration that routes to this handler only if the namespace is equal to kube-system.
 	// This configuration differs from above because it allows create request to go through while the webhook is down if and only if the namespace is kube-system.
-	kubeSystemCreateWebhook := admission.NewDefaultValidatingWebhook(v, clientConfig, admv1.ClusterScope, []admv1.OperationType{admv1.Create})
+	kubeSystemCreateWebhook := admission.NewDefaultValidatingWebhook(v, clientConfig, admissionv1.ClusterScope, []admissionv1.OperationType{admissionv1.Create})
 	kubeSystemCreateWebhook.Name = admission.CreateWebhookName(v, "create-kubesystem-only")
 	kubeSystemCreateWebhook.NamespaceSelector = &metav1.LabelSelector{
 		MatchExpressions: []metav1.LabelSelectorRequirement{
@@ -81,83 +83,12 @@ func (v *Validator) ValidatingWebhook(clientConfig admv1.WebhookClientConfig) []
 			},
 		},
 	}
-	kubeSystemCreateWebhook.FailurePolicy = admission.Ptr(admv1.Ignore)
+	kubeSystemCreateWebhook.FailurePolicy = admission.Ptr(admissionv1.Ignore)
 
-	return []admv1.ValidatingWebhook{*standardWebhook, *createWebhook, *kubeSystemCreateWebhook}
+	return []admissionv1.ValidatingWebhook{*standardWebhook, *createWebhook, *kubeSystemCreateWebhook}
 }
 
+// Admitters returns the psaAdmitter and the projectNamespaceAdmitter for namespaces.
 func (v *Validator) Admitters() []admission.Admitter {
-	return []admission.Admitter{&v.admitter}
-}
-
-type admitter struct {
-	sar authorizationv1.SubjectAccessReviewInterface
-}
-
-// Admit is the entrypoint for the validator.
-// Admit will return an error if it is unable to process the request.
-func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
-	listTrace := trace.New("Namespace Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
-	defer listTrace.LogIfLong(admission.SlowTraceDuration)
-
-	response := &admissionv1.AdmissionResponse{}
-
-	// Is the request attempting to modify the special PSA labels (enforce, warn, audit)?
-	// If it isn't, we're done.
-	// If it is, we then need to check to see if they should be allowed.
-	switch request.Operation {
-	case admissionv1.Create:
-		ns, err := objectsv1.NamespaceFromRequest(&request.AdmissionRequest)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode namespace from request: %w", err)
-		}
-		if !common.IsCreatingPSAConfig(ns.Labels) {
-			response.Allowed = true
-			return response, nil
-		}
-	case admissionv1.Update:
-		oldns, ns, err := objectsv1.NamespaceOldAndNewFromRequest(&request.AdmissionRequest)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode namespace from request: %w", err)
-		}
-		if !common.IsUpdatingPSAConfig(oldns.Labels, ns.Labels) {
-			response.Allowed = true
-			return response, nil
-		}
-	}
-
-	extras := map[string]v1.ExtraValue{}
-	for k, v := range request.UserInfo.Extra {
-		extras[k] = v1.ExtraValue(v)
-	}
-
-	resp, err := a.sar.Create(request.Context, &v1.SubjectAccessReview{
-		Spec: v1.SubjectAccessReviewSpec{
-			ResourceAttributes: &v1.ResourceAttributes{
-				Verb:     "updatepsa",
-				Group:    "management.cattle.io",
-				Version:  "v3",
-				Resource: "projects",
-			},
-			User:   request.UserInfo.Username,
-			Groups: request.UserInfo.Groups,
-			UID:    request.UserInfo.UID,
-			Extra:  extras,
-		},
-	}, metav1.CreateOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("SAR request creation failed: %w", err)
-	}
-
-	if resp.Status.Allowed {
-		response.Allowed = true
-	} else {
-		response.Result = &metav1.Status{
-			Status:  "Failure",
-			Message: resp.Status.Reason,
-			Reason:  metav1.StatusReasonUnauthorized,
-			Code:    http.StatusForbidden,
-		}
-	}
-	return response, nil
+	return []admission.Admitter{&v.psaAdmitter, &v.projectNamespaceAdmitter}
 }
