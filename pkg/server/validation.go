@@ -15,6 +15,7 @@ import (
 	"github.com/rancher/webhook/pkg/resources/validation/globalrole"
 	"github.com/rancher/webhook/pkg/resources/validation/globalrolebinding"
 	"github.com/rancher/webhook/pkg/resources/validation/machineconfig"
+	nsHandler "github.com/rancher/webhook/pkg/resources/validation/namespace"
 	"github.com/rancher/webhook/pkg/resources/validation/projectroletemplatebinding"
 	"github.com/rancher/webhook/pkg/resources/validation/roletemplate"
 	"github.com/rancher/webhook/pkg/resources/validation/secret"
@@ -30,6 +31,9 @@ func Validation(clients *clients.Clients) (http.Handler, error) {
 	router.Kind("Cluster").Group(management.GroupName).Type(&v3.Cluster{}).Handle(cluster.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews()))
 	router.Kind("Cluster").Group(provisioning.GroupName).Type(&v1.Cluster{}).Handle(cluster.NewProvisioningClusterValidator(clients))
 	router.Group("rke-machine-config.cattle.io").Type(&unstructured.Unstructured{}).Handle(machineconfig.NewMachineConfigValidator())
+
+	namespaces := nsHandler.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews())
+	router.Kind("Namespace").Type(&k8sv1.Namespace{}).Handle(namespaces)
 
 	if clients.MultiClusterManagement {
 		crtbResolver := resolvers.NewCRTBRuleResolver(clients.Management.ClusterRoleTemplateBinding().Cache(), clients.RoleTemplateResolver)
