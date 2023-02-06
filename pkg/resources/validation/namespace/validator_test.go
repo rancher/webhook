@@ -1,387 +1,111 @@
-package namespace_test
+package namespace
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
 	"testing"
 
-	"github.com/rancher/webhook/pkg/admission"
-	"github.com/rancher/webhook/pkg/resources/validation"
-	"github.com/rancher/webhook/pkg/resources/validation/namespace"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	admissionv1 "k8s.io/api/admission/v1"
-	authenticationv1 "k8s.io/api/authentication/v1"
-	authrizationv1 "k8s.io/api/authorization/v1"
-	v1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/admissionregistration/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	k8fake "k8s.io/client-go/kubernetes/typed/authorization/v1/fake"
-	k8testing "k8s.io/client-go/testing"
 )
 
-const failSarUser = "nonadminuser"
-const allowSarUser = "adminuser"
-const sarErrorUser = "sarerroruser"
-
-type test struct {
-	name         string
-	userName     string
-	clusterName  string
-	operation    admissionv1.Operation
-	namespace    v1.Namespace
-	oldNamespace v1.Namespace
-	allowed      bool
-	wantErr      bool
+func TestGVR(t *testing.T) {
+	validator := NewValidator(nil)
+	gvr := validator.GVR()
+	assert.Equal(t, "v1", gvr.Version)
+	assert.Equal(t, "namespaces", gvr.Resource)
+	assert.Equal(t, "", gvr.Group)
 }
 
-func TestValidator_Admit(t *testing.T) {
+func TestOperations(t *testing.T) {
+	validator := NewValidator(nil)
+	operations := validator.Operations()
+	assert.Len(t, operations, 2)
+	assert.Contains(t, operations, v1.Update)
+	assert.Contains(t, operations, v1.Create)
+}
 
-	tests := []test{
-		{
-			name:        "Update namespace PSA for admin user-should be allowed",
-			userName:    allowSarUser,
-			clusterName: "validcluster",
-			operation:   admissionv1.Update,
-			namespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "anynamespace",
-					Labels: map[string]string{
-						validation.EnforceLabel: "baseline",
-					},
-				},
-			},
-			oldNamespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   "anynamespace",
-					Labels: map[string]string{},
-				},
-			},
-			wantErr: false,
-			allowed: true,
-		},
-		{
-			name:        "Update NON PSA for NON admin user-should be allowed",
-			userName:    failSarUser,
-			clusterName: "validcluster",
-			operation:   admissionv1.Update,
-			namespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "anynamespace",
-					Labels: map[string]string{
-						"someotherlabelkey":     "somevalue",
-						validation.EnforceLabel: "baseline",
-					},
-				},
-			},
-			oldNamespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "anynamespace",
-					Labels: map[string]string{
-						validation.EnforceLabel: "baseline",
-					},
-				},
-			},
-			wantErr: false,
-			allowed: true,
-		},
-		{
-			name:        "Update PSA for NON admin user-should not be allowed",
-			userName:    failSarUser,
-			clusterName: "validcluster",
-			operation:   admissionv1.Update,
-			namespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "anynamespace",
-					Labels: map[string]string{
-						validation.EnforceLabel: "baseline",
-					},
-				},
-			},
-			oldNamespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   "anynamespace",
-					Labels: map[string]string{},
-				},
-			},
-			wantErr: false,
-			allowed: false,
-		},
-		{
-			name:        "Delete update PSA for NON admin user-should not be allowed",
-			userName:    failSarUser,
-			clusterName: "validcluster",
-			operation:   admissionv1.Update,
-			namespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   "anynamespace",
-					Labels: map[string]string{},
-				},
-			},
-			oldNamespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "anynamespace",
-					Labels: map[string]string{
-						validation.EnforceLabel: "baseline",
-					},
-				},
-			},
-			wantErr: false,
-			allowed: false,
-		},
-		{
-			name:        "Delete update PSA for admin user should be allowed",
-			userName:    allowSarUser,
-			clusterName: "validcluster",
-			operation:   admissionv1.Update,
-			namespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   "anynamespace",
-					Labels: map[string]string{},
-				},
-			},
-			oldNamespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "anynamespace",
-					Labels: map[string]string{
-						validation.EnforceLabel: "baseline",
-					},
-				},
-			},
-			wantErr: false,
-			allowed: true,
-		},
-		{
-			name:        "Update multiple PSA for allowed user",
-			userName:    allowSarUser,
-			clusterName: "validcluster",
-			operation:   admissionv1.Update,
-			namespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "anynamespace",
-					Labels: map[string]string{
-						validation.EnforceLabel: "baseline",
-						validation.WarnLabel:    "baseline",
-						validation.AuditLabel:   "baseline",
-					},
-				},
-			},
-			oldNamespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   "anynamespace",
-					Labels: map[string]string{},
-				},
-			},
-			wantErr: false,
-			allowed: true,
-		},
-		{
-			name:        "Update multiple PSA and non PSA for allowed user",
-			userName:    allowSarUser,
-			clusterName: "validcluster",
-			operation:   admissionv1.Update,
-			namespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "anynamespace",
-					Labels: map[string]string{
-						validation.EnforceLabel:        "baseline",
-						validation.WarnLabel:           "baseline",
-						validation.AuditLabel:          "baseline",
-						validation.AuditVersionLabel:   "restricted",
-						validation.WarnVersionLabel:    "restricted",
-						validation.EnforceVersionLabel: "restricted",
-						"randomkey":                    "randomvalue",
-					},
-					Annotations: map[string]string{
-						"annotationkey": "annotationlabel",
-					},
-				},
-			},
-			oldNamespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   "anynamespace",
-					Labels: map[string]string{},
-				},
-			},
-			wantErr: false,
-			allowed: true,
-		},
-		{
-			name:        "Update multiple PSA and non PSA for non allowed user",
-			userName:    failSarUser,
-			clusterName: "validcluster",
-			operation:   admissionv1.Update,
-			namespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "anynamespace",
-					Labels: map[string]string{
-						validation.EnforceLabel: "baseline",
-						validation.WarnLabel:    "baseline",
-						validation.AuditLabel:   "baseline",
-						"randomkey":             "randomvalue",
-					},
-					Annotations: map[string]string{
-						"annotationkey": "annotationlabel",
-					},
-				},
-			},
-			oldNamespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   "anynamespace",
-					Labels: map[string]string{},
-				},
-			},
-			wantErr: false,
-			allowed: false,
-		},
-		{
-			name:        "Update things unrelated to PSA labels",
-			userName:    allowSarUser,
-			clusterName: "validcluster",
-			operation:   admissionv1.Update,
-			namespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "anynamespace",
-					Labels: map[string]string{
-						"randomkey": "randomvalue",
-					},
-					Annotations: map[string]string{
-						"annotationkey": "annotationlabel",
-					},
-					GenerateName: "abcde",
-				},
-			},
-			oldNamespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   "anynamespace",
-					Labels: map[string]string{},
-				},
-			},
-			wantErr: false,
-			allowed: true,
-		},
-		{
-			name:        "SAR create failed for update attempt",
-			userName:    sarErrorUser,
-			clusterName: "validcluster",
-			operation:   admissionv1.Update,
-			namespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "anynamespace",
-					Labels: map[string]string{
-						validation.EnforceLabel: "baseline",
-					},
-					GenerateName: "abcde",
-				},
-			},
-			oldNamespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   "anynamespace",
-					Labels: map[string]string{},
-				},
-			},
-			wantErr: true,
-			allowed: true,
-		},
-		{
-			name:        "Create namespace with PSA for admin user-should be allowed",
-			userName:    allowSarUser,
-			clusterName: "validcluster",
-			operation:   admissionv1.Create,
-			namespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "anynamespace",
-					Labels: map[string]string{
-						validation.EnforceLabel: "baseline",
-					},
-				},
-			},
-			wantErr: false,
-			allowed: true,
-		},
-		{
-			name:        "Create namespace with PSA for not-permitted user should not be allowed",
-			userName:    failSarUser,
-			clusterName: "validcluster",
-			operation:   admissionv1.Create,
-			namespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "anynamespace",
-					Labels: map[string]string{
-						validation.EnforceLabel: "baseline",
-					},
-				},
-			},
-			wantErr: false,
-			allowed: false,
-		},
-	}
-
-	k8Fake := &k8testing.Fake{}
-	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
-	validator := namespace.NewValidator(fakeSAR)
-
-	k8Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (handled bool, ret runtime.Object, err error) {
-		createAction := action.(k8testing.CreateActionImpl)
-		review := createAction.GetObject().(*authrizationv1.SubjectAccessReview)
-		spec := review.Spec
-
-		// simulate SAR not allowed
-		if spec.User == failSarUser {
-			review.Status.Allowed = false
-			review.Status.Reason = fmt.Sprintf("%s %s", "Can not update project PSA for:", spec.User)
-			return true, review, nil
-		} else if spec.User == sarErrorUser {
-			return true, nil, fmt.Errorf("SAR creation failed for user #{spec.User}")
+func TestAdmitters(t *testing.T) {
+	validator := NewValidator(nil)
+	admitters := validator.Admitters()
+	assert.Len(t, admitters, 2)
+	hasPSAAdmitter := false
+	hasProjectNamespaceAdmitter := false
+	for i := range admitters {
+		admitter := admitters[i]
+		_, ok := admitter.(*psaLabelAdmitter)
+		if ok {
+			hasPSAAdmitter = true
+			continue
 		}
-		review.Status.Allowed = true
-		return true, review, nil
-	})
+		_, ok = admitter.(*projectNamespaceAdmitter)
+		if ok {
+			hasProjectNamespaceAdmitter = true
+			continue
+		}
+	}
+	assert.True(t, hasPSAAdmitter, "admitters did not contain a PSA admitter")
+	assert.True(t, hasProjectNamespaceAdmitter, "admitters did not contain a projectNamespaceAdmitter")
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			request := createNamespaceRequest(t, &tt)
-			admitters := validator.Admitters()
-			assert.Len(t, admitters, 1)
-			resp, err := admitters[0].Admit(request)
-			assert.Equal(t, tt.wantErr, err != nil)
-			if !tt.wantErr {
-				assert.Equal(t, tt.allowed, resp.Allowed)
+func TestValidatingWebhook(t *testing.T) {
+	testURL := "test.cattle.io"
+	clientConfig := v1.WebhookClientConfig{
+		URL: &testURL,
+	}
+	wantURL := "test.cattle.io/namespaces"
+	validator := NewValidator(nil)
+	webhooks := validator.ValidatingWebhook(clientConfig)
+	assert.Len(t, webhooks, 3)
+	hasAllUpdateWebhook := false
+	hasCreateNonKubeSystemWebhook := false
+	hasCreateKubeSystemWebhook := false
+	for _, webhook := range webhooks {
+		// all webhooks should resolve to the same endpoint, have only 1 rule/operation, and be for the cluster scope
+		assert.Equal(t, wantURL, *webhook.ClientConfig.URL)
+		rules := webhook.Rules
+		assert.Len(t, rules, 1)
+		rule := rules[0]
+		operations := rule.Operations
+		assert.Len(t, operations, 1)
+		operation := operations[0]
+		assert.Equal(t, v1.ClusterScope, *rule.Scope)
+
+		assert.Contains(t, []v1.OperationType{v1.Create, v1.Update}, operation, "only expected webhooks for create and update")
+		if operation == v1.Update {
+			assert.False(t, hasAllUpdateWebhook, "had more than one webhook validating update calls, exepcted only one")
+			hasAllUpdateWebhook = true
+			assert.Nil(t, webhook.NamespaceSelector)
+			assert.Nil(t, webhook.ObjectSelector)
+			if webhook.FailurePolicy != nil {
+				// failure policy defaults to fail, but if we specify one it needs to be fail
+				assert.Equal(t, v1.Fail, *webhook.FailurePolicy)
 			}
-		})
-	}
-}
-
-func createNamespaceRequest(t *testing.T, s *test) *admission.Request {
-	t.Helper()
-	gvk := metav1.GroupVersionKind{Version: "v1", Kind: "Namespace"}
-	gvr := metav1.GroupVersionResource{Version: "v1", Resource: "namespace"}
-
-	req := &admission.Request{
-		AdmissionRequest: admissionv1.AdmissionRequest{
-			UID:             "",
-			Kind:            gvk,
-			Resource:        gvr,
-			RequestKind:     &gvk,
-			RequestResource: &gvr,
-			Name:            s.namespace.Name,
-			Operation:       s.operation,
-			UserInfo:        authenticationv1.UserInfo{Username: s.userName, UID: ""},
-			Object:          runtime.RawExtension{},
-			Options:         runtime.RawExtension{},
-		},
-		Context: context.Background(),
-	}
-	if s.operation == admissionv1.Update {
-		oldobj, err := json.Marshal(s.oldNamespace)
-		require.NoError(t, err, "Failed to marshal old Namespace while creating request")
-		req.OldObject = runtime.RawExtension{
-			Raw: oldobj,
+		} else {
+			assert.NotNil(t, webhook.NamespaceSelector)
+			matchExpressions := webhook.NamespaceSelector.MatchExpressions
+			assert.Len(t, matchExpressions, 1)
+			matchExpression := matchExpressions[0]
+			assert.Len(t, matchExpression.Values, 1)
+			assert.Equal(t, "kube-system", matchExpression.Values[0])
+			assert.Equal(t, corev1.LabelMetadataName, matchExpression.Key)
+			assert.Contains(t, []metav1.LabelSelectorOperator{metav1.LabelSelectorOpIn, metav1.LabelSelectorOpNotIn}, matchExpression.Operator)
+			if matchExpression.Operator == metav1.LabelSelectorOpIn {
+				assert.False(t, hasCreateKubeSystemWebhook, "had more than one webhook for creation on kube-system")
+				hasCreateKubeSystemWebhook = true
+				assert.NotNil(t, webhook.FailurePolicy)
+				assert.Equal(t, v1.Ignore, *webhook.FailurePolicy)
+			} else {
+				assert.False(t, hasCreateNonKubeSystemWebhook, "had more than one webhook for creation on kube-system")
+				hasCreateNonKubeSystemWebhook = true
+				if webhook.FailurePolicy != nil {
+					assert.Equal(t, v1.Fail, *webhook.FailurePolicy)
+				}
+			}
 		}
 	}
-	var err error
-	req.Object.Raw, err = json.Marshal(s.namespace)
-	require.NoError(t, err, "Failed to marshal Namespace while creating request")
-	return req
+
+	assert.True(t, hasAllUpdateWebhook, "was missing expected webhook which validates all namespace on update")
+	assert.True(t, hasCreateKubeSystemWebhook, "was missing expected webhook create on kube system namespace")
+	assert.True(t, hasCreateNonKubeSystemWebhook, "was missing expected webhook create on non-kube-system namespaces")
 }
