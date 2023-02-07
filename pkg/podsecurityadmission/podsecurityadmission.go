@@ -13,6 +13,7 @@ import (
 	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
 	psav1 "k8s.io/pod-security-admission/admission/api/v1"
 	psav1beta1 "k8s.io/pod-security-admission/admission/api/v1beta1"
+	"sigs.k8s.io/yaml"
 )
 
 var (
@@ -122,4 +123,27 @@ func GetClusterVersion(version string) (semver.Version, error) {
 		return parsedVersion, fmt.Errorf("%s is not valid semver: %w", version, err)
 	}
 	return parsedVersion, nil
+}
+
+// GenerateAdmissionConfigFile generates the admission configuration file for PodSecurity based on the provided PodSecurityAdmissionConfigurationTemplate.
+// The k8sVersion is required for determining the API version.
+func GenerateAdmissionConfigFile(configurationTemplate *apisv3.PodSecurityAdmissionConfigurationTemplate, k8sVersion string) ([]byte, error) {
+	plugin, err := GetPluginConfigFromTemplate(configurationTemplate, k8sVersion)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get plugin config from template: %w", err)
+	}
+	config := apiserverv1.AdmissionConfiguration{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: apiserverv1.SchemeGroupVersion.String(),
+			Kind:       "AdmissionConfiguration",
+		},
+		Plugins: []apiserverv1.AdmissionPluginConfiguration{
+			plugin,
+		},
+	}
+	parsed, err := yaml.Marshal(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal the generated admission configuration: %w", err)
+	}
+	return parsed, err
 }
