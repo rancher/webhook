@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
 
@@ -9,7 +10,10 @@ import (
 	"github.com/rancher/webhook/pkg/clients"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv1 "github.com/rancher/webhook/pkg/generated/objects/provisioning.cattle.io/v1"
+	psa "github.com/rancher/webhook/pkg/podsecurityadmission"
+	mutator "github.com/rancher/webhook/pkg/resources/mutation/cluster"
 	"github.com/rancher/webhook/pkg/resources/validation"
+	corev1controller "github.com/rancher/wrangler/pkg/generated/controllers/core/v1"
 	"github.com/rancher/wrangler/pkg/kv"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
@@ -32,17 +36,21 @@ var provisioningGVR = schema.GroupVersionResource{
 	Resource: "clusters",
 }
 
-// NewValidator returns a new validator for provisioning clusters
+// NewProvisioningClusterValidator returns a new validator for provisioning clusters
 func NewProvisioningClusterValidator(client *clients.Clients) *ProvisioningClusterValidator {
 	return &ProvisioningClusterValidator{
 		sar:               client.K8s.AuthorizationV1().SubjectAccessReviews(),
 		mgmtClusterClient: client.Management.Cluster(),
+		secretCache:       client.Core.Secret().Cache(),
+		psactCache:        client.Management.PodSecurityAdmissionConfigurationTemplate().Cache(),
 	}
 }
 
 type ProvisioningClusterValidator struct {
 	sar               authorizationv1.SubjectAccessReviewInterface
 	mgmtClusterClient v3.ClusterClient
+	secretCache       corev1controller.SecretCache
+	psactCache        v3.PodSecurityAdmissionConfigurationTemplateCache
 }
 
 // GVR returns the GroupVersionKind for this CRD.
@@ -52,7 +60,7 @@ func (p *ProvisioningClusterValidator) GVR() schema.GroupVersionResource {
 
 // Operations returns list of operations handled by this validator.
 func (p *ProvisioningClusterValidator) Operations() []admissionregistrationv1.OperationType {
-	return []admissionregistrationv1.OperationType{admissionregistrationv1.Update, admissionregistrationv1.Create}
+	return []admissionregistrationv1.OperationType{admissionregistrationv1.Update, admissionregistrationv1.Create, admissionregistrationv1.Delete}
 }
 
 // ValidatingWebhook returns the ValidatingWebhook used for this CRD.
@@ -69,19 +77,25 @@ func (p *ProvisioningClusterValidator) Admit(request *admission.Request) (*admis
 		return nil, err
 	}
 	response := &admissionv1.AdmissionResponse{}
-	if err := p.validateClusterName(request, response, cluster); err != nil || response.Result != nil {
-		return response, err
+	if request.Operation == admissionv1.Create || request.Operation == admissionv1.Update {
+		if err := p.validateClusterName(request, response, cluster); err != nil || response.Result != nil {
+			return response, err
+		}
+
+		if response.Result = validation.CheckCreatorID(request, oldCluster, cluster); response.Result != nil {
+			return response, nil
+		}
+
+		if response.Result = validateACEConfig(cluster); response.Result != nil {
+			return response, nil
+		}
+
+		if err := p.validateCloudCredentialAccess(request, response, oldCluster, cluster); err != nil || response.Result != nil {
+			return response, err
+		}
 	}
 
-	if response.Result = validation.CheckCreatorID(request, oldCluster, cluster); response.Result != nil {
-		return response, nil
-	}
-
-	if response.Result = validateACEConfig(cluster); response.Result != nil {
-		return response, nil
-	}
-
-	if err := p.validateCloudCredentialAccess(request, response, oldCluster, cluster); err != nil || response.Result != nil {
+	if err := p.validatePSACT(request, response, cluster); err != nil || response.Result != nil {
 		return response, err
 	}
 
@@ -161,6 +175,94 @@ func (p *ProvisioningClusterValidator) validateClusterName(request *admission.Re
 		}
 	}
 
+	return nil
+}
+
+// validatePSACT validate if the cluster and underlying secret are configured properly when PSACT is enabled or disabled
+func (p *ProvisioningClusterValidator) validatePSACT(request *admission.Request, response *admissionv1.AdmissionResponse, cluster *v1.Cluster) error {
+	if cluster.Name == "local" || cluster.Spec.RKEConfig == nil {
+		return nil
+	}
+
+	name := fmt.Sprintf(mutator.SecretName, cluster.Name)
+	mountPath := fmt.Sprintf(mutator.MountPath, mutator.GetRuntime(cluster.Spec.KubernetesVersion))
+	templateName := cluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName
+
+	switch request.Operation {
+	case admissionv1.Delete:
+		_, err := p.secretCache.Get(cluster.Namespace, name)
+		if err == nil {
+			return fmt.Errorf("[provisioning cluster validator] the secret %s still exists in the cluster", name)
+		}
+		if !apierrors.IsNotFound(err) {
+			return fmt.Errorf("[provisioning cluster validator] failed to validate if the secret exists: %w", err)
+		}
+		return nil
+	case admissionv1.Create, admissionv1.Update:
+		if cluster.DeletionTimestamp != nil {
+			return nil
+		}
+		if templateName == "" {
+			// validate that the secret does not exist
+			_, err := p.secretCache.Get(cluster.Namespace, name)
+			if err == nil {
+				return fmt.Errorf("[provisioning cluster validator] the secret %s still exists in the cluster", name)
+			}
+			if !apierrors.IsNotFound(err) {
+				return fmt.Errorf("[provisioning cluster validator] failed to validate if the secret exists: %w", err)
+			}
+			// validate that the machineSelectorFile for PSA does not exist
+			if mutator.MachineSelectorFileExists(mutator.MachineSelectorFileForPSA(name, mountPath), cluster) {
+				return fmt.Errorf("[provisioning cluster validator] machineSelectorFile for PSA should not be in the cluster Spec")
+			}
+			// validate that the flags are not set
+			args := mutator.GetKubeAPIServerArg(cluster)
+			if value, ok := args[mutator.KubeAPIAdmissionConfigOption]; ok && value == mountPath {
+				return fmt.Errorf("[provisioning cluster validator] admission-control-config-file under kube-apiserver-arg should not be set to %s", mountPath)
+			}
+		} else {
+			parsedVersion, err := psa.GetClusterVersion(cluster.Spec.KubernetesVersion)
+			if err != nil {
+				return fmt.Errorf("[provisioning cluster validator] failed to parse cluster version: %w", err)
+			}
+			if parsedRangeLessThan123(parsedVersion) {
+				response.Result = &metav1.Status{
+					Status:  "Failure",
+					Message: "PodSecurityAdmissionConfigurationTemplate(PSACT) is only supported in k8s version 1.23 and above",
+					Reason:  metav1.StatusReasonBadRequest,
+					Code:    http.StatusBadRequest,
+				}
+				return nil
+			}
+
+			// validate that the psact exists
+			if _, err := p.psactCache.Get(templateName); err != nil {
+				if apierrors.IsNotFound(err) {
+					response.Result = &metav1.Status{
+						Status:  "Failure",
+						Message: err.Error(),
+						Reason:  metav1.StatusReasonBadRequest,
+						Code:    http.StatusBadRequest,
+					}
+					return nil
+				}
+				return fmt.Errorf("[provisioning cluster validator] failed to get PodSecurityAdmissionConfigurationTemplate: %w", err)
+			}
+			// validate that the secret for PSA exists
+			if _, err = p.secretCache.Get(cluster.Namespace, name); err != nil {
+				return fmt.Errorf("[provisioning cluster validator] failed to get secret: %w", err)
+			}
+			// validate that the machineSelectorFile for PSA is set
+			if !mutator.MachineSelectorFileExists(mutator.MachineSelectorFileForPSA(name, mountPath), cluster) {
+				return fmt.Errorf("[provisioning cluster validator] machineSelectorFile for PSA should be in the cluster Spec")
+			}
+			// validate that the flags are set
+			args := mutator.GetKubeAPIServerArg(cluster)
+			if val, ok := args[mutator.KubeAPIAdmissionConfigOption]; !ok || val != mountPath {
+				return fmt.Errorf("[provisioning cluster validator] admission-control-config-file under kube-apiserver-arg should be set to %s", mountPath)
+			}
+		}
+	}
 	return nil
 }
 

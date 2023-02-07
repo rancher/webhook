@@ -272,3 +272,146 @@ func getApcRestrictedPSAv1beta1() v1.AdmissionPluginConfiguration {
 	plugin.Configuration.Raw = cBytes
 	return plugin
 }
+
+func TestAdmissionConfigFile(t *testing.T) {
+	tests := []struct {
+		testName   string
+		psact      *v3.PodSecurityAdmissionConfigurationTemplate
+		k8sVersion string
+		expectErr  bool
+		expected   string
+	}{
+		{
+			testName:   "restricted on k8s 1.25",
+			psact:      getPsactRestricted(),
+			k8sVersion: "v1.25.5+k3s1",
+			expectErr:  false,
+			expected: `apiVersion: apiserver.config.k8s.io/v1
+kind: AdmissionConfiguration
+plugins:
+- configuration:
+    apiVersion: pod-security.admission.config.k8s.io/v1
+    defaults:
+      audit: restricted
+      audit-version: latest
+      enforce: restricted
+      enforce-version: latest
+      warn: restricted
+      warn-version: latest
+    exemptions:
+      namespaces:
+      - ingress-nginx
+      - kube-system
+    kind: PodSecurityConfiguration
+  name: PodSecurity
+  path: ""
+`,
+		},
+		{
+			testName:   "restricted on k8s 1.24",
+			psact:      getPsactRestricted(),
+			k8sVersion: "v1.24.9+k3s1",
+			expectErr:  false,
+			expected: `apiVersion: apiserver.config.k8s.io/v1
+kind: AdmissionConfiguration
+plugins:
+- configuration:
+    apiVersion: pod-security.admission.config.k8s.io/v1beta1
+    defaults:
+      audit: restricted
+      audit-version: latest
+      enforce: restricted
+      enforce-version: latest
+      warn: restricted
+      warn-version: latest
+    exemptions:
+      namespaces:
+      - ingress-nginx
+      - kube-system
+    kind: PodSecurityConfiguration
+  name: PodSecurity
+  path: ""
+`,
+		},
+		{
+			testName:   "restricted on k8s 1.23",
+			psact:      getPsactRestricted(),
+			k8sVersion: "v1.23.5+k3s1",
+			expectErr:  false,
+			expected: `apiVersion: apiserver.config.k8s.io/v1
+kind: AdmissionConfiguration
+plugins:
+- configuration:
+    apiVersion: pod-security.admission.config.k8s.io/v1beta1
+    defaults:
+      audit: restricted
+      audit-version: latest
+      enforce: restricted
+      enforce-version: latest
+      warn: restricted
+      warn-version: latest
+    exemptions:
+      namespaces:
+      - ingress-nginx
+      - kube-system
+    kind: PodSecurityConfiguration
+  name: PodSecurity
+  path: ""
+`,
+		},
+		{
+			testName: "missing fields on k8s 1.25",
+			psact: &v3.PodSecurityAdmissionConfigurationTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "restricted",
+				},
+				Description: "The default restricted pod security admission configuration template",
+				Configuration: v3.PodSecurityAdmissionConfigurationTemplateSpec{
+					Defaults: v3.PodSecurityAdmissionConfigurationTemplateDefaults{
+						EnforceVersion: "latest",
+						Audit:          "restricted",
+						AuditVersion:   "latest",
+						Warn:           "restricted",
+						WarnVersion:    "latest",
+					},
+					Exemptions: v3.PodSecurityAdmissionConfigurationTemplateExemptions{
+						RuntimeClasses: []string{},
+						Namespaces:     []string{"ingress-nginx", "kube-system"},
+					},
+				},
+			},
+			k8sVersion: "v1.25.5+rke2r2",
+			expectErr:  false,
+			expected: `apiVersion: apiserver.config.k8s.io/v1
+kind: AdmissionConfiguration
+plugins:
+- configuration:
+    apiVersion: pod-security.admission.config.k8s.io/v1
+    defaults:
+      audit: restricted
+      audit-version: latest
+      enforce-version: latest
+      warn: restricted
+      warn-version: latest
+    exemptions:
+      namespaces:
+      - ingress-nginx
+      - kube-system
+    kind: PodSecurityConfiguration
+  name: PodSecurity
+  path: ""
+`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.testName, func(t *testing.T) {
+			output, err := GenerateAdmissionConfigFile(tt.psact, tt.k8sVersion)
+			if err != nil && !tt.expectErr {
+				t.Errorf("failed in the test case: [%v]: unexpected error [%v]", tt.testName, err)
+			}
+			if !reflect.DeepEqual(output, []byte(tt.expected)) {
+				t.Errorf("failed in the test case: [%v]; get: [%v], expected: [%v]", tt.testName, output, []byte(tt.expected))
+			}
+		})
+	}
+}
