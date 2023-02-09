@@ -36,7 +36,11 @@ type Validator struct {
 	provisioningClusterCache v1.ClusterCache
 }
 
-const byPodSecurityAdmissionConfigurationName = "podSecurityAdmissionConfigurationName"
+const (
+	byPodSecurityAdmissionConfigurationName = "podSecurityAdmissionConfigurationName"
+	rancherPrivilegedPSACTName              = "rancher-privileged"
+	rancherRestrictedPSACTName              = "rancher-restricted"
+)
 
 // NewValidator returns a validator for PodSecurityAdmissionConfigurationTemplates
 func NewValidator(managementCache v3.ClusterCache, provisioningCache v1.ClusterCache) *Validator {
@@ -107,7 +111,7 @@ func (v *Validator) Admit(req *admission.Request) (*admissionv1.AdmissionRespons
 		resp.Allowed = true
 	case admissionv1.Delete:
 		// do not allow the default 'restricted' and 'privileged' templates from being deleted
-		if oldTemplate.Name == "restricted" || oldTemplate.Name == "privileged" {
+		if oldTemplate.Name == rancherPrivilegedPSACTName || oldTemplate.Name == rancherRestrictedPSACTName {
 			resp.Result = &metav1.Status{
 				Status:  "Failure",
 				Message: fmt.Sprintf("Cannot delete built-in template '%s'", oldTemplate.Name),

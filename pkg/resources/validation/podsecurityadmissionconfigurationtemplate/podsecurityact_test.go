@@ -61,7 +61,7 @@ func TestAdmit(t *testing.T) {
 			template: &v3.PodSecurityAdmissionConfigurationTemplate{
 				TypeMeta: metav1.TypeMeta{},
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "restricted",
+					Name: rancherRestrictedPSACTName,
 				},
 				Description:   "",
 				Configuration: validConfiguration,
@@ -73,7 +73,7 @@ func TestAdmit(t *testing.T) {
 			template: &v3.PodSecurityAdmissionConfigurationTemplate{
 				TypeMeta: metav1.TypeMeta{},
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "privileged",
+					Name: rancherPrivilegedPSACTName,
 				},
 				Description:   "",
 				Configuration: validConfiguration,
