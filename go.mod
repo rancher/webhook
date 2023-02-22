@@ -40,7 +40,7 @@ require (
 	github.com/rancher/lasso/controller-runtime v0.0.0-20221206162308-10123d5719ad
 	github.com/rancher/rancher/pkg/apis v0.0.0-20230217141749-a91b7fc1b4f0
 	github.com/rancher/rke v1.4.3-rc6
-	github.com/rancher/wrangler v1.0.1-0.20230131212012-76adc44fca0c
+	github.com/rancher/wrangler v1.1.0
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.8.1
 	golang.org/x/exp v0.0.0-20230206171751-46f607a40771
