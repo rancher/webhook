@@ -8,7 +8,6 @@ import (
 
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/auth"
-	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/resolvers"
 	"github.com/rancher/webhook/pkg/resources/validation"
@@ -21,9 +20,9 @@ import (
 )
 
 // NewValidator will create a newly allocated Validator.
-func NewValidator(crtb v3.ClusterRoleTemplateBindingCache, defaultResolver k8validation.AuthorizationRuleResolver,
+func NewValidator(crtb *resolvers.CRTBRuleResolver, defaultResolver k8validation.AuthorizationRuleResolver,
 	roleTemplateResolver *auth.RoleTemplateResolver) *Validator {
-	resolver := resolvers.NewAggregateRuleResolver(defaultResolver, resolvers.NewCRTBRuleResolver(crtb, roleTemplateResolver))
+	resolver := resolvers.NewAggregateRuleResolver(defaultResolver, crtb)
 	return &Validator{
 		resolver:             resolver,
 		roleTemplateResolver: roleTemplateResolver,

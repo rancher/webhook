@@ -8,6 +8,7 @@ import (
 	"github.com/rancher/rancher/pkg/apis/provisioning.cattle.io"
 	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/webhook/pkg/clients"
+	"github.com/rancher/webhook/pkg/resolvers"
 	"github.com/rancher/webhook/pkg/resources/validation/cluster"
 	"github.com/rancher/webhook/pkg/resources/validation/clusterroletemplatebinding"
 	"github.com/rancher/webhook/pkg/resources/validation/feature"
@@ -29,12 +30,12 @@ func Validation(clients *clients.Clients) (http.Handler, error) {
 	router.Group("rke-machine-config.cattle.io").Type(&unstructured.Unstructured{}).Handle(machineconfig.NewMachineConfigValidator())
 
 	if clients.MultiClusterManagement {
+		crtbResolver := resolvers.NewCRTBRuleResolver(clients.Management.ClusterRoleTemplateBinding().Cache(), clients.RoleTemplateResolver)
+		prtbResolver := resolvers.NewPRTBRuleResolver(clients.Management.ProjectRoleTemplateBinding().Cache(), clients.RoleTemplateResolver)
 		globalRoleBindings := globalrolebinding.NewValidator(clients.Management.GlobalRole().Cache(), clients.DefaultResolver)
 		globalRoles := globalrole.NewValidator(clients.DefaultResolver)
-		prtbs := projectroletemplatebinding.NewValidator(clients.Management.ProjectRoleTemplateBinding().Cache(),
-			clients.Management.ClusterRoleTemplateBinding().Cache(), clients.DefaultResolver, clients.RoleTemplateResolver)
-		crtbs := clusterroletemplatebinding.NewValidator(clients.Management.ClusterRoleTemplateBinding().Cache(),
-			clients.DefaultResolver, clients.RoleTemplateResolver)
+		prtbs := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver)
+		crtbs := clusterroletemplatebinding.NewValidator(crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver)
 		roleTemplates := roletemplate.NewValidator(clients.DefaultResolver, clients.RoleTemplateResolver, clients.K8s.AuthorizationV1().SubjectAccessReviews())
 
 		router.Kind("RoleTemplate").Group(management.GroupName).Type(&v3.RoleTemplate{}).Handle(roleTemplates)

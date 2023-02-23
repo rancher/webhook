@@ -9,7 +9,6 @@ import (
 
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/auth"
-	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/resolvers"
 	"github.com/rancher/webhook/pkg/resources/validation"
@@ -22,10 +21,10 @@ import (
 )
 
 // NewValidator returns a new validator used for validation PRTB.
-func NewValidator(prtb v3.ProjectRoleTemplateBindingCache, crtb v3.ClusterRoleTemplateBindingCache,
+func NewValidator(prtb *resolvers.PRTBRuleResolver, crtb *resolvers.CRTBRuleResolver,
 	defaultResolver k8validation.AuthorizationRuleResolver, roleTemplateResolver *auth.RoleTemplateResolver) *Validator {
-	clusterResolver := resolvers.NewAggregateRuleResolver(defaultResolver, resolvers.NewCRTBRuleResolver(crtb, roleTemplateResolver))
-	projectResolver := resolvers.NewAggregateRuleResolver(defaultResolver, resolvers.NewPRTBRuleResolver(prtb, roleTemplateResolver))
+	clusterResolver := resolvers.NewAggregateRuleResolver(defaultResolver, crtb)
+	projectResolver := resolvers.NewAggregateRuleResolver(defaultResolver, prtb)
 	return &Validator{
 		clusterResolver:      clusterResolver,
 		projectResolver:      projectResolver,
