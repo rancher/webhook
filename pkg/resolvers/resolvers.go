@@ -53,3 +53,13 @@ func visitRules(source fmt.Stringer, rules []rbacv1.PolicyRule, err error, visit
 	}
 	return true
 }
+
+// GetUserKey creates a indexer key based on the userName, and namespace of an object.
+func GetUserKey(userName, namespace string) string {
+	return fmt.Sprintf("user:%s-%s", userName, namespace)
+}
+
+// GetGroupKey creates a indexer key based on the groupName, and namespace of an object.
+func GetGroupKey(groupName, namespace string) string {
+	return fmt.Sprintf("group:%s-%s", groupName, namespace)
+}
