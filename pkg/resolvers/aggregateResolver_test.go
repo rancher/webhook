@@ -1,4 +1,4 @@
-package resolvers_test
+package resolvers
 
 import (
 	"fmt"
@@ -6,7 +6,6 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/rancher/webhook/pkg/fakes"
-	"github.com/rancher/webhook/pkg/resolvers"
 	"github.com/stretchr/testify/suite"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apiserver/pkg/authentication/user"
@@ -145,7 +144,7 @@ func (a *AggregateResolverSuite) TestAggregateRuleResolverGetRules() {
 	for _, tt := range tests {
 		a.Run(tt.name, func() {
 			resolverList, expectedRules := tt.resolvers(a.T())
-			agg := resolvers.NewAggregateRuleResolver(resolverList...)
+			agg := NewAggregateRuleResolver(resolverList...)
 			gotRules, err := agg.RulesFor(tt.user, tt.namespace)
 			if tt.wantErr {
 				a.Errorf(err, "AggregateRuleResolver.RulesFor() error = %v, wantErr %v", err, tt.wantErr)

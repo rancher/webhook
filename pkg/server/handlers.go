@@ -3,6 +3,7 @@ package server
 import (
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/clients"
+	"github.com/rancher/webhook/pkg/resolvers"
 	mutationCluster "github.com/rancher/webhook/pkg/resources/mutation/cluster"
 	"github.com/rancher/webhook/pkg/resources/mutation/fleetworkspace"
 	"github.com/rancher/webhook/pkg/resources/mutation/machineconfigs"
@@ -30,13 +31,13 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 	}
 
 	if clients.MultiClusterManagement {
+		crtbResolver := resolvers.NewCRTBRuleResolver(clients.Management.ClusterRoleTemplateBinding().Cache(), clients.RoleTemplateResolver)
+		prtbResolver := resolvers.NewPRTBRuleResolver(clients.Management.ProjectRoleTemplateBinding().Cache(), clients.RoleTemplateResolver)
 		psact := podsecurityadmissionconfigurationtemplate.NewValidator(clients.Management.Cluster().Cache(), clients.Provisioning.Cluster().Cache())
 		globalRoles := globalrole.NewValidator(clients.DefaultResolver)
 		globalRoleBindings := globalrolebinding.NewValidator(clients.Management.GlobalRole().Cache(), clients.DefaultResolver)
-		prtbs := projectroletemplatebinding.NewValidator(clients.Management.ProjectRoleTemplateBinding().Cache(),
-			clients.Management.ClusterRoleTemplateBinding().Cache(), clients.DefaultResolver, clients.RoleTemplateResolver)
-		crtbs := clusterroletemplatebinding.NewValidator(clients.Management.ClusterRoleTemplateBinding().Cache(),
-			clients.DefaultResolver, clients.RoleTemplateResolver)
+		prtbs := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver)
+		crtbs := clusterroletemplatebinding.NewValidator(crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver)
 		roleTemplates := roletemplate.NewValidator(clients.DefaultResolver, clients.RoleTemplateResolver, clients.K8s.AuthorizationV1().SubjectAccessReviews())
 
 		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates)

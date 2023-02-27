@@ -1,4 +1,4 @@
-package resolvers_test
+package resolvers
 
 import (
 	"encoding/json"
@@ -12,7 +12,11 @@ import (
 
 var errNotFound = errors.New("notFound")
 
-const invalidName = "invalidName"
+const (
+	invalidName = "invalidName"
+	adminGroup  = "adminGroup"
+	authGroup   = "auth://group"
+)
 
 type Rules []rbacv1.PolicyRule
 
@@ -46,8 +50,21 @@ func (r Rules) Equal(r2 Rules) bool {
 	}
 	return true
 }
-func NewUserInfo(username string) *user.DefaultInfo {
+func NewUserInfo(username string, groups ...string) *user.DefaultInfo {
 	return &user.DefaultInfo{
-		Name: username,
+		Name:   username,
+		Groups: groups,
 	}
+}
+
+// copySlices copies multiple rule list into one large list.
+// this is used instead of append so that the original list are not modified.
+func copySlices(slices ...[]rbacv1.PolicyRule) []rbacv1.PolicyRule {
+	ret := []rbacv1.PolicyRule{}
+	for _, slice := range slices {
+		for _, rule := range slice {
+			ret = append(ret, rule)
+		}
+	}
+	return ret
 }

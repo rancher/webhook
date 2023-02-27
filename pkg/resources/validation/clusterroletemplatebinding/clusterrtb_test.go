@@ -11,6 +11,7 @@ import (
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
 	"github.com/rancher/webhook/pkg/fakes"
+	"github.com/rancher/webhook/pkg/resolvers"
 	"github.com/rancher/webhook/pkg/resources/validation/clusterroletemplatebinding"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -136,15 +137,17 @@ func (c *ClusterRoleTemplateBindingSuite) Test_PrivilegeEscalation() {
 	clusterRoleCache := fakes.NewMockClusterRoleCache(ctrl)
 	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
 	crtbCache := fakes.NewMockClusterRoleTemplateBindingCache(ctrl)
-	crtbCache.EXPECT().List(newDefaultCRTB().ClusterName, gomock.Any()).Return([]*apisv3.ClusterRoleTemplateBinding{
+	crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
+	crtbCache.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(crtbUser, newDefaultCRTB().ClusterName)).Return([]*apisv3.ClusterRoleTemplateBinding{
 		{
 			UserName:         crtbUser,
 			RoleTemplateName: c.adminRT.Name,
 		},
 	}, nil).AnyTimes()
-	validator := clusterroletemplatebinding.NewValidator(crtbCache, resolver,
-		roleResolver,
-	)
+	crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
+	crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
+	validator := clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver)
 	type args struct {
 		oldCRTB  func() *apisv3.ClusterRoleTemplateBinding
 		newCRTB  func() *apisv3.ClusterRoleTemplateBinding
@@ -275,11 +278,11 @@ func (c *ClusterRoleTemplateBindingSuite) Test_UpdateValidation() {
 	clusterRoleCache := fakes.NewMockClusterRoleCache(ctrl)
 	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
 	crtbCache := fakes.NewMockClusterRoleTemplateBindingCache(ctrl)
-	crtbCache.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
+	crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
-	validator := clusterroletemplatebinding.NewValidator(crtbCache, resolver,
-		roleResolver,
-	)
+	crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
+	validator := clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver)
 	type args struct {
 		oldCRTB  func() *apisv3.ClusterRoleTemplateBinding
 		newCRTB  func() *apisv3.ClusterRoleTemplateBinding
@@ -573,11 +576,11 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 	clusterRoleCache := fakes.NewMockClusterRoleCache(ctrl)
 	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
 	crtbCache := fakes.NewMockClusterRoleTemplateBindingCache(ctrl)
-	crtbCache.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
+	crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
-	validator := clusterroletemplatebinding.NewValidator(crtbCache, resolver,
-		roleResolver,
-	)
+	crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
+	validator := clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver)
 	type args struct {
 		oldCRTB  func() *apisv3.ClusterRoleTemplateBinding
 		newCRTB  func() *apisv3.ClusterRoleTemplateBinding
