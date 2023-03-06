@@ -3,6 +3,7 @@ package cluster
 import (
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -106,6 +107,14 @@ func (m *ProvisioningClusterMutator) Admit(request *admission.Request) (*admissi
 		return nil, err
 	}
 
+	// Re-marshal the cluster for generating the JSON patch. If the webhook's provisioning cluster CRD is out of date, the
+	// patch will unintentionally drop new (unknown) fields. This ensures the patch is generated based solely on the
+	// patches we expect.
+	clusterJSON, err := json.Marshal(cluster)
+	if err != nil {
+		return nil, err
+	}
+
 	if request.Operation == admissionv1.Create {
 		// Set Annotation on the cluster
 		annotations := cluster.GetAnnotations()
@@ -125,7 +134,7 @@ func (m *ProvisioningClusterMutator) Admit(request *admission.Request) (*admissi
 	}
 
 	response.Allowed = true
-	if err = patch.CreatePatch(request.Object.Raw, cluster, response); err != nil {
+	if err = patch.CreatePatch(clusterJSON, cluster, response); err != nil {
 		return nil, fmt.Errorf("failed to create patch: %w", err)
 	}
 	return response, nil
