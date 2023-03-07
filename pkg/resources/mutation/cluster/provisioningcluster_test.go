@@ -158,8 +158,8 @@ func Test_AddMachineSelectorFile(t *testing.T) {
 		},
 		{
 			name:     "cluster that has different MachineSelectorFiles",
-			file:     machineSelectorFile1(),
-			cluster:  clusterWithMachineSelectorFile2(),
+			file:     machineSelectorFile2(),
+			cluster:  clusterWithMachineSelectorFile1(),
 			expected: clusterWithMachineSelectorFile1And2(),
 		},
 	}
@@ -177,39 +177,51 @@ func Test_AddMachineSelectorFile(t *testing.T) {
 
 func Test_DropMachineSelectorFile(t *testing.T) {
 	tests := []struct {
-		name     string
-		file     rkev1.RKEProvisioningFiles
-		cluster  *v1.Cluster
-		expected *v1.Cluster
+		name             string
+		fileToDrop       rkev1.RKEProvisioningFiles
+		cluster          *v1.Cluster
+		expected         *v1.Cluster
+		ignoreValueCheck bool
 	}{
 		{
-			name:     "cluster that does not have MachineSelectorFiles",
-			file:     machineSelectorFile1(),
-			cluster:  clusterWithoutMachineSelectorFile(),
-			expected: clusterWithoutMachineSelectorFile(),
+			name:             "cluster that does not have MachineSelectorFiles",
+			fileToDrop:       machineSelectorFile1(),
+			cluster:          clusterWithoutMachineSelectorFile(),
+			expected:         clusterWithoutMachineSelectorFile(),
+			ignoreValueCheck: false,
 		},
 		{
-			name:     "cluster that has the same MachineSelectorFiles",
-			file:     machineSelectorFile1(),
-			cluster:  clusterWithMachineSelectorFile1(),
-			expected: clusterWithoutMachineSelectorFile(),
+			name:             "cluster that has the same MachineSelectorFiles",
+			fileToDrop:       machineSelectorFile1(),
+			cluster:          clusterWithMachineSelectorFile1(),
+			expected:         clusterWithoutMachineSelectorFile(),
+			ignoreValueCheck: false,
 		},
 		{
-			name:     "cluster that has different MachineSelectorFiles",
-			file:     machineSelectorFile1(),
-			cluster:  clusterWithMachineSelectorFile2(),
-			expected: clusterWithMachineSelectorFile2(),
+			name:             "cluster that has different MachineSelectorFiles",
+			fileToDrop:       machineSelectorFile1(),
+			cluster:          clusterWithMachineSelectorFile2(),
+			expected:         clusterWithMachineSelectorFile2(),
+			ignoreValueCheck: false,
 		},
 		{
-			name:     "cluster that has multiple MachineSelectorFiles",
-			file:     machineSelectorFile1(),
-			cluster:  clusterWithMachineSelectorFile1And2(),
-			expected: clusterWithMachineSelectorFile2(),
+			name:             "cluster that has multiple MachineSelectorFiles - ignore value check",
+			fileToDrop:       machineSelectorFile1(),
+			cluster:          clusterWithMachineSelectorFile1And2And3(),
+			expected:         clusterWithMachineSelectorFile1And2(),
+			ignoreValueCheck: true,
+		},
+		{
+			name:             "cluster that has multiple MachineSelectorFiles - enforce value check",
+			fileToDrop:       machineSelectorFile1(),
+			cluster:          clusterWithMachineSelectorFile1And2And3(),
+			expected:         clusterWithMachineSelectorFile2And3(),
+			ignoreValueCheck: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dropMachineSelectorFile(tt.file, tt.cluster)
+			dropMachineSelectorFile(tt.fileToDrop, tt.cluster, tt.ignoreValueCheck)
 			got := tt.cluster.Spec.RKEConfig.MachineSelectorFiles
 			expected := tt.expected.Spec.RKEConfig.MachineSelectorFiles
 			if !equality.Semantic.DeepEqual(got, expected) {
@@ -221,39 +233,51 @@ func Test_DropMachineSelectorFile(t *testing.T) {
 
 func Test_MachineSelectorFileExists(t *testing.T) {
 	tests := []struct {
-		name     string
-		file     rkev1.RKEProvisioningFiles
-		cluster  *v1.Cluster
-		expected bool
+		name             string
+		file             rkev1.RKEProvisioningFiles
+		cluster          *v1.Cluster
+		ignoreValueCheck bool
+		expected         bool
 	}{
 		{
-			name:     "cluster that does not have MachineSelectorFiles",
-			file:     machineSelectorFile1(),
-			cluster:  clusterWithoutMachineSelectorFile(),
-			expected: false,
+			name:             "cluster that does not have MachineSelectorFiles",
+			file:             machineSelectorFile1(),
+			cluster:          clusterWithoutMachineSelectorFile(),
+			ignoreValueCheck: false,
+			expected:         false,
 		},
 		{
-			name:     "cluster that has the same MachineSelectorFiles",
-			file:     machineSelectorFile1(),
-			cluster:  clusterWithMachineSelectorFile1(),
-			expected: true,
+			name:             "cluster that has the same MachineSelectorFiles",
+			file:             machineSelectorFile1(),
+			cluster:          clusterWithMachineSelectorFile1(),
+			ignoreValueCheck: false,
+			expected:         true,
 		},
 		{
-			name:     "cluster that has different MachineSelectorFiles",
-			file:     machineSelectorFile1(),
-			cluster:  clusterWithMachineSelectorFile2(),
-			expected: false,
+			name:             "cluster that has different MachineSelectorFiles",
+			file:             machineSelectorFile1(),
+			cluster:          clusterWithMachineSelectorFile2(),
+			ignoreValueCheck: false,
+			expected:         false,
 		},
 		{
-			name:     "cluster that has multiple MachineSelectorFiles",
-			file:     machineSelectorFile1(),
-			cluster:  clusterWithMachineSelectorFile1And2(),
-			expected: true,
+			name:             "cluster that has multiple MachineSelectorFiles - ignore value check",
+			file:             machineSelectorFile3(),
+			cluster:          clusterWithMachineSelectorFile1And2(),
+			ignoreValueCheck: true,
+			expected:         true,
+		},
+		{
+			name:             "cluster that has multiple MachineSelectorFiles - enforce value check",
+			file:             machineSelectorFile3(),
+			cluster:          clusterWithMachineSelectorFile1And2(),
+			ignoreValueCheck: false,
+			expected:         false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := MachineSelectorFileExists(tt.file, tt.cluster)
+			result := MachineSelectorFileExists(tt.file, tt.cluster, tt.ignoreValueCheck)
 			if !equality.Semantic.DeepEqual(result, tt.expected) {
 				t.Errorf("got: %v, expected: %v", result, tt.expected)
 			}
@@ -298,6 +322,86 @@ func Test_GetRuntime(t *testing.T) {
 	}
 }
 
+func Test_cleanupExpectedValue(t *testing.T) {
+	tests := []struct {
+		name      string
+		inputFile rkev1.RKEProvisioningFiles
+		expected  rkev1.RKEProvisioningFiles
+	}{
+		{
+			name: "file with values for the ExpectedValue field",
+			inputFile: rkev1.RKEProvisioningFiles{
+				MachineLabelSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						controlPlaneRoleLabel: "true",
+					},
+				},
+				FileSources: []rkev1.ProvisioningFileSource{
+					{
+						Secret: rkev1.K8sObjectFileSource{
+							Name: "foo",
+							Items: []rkev1.KeyToPath{
+								{
+									Key:  "key1",
+									Path: "/etc/rke2/path1",
+									Hash: "expected-value-for-file1",
+								},
+							},
+						},
+						ConfigMap: rkev1.K8sObjectFileSource{
+							Name: "bar",
+							Items: []rkev1.KeyToPath{
+								{
+									Key:  "key2",
+									Path: "/etc/rke2/path2",
+									Hash: "expected-value2",
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: rkev1.RKEProvisioningFiles{
+				MachineLabelSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						controlPlaneRoleLabel: "true",
+					},
+				},
+				FileSources: []rkev1.ProvisioningFileSource{
+					{
+						Secret: rkev1.K8sObjectFileSource{
+							Name: "foo",
+							Items: []rkev1.KeyToPath{
+								{
+									Key:  "key1",
+									Path: "/etc/rke2/path1",
+								},
+							},
+						},
+						ConfigMap: rkev1.K8sObjectFileSource{
+							Name: "bar",
+							Items: []rkev1.KeyToPath{
+								{
+									Key:  "key2",
+									Path: "/etc/rke2/path2",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cleanupHash(&tt.inputFile)
+			if !equality.Semantic.DeepEqual(tt.inputFile, tt.expected) {
+				t.Errorf("got: %v, expected: %v", tt.inputFile, tt.expected)
+			}
+		})
+	}
+}
+
 func clusterWithoutKubeAPIServerArg() *v1.Cluster {
 	return &v1.Cluster{
 		Spec: v1.ClusterSpec{
@@ -334,6 +438,12 @@ func clusterWithKubeAPIServerArg2() *v1.Cluster {
 	arg = append(arg, "foo3=bar3=baz3")
 	cluster.Spec.RKEConfig.MachineGlobalConfig.Data["kube-apiserver-arg"] = arg
 	return cluster
+}
+
+func machineSelectorFile3() rkev1.RKEProvisioningFiles {
+	file := machineSelectorFile1()
+	file.FileSources[0].Secret.Items[0].Hash = "expected-value-for-file-3"
+	return file
 }
 
 func machineSelectorFile2() rkev1.RKEProvisioningFiles {
@@ -377,6 +487,7 @@ func machineSelectorFile1() rkev1.RKEProvisioningFiles {
 							Key:         "key1",
 							Path:        "/etc/rke2/path1",
 							Permissions: "",
+							Hash:        "expected-value-for-file1",
 						},
 					},
 					DefaultPermissions: "",
@@ -400,20 +511,52 @@ func clusterWithMachineSelectorFile1() *v1.Cluster {
 	}
 }
 
-func clusterWithMachineSelectorFile1And2() *v1.Cluster {
+func clusterWithMachineSelectorFile1And2And3() *v1.Cluster {
 	return &v1.Cluster{
 		Spec: v1.ClusterSpec{
 			RKEConfig: &v1.RKEConfig{
 				RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
 					MachineSelectorFiles: []rkev1.RKEProvisioningFiles{
-						machineSelectorFile2(),
 						machineSelectorFile1(),
+						machineSelectorFile2(),
+						machineSelectorFile3(),
 					},
 				},
 			},
 		},
 	}
 }
+
+func clusterWithMachineSelectorFile2And3() *v1.Cluster {
+	return &v1.Cluster{
+		Spec: v1.ClusterSpec{
+			RKEConfig: &v1.RKEConfig{
+				RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
+					MachineSelectorFiles: []rkev1.RKEProvisioningFiles{
+						machineSelectorFile2(),
+						machineSelectorFile3(),
+					},
+				},
+			},
+		},
+	}
+}
+
+func clusterWithMachineSelectorFile1And2() *v1.Cluster {
+	return &v1.Cluster{
+		Spec: v1.ClusterSpec{
+			RKEConfig: &v1.RKEConfig{
+				RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
+					MachineSelectorFiles: []rkev1.RKEProvisioningFiles{
+						machineSelectorFile1(),
+						machineSelectorFile2(),
+					},
+				},
+			},
+		},
+	}
+}
+
 func clusterWithMachineSelectorFile2() *v1.Cluster {
 	return &v1.Cluster{
 		Spec: v1.ClusterSpec{

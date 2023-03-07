@@ -1,6 +1,8 @@
 package cluster
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"reflect"
 	"strings"
@@ -34,12 +36,13 @@ const (
 	KubeAPIAdmissionConfigOption = "admission-control-config-file"
 	// SecretName is the naming pattern of the secret which contains the admission control configuration file
 	SecretName = "%s-admission-configuration-psact"
+	// SecretKey is the key of the item holding the admission control configuration file in the secret
+	SecretKey = "admission-config-psact"
 	// MountPath is where the admission control configuration file will be mounted in the control plane nodes
 	MountPath = "/etc/rancher/%s/config/rancher-psact.yaml"
 
 	controlPlaneRoleLabel = "rke.cattle.io/control-plane-role"
 	secretAnnotation      = "rke.cattle.io/object-authorized-for-clusters"
-	secretKey             = "admission-config-psact"
 	runtimeK3S            = "k3s"
 	runtimeRKE2           = "rke2"
 	runtimeRKE            = "rke"
@@ -164,7 +167,7 @@ func (m *ProvisioningClusterMutator) handlePSACT(request *admission.Request, clu
 				return nil, fmt.Errorf("[provisioning cluster mutator] failed to delete the secret: %w", err)
 			}
 			// drop relevant fields if they exist in the cluster
-			dropMachineSelectorFile(MachineSelectorFileForPSA(secretName, mountPath), cluster)
+			dropMachineSelectorFile(MachineSelectorFileForPSA(secretName, mountPath, ""), cluster, true)
 			args := GetKubeAPIServerArg(cluster)
 			if args[KubeAPIAdmissionConfigOption] == mountPath {
 				delete(args, KubeAPIAdmissionConfigOption)
@@ -187,14 +190,16 @@ func (m *ProvisioningClusterMutator) handlePSACT(request *admission.Request, clu
 				secretAnnotation: cluster.Name,
 			}
 			data := map[string][]byte{
-				secretKey: fileContent,
+				SecretKey: fileContent,
 			}
 			err = m.ensureSecret(cluster.Namespace, secretName, data, anno)
 			if err != nil {
 				return nil, fmt.Errorf("[provisioning cluster mutator] failed to create or update the secret for the admission configuration file: %w", err)
 			}
-			// set relevant fields in the cluster
-			addMachineSelectorFile(MachineSelectorFileForPSA(secretName, mountPath), cluster)
+			// drop then set relevant fields if they exist in the cluster
+			dropMachineSelectorFile(MachineSelectorFileForPSA(secretName, mountPath, ""), cluster, true)
+			hash := sha256.Sum256(fileContent)
+			addMachineSelectorFile(MachineSelectorFileForPSA(secretName, mountPath, base64.StdEncoding.EncodeToString(hash[:])), cluster)
 			args := GetKubeAPIServerArg(cluster)
 			args[KubeAPIAdmissionConfigOption] = mountPath
 			setKubeAPIServerArg(args, cluster)
@@ -277,7 +282,7 @@ func setKubeAPIServerArg(arg map[string]string, cluster *v1.Cluster) {
 
 // MachineSelectorFileForPSA generates an RKEProvisioningFiles that mounts the secret which contains
 // the generated admission configuration file to the control plane node
-func MachineSelectorFileForPSA(secretName, mountPath string) rkev1.RKEProvisioningFiles {
+func MachineSelectorFileForPSA(secretName, mountPath, hash string) rkev1.RKEProvisioningFiles {
 	return rkev1.RKEProvisioningFiles{
 		MachineLabelSelector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
@@ -290,8 +295,9 @@ func MachineSelectorFileForPSA(secretName, mountPath string) rkev1.RKEProvisioni
 					Name: secretName,
 					Items: []rkev1.KeyToPath{
 						{
-							Key:  secretKey,
+							Key:  SecretKey,
 							Path: mountPath,
+							Hash: hash,
 						},
 					},
 				},
@@ -312,11 +318,16 @@ func addMachineSelectorFile(file rkev1.RKEProvisioningFiles, cluster *v1.Cluster
 }
 
 // dropMachineSelectorFile removes the provided RKEProvisioningFiles from the cluster if it is found in the cluster.
-func dropMachineSelectorFile(file rkev1.RKEProvisioningFiles, cluster *v1.Cluster) {
+func dropMachineSelectorFile(file rkev1.RKEProvisioningFiles, cluster *v1.Cluster, ignoreValueCheck bool) {
 	source := cluster.Spec.RKEConfig.MachineSelectorFiles
 	// traverse the slice backward for faster lookup because the target is usually the last item in the slice
 	for i := len(source) - 1; i >= 0; i-- {
-		if equality.Semantic.DeepEqual(file, source[i]) {
+		fromCluster := source[i].DeepCopy()
+		if ignoreValueCheck {
+			cleanupHash(fromCluster)
+			cleanupHash(&file)
+		}
+		if equality.Semantic.DeepEqual(&file, fromCluster) {
 			if len(source) == 1 {
 				cluster.Spec.RKEConfig.MachineSelectorFiles = nil
 				break
@@ -328,9 +339,14 @@ func dropMachineSelectorFile(file rkev1.RKEProvisioningFiles, cluster *v1.Cluste
 }
 
 // MachineSelectorFileExists returns a boolean to indicate if the provided RKEProvisioningFiles exist in the provided cluster.
-func MachineSelectorFileExists(file rkev1.RKEProvisioningFiles, cluster *v1.Cluster) bool {
+func MachineSelectorFileExists(file rkev1.RKEProvisioningFiles, cluster *v1.Cluster, ignoreValueCheck bool) bool {
 	for _, item := range cluster.Spec.RKEConfig.MachineSelectorFiles {
-		if equality.Semantic.DeepEqual(file, item) {
+		fromCluster := item.DeepCopy()
+		if ignoreValueCheck {
+			cleanupHash(fromCluster)
+			cleanupHash(&file)
+		}
+		if equality.Semantic.DeepEqual(&file, fromCluster) {
 			return true
 		}
 	}
@@ -348,5 +364,17 @@ func GetRuntime(kubernetesVersion string) string {
 		return runtimeRKE
 	default:
 		return ""
+	}
+}
+
+// cleanupHash unsets the value of the field Hash in the RKEProvisioningFiles
+func cleanupHash(file *rkev1.RKEProvisioningFiles) {
+	for i, source := range file.FileSources {
+		for j := range source.Secret.Items {
+			file.FileSources[i].Secret.Items[j].Hash = ""
+		}
+		for j := range source.ConfigMap.Items {
+			file.FileSources[i].ConfigMap.Items[j].Hash = ""
+		}
 	}
 }
