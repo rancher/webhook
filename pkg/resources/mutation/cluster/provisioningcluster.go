@@ -282,8 +282,8 @@ func setKubeAPIServerArg(arg map[string]string, cluster *v1.Cluster) {
 
 // MachineSelectorFileForPSA generates an RKEProvisioningFiles that mounts the secret which contains
 // the generated admission configuration file to the control plane node
-func MachineSelectorFileForPSA(secretName, mountPath, hash string) rkev1.RKEProvisioningFiles {
-	return rkev1.RKEProvisioningFiles{
+func MachineSelectorFileForPSA(secretName, mountPath, hash string) *rkev1.RKEProvisioningFiles {
+	return &rkev1.RKEProvisioningFiles{
 		MachineLabelSelector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
 				controlPlaneRoleLabel: "true",
@@ -308,26 +308,29 @@ func MachineSelectorFileForPSA(secretName, mountPath, hash string) rkev1.RKEProv
 
 // addMachineSelectorFile adds the provided RKEProvisioningFiles to the cluster's MachineSelectorFiles list.
 // It is a no-op if the provided RKEProvisioningFiles already exist in the cluster.
-func addMachineSelectorFile(file rkev1.RKEProvisioningFiles, cluster *v1.Cluster) {
+func addMachineSelectorFile(file *rkev1.RKEProvisioningFiles, cluster *v1.Cluster) {
 	for _, item := range cluster.Spec.RKEConfig.MachineSelectorFiles {
-		if equality.Semantic.DeepEqual(file, item) {
+		if equality.Semantic.DeepEqual(file, &item) {
 			return
 		}
 	}
-	cluster.Spec.RKEConfig.MachineSelectorFiles = append(cluster.Spec.RKEConfig.MachineSelectorFiles, file)
+	cluster.Spec.RKEConfig.MachineSelectorFiles = append(cluster.Spec.RKEConfig.MachineSelectorFiles, *file)
 }
 
 // dropMachineSelectorFile removes the provided RKEProvisioningFiles from the cluster if it is found in the cluster.
-func dropMachineSelectorFile(file rkev1.RKEProvisioningFiles, cluster *v1.Cluster, ignoreValueCheck bool) {
+func dropMachineSelectorFile(file *rkev1.RKEProvisioningFiles, cluster *v1.Cluster, ignoreValueCheck bool) {
 	source := cluster.Spec.RKEConfig.MachineSelectorFiles
+	if ignoreValueCheck {
+		cleanupHash(file)
+	}
 	// traverse the slice backward for faster lookup because the target is usually the last item in the slice
 	for i := len(source) - 1; i >= 0; i-- {
-		fromCluster := source[i].DeepCopy()
+		fromCluster := &source[i]
 		if ignoreValueCheck {
+			fromCluster = fromCluster.DeepCopy()
 			cleanupHash(fromCluster)
-			cleanupHash(&file)
 		}
-		if equality.Semantic.DeepEqual(&file, fromCluster) {
+		if equality.Semantic.DeepEqual(file, fromCluster) {
 			if len(source) == 1 {
 				cluster.Spec.RKEConfig.MachineSelectorFiles = nil
 				break
@@ -339,14 +342,17 @@ func dropMachineSelectorFile(file rkev1.RKEProvisioningFiles, cluster *v1.Cluste
 }
 
 // MachineSelectorFileExists returns a boolean to indicate if the provided RKEProvisioningFiles exist in the provided cluster.
-func MachineSelectorFileExists(file rkev1.RKEProvisioningFiles, cluster *v1.Cluster, ignoreValueCheck bool) bool {
+func MachineSelectorFileExists(file *rkev1.RKEProvisioningFiles, cluster *v1.Cluster, ignoreValueCheck bool) bool {
+	if ignoreValueCheck {
+		cleanupHash(file)
+	}
 	for _, item := range cluster.Spec.RKEConfig.MachineSelectorFiles {
-		fromCluster := item.DeepCopy()
+		fromCluster := &item
 		if ignoreValueCheck {
+			fromCluster = fromCluster.DeepCopy()
 			cleanupHash(fromCluster)
-			cleanupHash(&file)
 		}
-		if equality.Semantic.DeepEqual(&file, fromCluster) {
+		if equality.Semantic.DeepEqual(file, fromCluster) {
 			return true
 		}
 	}

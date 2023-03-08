@@ -165,7 +165,7 @@ func Test_AddMachineSelectorFile(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			addMachineSelectorFile(tt.file, tt.cluster)
+			addMachineSelectorFile(&tt.file, tt.cluster)
 			got := tt.cluster.Spec.RKEConfig.MachineSelectorFiles
 			expected := tt.expected.Spec.RKEConfig.MachineSelectorFiles
 			if !equality.Semantic.DeepEqual(got, expected) {
@@ -221,7 +221,7 @@ func Test_DropMachineSelectorFile(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dropMachineSelectorFile(tt.fileToDrop, tt.cluster, tt.ignoreValueCheck)
+			dropMachineSelectorFile(&tt.fileToDrop, tt.cluster, tt.ignoreValueCheck)
 			got := tt.cluster.Spec.RKEConfig.MachineSelectorFiles
 			expected := tt.expected.Spec.RKEConfig.MachineSelectorFiles
 			if !equality.Semantic.DeepEqual(got, expected) {
@@ -277,7 +277,7 @@ func Test_MachineSelectorFileExists(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := MachineSelectorFileExists(tt.file, tt.cluster, tt.ignoreValueCheck)
+			result := MachineSelectorFileExists(&tt.file, tt.cluster, tt.ignoreValueCheck)
 			if !equality.Semantic.DeepEqual(result, tt.expected) {
 				t.Errorf("got: %v, expected: %v", result, tt.expected)
 			}
