@@ -1,6 +1,8 @@
 package cluster
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -212,7 +214,7 @@ func (p *ProvisioningClusterValidator) validatePSACT(request *admission.Request,
 				return fmt.Errorf("[provisioning cluster validator] failed to validate if the secret exists: %w", err)
 			}
 			// validate that the machineSelectorFile for PSA does not exist
-			if mutator.MachineSelectorFileExists(mutator.MachineSelectorFileForPSA(name, mountPath), cluster) {
+			if mutator.MachineSelectorFileExists(mutator.MachineSelectorFileForPSA(name, mountPath, ""), cluster, true) {
 				return fmt.Errorf("[provisioning cluster validator] machineSelectorFile for PSA should not be in the cluster Spec")
 			}
 			// validate that the flags are not set
@@ -249,11 +251,13 @@ func (p *ProvisioningClusterValidator) validatePSACT(request *admission.Request,
 				return fmt.Errorf("[provisioning cluster validator] failed to get PodSecurityAdmissionConfigurationTemplate: %w", err)
 			}
 			// validate that the secret for PSA exists
-			if _, err = p.secretCache.Get(cluster.Namespace, name); err != nil {
+			secret, err := p.secretCache.Get(cluster.Namespace, name)
+			if err != nil {
 				return fmt.Errorf("[provisioning cluster validator] failed to get secret: %w", err)
 			}
 			// validate that the machineSelectorFile for PSA is set
-			if !mutator.MachineSelectorFileExists(mutator.MachineSelectorFileForPSA(name, mountPath), cluster) {
+			hash := sha256.Sum256(secret.Data[mutator.SecretKey])
+			if !mutator.MachineSelectorFileExists(mutator.MachineSelectorFileForPSA(name, mountPath, base64.StdEncoding.EncodeToString(hash[:])), cluster, false) {
 				return fmt.Errorf("[provisioning cluster validator] machineSelectorFile for PSA should be in the cluster Spec")
 			}
 			// validate that the flags are set
