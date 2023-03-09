@@ -38,7 +38,7 @@ require (
 	github.com/rancher/dynamiclistener v0.3.5
 	github.com/rancher/lasso v0.0.0-20221227210133-6ea88ca2fbcc
 	github.com/rancher/lasso/controller-runtime v0.0.0-20221206162308-10123d5719ad
-	github.com/rancher/rancher/pkg/apis v0.0.0-20230307225827-e2410e02494a
+	github.com/rancher/rancher/pkg/apis v0.0.0-20230309175441-1ad0096f46bb
 	github.com/rancher/rke v1.4.4-rc3
 	github.com/rancher/wrangler v1.1.0
 	github.com/sirupsen/logrus v1.9.0
