@@ -4,6 +4,7 @@ package clusterroletemplatebinding
 import (
 	"fmt"
 	"net/http"
+	"unicode/utf8"
 
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
@@ -145,6 +146,10 @@ func validateUpdateFields(oldCRTB, newCRTB *apisv3.ClusterRoleTemplateBinding) e
 
 // validateCreateFields checks if all required fields are present and valid.
 func (v *Validator) validateCreateFields(newCRTB *apisv3.ClusterRoleTemplateBinding) error {
+	if err := validateName(newCRTB); err != nil {
+		return err
+	}
+
 	hasUserTarget := newCRTB.UserName != "" || newCRTB.UserPrincipalName != ""
 	hasGroupTarget := newCRTB.GroupName != "" || newCRTB.GroupPrincipalName != ""
 
@@ -165,5 +170,15 @@ func (v *Validator) validateCreateFields(newCRTB *apisv3.ClusterRoleTemplateBind
 		return fmt.Errorf("referenced role '%s' is locked and cannot be assigned: %w", roleTemplate.DisplayName, admission.ErrInvalidRequest)
 	}
 
+	return nil
+}
+
+func validateName(crtb *apisv3.ClusterRoleTemplateBinding) error {
+	fullName := fmt.Sprintf("%s_%s", crtb.ClusterName, crtb.Name)
+	charLength := utf8.RuneCountInString(fullName)
+	if charLength > 63 {
+		return fmt.Errorf("combined with cluster name, the binding name is %d characters long, but it can't be longer than 63 characters",
+			charLength)
+	}
 	return nil
 }

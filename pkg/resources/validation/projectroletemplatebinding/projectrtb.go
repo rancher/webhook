@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
@@ -167,6 +168,10 @@ func validateUpdateFields(oldPRTB, newPRTB *apisv3.ProjectRoleTemplateBinding) e
 
 // validateCreateFields checks if all required fields are present and valid.
 func (v *Validator) validateCreateFields(newPRTB *apisv3.ProjectRoleTemplateBinding) error {
+	if err := validateName(newPRTB); err != nil {
+		return err
+	}
+
 	hasUserTarget := newPRTB.UserName != "" || newPRTB.UserPrincipalName != ""
 	hasGroupTarget := newPRTB.GroupName != "" || newPRTB.GroupPrincipalName != ""
 
@@ -187,5 +192,15 @@ func (v *Validator) validateCreateFields(newPRTB *apisv3.ProjectRoleTemplateBind
 		return fmt.Errorf("referenced role '%s' is locked and cannot be assigned: %w", roleTemplate.DisplayName, admission.ErrInvalidRequest)
 	}
 
+	return nil
+}
+
+func validateName(prtb *apisv3.ProjectRoleTemplateBinding) error {
+	fullName := fmt.Sprintf("%s_%s", prtb.ProjectName, prtb.Name)
+	charLength := utf8.RuneCountInString(fullName)
+	if charLength > 63 {
+		return fmt.Errorf("combined with project name, the binding name is %d characters long, but it can't be longer than 63 characters",
+			charLength)
+	}
 	return nil
 }

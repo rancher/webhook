@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -616,6 +617,22 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
 					baseCRTB := newDefaultCRTB()
 					baseCRTB.ClusterName = ""
+					return baseCRTB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "combined name too long",
+			args: args{
+				username: adminUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					return nil
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.ClusterName = "foobar"
+					baseCRTB.Name = strings.Repeat("hello", 12)
 					return baseCRTB
 				},
 			},

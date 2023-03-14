@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -642,6 +643,22 @@ func (p *ProjectRoleTemplateBindingSuite) Test_Create() {
 				},
 			},
 			allowed: true,
+		},
+		{
+			name: "combined name too long",
+			args: args{
+				username: adminUser,
+				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					return nil
+				},
+				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.ProjectName = "foobar"
+					basePRTB.Name = strings.Repeat("hello", 12)
+					return basePRTB
+				},
+			},
+			allowed: false,
 		},
 		{
 			name: "missing roleTemplate",
