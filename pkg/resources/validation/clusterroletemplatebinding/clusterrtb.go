@@ -52,8 +52,8 @@ func (v *Validator) Operations() []admissionregistrationv1.OperationType {
 }
 
 // ValidatingWebhook returns the ValidatingWebhook used for this CRD.
-func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.WebhookClientConfig) *admissionregistrationv1.ValidatingWebhook {
-	return admission.NewDefaultValidatingWebhook(v, clientConfig, admissionregistrationv1.NamespacedScope)
+func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.WebhookClientConfig) []admissionregistrationv1.ValidatingWebhook {
+	return []admissionregistrationv1.ValidatingWebhook{*admission.NewDefaultValidatingWebhook(v, clientConfig, admissionregistrationv1.NamespacedScope, v.Operations())}
 }
 
 // Admit is the entrypoint for the validator. Admit will return an error if it unable to process the request.

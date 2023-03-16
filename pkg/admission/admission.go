@@ -18,6 +18,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
+const (
+	webhookQualifier = "rancher.cattle.io"
+)
+
 var (
 	// ErrInvalidRequest error returned when the requested operation with the requested fields are invalid.
 	ErrInvalidRequest = fmt.Errorf("invalid request")
@@ -51,20 +55,24 @@ type WebhookHandler interface {
 type ValidatingAdmissionHandler interface {
 	WebhookHandler
 
-	// ValidatingWebhook returns the configuration information for a ValidatingWebhook.
-	// This functions allows ValidatingAdmissionHandler to perform and modifications to the default configuration if needed.
+	// ValidatingWebhook returns a list of configurations to route to this handler.
+	//
+	// This functions allows ValidatingAdmissionHandler to perform modifications to the default configuration if needed.
 	// A default configuration can be made using NewDefaultValidatingWebhook(...)
-	ValidatingWebhook(clientConfig v1.WebhookClientConfig) *v1.ValidatingWebhook
+	// Most Webhooks implementing ValidatingWebhook will only return one configuration.
+	ValidatingWebhook(clientConfig v1.WebhookClientConfig) []v1.ValidatingWebhook
 }
 
 // MutatingAdmissionHandler is a handler used for creating a MutatingAdmission Webhook.
 type MutatingAdmissionHandler interface {
 	WebhookHandler
 
-	// MutatingWebhook returns the configuration information for a ValidatingWebhook.
-	// This functions allows MutatingAdmissionHandler to perform and modifications to the default configuration if needed.
+	// MutatingWebhook returns a list of configurations to route to this handler.
+	//
+	// MutatingWebhook functions allows MutatingAdmissionHandler to perform modifications to the default configuration if needed.
 	// A default configuration can be made using NewDefaultMutatingWebhook(...)
-	MutatingWebhook(clientConfig v1.WebhookClientConfig) *v1.MutatingWebhook
+	// Most Webhooks implementing MutatingWebhook will only return one configuration.
+	MutatingWebhook(clientConfig v1.WebhookClientConfig) []v1.MutatingWebhook
 }
 
 // Request is a simple wrapper for an AdmissionRequest that includes the context from the original http.Request.
@@ -76,8 +84,8 @@ type Request struct {
 // NewDefaultValidatingWebhook creates a new ValidatingWebhook based on the WebhookHandler provided.
 // The path set on the client config will be appended with the webhooks path.
 // The return webhook will not be nil.
-func NewDefaultValidatingWebhook(handler WebhookHandler, clientConfig v1.WebhookClientConfig, scope v1.ScopeType) *v1.ValidatingWebhook {
-	info := defaultWebhookInfo(handler, clientConfig, scope)
+func NewDefaultValidatingWebhook(handler WebhookHandler, clientConfig v1.WebhookClientConfig, scope v1.ScopeType, ops []v1.OperationType) *v1.ValidatingWebhook {
+	info := defaultWebhookInfo(handler, clientConfig, scope, ops)
 	return &v1.ValidatingWebhook{
 		Name:                    info.name,
 		ClientConfig:            info.clientConfig,
@@ -93,8 +101,8 @@ func NewDefaultValidatingWebhook(handler WebhookHandler, clientConfig v1.Webhook
 // NewDefaultMutatingWebhook creates a new MutatingWebhook based on the WebhookHandler provided.
 // The path set on the client config will be appended with the webhooks path.
 // The return webhook will not be nil.
-func NewDefaultMutatingWebhook(handler WebhookHandler, clientConfig v1.WebhookClientConfig, scope v1.ScopeType) *v1.MutatingWebhook {
-	info := defaultWebhookInfo(handler, clientConfig, scope)
+func NewDefaultMutatingWebhook(handler WebhookHandler, clientConfig v1.WebhookClientConfig, scope v1.ScopeType, ops []v1.OperationType) *v1.MutatingWebhook {
+	info := defaultWebhookInfo(handler, clientConfig, scope, ops)
 	return &v1.MutatingWebhook{
 		Name:                    info.name,
 		ClientConfig:            info.clientConfig,
@@ -114,11 +122,11 @@ type webhookInfo struct {
 }
 
 // defaultWebhookInfo contains common code for creating MutatingWebhooks and ValidatingWebhooks.
-func defaultWebhookInfo(handler WebhookHandler, clientConfig v1.WebhookClientConfig, scope v1.ScopeType) webhookInfo {
+func defaultWebhookInfo(handler WebhookHandler, clientConfig v1.WebhookClientConfig, scope v1.ScopeType, ops []v1.OperationType) webhookInfo {
 	gvr := handler.GVR()
 	rules := []v1.RuleWithOperations{
 		{
-			Operations: handler.Operations(),
+			Operations: ops,
 			Rule: v1.Rule{
 				APIGroups:   []string{gvr.Group},
 				APIVersions: []string{gvr.Version},
@@ -138,7 +146,7 @@ func defaultWebhookInfo(handler WebhookHandler, clientConfig v1.WebhookClientCon
 		clientConfig.Service = newService
 	}
 	return webhookInfo{
-		name:         fmt.Sprintf("rancher.cattle.io.%s", SubPath(gvr)),
+		name:         CreateWebhookName(handler, ""),
 		clientConfig: clientConfig,
 		rules:        rules,
 	}
@@ -165,6 +173,7 @@ func SubPath(gvr schema.GroupVersionResource) string {
 // NewHandlerFunc returns a new HandlerFunc that will call the WebhookHandler's admit function.
 func NewHandlerFunc(handler WebhookHandler) http.HandlerFunc {
 	return func(responseWriter http.ResponseWriter, req *http.Request) {
+
 		review := &admissionv1.AdmissionReview{}
 		err := json.NewDecoder(req.Body).Decode(review)
 		if err != nil {
@@ -263,4 +272,13 @@ func ResponseBadRequest(message string) *admissionv1.AdmissionResponse {
 		},
 		Allowed: false,
 	}
+}
+
+// CreateWebhookName returns a new name for the given webhook handler with the given suffix.
+func CreateWebhookName(handler WebhookHandler, suffix string) string {
+	subPath := SubPath(handler.GVR())
+	if suffix == "" {
+		return fmt.Sprintf("%s.%s", webhookQualifier, subPath)
+	}
+	return fmt.Sprintf("%s.%s.%s", webhookQualifier, subPath, suffix)
 }

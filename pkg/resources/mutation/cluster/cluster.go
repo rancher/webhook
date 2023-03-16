@@ -44,10 +44,10 @@ func (m *ManagementClusterMutator) Operations() []admissionregistrationv1.Operat
 }
 
 // MutatingWebhook returns the MutatingWebhook used for this CRD.
-func (m *ManagementClusterMutator) MutatingWebhook(clientConfig admissionregistrationv1.WebhookClientConfig) *admissionregistrationv1.MutatingWebhook {
-	mutatingWebhook := admission.NewDefaultMutatingWebhook(m, clientConfig, admissionregistrationv1.ClusterScope)
+func (m *ManagementClusterMutator) MutatingWebhook(clientConfig admissionregistrationv1.WebhookClientConfig) []admissionregistrationv1.MutatingWebhook {
+	mutatingWebhook := admission.NewDefaultMutatingWebhook(m, clientConfig, admissionregistrationv1.ClusterScope, m.Operations())
 	mutatingWebhook.SideEffects = admission.Ptr(admissionregistrationv1.SideEffectClassNoneOnDryRun)
-	return mutatingWebhook
+	return []admissionregistrationv1.MutatingWebhook{*mutatingWebhook}
 }
 
 // Admit is the entrypoint for the mutator. Admit will return an error if it is unable to process the request.

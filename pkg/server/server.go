@@ -201,11 +201,11 @@ func updateWebhookConfigs(applier apply.Apply, applyErrChecker *health.ErrorChec
 		}
 		validatingWebhooks := make([]v1.ValidatingWebhook, 0, len(validators))
 		for _, webhook := range validators {
-			validatingWebhooks = append(validatingWebhooks, *webhook.ValidatingWebhook(validationClientConfig))
+			validatingWebhooks = append(validatingWebhooks, webhook.ValidatingWebhook(validationClientConfig)...)
 		}
 		mutatingWebhooks := make([]v1.MutatingWebhook, 0, len(mutators))
 		for _, webhook := range mutators {
-			mutatingWebhooks = append(mutatingWebhooks, *webhook.MutatingWebhook(mutationClientConfig))
+			mutatingWebhooks = append(mutatingWebhooks, webhook.MutatingWebhook(mutationClientConfig)...)
 		}
 		applyErr := applier.WithOwner(secret).ApplyObjects(
 			&v1.ValidatingWebhookConfiguration{

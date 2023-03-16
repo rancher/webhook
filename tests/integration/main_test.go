@@ -1,4 +1,4 @@
-// Package integration holds the integration test for the webhook.
+// Package integration_test holds the integration test for the webhook.
 package integration_test
 
 import (
