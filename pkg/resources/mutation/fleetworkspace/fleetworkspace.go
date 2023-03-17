@@ -60,10 +60,10 @@ func (m *Mutator) Operations() []admissionregistrationv1.OperationType {
 }
 
 // MutatingWebhook returns the MutatingWebhook used for this CRD.
-func (m *Mutator) MutatingWebhook(clientConfig admissionregistrationv1.WebhookClientConfig) *admissionregistrationv1.MutatingWebhook {
-	mutatingWebhook := admission.NewDefaultMutatingWebhook(m, clientConfig, admissionregistrationv1.ClusterScope)
+func (m *Mutator) MutatingWebhook(clientConfig admissionregistrationv1.WebhookClientConfig) []admissionregistrationv1.MutatingWebhook {
+	mutatingWebhook := admission.NewDefaultMutatingWebhook(m, clientConfig, admissionregistrationv1.ClusterScope, m.Operations())
 	mutatingWebhook.SideEffects = admission.Ptr(admissionregistrationv1.SideEffectClassNoneOnDryRun)
-	return mutatingWebhook
+	return []admissionregistrationv1.MutatingWebhook{*mutatingWebhook}
 }
 
 // When fleetworkspace is created, it will create the following resources:

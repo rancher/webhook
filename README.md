@@ -51,21 +51,26 @@ type WebhookHandler interface {
 type ValidatingAdmissionHandler interface {
 	WebhookHandler
 
-	// ValidatingWebhook returns the configuration information for a ValidatingWebhook.
-	// This functions allows ValidatingAdmissionHandler to perform and modifications to the default configuration if needed.
+	// ValidatingWebhook returns a list of configurations to route to this handler.
+	//
+	// This functions allows ValidatingAdmissionHandler to perform modifications to the default configuration if needed.
 	// A default configuration can be made using NewDefaultValidatingWebhook(...)
-	ValidatingWebhook(clientConfig v1.WebhookClientConfig) *v1.ValidatingWebhook
+	// Most Webhooks implementing ValidatingWebhook will only return one configuration.
+	ValidatingWebhook(clientConfig v1.WebhookClientConfig) []v1.ValidatingWebhook
 }
 
 // MutatingAdmissionHandler is a handler used for creating a MutatingAdmission Webhook.
 type MutatingAdmissionHandler interface {
 	WebhookHandler
 
-	// MutatingWebhook returns the configuration information for a ValidatingWebhook.
-	// This functions allows MutatingAdmissionHandler to perform and modifications to the default configuration if needed.
+	// MutatingWebhook returns a list of configurations to route to this handler.
+	//
+	// MutatingWebhook functions allows MutatingAdmissionHandler to perform modifications to the default configuration if needed.
 	// A default configuration can be made using NewDefaultMutatingWebhook(...)
-	MutatingWebhook(clientConfig v1.WebhookClientConfig) *v1.MutatingWebhook
+	// Most Webhooks implementing MutatingWebhook will only return one configuration.
+	MutatingWebhook(clientConfig v1.WebhookClientConfig) []v1.MutatingWebhook
 }
+
 
 ```
 Any admission controller, as an app, consists of two main things:

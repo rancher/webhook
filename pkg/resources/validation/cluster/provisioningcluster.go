@@ -66,8 +66,8 @@ func (p *ProvisioningClusterValidator) Operations() []admissionregistrationv1.Op
 }
 
 // ValidatingWebhook returns the ValidatingWebhook used for this CRD.
-func (p *ProvisioningClusterValidator) ValidatingWebhook(clientConfig admissionregistrationv1.WebhookClientConfig) *admissionregistrationv1.ValidatingWebhook {
-	return admission.NewDefaultValidatingWebhook(p, clientConfig, admissionregistrationv1.NamespacedScope)
+func (p *ProvisioningClusterValidator) ValidatingWebhook(clientConfig admissionregistrationv1.WebhookClientConfig) []admissionregistrationv1.ValidatingWebhook {
+	return []admissionregistrationv1.ValidatingWebhook{*admission.NewDefaultValidatingWebhook(p, clientConfig, admissionregistrationv1.NamespacedScope, p.Operations())}
 }
 
 // Admit handles the webhook admission request sent to this webhook.

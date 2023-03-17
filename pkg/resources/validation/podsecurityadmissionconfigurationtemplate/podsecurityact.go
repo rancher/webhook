@@ -54,10 +54,10 @@ func NewValidator(managementCache v3.ClusterCache, provisioningCache v1.ClusterC
 }
 
 // ValidatingWebhook returns the ValidatingWebhook used for this CRD.
-func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.WebhookClientConfig) *admissionregistrationv1.ValidatingWebhook {
-	valWebhook := admission.NewDefaultValidatingWebhook(v, clientConfig, admissionregistrationv1.AllScopes)
+func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.WebhookClientConfig) []admissionregistrationv1.ValidatingWebhook {
+	valWebhook := admission.NewDefaultValidatingWebhook(v, clientConfig, admissionregistrationv1.AllScopes, v.Operations())
 	valWebhook.FailurePolicy = admission.Ptr(admissionregistrationv1.Ignore)
-	return valWebhook
+	return []admissionregistrationv1.ValidatingWebhook{*valWebhook}
 }
 
 func byPodSecurityAdmissionConfigurationTemplateV1(obj *provv1.Cluster) ([]string, error) {
