@@ -117,6 +117,17 @@ var rancherAuthMCMRules = []v1.RuleWithOperations{
 			Scope:       &clusterScope,
 		},
 	},
+	{
+		Operations: []v1.OperationType{
+			v1.Delete,
+		},
+		Rule: v1.Rule{
+			APIGroups:   []string{""},
+			APIVersions: []string{"v1"},
+			Resources:   []string{"secrets"},
+			Scope:       &namespaceScope,
+		},
+	},
 }
 
 var fleetMutationRules = []v1.RuleWithOperations{
