@@ -18,6 +18,7 @@ import (
 	"github.com/rancher/webhook/pkg/resources/validation/podsecurityadmissionconfigurationtemplate"
 	"github.com/rancher/webhook/pkg/resources/validation/projectroletemplatebinding"
 	"github.com/rancher/webhook/pkg/resources/validation/roletemplate"
+	validationSecret "github.com/rancher/webhook/pkg/resources/validation/secret"
 )
 
 // Validation returns a list of all ValidatingAdmissionHandlers used by the webhook.
@@ -39,8 +40,9 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		prtbs := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver)
 		crtbs := clusterroletemplatebinding.NewValidator(crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver)
 		roleTemplates := roletemplate.NewValidator(clients.DefaultResolver, clients.RoleTemplateResolver, clients.K8s.AuthorizationV1().SubjectAccessReviews())
+		secrets := validationSecret.NewValidator(clients.RBAC.Role().Cache(), clients.RBAC.RoleBinding().Cache())
 
-		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates)
+		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets)
 	}
 	return handlers, nil
 }
