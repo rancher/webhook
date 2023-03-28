@@ -20,13 +20,15 @@ import (
 
 // Validator validates the namespace admission request.
 type Validator struct {
-	sar authorizationv1.SubjectAccessReviewInterface
+	admitter admitter
 }
 
 // NewValidator returns a new validator used for validation of namespace requests.
 func NewValidator(sar authorizationv1.SubjectAccessReviewInterface) *Validator {
 	return &Validator{
-		sar: sar,
+		admitter: admitter{
+			sar: sar,
+		},
 	}
 }
 
@@ -84,9 +86,17 @@ func (v *Validator) ValidatingWebhook(clientConfig admv1.WebhookClientConfig) []
 	return []admv1.ValidatingWebhook{*standardWebhook, *createWebhook, *kubeSystemCreateWebhook}
 }
 
+func (v *Validator) Admitters() []admission.Admitter {
+	return []admission.Admitter{&v.admitter}
+}
+
+type admitter struct {
+	sar authorizationv1.SubjectAccessReviewInterface
+}
+
 // Admit is the entrypoint for the validator.
 // Admit will return an error if it is unable to process the request.
-func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	listTrace := trace.New("Namespace Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
@@ -121,7 +131,7 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 		extras[k] = v1.ExtraValue(v)
 	}
 
-	resp, err := v.sar.Create(request.Context, &v1.SubjectAccessReview{
+	resp, err := a.sar.Create(request.Context, &v1.SubjectAccessReview{
 		Spec: v1.SubjectAccessReviewSpec{
 			ResourceAttributes: &v1.ResourceAttributes{
 				Verb:     "updatepsa",

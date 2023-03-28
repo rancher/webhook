@@ -44,10 +44,12 @@ type WebhookHandler interface {
 	// Operations returns list of operations that this WebhookHandler supports.
 	// Handlers will only be sent request with operations that are contained in the provided list.
 	Operations() []v1.OperationType
+}
 
-	// Admit handles the webhook admission request sent to this webhook.
-	// The response returned by the WebhookHandler will be forwarded to the kube-api server.
-	// If the WebhookHandler can not accurately evaluate the request it should return an error.
+// Admitter handles webhook admission requests sent to this webhook.
+// The response returned by the WebhookHandler will be forwarded to the kube-api server.
+// If the WebhookHandler can not accurately evaluate the request it should return an error.
+type Admitter interface {
 	Admit(*Request) (*admissionv1.AdmissionResponse, error)
 }
 
@@ -61,11 +63,17 @@ type ValidatingAdmissionHandler interface {
 	// A default configuration can be made using NewDefaultValidatingWebhook(...)
 	// Most Webhooks implementing ValidatingWebhook will only return one configuration.
 	ValidatingWebhook(clientConfig v1.WebhookClientConfig) []v1.ValidatingWebhook
+
+	// Admitters returns the admitters that this handler will call when evaluating a resource. If any one of these
+	// fails or encounters an error, the failure/error is immediately returned and the rest are short-circuted.
+	Admitters() []Admitter
 }
 
 // MutatingAdmissionHandler is a handler used for creating a MutatingAdmission Webhook.
 type MutatingAdmissionHandler interface {
 	WebhookHandler
+	// Since mutators can change a resource, each MutatingAdmissionHandler can only use 1 admit function.
+	Admitter
 
 	// MutatingWebhook returns a list of configurations to route to this handler.
 	//
@@ -170,45 +178,87 @@ func SubPath(gvr schema.GroupVersionResource) string {
 	return gvr.GroupResource().String()
 }
 
-// NewHandlerFunc returns a new HandlerFunc that will call the WebhookHandler's admit function.
-func NewHandlerFunc(handler WebhookHandler) http.HandlerFunc {
+// NewValidatingHandlerFunc returns a new HandlerFunc that will call the functions returned by the ValidatingAdmissionHandler's AdmitFuncs() call.
+// If it encounters a failure or an error, it short-circuts and returns immediately.
+func NewValidatingHandlerFunc(handler ValidatingAdmissionHandler) http.HandlerFunc {
 	return func(responseWriter http.ResponseWriter, req *http.Request) {
-
-		review := &admissionv1.AdmissionReview{}
-		err := json.NewDecoder(req.Body).Decode(review)
+		review, webReq, err := getReviewAndRequestForHandler(req, handler)
 		if err != nil {
 			sendError(responseWriter, review, err)
 			return
 		}
-
-		if review.Request == nil {
-			sendError(responseWriter, review, fmt.Errorf("request is not set: %w", ErrInvalidRequest))
-			return
+		// save the response from the loop so we can return on success
+		var response *admissionv1.AdmissionResponse
+		for _, admitter := range handler.Admitters() {
+			if admitter == nil {
+				continue
+			}
+			response, err = admitter.Admit(webReq)
+			if response == nil {
+				response = &admissionv1.AdmissionResponse{}
+			}
+			logrus.Debugf("admit result: %s %s %s user=%s allowed=%v err=%v", webReq.Operation, webReq.Kind.String(), resourceString(webReq.Namespace, webReq.Name), webReq.UserInfo.Username, response.Allowed, err)
+			// if we get an error or are not allowed, short circuit the admits
+			if err != nil {
+				review.Response = response
+				sendError(responseWriter, review, err)
+				return
+			}
+			if !response.Allowed {
+				sendResponse(responseWriter, review, response)
+				return
+			}
 		}
-		webReq := &Request{
-			AdmissionRequest: *review.Request,
-			Context:          req.Context(),
-		}
-
-		// validate that this handler can handle the provided operation.
-		if !canHandleOperation(handler, review.Request.Operation) {
-			sendError(responseWriter, review, fmt.Errorf("can not handle '%s' for '%s': %w", review.Request.Operation, SubPath(handler.GVR()), ErrUnsupportedOperation))
-			return
-		}
-
-		review.Response, err = handler.Admit(webReq)
-		if review.Response == nil {
-			review.Response = &admissionv1.AdmissionResponse{}
-		}
-		logrus.Debugf("admit result: %s %s %s user=%s allowed=%v err=%v", webReq.Operation, webReq.Kind.String(), resourceString(webReq.Namespace, webReq.Name), webReq.UserInfo.Username, review.Response.Allowed, err)
-		if err != nil {
-			sendError(responseWriter, review, err)
-			return
-		}
-
-		review.Response.UID = review.Request.UID
-		writeResponse(responseWriter, review)
+		// if we have reached this point, all admits approved
+		sendResponse(responseWriter, review, response)
 	}
+}
+
+// NewMutatingHandlerFunc returns a new HandlerFunc that will call the function returned by the MutatingAdmissionHandler's AdmitFunc() call.
+func NewMutatingHandlerFunc(handler MutatingAdmissionHandler) http.HandlerFunc {
+	return func(responseWriter http.ResponseWriter, req *http.Request) {
+		review, webReq, err := getReviewAndRequestForHandler(req, handler)
+		if err != nil {
+			// review could not be valid, so initialize some safe defaults
+			sendError(responseWriter, review, err)
+			return
+		}
+		response, err := handler.Admit(webReq)
+		if response == nil {
+			response = &admissionv1.AdmissionResponse{}
+		}
+		logrus.Debugf("admit result: %s %s %s user=%s allowed=%v err=%v", webReq.Operation, webReq.Kind.String(), resourceString(webReq.Namespace, webReq.Name), webReq.UserInfo.Username, response.Allowed, err)
+		if err != nil {
+			review.Response = response
+			sendError(responseWriter, review, err)
+			return
+		}
+		sendResponse(responseWriter, review, response)
+	}
+}
+
+// getReviewAndRequestForHandler produces a admission.AdmissionReview and a Request for a given http request and handler.
+// Returns an error if this handler can't handle this request or if the http.Request couldn't be decoded into an admissionReview.
+func getReviewAndRequestForHandler(req *http.Request, handler WebhookHandler) (*admissionv1.AdmissionReview, *Request, error) {
+	review := admissionv1.AdmissionReview{}
+	err := json.NewDecoder(req.Body).Decode(&review)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if review.Request == nil {
+		return &review, nil, fmt.Errorf("request is not set: %w", ErrInvalidRequest)
+	}
+	webReq := &Request{
+		AdmissionRequest: *review.Request,
+		Context:          req.Context(),
+	}
+
+	// validate that this handler can handle the provided operation
+	if !canHandleOperation(handler, review.Request.Operation) {
+		return &review, nil, fmt.Errorf("can not handle '%s' for '%s': %w", review.Request.Operation, SubPath(handler.GVR()), ErrUnsupportedOperation)
+	}
+	return &review, webReq, nil
 }
 
 // Ptr is a generic function that returns the pointer of a string.
@@ -217,13 +267,28 @@ func Ptr[T ~string](str T) *T {
 	return &newStr
 }
 
+func sendResponse(responseWriter http.ResponseWriter, review *admissionv1.AdmissionReview, response *admissionv1.AdmissionResponse) {
+	review.Response = response
+	review.Response.UID = review.Request.UID
+	writeResponse(responseWriter, review)
+}
+
 func sendError(responseWriter http.ResponseWriter, review *admissionv1.AdmissionReview, err error) {
 	logrus.Error(err)
 	if review == nil || review.Request == nil {
 		http.Error(responseWriter, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if review.Response == nil {
+		review.Response = &admissionv1.AdmissionResponse{}
+	}
+	// set the response to 500 so that k8s knows that the request got an error. If we just set the Result status the
+	// failure policy won't apply
+	responseWriter.WriteHeader(http.StatusInternalServerError)
+	review.Response.UID = review.Request.UID
+
 	review.Response.Result = &errors.NewInternalError(err).ErrStatus
+	review.Response.Result.Code = http.StatusInternalServerError
 	writeResponse(responseWriter, review)
 }
 

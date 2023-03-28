@@ -23,13 +23,15 @@ var gvr = schema.GroupVersionResource{
 // NewValidator returns a new validator used for validation globalRoles.
 func NewValidator(resolver validation.AuthorizationRuleResolver) *Validator {
 	return &Validator{
-		resolver: resolver,
+		admitter: admitter{
+			resolver: resolver,
+		},
 	}
 }
 
-// Validator implements admission.ValidatingAdmissionHandler
+// Validator implements admission.ValidatingAdmissionHandler.
 type Validator struct {
-	resolver validation.AuthorizationRuleResolver
+	admitter admitter
 }
 
 // GVR returns the GroupVersionKind for this CRD.
@@ -47,9 +49,18 @@ func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.Webho
 	return []admissionregistrationv1.ValidatingWebhook{*admission.NewDefaultValidatingWebhook(v, clientConfig, admissionregistrationv1.ClusterScope, v.Operations())}
 }
 
+// Admitters returns the admitter objects used to validate globalRoles.
+func (v *Validator) Admitters() []admission.Admitter {
+	return []admission.Admitter{&v.admitter}
+}
+
+type admitter struct {
+	resolver validation.AuthorizationRuleResolver
+}
+
 // Admit is the entrypoint for the validator. Admit will return an error if it unable to process the request.
 // If this function is called without NewValidator(..) calls will panic.
-func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	listTrace := trace.New("globalRoleValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
@@ -82,7 +93,7 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 	}
 
 	response := &admissionv1.AdmissionResponse{}
-	auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, newGR.Rules, "", v.resolver))
+	auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, newGR.Rules, "", a.resolver))
 
 	return response, nil
 }

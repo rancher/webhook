@@ -28,12 +28,11 @@ const (
 
 // Validator implements admission.ValidatingAdmissionWebhook.
 type Validator struct {
-	roleCache        v1.RoleCache
-	roleBindingCache v1.RoleBindingCache
+	admitter admitter
 }
 
 // NewValidator creates a new secret validator which ensures secrets which own rbac objects aren't deleted with options
-// to oprhan those RBAC resources
+// to orphan those RBAC resources.
 func NewValidator(roleCache v1.RoleCache, roleBindingCache v1.RoleBindingCache) *Validator {
 	roleCache.AddIndexer(roleOwnerIndex, func(obj *rbacv1.Role) ([]string, error) {
 		return secretOwnerIndexer(obj.ObjectMeta), nil
@@ -42,8 +41,10 @@ func NewValidator(roleCache v1.RoleCache, roleBindingCache v1.RoleBindingCache) 
 		return secretOwnerIndexer(obj.ObjectMeta), nil
 	})
 	return &Validator{
-		roleCache:        roleCache,
-		roleBindingCache: roleBindingCache,
+		admitter: admitter{
+			roleCache:        roleCache,
+			roleBindingCache: roleBindingCache,
+		},
 	}
 }
 
@@ -75,8 +76,18 @@ func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.Webho
 	return []admissionregistrationv1.ValidatingWebhook{*validatingWebhook}
 }
 
+// Admitters returns the admitter objects used to validate secrets.
+func (v *Validator) Admitters() []admission.Admitter {
+	return []admission.Admitter{&v.admitter}
+}
+
+type admitter struct {
+	roleCache        v1.RoleCache
+	roleBindingCache v1.RoleBindingCache
+}
+
 // Admit is the entrypoint for the validator. Admit will return an error if it is unable to process the request.
-func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	if request.DryRun != nil && *request.DryRun {
 		return admission.ResponseAllowed(), nil
 	}
@@ -99,7 +110,7 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 	if err != nil {
 		return nil, fmt.Errorf("unable to read secret from request: %w", err)
 	}
-	roles, roleBindings, err := v.getRbacRefs(secret)
+	roles, roleBindings, err := a.getRbacRefs(secret)
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
 		roleNames := make([]string, len(roles))
 		roleBindingNames := make([]string, len(roleBindings))
@@ -131,12 +142,12 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 }
 
 // getRbacRefs checks to see if there are any existing rbac resources which could be orphaned by this delete call
-func (v *Validator) getRbacRefs(secret *corev1.Secret) ([]*rbacv1.Role, []*rbacv1.RoleBinding, error) {
-	roles, err := v.roleCache.GetByIndex(roleOwnerIndex, fmt.Sprintf(ownerFormat, secret.Namespace, secret.Name))
+func (a *admitter) getRbacRefs(secret *corev1.Secret) ([]*rbacv1.Role, []*rbacv1.RoleBinding, error) {
+	roles, err := a.roleCache.GetByIndex(roleOwnerIndex, fmt.Sprintf(ownerFormat, secret.Namespace, secret.Name))
 	if err != nil {
 		return nil, nil, err
 	}
-	roleBindings, err := v.roleBindingCache.GetByIndex(roleBindingOwnerIndex, fmt.Sprintf(ownerFormat, secret.Namespace, secret.Name))
+	roleBindings, err := a.roleBindingCache.GetByIndex(roleBindingOwnerIndex, fmt.Sprintf(ownerFormat, secret.Namespace, secret.Name))
 	if err != nil {
 		return nil, nil, err
 	}

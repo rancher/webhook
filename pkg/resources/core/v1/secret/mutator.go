@@ -10,15 +10,12 @@ import (
 	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/trace"
 )
 
-var gvr = schema.GroupVersionResource{
-	Group:    "",
-	Version:  "v1",
-	Resource: "secrets",
-}
+var gvr = corev1.SchemeGroupVersion.WithResource("secrets")
 
 // Mutator implements admission.MutatingAdmissionWebhook.
 type Mutator struct{}

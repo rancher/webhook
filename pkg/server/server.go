@@ -122,12 +122,12 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, validators []
 
 	logrus.Debug("Creating Webhook routes")
 	for _, webhook := range validators {
-		route := router.HandleFunc(admission.Path(validationPath, webhook), admission.NewHandlerFunc(webhook))
+		route := router.HandleFunc(admission.Path(validationPath, webhook), admission.NewValidatingHandlerFunc(webhook))
 		path, _ := route.GetPathTemplate()
 		logrus.Debugf("creating route: %s", path)
 	}
 	for _, webhook := range mutators {
-		route := router.HandleFunc(admission.Path(mutationPath, webhook), admission.NewHandlerFunc(webhook))
+		route := router.HandleFunc(admission.Path(mutationPath, webhook), admission.NewMutatingHandlerFunc(webhook))
 		path, _ := route.GetPathTemplate()
 		logrus.Debugf("creating route: %s", path)
 	}

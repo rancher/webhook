@@ -34,18 +34,17 @@ var fleetNameRegex = regexp.MustCompile("^[^-][-a-z0-9]+$")
 // NewProvisioningClusterValidator returns a new validator for provisioning clusters
 func NewProvisioningClusterValidator(client *clients.Clients) *ProvisioningClusterValidator {
 	return &ProvisioningClusterValidator{
-		sar:               client.K8s.AuthorizationV1().SubjectAccessReviews(),
-		mgmtClusterClient: client.Management.Cluster(),
-		secretCache:       client.Core.Secret().Cache(),
-		psactCache:        client.Management.PodSecurityAdmissionConfigurationTemplate().Cache(),
+		admitter: provisioningAdmitter{
+			sar:               client.K8s.AuthorizationV1().SubjectAccessReviews(),
+			mgmtClusterClient: client.Management.Cluster(),
+			secretCache:       client.Core.Secret().Cache(),
+			psactCache:        client.Management.PodSecurityAdmissionConfigurationTemplate().Cache(),
+		},
 	}
 }
 
 type ProvisioningClusterValidator struct {
-	sar               authorizationv1.SubjectAccessReviewInterface
-	mgmtClusterClient v3.ClusterClient
-	secretCache       corev1controller.SecretCache
-	psactCache        v3.PodSecurityAdmissionConfigurationTemplateCache
+	admitter provisioningAdmitter
 }
 
 // GVR returns the GroupVersionKind for this CRD.
@@ -63,8 +62,20 @@ func (p *ProvisioningClusterValidator) ValidatingWebhook(clientConfig admissionr
 	return []admissionregistrationv1.ValidatingWebhook{*admission.NewDefaultValidatingWebhook(p, clientConfig, admissionregistrationv1.NamespacedScope, p.Operations())}
 }
 
+// Admitters returns the admitter objects used to validate provisioning clusters.
+func (p *ProvisioningClusterValidator) Admitters() []admission.Admitter {
+	return []admission.Admitter{&p.admitter}
+}
+
+type provisioningAdmitter struct {
+	sar               authorizationv1.SubjectAccessReviewInterface
+	mgmtClusterClient v3.ClusterClient
+	secretCache       corev1controller.SecretCache
+	psactCache        v3.PodSecurityAdmissionConfigurationTemplateCache
+}
+
 // Admit handles the webhook admission request sent to this webhook.
-func (p *ProvisioningClusterValidator) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	listTrace := trace.New("provisioningClusterValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 	oldCluster, cluster, err := objectsv1.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
@@ -98,7 +109,7 @@ func (p *ProvisioningClusterValidator) Admit(request *admission.Request) (*admis
 	return response, nil
 }
 
-func (p *ProvisioningClusterValidator) validateCloudCredentialAccess(request *admission.Request, response *admissionv1.AdmissionResponse, oldCluster, newCluster *v1.Cluster) error {
+func (p *provisioningAdmitter) validateCloudCredentialAccess(request *admission.Request, response *admissionv1.AdmissionResponse, oldCluster, newCluster *v1.Cluster) error {
 	if newCluster.Spec.CloudCredentialSecretName == "" ||
 		oldCluster.Spec.CloudCredentialSecretName == newCluster.Spec.CloudCredentialSecretName {
 		return nil
@@ -149,7 +160,7 @@ func getCloudCredentialSecretInfo(namespace, name string) (string, string) {
 	return namespace, name
 }
 
-func (p *ProvisioningClusterValidator) validateClusterName(request *admission.Request, response *admissionv1.AdmissionResponse, cluster *v1.Cluster) error {
+func (p *provisioningAdmitter) validateClusterName(request *admission.Request, response *admissionv1.AdmissionResponse, cluster *v1.Cluster) error {
 	if request.Operation != admissionv1.Create {
 		return nil
 	}
@@ -174,7 +185,7 @@ func (p *ProvisioningClusterValidator) validateClusterName(request *admission.Re
 }
 
 // validatePSACT validate if the cluster and underlying secret are configured properly when PSACT is enabled or disabled
-func (p *ProvisioningClusterValidator) validatePSACT(request *admission.Request, response *admissionv1.AdmissionResponse, cluster *v1.Cluster) error {
+func (p *provisioningAdmitter) validatePSACT(request *admission.Request, response *admissionv1.AdmissionResponse, cluster *v1.Cluster) error {
 	if cluster.Name == "local" || cluster.Spec.RKEConfig == nil {
 		return nil
 	}

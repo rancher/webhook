@@ -255,7 +255,9 @@ func TestAdmit(t *testing.T) {
 			roleBindingCache.EXPECT().AddIndexer(roleBindingOwnerIndex, gomock.Any())
 			validator := NewValidator(roleCache, roleBindingCache)
 
-			response, err := validator.Admit(&req)
+			admitters := validator.Admitters()
+			assert.Len(t, admitters, 1)
+			response, err := admitters[0].Admit(&req)
 			if test.wantError {
 				assert.Error(t, err)
 			} else {

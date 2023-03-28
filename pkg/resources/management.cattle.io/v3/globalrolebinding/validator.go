@@ -26,15 +26,16 @@ var gvr = schema.GroupVersionResource{
 // NewValidator returns a new validator for GlobalRoleBindings.
 func NewValidator(grCache v3.GlobalRoleCache, resolver rbacvalidation.AuthorizationRuleResolver) *Validator {
 	return &Validator{
-		resolver:    resolver,
-		globalRoles: grCache,
+		admitter: admitter{
+			resolver:    resolver,
+			globalRoles: grCache,
+		},
 	}
 }
 
 // Validator is used to validate operations to GlobalRoleBindings.
 type Validator struct {
-	resolver    rbacvalidation.AuthorizationRuleResolver
-	globalRoles v3.GlobalRoleCache
+	admitter admitter
 }
 
 // GVR returns the GroupVersionKind for this CRD.
@@ -52,8 +53,18 @@ func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.Webho
 	return []admissionregistrationv1.ValidatingWebhook{*admission.NewDefaultValidatingWebhook(v, clientConfig, admissionregistrationv1.ClusterScope, v.Operations())}
 }
 
+// Admitters returns the admitter objects used to validate globalRoleBindings.
+func (v *Validator) Admitters() []admission.Admitter {
+	return []admission.Admitter{&v.admitter}
+}
+
+type admitter struct {
+	resolver    rbacvalidation.AuthorizationRuleResolver
+	globalRoles v3.GlobalRoleCache
+}
+
 // Admit handles the webhook admission request sent to this webhook.
-func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	listTrace := trace.New("globalRoleBindingValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
@@ -63,7 +74,7 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 	}
 
 	// Pull the global role to get the rules
-	globalRole, err := v.globalRoles.Get(newGRB.GlobalRoleName)
+	globalRole, err := a.globalRoles.Get(newGRB.GlobalRoleName)
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return nil, err
@@ -93,7 +104,7 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 	}
 
 	response := &admissionv1.AdmissionResponse{}
-	auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, globalRole.Rules, "", v.resolver))
+	auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, globalRole.Rules, "", a.resolver))
 
 	return response, nil
 }

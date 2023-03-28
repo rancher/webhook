@@ -36,8 +36,10 @@ var (
 
 func TestAdmit(t *testing.T) {
 	validator = Validator{
-		ManagementClusterCache:   mockMgmtCache{},
-		provisioningClusterCache: mockProvisioningCache{},
+		admitter: admitter{
+			ManagementClusterCache:   mockMgmtCache{},
+			provisioningClusterCache: mockProvisioningCache{},
+		},
 	}
 	validConfiguration := v3.PodSecurityAdmissionConfigurationTemplateSpec{
 		Defaults: v3.PodSecurityAdmissionConfigurationTemplateDefaults{
@@ -117,7 +119,6 @@ func TestAdmit(t *testing.T) {
 			wantAllowed: true,
 		},
 	}
-
 	validationTests = []validationTest{
 		{
 			testName: "Completely Valid Template Test",
@@ -549,7 +550,11 @@ func TestAdmit(t *testing.T) {
 				t.Log(fmt.Errorf("failed to create DELETE request for PodSecurityAdmissionConfigurationTemplate object: %w", err))
 				t.Fail()
 			}
-			resp, _ := validator.Admit(&req)
+			admitters := validator.Admitters()
+			if len(admitters) != 1 {
+				t.Logf("wanted only one admitter but got = %d", len(admitters))
+			}
+			resp, _ := admitters[0].Admit(&req)
 			if resp.Allowed != testcase.wantAllowed {
 				t.Logf("wanted allowed = %t, got allowed = %t", testcase.wantAllowed, resp.Allowed)
 				t.Fail()
@@ -564,7 +569,11 @@ func TestAdmit(t *testing.T) {
 				t.Log(fmt.Errorf("failed to create CREATE request for PodSecurityAdmissionConfigurationTemplate object: %w", err))
 				t.Fail()
 			}
-			resp, _ := validator.Admit(&req)
+			admitters := validator.Admitters()
+			if len(admitters) != 1 {
+				t.Logf("wanted only one admitter but got = %d", len(admitters))
+			}
+			resp, _ := admitters[0].Admit(&req)
 			if resp.Allowed != testcase.wantAllowed {
 				t.Logf("wanted allowed = %t, got allowed = %t", testcase.wantAllowed, resp.Allowed)
 				t.Fail()

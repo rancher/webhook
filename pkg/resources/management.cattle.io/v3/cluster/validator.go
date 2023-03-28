@@ -29,15 +29,16 @@ var parsedRangeLessThan123 = semver.MustParseRange("< 1.23.0-rancher0")
 // NewValidator returns a new validator for management clusters.
 func NewValidator(sar authorizationv1.SubjectAccessReviewInterface, cache v3.PodSecurityAdmissionConfigurationTemplateCache) *Validator {
 	return &Validator{
-		sar:   sar,
-		psact: cache,
+		admitter: admitter{
+			sar:   sar,
+			psact: cache,
+		},
 	}
 }
 
 // Validator ValidatingWebhook for management clusters.
 type Validator struct {
-	sar   authorizationv1.SubjectAccessReviewInterface
-	psact v3.PodSecurityAdmissionConfigurationTemplateCache
+	admitter admitter
 }
 
 // GVR returns the GroupVersionKind for this CRD.
@@ -57,9 +58,19 @@ func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.Webho
 	return []admissionregistrationv1.ValidatingWebhook{*valWebhook}
 }
 
+// Admitters returns the admitter objects used to validate clusters.
+func (v *Validator) Admitters() []admission.Admitter {
+	return []admission.Admitter{&v.admitter}
+}
+
+type admitter struct {
+	sar   authorizationv1.SubjectAccessReviewInterface
+	psact v3.PodSecurityAdmissionConfigurationTemplateCache
+}
+
 // Admit handles the webhook admission request sent to this webhook.
-func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
-	response, err := v.validateFleetPermissions(request)
+func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+	response, err := a.validateFleetPermissions(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate fleet permissions: %w", err)
 	}
@@ -76,14 +87,14 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 		if cluster.Name == "local" || cluster.Spec.RancherKubernetesEngineConfig == nil {
 			return admission.ResponseAllowed(), nil
 		}
-		response, err = v.validatePSACT(request)
+		response, err = a.validatePSACT(request)
 		if err != nil {
 			return nil, fmt.Errorf("failed to validate PodSecurityAdmissionConfigurationTemplate(PSACT): %w", err)
 		}
 		if !response.Allowed {
 			return response, nil
 		}
-		response, err = v.validatePSP(request)
+		response, err = a.validatePSP(request)
 		if err != nil {
 			return nil, fmt.Errorf("failed to validate PSP: %w", err)
 		}
@@ -103,7 +114,7 @@ func toExtra(extra map[string]authenticationv1.ExtraValue) map[string]v1.ExtraVa
 }
 
 // validateFleetPermissions validates whether the request maker has required permissions around FleetWorkspace.
-func (v *Validator) validateFleetPermissions(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+func (a *admitter) validateFleetPermissions(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	oldCluster, newCluster, err := objectsv3.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get old and new clusters from request: %w", err)
@@ -132,7 +143,7 @@ func (v *Validator) validateFleetPermissions(request *admission.Request) (*admis
 		}, nil
 	}
 
-	resp, err := v.sar.Create(request.Context, &v1.SubjectAccessReview{
+	resp, err := a.sar.Create(request.Context, &v1.SubjectAccessReview{
 		Spec: v1.SubjectAccessReviewSpec{
 			ResourceAttributes: &v1.ResourceAttributes{
 				Verb:     "fleetaddcluster",
@@ -166,7 +177,7 @@ func (v *Validator) validateFleetPermissions(request *admission.Request) (*admis
 }
 
 // validatePSACT validates the cluster spec when PodSecurityAdmissionConfigurationTemplate is used.
-func (v *Validator) validatePSACT(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+func (a *admitter) validatePSACT(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	oldCluster, newCluster, err := objectsv3.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get old and new clusters from request: %w", err)
@@ -181,7 +192,7 @@ func (v *Validator) validatePSACT(request *admission.Request) (*admissionv1.Admi
 		return admission.ResponseBadRequest("PodSecurityAdmissionConfigurationTemplate(PSACT) is only supported in k8s version 1.23 and above"), nil
 	}
 	if newTemplateName != "" {
-		response, err := v.checkPSAConfigOnCluster(newCluster)
+		response, err := a.checkPSAConfigOnCluster(newCluster)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check the PodSecurity Config in the cluster %s: %w", newCluster.Name, err)
 		}
@@ -216,7 +227,7 @@ func (v *Validator) validatePSACT(request *admission.Request) (*admissionv1.Admi
 }
 
 // checkPSAConfigOnCluster validates the cluster spec when DefaultPodSecurityAdmissionConfigurationTemplateName is set.
-func (v *Validator) checkPSAConfigOnCluster(cluster *apisv3.Cluster) (*admissionv1.AdmissionResponse, error) {
+func (a *admitter) checkPSAConfigOnCluster(cluster *apisv3.Cluster) (*admissionv1.AdmissionResponse, error) {
 	// validate that extra_args.admission-control-config-file is not set at the same time
 	_, found := cluster.Spec.RancherKubernetesEngineConfig.Services.KubeAPI.ExtraArgs["admission-control-config-file"]
 	if found {
@@ -225,7 +236,7 @@ func (v *Validator) checkPSAConfigOnCluster(cluster *apisv3.Cluster) (*admission
 	// validate that the configuration for PodSecurityAdmission under the kube-api.admission_configuration section
 	// matches the content of the PodSecurityAdmissionConfigurationTemplate specified in the cluster
 	name := cluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName
-	template, err := v.psact.Get(name)
+	template, err := a.psact.Get(name)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return admission.ResponseBadRequest(err.Error()), nil
@@ -257,7 +268,7 @@ func (v *Validator) checkPSAConfigOnCluster(cluster *apisv3.Cluster) (*admission
 }
 
 // validatePSP validates if the PSP feature is enabled in a cluster which version is 1.25 or above.
-func (v *Validator) validatePSP(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+func (a *admitter) validatePSP(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	cluster, err := objectsv3.ClusterFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cluster from request: %w", err)

@@ -342,7 +342,9 @@ func TestValidator_Admit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			request := createNamespaceRequest(t, &tt)
-			resp, err := validator.Admit(request)
+			admitters := validator.Admitters()
+			assert.Len(t, admitters, 1)
+			resp, err := admitters[0].Admit(request)
 			assert.Equal(t, tt.wantErr, err != nil)
 			if !tt.wantErr {
 				assert.Equal(t, tt.allowed, resp.Allowed)
