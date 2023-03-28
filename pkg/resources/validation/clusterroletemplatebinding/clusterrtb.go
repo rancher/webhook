@@ -30,15 +30,16 @@ func NewValidator(crtb *resolvers.CRTBRuleResolver, defaultResolver k8validation
 	roleTemplateResolver *auth.RoleTemplateResolver) *Validator {
 	resolver := resolvers.NewAggregateRuleResolver(defaultResolver, crtb)
 	return &Validator{
-		resolver:             resolver,
-		roleTemplateResolver: roleTemplateResolver,
+		admitter: admitter{
+			resolver:             resolver,
+			roleTemplateResolver: roleTemplateResolver,
+		},
 	}
 }
 
 // Validator conforms to the webhook.Handler interface and is used for validating request for clusteroletemplatebindings.
 type Validator struct {
-	resolver             k8validation.AuthorizationRuleResolver
-	roleTemplateResolver *auth.RoleTemplateResolver
+	admitter admitter
 }
 
 // GVR returns the GroupVersionKind for this CRD.
@@ -56,9 +57,19 @@ func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.Webho
 	return []admissionregistrationv1.ValidatingWebhook{*admission.NewDefaultValidatingWebhook(v, clientConfig, admissionregistrationv1.NamespacedScope, v.Operations())}
 }
 
+// Admitters returns the admitter objects used to validate clusterRoleTemplateBindings.
+func (v *Validator) Admitters() []admission.Admitter {
+	return []admission.Admitter{&v.admitter}
+}
+
+type admitter struct {
+	resolver             k8validation.AuthorizationRuleResolver
+	roleTemplateResolver *auth.RoleTemplateResolver
+}
+
 // Admit is the entrypoint for the validator. Admit will return an error if it unable to process the request.
 // If this function is called without NewValidator(..) calls will panic.
-func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	listTrace := trace.New("clusterRoleTemplateBindingValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
@@ -87,7 +98,7 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 	}
 
 	if request.Operation == admissionv1.Create {
-		if err = v.validateCreateFields(crtb); err != nil {
+		if err = a.validateCreateFields(crtb); err != nil {
 			return &admissionv1.AdmissionResponse{
 				Result: &metav1.Status{
 					Status:  "Failure",
@@ -100,7 +111,7 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 		}
 	}
 
-	roleTemplate, err := v.roleTemplateResolver.RoleTemplateCache().Get(crtb.RoleTemplateName)
+	roleTemplate, err := a.roleTemplateResolver.RoleTemplateCache().Get(crtb.RoleTemplateName)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return &admissionv1.AdmissionResponse{Allowed: true}, nil
@@ -108,12 +119,12 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 		return nil, fmt.Errorf("failed to get roletemplate '%s': %w", crtb.RoleTemplateName, err)
 	}
 
-	rules, err := v.roleTemplateResolver.RulesFromTemplate(roleTemplate)
+	rules, err := a.roleTemplateResolver.RulesFromTemplate(roleTemplate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve rules from roletemplate '%s': %w", crtb.RoleTemplateName, err)
 	}
 	response := &admissionv1.AdmissionResponse{}
-	auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, rules, crtb.ClusterName, v.resolver))
+	auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, rules, crtb.ClusterName, a.resolver))
 
 	return response, nil
 }
@@ -144,7 +155,7 @@ func validateUpdateFields(oldCRTB, newCRTB *apisv3.ClusterRoleTemplateBinding) e
 }
 
 // validateCreateFields checks if all required fields are present and valid.
-func (v *Validator) validateCreateFields(newCRTB *apisv3.ClusterRoleTemplateBinding) error {
+func (a *admitter) validateCreateFields(newCRTB *apisv3.ClusterRoleTemplateBinding) error {
 	hasUserTarget := newCRTB.UserName != "" || newCRTB.UserPrincipalName != ""
 	hasGroupTarget := newCRTB.GroupName != "" || newCRTB.GroupPrincipalName != ""
 
@@ -156,7 +167,7 @@ func (v *Validator) validateCreateFields(newCRTB *apisv3.ClusterRoleTemplateBind
 		return fmt.Errorf("missing required field 'clusterName': %w", admission.ErrInvalidRequest)
 	}
 
-	roleTemplate, err := v.roleTemplateResolver.RoleTemplateCache().Get(newCRTB.RoleTemplateName)
+	roleTemplate, err := a.roleTemplateResolver.RoleTemplateCache().Get(newCRTB.RoleTemplateName)
 	if err != nil {
 		return fmt.Errorf("unknown reference roleTemplate '%s': %w", newCRTB.RoleTemplateName, err)
 	}

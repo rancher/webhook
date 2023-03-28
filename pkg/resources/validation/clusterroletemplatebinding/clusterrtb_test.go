@@ -244,7 +244,9 @@ func (c *ClusterRoleTemplateBindingSuite) Test_PrivilegeEscalation() {
 		test := tests[i]
 		c.Run(test.name, func() {
 			req := createCRTBRequest(c.T(), test.args.oldCRTB(), test.args.newCRTB(), test.args.username)
-			resp, err := validator.Admit(req)
+			admitters := validator.Admitters()
+			assert.Len(c.T(), admitters, 1)
+			resp, err := admitters[0].Admit(req)
 			c.NoError(err, "Admit failed")
 			if resp.Allowed != test.allowed {
 				c.Failf("Response was incorrectly validated", "Wanted response.Allowed = '%v' got %v: result=%+v", test.allowed, resp.Allowed, resp.Result)
@@ -544,7 +546,9 @@ func (c *ClusterRoleTemplateBindingSuite) Test_UpdateValidation() {
 		c.Run(test.name, func() {
 			c.T().Parallel()
 			req := createCRTBRequest(c.T(), test.args.oldCRTB(), test.args.newCRTB(), test.args.username)
-			resp, err := validator.Admit(req)
+			admitters := validator.Admitters()
+			assert.Len(c.T(), admitters, 1)
+			resp, err := admitters[0].Admit(req)
 			c.NoError(err, "Admit failed")
 			if resp.Allowed != test.allowed {
 				c.Failf("Response was incorrectly validated", "Wanted response.Allowed = '%v' got %v: result=%+v", test.allowed, resp.Allowed, resp.Result)
@@ -704,7 +708,9 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 		c.Run(test.name, func() {
 			c.T().Parallel()
 			req := createCRTBRequest(c.T(), test.args.oldCRTB(), test.args.newCRTB(), test.args.username)
-			resp, err := validator.Admit(req)
+			admitters := validator.Admitters()
+			assert.Len(c.T(), admitters, 1)
+			resp, err := admitters[0].Admit(req)
 			c.NoError(err, "Admit failed")
 			if resp.Allowed != test.allowed {
 				c.Failf("Response was incorrectly validated", "Wanted response.Allowed = '%v' got %v: result=%+v", test.allowed, resp.Allowed, resp.Result)
