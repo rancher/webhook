@@ -149,7 +149,7 @@ node:
 
 steps:
   - name: build
-    image: rancher/dapper:v0.5.8
+    image: rancher/dapper:v0.6.0
     commands:
       - dapper ci
     volumes:
