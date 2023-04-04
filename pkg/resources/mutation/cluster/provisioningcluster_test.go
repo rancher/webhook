@@ -1,12 +1,18 @@
 package cluster
 
 import (
+	"encoding/json"
 	"testing"
 
 	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
+	"github.com/rancher/webhook/pkg/admission"
+	data2 "github.com/rancher/wrangler/pkg/data"
+	"github.com/stretchr/testify/assert"
+	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 func Test_GetKubeAPIServerArg(t *testing.T) {
@@ -579,4 +585,35 @@ func clusterWithoutMachineSelectorFile() *v1.Cluster {
 			},
 		},
 	}
+}
+
+func TestAdmitPreserveUnknownFields(t *testing.T) {
+	cluster := &v1.Cluster{}
+	data, err := data2.Convert(cluster)
+	assert.Nil(t, err)
+
+	data.SetNested("test", "spec", "unknownField")
+	raw, err := json.Marshal(data)
+	assert.Nil(t, err)
+
+	request := &admission.Request{
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Object: runtime.RawExtension{
+				Raw: raw,
+			},
+		},
+	}
+
+	m := ProvisioningClusterMutator{}
+
+	request.Operation = admissionv1.Create
+	response, err := m.Admit(request)
+	assert.Nil(t, err)
+	assert.Equal(t, response.Patch, []byte(`[{"op":"add","path":"/metadata/annotations","value":{"field.cattle.io/creatorId":""}}]`))
+
+	request.Operation = admissionv1.Update
+	response, err = m.Admit(request)
+	assert.Nil(t, err)
+	assert.Nil(t, response.Patch)
+
 }
