@@ -55,8 +55,6 @@ spec:
             scheme: "HTTPS"
           failureThreshold: 60
           periodSeconds: 5
-          successThreshold: 1
-          timeoutSeconds: 1
         livenessProbe:
           httpGet:
             path: "/healthz"

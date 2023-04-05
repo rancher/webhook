@@ -29,3 +29,7 @@ if echo $TAG | grep -q dirty; then
     HELM_TAG=dev
     HELM_VERSION=0.0.0-dev
 fi
+
+DIST_DIR="$(dirname $0)/../dist/"
+mkdir -p ${DIST_DIR}
+echo "export TAG=${TAG}; export HELM_TAG=${HELM_TAG}; export HELM_VERSION=${HELM_VERSION};" >${DIST_DIR}/tags

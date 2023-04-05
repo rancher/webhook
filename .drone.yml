@@ -20,6 +20,7 @@ steps:
     image: rancher/rancher:v2.7-head
     privileged: true
     commands:
+      - zypper -n install helm
       - scripts/integration-test
 
   - name: github_binary_release
@@ -88,6 +89,7 @@ steps:
     image: rancher/rancher:v2.7-head
     privileged: true
     commands:
+      - zypper -n install helm
       - scripts/integration-test
 
   - name: github_binary_release
@@ -160,6 +162,7 @@ steps:
     image: rancher/rancher:v2.7-head
     privileged: true
     commands:
+      - zypper -n install helm
       - scripts/integration-test
 
   - name: github_binary_release
