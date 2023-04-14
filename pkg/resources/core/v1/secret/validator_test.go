@@ -26,7 +26,6 @@ func TestAdmit(t *testing.T) {
 		hasRoleBindingRefs         bool
 		hasOrphanDelete            bool
 		hasOrphanPropagationDelete bool
-		dryRun                     bool
 		secretDecodeError          bool
 		optionsDecodeError         bool
 		roleIndexerError           error
@@ -102,18 +101,6 @@ func TestAdmit(t *testing.T) {
 			hasRoleBindingRefs:         true,
 			hasOrphanPropagationDelete: true,
 			wantAdmit:                  false,
-		},
-		{
-			name:      "dry run, no orphan, allow",
-			dryRun:    true,
-			wantAdmit: true,
-		},
-		{
-			name:                       "dry run, has role, orphan, allow",
-			dryRun:                     true,
-			hasRoleRefs:                true,
-			hasOrphanPropagationDelete: true,
-			wantAdmit:                  true,
 		},
 		{
 			name:                       "secret decode error",
@@ -209,7 +196,6 @@ func TestAdmit(t *testing.T) {
 					UserInfo:        v1authentication.UserInfo{Username: "test-user", UID: ""},
 					Object:          runtime.RawExtension{},
 					OldObject:       runtime.RawExtension{},
-					DryRun:          &test.dryRun,
 				},
 			}
 			invalidObj := struct {

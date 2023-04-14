@@ -88,9 +88,6 @@ type admitter struct {
 
 // Admit is the entrypoint for the validator. Admit will return an error if it is unable to process the request.
 func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
-	if request.DryRun != nil && *request.DryRun {
-		return admission.ResponseAllowed(), nil
-	}
 	listTrace := trace.New("secret Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
