@@ -55,8 +55,21 @@ var rancherAuthBaseRules = []v1.RuleWithOperations{
 	},
 	{
 		Operations: []v1.OperationType{
-			v1.Create,
 			v1.Update,
+		},
+		Rule: v1.Rule{
+			APIGroups:   []string{""},
+			APIVersions: []string{"v1"},
+			Resources:   []string{"namespaces"},
+			Scope:       &clusterScope,
+		},
+	},
+}
+
+var rancherNamespaceRules = []v1.RuleWithOperations{
+	{
+		Operations: []v1.OperationType{
+			v1.Create,
 		},
 		Rule: v1.Rule{
 			APIGroups:   []string{""},

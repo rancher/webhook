@@ -180,6 +180,40 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 					SideEffects:             &sideEffectClassNone,
 					AdmissionReviewVersions: []string{"v1", "v1beta1"},
 				},
+				{
+					Name:          "rancher.cattle.io.namespaces.create-non-kubesystem",
+					ClientConfig:  validationClientConfig,
+					Rules:         rancherNamespaceRules,
+					FailurePolicy: &failPolicyFail,
+					SideEffects:   &sideEffectClassNone,
+					NamespaceSelector: &metav1.LabelSelector{
+						MatchExpressions: []metav1.LabelSelectorRequirement{
+							{
+								Key:      corev1.LabelMetadataName,
+								Operator: metav1.LabelSelectorOpNotIn,
+								Values:   []string{"kube-system"},
+							},
+						},
+					},
+					AdmissionReviewVersions: []string{"v1", "v1beta1"},
+				},
+				{
+					Name:          "rancher.cattle.io.namespaces.create-kubesystem-only",
+					ClientConfig:  validationClientConfig,
+					Rules:         rancherNamespaceRules,
+					FailurePolicy: &failPolicyIgnore,
+					SideEffects:   &sideEffectClassNone,
+					NamespaceSelector: &metav1.LabelSelector{
+						MatchExpressions: []metav1.LabelSelectorRequirement{
+							{
+								Key:      corev1.LabelMetadataName,
+								Operator: metav1.LabelSelectorOpIn,
+								Values:   []string{"kube-system"},
+							},
+						},
+					},
+					AdmissionReviewVersions: []string{"v1", "v1beta1"},
+				},
 			},
 		}, &v1.MutatingWebhookConfiguration{
 			ObjectMeta: metav1.ObjectMeta{
