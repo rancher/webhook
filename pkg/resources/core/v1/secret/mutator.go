@@ -39,12 +39,6 @@ func (m *Mutator) MutatingWebhook(clientConfig admissionregistrationv1.WebhookCl
 
 // Admit is the entrypoint for the mutator. Admit will return an error if it unable to process the request.
 func (m *Mutator) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
-	if request.DryRun != nil && *request.DryRun {
-		return &admissionv1.AdmissionResponse{
-			Allowed: true,
-		}, nil
-	}
-
 	listTrace := trace.New("secret Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
