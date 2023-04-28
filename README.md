@@ -22,6 +22,14 @@ is also rejected.
 The Go web-server itself is configured by [dynamiclistener](https://github.com/rancher/dynamiclistener).
 It handles TLS certificates and the management of associated Secrets for secure communication of other Rancher components with the Webhook.
 
+## Docs
+
+Documentation on each of the CRDs that are validated can be found in `docs.md`. It is recommended to review the [kubernetes docs on CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/#customresourcedefinitions) as well.
+
+Docs are added by creating a resource-specific readme in the directory of your mutator/validator (e.x. `pkg/resources/$GROUP/$GROUP_VERSION/$RESOURCE/$READABLE_RESOURCE.MD`). 
+These files should be named with a human-readable version of the CRD's name.
+Running `go generate` will then aggregate these into the user-facing docs in the `docs.md` file.
+
 ## Webhooks
 Rancher-Webhook is composed of multiple [WebhookHandlers](pkg/admission/admission.go) which is used when creating [ValidatingWebhooks](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.24/#validatingwebhook-v1-admissionregistration-k8s-io) and [MutatingWebhooks](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.24/#mutatingwebhook-v1-admissionregistration-k8s-io). 
 
