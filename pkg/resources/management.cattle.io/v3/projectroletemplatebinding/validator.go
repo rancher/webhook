@@ -1,9 +1,9 @@
-// Package projectroletemplatebinding is used for validating projectroletemplatebinding admission request.
+// Package projectroletemplatebinding is used for validating ProjectRoleTemplateBinding admission requests.
 package projectroletemplatebinding
 
 import (
+	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -14,8 +14,8 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	k8validation "k8s.io/kubernetes/pkg/registry/rbac/validation"
 	"k8s.io/utils/trace"
 )
@@ -71,28 +71,21 @@ type admitter struct {
 	roleTemplateResolver *auth.RoleTemplateResolver
 }
 
-// Admit is the entrypoint for the validator. Admit will return an error if it unable to process the request.
-// If this function is called without NewValidator(..) calls will panic.
+// Admit is the entrypoint for the validator. Admit will return an error if it's unable to process the request.
+// If this method is called on a nil Validator, it panics.
 func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	listTrace := trace.New("projectRoleTemplateBindingValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
+	fieldPath := field.NewPath("projectroletemplatebinding")
+
 	if request.Operation == admissionv1.Update {
 		oldPRTB, newPRTB, err := objectsv3.ProjectRoleTemplateBindingOldAndNewFromRequest(&request.AdmissionRequest)
 		if err != nil {
-			return nil, fmt.Errorf("failed to decode PRTB objects from request: %w", err)
+			return nil, fmt.Errorf("failed to decode old and new PRTB objects from request: %w", err)
 		}
-
-		if err = validateUpdateFields(oldPRTB, newPRTB); err != nil {
-			return &admissionv1.AdmissionResponse{
-				Result: &metav1.Status{
-					Status:  "Failure",
-					Message: err.Error(),
-					Reason:  metav1.StatusReasonBadRequest,
-					Code:    http.StatusBadRequest,
-				},
-				Allowed: false,
-			}, nil
+		if err := validateUpdateFields(oldPRTB, newPRTB, fieldPath); err != nil {
+			return admission.ResponseBadRequest(err.Error()), nil
 		}
 	}
 
@@ -102,16 +95,12 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	}
 
 	if request.Operation == admissionv1.Create {
-		if err = a.validateCreateFields(prtb); err != nil {
-			return &admissionv1.AdmissionResponse{
-				Result: &metav1.Status{
-					Status:  "Failure",
-					Message: err.Error(),
-					Reason:  metav1.StatusReasonBadRequest,
-					Code:    http.StatusBadRequest,
-				},
-				Allowed: false,
-			}, nil
+		var fieldErr *field.Error
+		if err := a.validateCreateFields(prtb, fieldPath); err != nil {
+			if errors.As(err, &fieldErr) {
+				return admission.ResponseBadRequest(err.Error()), nil
+			}
+			return nil, fmt.Errorf("failed to validate fields on create: %w", err)
 		}
 	}
 
@@ -152,51 +141,73 @@ func clusterFromProject(project string) (string, string) {
 }
 
 // validUpdateFields checks if the fields being changed are valid update fields.
-func validateUpdateFields(oldPRTB, newPRTB *apisv3.ProjectRoleTemplateBinding) error {
-	var invalidFieldName string
+func validateUpdateFields(oldPRTB, newPRTB *apisv3.ProjectRoleTemplateBinding, fieldPath *field.Path) *field.Error {
+	const reason = "field is immutable"
 	switch {
 	case oldPRTB.RoleTemplateName != newPRTB.RoleTemplateName:
-		invalidFieldName = "referenced roleTemplate"
+		return field.Invalid(fieldPath.Child("roleTemplateName"), newPRTB.RoleTemplateName, reason)
 	case oldPRTB.ProjectName != newPRTB.ProjectName:
-		invalidFieldName = "projectName"
+		return field.Invalid(fieldPath.Child("projectName"), newPRTB.ProjectName, reason)
 	case oldPRTB.UserName != newPRTB.UserName && oldPRTB.UserName != "":
-		invalidFieldName = "userName"
+		return field.Invalid(fieldPath.Child("userName"), newPRTB.UserName, reason)
 	case oldPRTB.UserPrincipalName != newPRTB.UserPrincipalName && oldPRTB.UserPrincipalName != "":
-		invalidFieldName = "userPrincipalName"
+		return field.Invalid(fieldPath.Child("userPrincipalName"), newPRTB.UserPrincipalName, reason)
 	case oldPRTB.GroupName != newPRTB.GroupName && oldPRTB.GroupName != "":
-		invalidFieldName = "groupName"
+		return field.Invalid(fieldPath.Child("groupName"), newPRTB.GroupName, reason)
 	case oldPRTB.GroupPrincipalName != newPRTB.GroupPrincipalName && oldPRTB.GroupPrincipalName != "":
-		invalidFieldName = "groupPrincipalName"
+		return field.Invalid(fieldPath.Child("groupPrincipalName"), newPRTB.GroupPrincipalName, reason)
 	case (newPRTB.GroupName != "" || oldPRTB.GroupPrincipalName != "") && (newPRTB.UserName != "" || oldPRTB.UserPrincipalName != ""):
-		invalidFieldName = "both user and group"
+		return field.Forbidden(fieldPath,
+			"binding must target either a user [userName]/[userPrincipalName] OR a group [groupName]/[groupPrincipalName]")
+	case newPRTB.ServiceAccount != "":
+		return field.Forbidden(fieldPath.Child("serviceAccount"), "update is not allowed")
 	default:
 		return nil
 	}
-
-	return fmt.Errorf("cannot update %s for clusterRoleTemplateBinding %s: %w", invalidFieldName, oldPRTB.Name, admission.ErrInvalidRequest)
 }
 
 // validateCreateFields checks if all required fields are present and valid.
-func (a *admitter) validateCreateFields(newPRTB *apisv3.ProjectRoleTemplateBinding) error {
+func (a *admitter) validateCreateFields(newPRTB *apisv3.ProjectRoleTemplateBinding, fieldPath *field.Path) error {
 	hasUserTarget := newPRTB.UserName != "" || newPRTB.UserPrincipalName != ""
 	hasGroupTarget := newPRTB.GroupName != "" || newPRTB.GroupPrincipalName != ""
+	hasServiceAccountTarget := newPRTB.ServiceAccount != ""
 
-	if (hasUserTarget && hasGroupTarget) || (!hasUserTarget && !hasGroupTarget) {
-		return fmt.Errorf("binding must target either a user [userId]/[userPrincipalId] OR a group [groupId]/[groupPrincipalId]: %w", admission.ErrInvalidRequest)
+	if !onlyOneTrue(hasUserTarget, hasGroupTarget, hasServiceAccountTarget) {
+		return field.Forbidden(fieldPath,
+			"binding must target only a user [userName]/[userPrincipalName] OR a group [groupName]/[groupPrincipalName] OR a [serviceAccount]")
 	}
 
 	if newPRTB.ProjectName == "" {
-		return fmt.Errorf("binding must have field projectName set: %w", admission.ErrInvalidRequest)
+		return field.Required(fieldPath.Child("projectName"), "")
+	}
+
+	if newPRTB.RoleTemplateName == "" {
+		return field.Required(fieldPath.Child("roleTemplateName"), "")
 	}
 
 	roleTemplate, err := a.roleTemplateResolver.RoleTemplateCache().Get(newPRTB.RoleTemplateName)
 	if err != nil {
-		return fmt.Errorf("unknown reference roleTemplate '%s': %w", newPRTB.RoleTemplateName, err)
+		return err
 	}
 
 	if roleTemplate.Locked {
-		return fmt.Errorf("referenced role '%s' is locked and cannot be assigned: %w", roleTemplate.DisplayName, admission.ErrInvalidRequest)
+		return field.Forbidden(fieldPath.Child("roleTemplate"), fmt.Sprintf("referenced role '%s' is locked and cannot be assigned", roleTemplate.DisplayName))
+	}
+
+	const projectContext = "project"
+	if roleTemplate.Context != projectContext {
+		return field.NotSupported(fieldPath.Child("roleTemplate", "context"), roleTemplate.Context, []string{projectContext})
 	}
 
 	return nil
+}
+
+func onlyOneTrue(values ...bool) bool {
+	var trueCount int
+	for _, v := range values {
+		if v {
+			trueCount++
+		}
+	}
+	return trueCount == 1
 }

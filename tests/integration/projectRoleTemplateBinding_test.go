@@ -57,6 +57,7 @@ func (m *IntegrationSuite) TestProjectRoleTemplateBinding() {
 				Resources: []string{"pods"},
 			},
 		},
+		Context: "project",
 	}
 	m.createObj(testRT, schema.GroupVersionKind{})
 	validateEndpoints(m.T(), endPoints, m.clientFactory)
