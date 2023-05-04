@@ -115,7 +115,7 @@ changes returns a response value with `Allowed` set to false.
 This logic is the main part of object inspection and admission control.
 
 ### Mutation
-A MutatingAdmissionHandler should be used when the data being updated needs to be modified. All modifications must be recorded using a [JSONpatch](https://jsonpatch.com/). This can be done easily using the `pkg/patch` library for example the [MutatingAdmissionHandler for secrets](pkg/resources/mutation/secret/secret.go) add the creator's username as an annotation then creates a patch that is attached to the response.
+A MutatingAdmissionHandler should be used when the data being updated needs to be modified. All modifications must be recorded using a [JSONpatch](https://jsonpatch.com/). This can be done easily using the `pkg/patch` library for example the [MutatingAdmissionHandler for secrets](pkg/resources/core/v1/secret/mutator.go) add the creator's username as an annotation then creates a patch that is attached to the response.
 ```go 
 	newSecret.Annotations[auth.CreatorIDAnn] = request.UserInfo.Username
 	response := &admissionv1.AdmissionResponse{}
