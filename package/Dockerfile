@@ -1,4 +1,4 @@
-FROM registry.suse.com/bci/bci-micro:15.4.18.4
+FROM registry.suse.com/bci/bci-micro:15.4.19.1
 
 ARG user=webhook
 

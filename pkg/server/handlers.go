@@ -4,28 +4,27 @@ import (
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/clients"
 	"github.com/rancher/webhook/pkg/resolvers"
-	mutationCluster "github.com/rancher/webhook/pkg/resources/mutation/cluster"
-	"github.com/rancher/webhook/pkg/resources/mutation/fleetworkspace"
-	"github.com/rancher/webhook/pkg/resources/mutation/machineconfigs"
-	"github.com/rancher/webhook/pkg/resources/mutation/secret"
-	"github.com/rancher/webhook/pkg/resources/validation/cluster"
-	"github.com/rancher/webhook/pkg/resources/validation/clusterroletemplatebinding"
-	"github.com/rancher/webhook/pkg/resources/validation/feature"
-	"github.com/rancher/webhook/pkg/resources/validation/globalrole"
-	"github.com/rancher/webhook/pkg/resources/validation/globalrolebinding"
-	"github.com/rancher/webhook/pkg/resources/validation/machineconfig"
-	nshandler "github.com/rancher/webhook/pkg/resources/validation/namespace"
-	"github.com/rancher/webhook/pkg/resources/validation/podsecurityadmissionconfigurationtemplate"
-	"github.com/rancher/webhook/pkg/resources/validation/projectroletemplatebinding"
-	"github.com/rancher/webhook/pkg/resources/validation/roletemplate"
+	nshandler "github.com/rancher/webhook/pkg/resources/core/v1/namespace"
+	"github.com/rancher/webhook/pkg/resources/core/v1/secret"
+	managementCluster "github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/cluster"
+	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/clusterroletemplatebinding"
+	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/feature"
+	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/fleetworkspace"
+	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/globalrole"
+	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/globalrolebinding"
+	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/podsecurityadmissionconfigurationtemplate"
+	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/projectroletemplatebinding"
+	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/roletemplate"
+	provisioningCluster "github.com/rancher/webhook/pkg/resources/provisioning.cattle.io/v1/cluster"
+	"github.com/rancher/webhook/pkg/resources/rke-machine-config.cattle.io/v1/machineconfig"
 )
 
 // Validation returns a list of all ValidatingAdmissionHandlers used by the webhook.
 func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandler, error) {
 	handlers := []admission.ValidatingAdmissionHandler{
 		&feature.Validator{},
-		cluster.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache()),
-		cluster.NewProvisioningClusterValidator(clients),
+		managementCluster.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache()),
+		provisioningCluster.NewProvisioningClusterValidator(clients),
 		&machineconfig.Validator{},
 		nshandler.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews()),
 	}
@@ -48,10 +47,10 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 // Mutation returns a list of all MutatingAdmissionHandlers used by the webhook.
 func Mutation(clients *clients.Clients) ([]admission.MutatingAdmissionHandler, error) {
 	return []admission.MutatingAdmissionHandler{
-		mutationCluster.NewProvisioningClusterMutator(clients.Core.Secret(), clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache()),
-		mutationCluster.NewManagementClusterMutator(clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache()),
+		provisioningCluster.NewProvisioningClusterMutator(clients.Core.Secret(), clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache()),
+		managementCluster.NewManagementClusterMutator(clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache()),
 		fleetworkspace.NewMutator(clients),
 		&secret.Mutator{},
-		&machineconfigs.Mutator{},
+		&machineconfig.Mutator{},
 	}, nil
 }
