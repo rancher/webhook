@@ -109,6 +109,23 @@ func (v *Validator) validateFleetPermissions(request *admission.Request) (*admis
 		return nil, fmt.Errorf("failed to get old and new clusters from request: %w", err)
 	}
 
+	// Ensure that the FleetWorkspaceName field cannot be unset once it is set, as it would cause (likely unintentional)
+	// cluster deletion. Note that we're only enforcing this rule on UPDATE because Spec.FleetWorkspaceName will be
+	// empty on cluster deletion, which is fine.
+	fleetWorkspaceUnset := newCluster.Spec.FleetWorkspaceName == "" && oldCluster.Spec.FleetWorkspaceName != ""
+	if request.Operation == admissionv1.Update && fleetWorkspaceUnset {
+		return &admissionv1.AdmissionResponse{
+			Result: &metav1.Status{
+				Status:  "Failure",
+				Message: "once set, field FleetWorkspaceName cannot be made empty",
+				Reason:  metav1.StatusReasonInvalid,
+				Code:    http.StatusBadRequest,
+			},
+			Allowed: false,
+		}, nil
+	}
+
+	// If the FleetWorkspaceName is empty or unchanged, there's no need to make a SAR request.
 	if newCluster.Spec.FleetWorkspaceName == "" || oldCluster.Spec.FleetWorkspaceName == newCluster.Spec.FleetWorkspaceName {
 		return &admissionv1.AdmissionResponse{
 			Allowed: true,
