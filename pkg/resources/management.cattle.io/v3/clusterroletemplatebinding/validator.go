@@ -2,8 +2,8 @@
 package clusterroletemplatebinding
 
 import (
+	"errors"
 	"fmt"
-	"net/http"
 
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
@@ -13,8 +13,8 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	k8validation "k8s.io/kubernetes/pkg/registry/rbac/validation"
 	"k8s.io/utils/trace"
 )
@@ -73,41 +73,31 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	listTrace := trace.New("clusterRoleTemplateBindingValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
+	fieldPath := field.NewPath("clusterroletemplatebinding")
+
 	if request.Operation == admissionv1.Update {
 		oldCRTB, newCRTB, err := objectsv3.ClusterRoleTemplateBindingOldAndNewFromRequest(&request.AdmissionRequest)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get old and new CRTB from request: %w", err)
+			return nil, fmt.Errorf("failed to decode old and new CRTB from request: %w", err)
 		}
 
-		if err := validateUpdateFields(oldCRTB, newCRTB); err != nil {
-			return &admissionv1.AdmissionResponse{
-				Result: &metav1.Status{
-					Status:  "Failure",
-					Message: err.Error(),
-					Reason:  metav1.StatusReasonBadRequest,
-					Code:    http.StatusBadRequest,
-				},
-				Allowed: false,
-			}, nil
+		if err := validateUpdateFields(oldCRTB, newCRTB, fieldPath); err != nil {
+			return admission.ResponseBadRequest(err.Error()), nil
 		}
 	}
 
 	crtb, err := objectsv3.ClusterRoleTemplateBindingFromRequest(&request.AdmissionRequest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get binding crtb from request: %w", err)
+		return nil, fmt.Errorf("failed to decode CRTB from request: %w", err)
 	}
 
 	if request.Operation == admissionv1.Create {
-		if err = a.validateCreateFields(crtb); err != nil {
-			return &admissionv1.AdmissionResponse{
-				Result: &metav1.Status{
-					Status:  "Failure",
-					Message: err.Error(),
-					Reason:  metav1.StatusReasonBadRequest,
-					Code:    http.StatusBadRequest,
-				},
-				Allowed: false,
-			}, nil
+		if err = a.validateCreateFields(crtb, fieldPath); err != nil {
+			var fieldErr *field.Error
+			if errors.As(err, &fieldErr) {
+				return admission.ResponseBadRequest(fieldErr.Error()), nil
+			}
+			return nil, fmt.Errorf("failed to validate fields on create: %w", err)
 		}
 	}
 
@@ -130,50 +120,58 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 }
 
 // validUpdateFields checks if the fields being changed are valid update fields.
-func validateUpdateFields(oldCRTB, newCRTB *apisv3.ClusterRoleTemplateBinding) error {
-	var invalidFieldName string
+func validateUpdateFields(oldCRTB, newCRTB *apisv3.ClusterRoleTemplateBinding, fieldPath *field.Path) *field.Error {
+	const reason = "field is immutable"
 	switch {
 	case oldCRTB.RoleTemplateName != newCRTB.RoleTemplateName:
-		invalidFieldName = "referenced roleTemplate"
+		return field.Invalid(fieldPath.Child("roleTemplateName"), newCRTB.RoleTemplateName, reason)
 	case oldCRTB.ClusterName != newCRTB.ClusterName:
-		invalidFieldName = "clusterName"
+		return field.Invalid(fieldPath.Child("clusterName"), newCRTB.ClusterName, reason)
 	case oldCRTB.UserName != newCRTB.UserName && oldCRTB.UserName != "":
-		invalidFieldName = "userName"
+		return field.Invalid(fieldPath.Child("userName"), newCRTB.UserName, reason)
 	case oldCRTB.UserPrincipalName != newCRTB.UserPrincipalName && oldCRTB.UserPrincipalName != "":
-		invalidFieldName = "userPrincipalName"
+		return field.Invalid(fieldPath.Child("userPrincipalName"), newCRTB.UserPrincipalName, reason)
 	case oldCRTB.GroupName != newCRTB.GroupName && oldCRTB.GroupName != "":
-		invalidFieldName = "groupName"
+		return field.Invalid(fieldPath.Child("groupName"), newCRTB.GroupName, reason)
 	case oldCRTB.GroupPrincipalName != newCRTB.GroupPrincipalName && oldCRTB.GroupPrincipalName != "":
-		invalidFieldName = "groupPrincipalName"
+		return field.Invalid(fieldPath.Child("groupPrincipalName"), newCRTB.GroupPrincipalName, reason)
 	case (newCRTB.GroupName != "" || oldCRTB.GroupPrincipalName != "") && (newCRTB.UserName != "" || oldCRTB.UserPrincipalName != ""):
-		invalidFieldName = "both user and group"
+		return field.Forbidden(fieldPath,
+			"binding target must target either a user [userName]/[userPrincipalName] OR a group [groupName]/[groupPrincipalName]")
 	default:
 		return nil
 	}
-
-	return fmt.Errorf("cannot update %s for clusterRoleTemplateBinding %s: %w", invalidFieldName, oldCRTB.Name, admission.ErrInvalidRequest)
 }
 
 // validateCreateFields checks if all required fields are present and valid.
-func (a *admitter) validateCreateFields(newCRTB *apisv3.ClusterRoleTemplateBinding) error {
+func (a *admitter) validateCreateFields(newCRTB *apisv3.ClusterRoleTemplateBinding, fieldPath *field.Path) error {
+	const reason = "field is required"
+
 	hasUserTarget := newCRTB.UserName != "" || newCRTB.UserPrincipalName != ""
 	hasGroupTarget := newCRTB.GroupName != "" || newCRTB.GroupPrincipalName != ""
 
 	if (hasUserTarget && hasGroupTarget) || (!hasUserTarget && !hasGroupTarget) {
-		return fmt.Errorf("binding must target either a user [userId]/[userPrincipalId] OR a group [groupId]/[groupPrincipalId]: %w", admission.ErrInvalidRequest)
+		return field.Forbidden(fieldPath, "binding must target either a user [userId]/[userPrincipalId] OR a group [groupId]/[groupPrincipalId]")
 	}
 
 	if newCRTB.ClusterName == "" {
-		return fmt.Errorf("missing required field 'clusterName': %w", admission.ErrInvalidRequest)
+		return field.Required(fieldPath.Child("clusterName"), reason)
+	}
+
+	if newCRTB.RoleTemplateName == "" {
+		return field.Required(fieldPath.Child("roleTemplateName"), reason)
 	}
 
 	roleTemplate, err := a.roleTemplateResolver.RoleTemplateCache().Get(newCRTB.RoleTemplateName)
 	if err != nil {
-		return fmt.Errorf("unknown reference roleTemplate '%s': %w", newCRTB.RoleTemplateName, err)
+		if apierrors.IsNotFound(err) {
+			return field.Invalid(fieldPath.Child("roleTemplateName"), newCRTB.RoleTemplateName, "the referenced role template was not found")
+		}
+		return err
 	}
 
 	if roleTemplate.Locked {
-		return fmt.Errorf("referenced role '%s' is locked and cannot be assigned: %w", roleTemplate.DisplayName, admission.ErrInvalidRequest)
+		return field.Forbidden(fieldPath.Child("roleTemplate"), fmt.Sprintf("referenced role %s is locked and cannot be assigned", roleTemplate.DisplayName))
 	}
 
 	return nil
