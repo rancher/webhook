@@ -1,5 +1,5 @@
 //go:generate go run pkg/codegen/cleanup/main.go
-//go:generate go run pkg/codegen/main.go pkg/codegen/template.go pkg/codegen/docs.go
+//go:generate go run ./pkg/codegen
 package main
 
 import (
