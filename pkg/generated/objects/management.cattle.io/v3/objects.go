@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	admissionv1 "k8s.io/api/admission/v1"
 )
 
@@ -483,4 +483,24 @@ func ProjectRoleTemplateBindingFromRequest(request *admissionv1.AdmissionRequest
 	}
 
 	return object, nil
+}
+
+func TokenOldAndNewFromRequest(request *admissionv1.AdmissionRequest) (*v3.Token, *v3.Token, error) {
+	if request == nil {
+		return nil, nil, fmt.Errorf("nil request")
+	}
+
+	object := &v3.Token{}
+	oldObject := &v3.Token{}
+
+	err := json.Unmarshal(request.Object.Raw, object)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal request object: %w", err)
+	}
+
+	err = json.Unmarshal(request.OldObject.Raw, oldObject)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal request oldObject: %w", err)
+	}
+	return oldObject, object, err
 }
