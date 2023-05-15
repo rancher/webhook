@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	admissionv1 "k8s.io/api/admission/v1"
 )
 
@@ -485,6 +485,9 @@ func ProjectRoleTemplateBindingFromRequest(request *admissionv1.AdmissionRequest
 	return object, nil
 }
 
+// TokenOldAndNewFromRequest gets the old and new Token objects, respectively, from the webhook request.
+// If the request is a Delete operation, then the new object is the zero value for Token.
+// Similarly, if the request is a Create operation, then the old object is the zero value for Token.
 func TokenOldAndNewFromRequest(request *admissionv1.AdmissionRequest) (*v3.Token, *v3.Token, error) {
 	if request == nil {
 		return nil, nil, fmt.Errorf("nil request")
@@ -493,14 +496,44 @@ func TokenOldAndNewFromRequest(request *admissionv1.AdmissionRequest) (*v3.Token
 	object := &v3.Token{}
 	oldObject := &v3.Token{}
 
-	err := json.Unmarshal(request.Object.Raw, object)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal request object: %w", err)
+	if request.Operation != admissionv1.Delete {
+		err := json.Unmarshal(request.Object.Raw, object)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to unmarshal request object: %w", err)
+		}
 	}
 
-	err = json.Unmarshal(request.OldObject.Raw, oldObject)
+	if request.Operation == admissionv1.Create {
+		return oldObject, object, nil
+	}
+
+	err := json.Unmarshal(request.OldObject.Raw, oldObject)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal request oldObject: %w", err)
 	}
-	return oldObject, object, err
+
+	return oldObject, object, nil
+}
+
+// TokenFromRequest returns a Token object from the webhook request.
+// If the operation is a Delete operation, then the old object is returned.
+// Otherwise, the new object is returned.
+func TokenFromRequest(request *admissionv1.AdmissionRequest) (*v3.Token, error) {
+	if request == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	object := &v3.Token{}
+	raw := request.Object.Raw
+
+	if request.Operation == admissionv1.Delete {
+		raw = request.OldObject.Raw
+	}
+
+	err := json.Unmarshal(raw, object)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal request object: %w", err)
+	}
+
+	return object, nil
 }
