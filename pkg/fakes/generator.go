@@ -8,5 +8,5 @@ package fakes
 //go:generate mockgen --build_flags=--mod=mod -package fakes -destination ./globalRole.go github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3 GlobalRoleController,GlobalRoleClient,GlobalRoleCache
 //go:generate mockgen --build_flags=--mod=mod -package fakes -destination ./roleTemplate.go github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3 RoleTemplateController,RoleTemplateClient,RoleTemplateCache
 //go:generate mockgen --build_flags=--mod=mod -package fakes -destination ./k8Validation.go "k8s.io/kubernetes/pkg/registry/rbac/validation" AuthorizationRuleResolver
-//go:generate mockgen --build_flags=--mod=mod -package fakes -destination ./RoleCache.go github.com/rancher/wrangler/pkg/generated/controllers/rbac/v1 RoleCache
-//go:generate mockgen --build_flags=--mod=mod -package fakes -destination ./RoleBindingCache.go github.com/rancher/wrangler/pkg/generated/controllers/rbac/v1 RoleBindingCache
+//go:generate mockgen --build_flags=--mod=mod -package fakes -destination ./RoleCache.go github.com/rancher/wrangler/pkg/generated/controllers/rbac/v1 RoleCache,RoleController
+//go:generate mockgen --build_flags=--mod=mod -package fakes -destination ./RoleBindingCache.go github.com/rancher/wrangler/pkg/generated/controllers/rbac/v1 RoleBindingCache,RoleBindingController
