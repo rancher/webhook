@@ -20,15 +20,16 @@ import (
 
 func TestValidateProjectNamespaceAnnotations(t *testing.T) {
 	tests := []struct {
-		name                     string
-		operationType            v1.Operation
-		projectAnnotationValue   string
-		includeProjectAnnotation bool
-		targetProject            string
-		userCanAccessProject     bool
-		sarError                 bool
-		wantError                bool
-		wantAllowed              bool
+		name                      string
+		operationType             v1.Operation
+		projectAnnotationValue    string
+		oldProjectAnnotationValue string
+		includeProjectAnnotation  bool
+		targetProject             string
+		userCanAccessProject      bool
+		sarError                  bool
+		wantError                 bool
+		wantAllowed               bool
 	}{
 		{
 			name:                     "user can access, create",
@@ -42,15 +43,27 @@ func TestValidateProjectNamespaceAnnotations(t *testing.T) {
 			wantAllowed:              true,
 		},
 		{
-			name:                     "user can access, update",
-			operationType:            v1.Update,
-			projectAnnotationValue:   "c-123xyz:p-123xyz",
-			includeProjectAnnotation: true,
-			targetProject:            "p-123xyz",
-			userCanAccessProject:     true,
-			sarError:                 false,
-			wantError:                false,
-			wantAllowed:              true,
+			name:                      "user can access, update",
+			operationType:             v1.Update,
+			projectAnnotationValue:    "c-123xyz:p-123xyz",
+			oldProjectAnnotationValue: "c-123abc:p-123abc",
+			includeProjectAnnotation:  true,
+			targetProject:             "p-123xyz",
+			userCanAccessProject:      true,
+			sarError:                  false,
+			wantError:                 false,
+			wantAllowed:               true,
+		},
+		{
+			name:                      "user isn't modifying projectID, update",
+			operationType:             v1.Update,
+			projectAnnotationValue:    "c-123xyz:p-123xyz",
+			oldProjectAnnotationValue: "c-123xyz:p-123xyz",
+			includeProjectAnnotation:  true,
+			targetProject:             "p-123xyz",
+			userCanAccessProject:      false,
+			wantError:                 false,
+			wantAllowed:               true,
 		},
 		{
 			name:                     "user can't access, create",
@@ -64,15 +77,16 @@ func TestValidateProjectNamespaceAnnotations(t *testing.T) {
 			wantAllowed:              false,
 		},
 		{
-			name:                     "user can't access, update",
-			operationType:            v1.Update,
-			projectAnnotationValue:   "c-123xyz:p-123xyz",
-			includeProjectAnnotation: true,
-			targetProject:            "p-123xyz",
-			userCanAccessProject:     false,
-			sarError:                 false,
-			wantError:                false,
-			wantAllowed:              false,
+			name:                      "user can't access, update",
+			operationType:             v1.Update,
+			projectAnnotationValue:    "c-123xyz:p-123xyz",
+			oldProjectAnnotationValue: "c-123abc:p-123abc",
+			includeProjectAnnotation:  true,
+			targetProject:             "p-123xyz",
+			userCanAccessProject:      false,
+			sarError:                  false,
+			wantError:                 false,
+			wantAllowed:               false,
 		},
 		{
 			name:                     "no annotation, create",
@@ -106,15 +120,16 @@ func TestValidateProjectNamespaceAnnotations(t *testing.T) {
 			wantAllowed:              false,
 		},
 		{
-			name:                     "invalid annotation, update",
-			operationType:            v1.Update,
-			projectAnnotationValue:   "not-valid-project",
-			includeProjectAnnotation: true,
-			targetProject:            "p-123xyz",
-			userCanAccessProject:     false,
-			sarError:                 false,
-			wantError:                true,
-			wantAllowed:              false,
+			name:                      "invalid annotation, update",
+			operationType:             v1.Update,
+			projectAnnotationValue:    "not-valid-project",
+			oldProjectAnnotationValue: "c-123abc:p-123abc",
+			includeProjectAnnotation:  true,
+			targetProject:             "p-123xyz",
+			userCanAccessProject:      false,
+			sarError:                  false,
+			wantError:                 true,
+			wantAllowed:               false,
 		},
 		{
 			name:                     "empty annotation, create",
@@ -128,15 +143,28 @@ func TestValidateProjectNamespaceAnnotations(t *testing.T) {
 			wantAllowed:              false,
 		},
 		{
-			name:                     "empty annotation, update",
-			operationType:            v1.Update,
-			projectAnnotationValue:   "",
-			includeProjectAnnotation: true,
-			targetProject:            "p-123xyz",
-			userCanAccessProject:     false,
-			sarError:                 false,
-			wantError:                true,
-			wantAllowed:              false,
+			name:                      "empty annotation, update",
+			operationType:             v1.Update,
+			projectAnnotationValue:    "",
+			oldProjectAnnotationValue: "c-123abc:p-123abc",
+			includeProjectAnnotation:  true,
+			targetProject:             "p-123xyz",
+			userCanAccessProject:      false,
+			sarError:                  false,
+			wantError:                 true,
+			wantAllowed:               false,
+		},
+		{
+			name:                      "empty old annotation, update",
+			operationType:             v1.Update,
+			projectAnnotationValue:    "c-123xyz:p-123xyz",
+			oldProjectAnnotationValue: "",
+			includeProjectAnnotation:  true,
+			targetProject:             "p-123xyz",
+			userCanAccessProject:      false,
+			sarError:                  false,
+			wantError:                 false,
+			wantAllowed:               false,
 		},
 		{
 			name:                     "sar error, create",
@@ -150,15 +178,16 @@ func TestValidateProjectNamespaceAnnotations(t *testing.T) {
 			wantAllowed:              false,
 		},
 		{
-			name:                     "sar error, update",
-			operationType:            v1.Update,
-			projectAnnotationValue:   "c-123xyz:p-123xyz",
-			includeProjectAnnotation: true,
-			targetProject:            "p-123xyz",
-			userCanAccessProject:     false,
-			sarError:                 true,
-			wantError:                true,
-			wantAllowed:              false,
+			name:                      "sar error, update",
+			operationType:             v1.Update,
+			projectAnnotationValue:    "c-123xyz:p-123xyz",
+			oldProjectAnnotationValue: "c-123abc:p-123abc",
+			includeProjectAnnotation:  true,
+			targetProject:             "p-123xyz",
+			userCanAccessProject:      false,
+			sarError:                  true,
+			wantError:                 true,
+			wantAllowed:               false,
 		},
 	}
 	for _, test := range tests {
@@ -183,7 +212,7 @@ func TestValidateProjectNamespaceAnnotations(t *testing.T) {
 				// if this wasn't for our project, don't handle the response
 				return false, nil, nil
 			})
-			request, err := createAnnotationNamespaceRequest(test.projectAnnotationValue, test.includeProjectAnnotation, test.operationType)
+			request, err := createAnnotationNamespaceRequest(test.projectAnnotationValue, test.oldProjectAnnotationValue, test.includeProjectAnnotation, test.operationType)
 			assert.NoError(t, err)
 			response := webhook.Response{}
 			err = validator.Admit(&response, request)
@@ -203,7 +232,7 @@ func sarIsForProjectGVR(sarSpec authorizationv1.SubjectAccessReviewSpec) bool {
 		sarSpec.ResourceAttributes.Resource == projectsGVR.Resource
 }
 
-func createAnnotationNamespaceRequest(projectAnnotation string, includeProjectAnnotation bool, operation v1.Operation) (*webhook.Request, error) {
+func createAnnotationNamespaceRequest(newProjectAnnotation, oldProjectAnnotation string, includeProjectAnnotation bool, operation v1.Operation) (*webhook.Request, error) {
 	gvk := metav1.GroupVersionKind{Version: "v1", Kind: "Namespace"}
 	gvr := metav1.GroupVersionResource{Version: "v1", Resource: "namespace"}
 	ns := corev1.Namespace{
@@ -213,7 +242,7 @@ func createAnnotationNamespaceRequest(projectAnnotation string, includeProjectAn
 	}
 	if includeProjectAnnotation {
 		ns.Annotations = map[string]string{
-			projectNSAnnotation: projectAnnotation,
+			projectNSAnnotation: newProjectAnnotation,
 		}
 	}
 
@@ -233,7 +262,16 @@ func createAnnotationNamespaceRequest(projectAnnotation string, includeProjectAn
 		Context:     context.Background(),
 		ObjTemplate: &corev1.Namespace{},
 	}
+
+	var err error
+	req.Object.Raw, err = json.Marshal(ns)
+	if err != nil {
+		return nil, err
+	}
 	if operation == v1.Update {
+		if includeProjectAnnotation {
+			ns.Annotations[projectNSAnnotation] = oldProjectAnnotation
+		}
 		obj, err := json.Marshal(ns)
 		if err != nil {
 			return nil, err
@@ -241,11 +279,6 @@ func createAnnotationNamespaceRequest(projectAnnotation string, includeProjectAn
 		req.OldObject = runtime.RawExtension{
 			Raw: obj,
 		}
-	}
-	var err error
-	req.Object.Raw, err = json.Marshal(ns)
-	if err != nil {
-		return nil, err
 	}
 	return req, nil
 }
