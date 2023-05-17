@@ -21,8 +21,6 @@ import (
 const (
 	roleOwnerIndex        = "webhook.cattle.io/role-owner-index"
 	roleBindingOwnerIndex = "webhook.cattle.io/role-binding-owner-index"
-	secretKind            = "Secret"
-	ownerFormat           = "%s/%s"
 	logPrefix             = "validator/corev1/secret"
 )
 
