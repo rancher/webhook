@@ -192,9 +192,13 @@ var rancherMutationRules = []v1.RuleWithOperations{
 			Scope:       &namespaceScope,
 		},
 	},
+}
+
+var rancherMutationMCMRules = []v1.RuleWithOperations{
 	{
 		Operations: []v1.OperationType{
 			v1.Create,
+			v1.Delete,
 		},
 		Rule: v1.Rule{
 			APIGroups:   []string{""},

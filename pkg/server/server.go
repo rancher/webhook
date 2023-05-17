@@ -137,6 +137,7 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 		rancherAuthRules := rancherAuthBaseRules
 		if clients.MultiClusterManagement { // register additional rbac rules if mcm is enabled
 			rancherAuthRules = append(rancherAuthRules, rancherAuthMCMRules...)
+			rancherMutationRules = append(rancherMutationRules, rancherMutationMCMRules...)
 		}
 
 		validationClientConfig := v1.WebhookClientConfig{
