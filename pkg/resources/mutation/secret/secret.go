@@ -1,25 +1,60 @@
 package secret
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/rancher/webhook/pkg/auth"
 	"github.com/rancher/webhook/pkg/patch"
+	v1 "github.com/rancher/wrangler/pkg/generated/controllers/rbac/v1"
 	"github.com/rancher/wrangler/pkg/webhook"
 	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/trace"
 )
 
-func NewMutator() webhook.Handler {
-	return &mutator{}
+const (
+	roleBindingOwnerIndex = "webhook.cattle.io/role-binding-index"
+	secretKind            = "Secret"
+	ownerFormat           = "%s/%s"
+)
+
+// NewMutator returns a new mutator which mutates secret objects, and related resources
+func NewMutator(roleController v1.RoleController, roleBindingController v1.RoleBindingController) *Mutator {
+	roleBindingController.Cache().AddIndexer(roleBindingOwnerIndex, roleBindingIndexer)
+	return &Mutator{
+		roleController:        roleController,
+		roleBindingController: roleBindingController,
+	}
+
 }
 
-type mutator struct{}
+// roleBindingIndexer indexes an object based on all owning secrets.
+func roleBindingIndexer(roleBinding *rbacv1.RoleBinding) ([]string, error) {
+	// only looking for roleBindings targeting roles
+	if roleBinding.RoleRef.Kind != "Role" {
+		return nil, nil
+	}
+	var owningSecrets []string
+	for _, owner := range roleBinding.OwnerReferences {
+		if owner.APIVersion == corev1.SchemeGroupVersion.String() && owner.Kind == secretKind {
+			owningSecrets = append(owningSecrets, fmt.Sprintf(ownerFormat, roleBinding.Namespace, owner.Name))
+		}
+	}
+	return owningSecrets, nil
+}
 
-func (m *mutator) Admit(response *webhook.Response, request *webhook.Request) error {
+// Mutator implements admission.MutatingAdmissionWebhook.
+type Mutator struct {
+	roleController        v1.RoleController
+	roleBindingController v1.RoleBindingController
+}
+
+func (m *Mutator) Admit(response *webhook.Response, request *webhook.Request) error {
 	if request.DryRun != nil && *request.DryRun {
 		response.Allowed = true
 		return nil
@@ -32,7 +67,17 @@ func (m *mutator) Admit(response *webhook.Response, request *webhook.Request) er
 	if err != nil {
 		return err
 	}
+	switch request.Operation {
+	case admissionv1.Create:
+		return m.admitCreate(secret, response, request)
+	case admissionv1.Delete:
+		return m.admitDelete(secret, response, request)
+	default:
+		return fmt.Errorf("operation type %q not handled", request.Operation)
+	}
+}
 
+func (m *Mutator) admitCreate(secret *corev1.Secret, response *webhook.Response, request *webhook.Request) error {
 	if secret.Type != "provisioning.cattle.io/cloud-credential" {
 		response.Allowed = true
 		return nil
@@ -50,7 +95,68 @@ func (m *mutator) Admit(response *webhook.Response, request *webhook.Request) er
 	return patch.CreatePatch(secret, newSecret, response)
 }
 
-func secretObject(request *webhook.Request) (*v1.Secret, error) {
+// admitDelete checks to see if there are any roleBindings owned by this secret which provide access to a role granting access to this secret
+// if so, it redacts the role so that it only grants delete access. This handles cases where users were given owner access to an individual secret
+// through a controller (like cloud-credentials), and delete the secret but keep the rbac
+func (m *Mutator) admitDelete(secret *corev1.Secret, response *webhook.Response, request *webhook.Request) error {
+	roleBindings, err := m.roleBindingController.Cache().GetByIndex(roleBindingOwnerIndex, fmt.Sprintf(ownerFormat, secret.Namespace, secret.Name))
+	if err != nil {
+		return fmt.Errorf("unable to determine if secret %s/%s has rbac references: %w", secret.Namespace, secret.Name, err)
+	}
+	for _, roleBinding := range roleBindings {
+		role, err := m.roleController.Cache().Get(roleBinding.Namespace, roleBinding.RoleRef.Name)
+		if err != nil {
+			// if the role doesn't exist, don't need to de-power the role
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			return fmt.Errorf("unable to evaluate role %s/%s granted by binding %s/%s owned by the secret: %w", role.Namespace, role.Name, roleBinding.Namespace, roleBinding.Name, err)
+		}
+		rules, amended := amendRulesToOnlyPermitDelete(role.Rules, secret.Name)
+		if amended {
+			role.Rules = rules
+			_, err = m.roleController.Update(role)
+			// role may have been deleted by this point, if so, ignore the error
+			if err != nil && !apierrors.IsNotFound(err) {
+				return fmt.Errorf("unable to revoke permissions on role %s/%s granted by binding %s/%s owned by the secret: %w", role.Namespace, role.Name, roleBinding.Namespace, roleBinding.Name, err)
+			}
+		}
+
+	}
+	response.Allowed = true
+	return nil
+}
+
+// amendRulesToOnlyPermitDelete changes rules which grant specific access to the secret identified by secretName so that they only give delete access
+// this function specifically targets rules which have a form used by rancher in granting access to cloud credentials, and omits other types of rules
+// such as * verbs on * resources in * groups which can give access to this secret, but aren't of the form used by the cloud credential logic.
+func amendRulesToOnlyPermitDelete(rules []rbacv1.PolicyRule, secretName string) ([]rbacv1.PolicyRule, bool) {
+	// we only want the specific rule which grants get level access to this specific resource. The form is constricted enough
+	// for this to catch these rules
+	amended := false
+	for i, rule := range rules {
+		// only targeting rules with a single api group "" or *
+		apiGroupMatches := len(rule.APIGroups) == 1 && (rule.APIGroups[0] == "" || rule.APIGroups[0] == "*")
+		resourceMatches := len(rule.Resources) == 1 && rule.Resources[0] == "secrets"
+		nameMatches := len(rule.ResourceNames) == 1 && rule.ResourceNames[0] == secretName
+		hasGet := false
+		for _, verb := range rule.Verbs {
+			if verb == "get" || verb == "*" {
+				hasGet = true
+				break
+			}
+		}
+		if apiGroupMatches && resourceMatches && nameMatches && hasGet {
+			amended = true
+			rule.Verbs = []string{"delete"}
+			rules[i] = rule
+		}
+
+	}
+	return rules, amended
+}
+
+func secretObject(request *webhook.Request) (*corev1.Secret, error) {
 	var secret runtime.Object
 	var err error
 	if request.Operation == admissionv1.Delete {
@@ -58,5 +164,5 @@ func secretObject(request *webhook.Request) (*v1.Secret, error) {
 	} else {
 		secret, err = request.DecodeObject()
 	}
-	return secret.(*v1.Secret), err
+	return secret.(*corev1.Secret), err
 }
