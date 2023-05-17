@@ -261,10 +261,10 @@ func getReviewAndRequestForHandler(req *http.Request, handler WebhookHandler) (*
 	return &review, webReq, nil
 }
 
-// Ptr is a generic function that returns the pointer of a string.
-func Ptr[T ~string](str T) *T {
-	newStr := str
-	return &newStr
+// Ptr is a generic function that returns the pointer of T.
+func Ptr[T any](value T) *T {
+	newVal := value
+	return &newVal
 }
 
 func sendResponse(responseWriter http.ResponseWriter, review *admissionv1.AdmissionReview, response *admissionv1.AdmissionResponse) {

@@ -49,11 +49,15 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 
 // Mutation returns a list of all MutatingAdmissionHandlers used by the webhook.
 func Mutation(clients *clients.Clients) ([]admission.MutatingAdmissionHandler, error) {
-	return []admission.MutatingAdmissionHandler{
+	mutators := []admission.MutatingAdmissionHandler{
 		mutationCluster.NewProvisioningClusterMutator(clients.Core.Secret(), clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache()),
 		mutationCluster.NewManagementClusterMutator(clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache()),
 		fleetworkspace.NewMutator(clients),
-		&secret.Mutator{},
 		&machineconfigs.Mutator{},
-	}, nil
+	}
+
+	if clients.MultiClusterManagement {
+		mutators = append(mutators, secret.NewMutator(clients.RBAC.Role(), clients.RBAC.RoleBinding()))
+	}
+	return mutators, nil
 }
