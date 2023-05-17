@@ -9,7 +9,6 @@ import (
 	objectsv1 "github.com/rancher/webhook/pkg/generated/objects/core/v1"
 	admissionv1 "k8s.io/api/admission/v1"
 	v1 "k8s.io/api/authorization/v1"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/utils/trace"
@@ -32,29 +31,24 @@ func (p *projectNamespaceAdmitter) Admit(request *admission.Request) (*admission
 
 	response := &admissionv1.AdmissionResponse{}
 
-	var ns *corev1.Namespace
-	var err error
-
-	switch request.Operation {
-	case admissionv1.Create:
-		ns, err = objectsv1.NamespaceFromRequest(&request.AdmissionRequest)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode namespace from request: %w", err)
-		}
-
-	case admissionv1.Update:
-		// standard rbac will prevent moving "out" of the old project, so we only need to check the destination project
-		_, ns, err = objectsv1.NamespaceOldAndNewFromRequest(&request.AdmissionRequest)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode namespace from request: %w", err)
-		}
+	oldNs, newNs, err := objectsv1.NamespaceOldAndNewFromRequest(&request.AdmissionRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode namespace from request: %w", err)
 	}
 
-	projectAnnoValue, ok := ns.Annotations[projectNSAnnotation]
+	projectAnnoValue, ok := newNs.Annotations[projectNSAnnotation]
 	if !ok {
 		// this namespace doesn't belong to a project, let standard RBAC handle it
 		response.Allowed = true
 		return response, nil
+	}
+
+	if request.Operation == admissionv1.Update {
+		// only handle when project annotation is changing
+		if oldAnnoValue, ok := oldNs.Annotations[projectNSAnnotation]; ok && oldAnnoValue == projectAnnoValue {
+			response.Allowed = true
+			return response, nil
+		}
 	}
 
 	values := strings.Split(projectAnnoValue, ":")
