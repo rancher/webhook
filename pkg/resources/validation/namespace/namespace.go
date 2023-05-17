@@ -64,6 +64,24 @@ func (v *Validator) Admit(response *webhook.Response, request *webhook.Request) 
 		return nil
 	}
 
+	if request.Operation == admissionv1.Update {
+		oldObject, err := request.DecodeOldObject()
+		if err != nil {
+			return fmt.Errorf("failed to decode old namespace from request: %w", err)
+		}
+
+		oldNs, ok := oldObject.(*corev1.Namespace)
+		if !ok {
+			return fmt.Errorf("old object on request was not a namesapce")
+		}
+
+		// only handle when project annotation is changing
+		if oldAnnoValue, ok := oldNs.Annotations[projectNSAnnotation]; ok && oldAnnoValue == projectAnnoValue {
+			response.Allowed = true
+			return nil
+		}
+	}
+
 	values := strings.Split(projectAnnoValue, ":")
 	if len(values) < 2 {
 		return fmt.Errorf("unable to retrieve project id from annotation, too few values")
