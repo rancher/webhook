@@ -32,8 +32,7 @@ var gvr = schema.GroupVersionResource{
 
 // Validator validates the PodSecurityAdmissionConfigurationTemplate admission request.
 type Validator struct {
-	ManagementClusterCache   v3.ClusterCache
-	provisioningClusterCache v1.ClusterCache
+	admitter admitter
 }
 
 const (
@@ -42,15 +41,18 @@ const (
 	rancherRestrictedPSACTName              = "rancher-restricted"
 )
 
-// NewValidator returns a validator for PodSecurityAdmissionConfigurationTemplates
+// NewValidator returns a validator for PodSecurityAdmissionConfigurationTemplates.
 func NewValidator(managementCache v3.ClusterCache, provisioningCache v1.ClusterCache) *Validator {
-	val := &Validator{
+	adm := admitter{
 		ManagementClusterCache:   managementCache,
 		provisioningClusterCache: provisioningCache,
 	}
-	val.ManagementClusterCache.AddIndexer(byPodSecurityAdmissionConfigurationName, byPodSecurityAdmissionConfigurationTemplateV3)
-	val.provisioningClusterCache.AddIndexer(byPodSecurityAdmissionConfigurationName, byPodSecurityAdmissionConfigurationTemplateV1)
-	return val
+	adm.ManagementClusterCache.AddIndexer(byPodSecurityAdmissionConfigurationName, byPodSecurityAdmissionConfigurationTemplateV3)
+	adm.provisioningClusterCache.AddIndexer(byPodSecurityAdmissionConfigurationName, byPodSecurityAdmissionConfigurationTemplateV1)
+
+	return &Validator{
+		admitter: adm,
+	}
 }
 
 // ValidatingWebhook returns the ValidatingWebhook used for this CRD.
@@ -84,8 +86,18 @@ func (v *Validator) Operations() []admissionregistrationv1.OperationType {
 	return []admissionregistrationv1.OperationType{admissionregistrationv1.Update, admissionregistrationv1.Create, admissionregistrationv1.Delete}
 }
 
+// Admitters returns the admitter objects used to validate podsecurityadmissionconfigurationtemplate.
+func (v *Validator) Admitters() []admission.Admitter {
+	return []admission.Admitter{&v.admitter}
+}
+
+type admitter struct {
+	ManagementClusterCache   v3.ClusterCache
+	provisioningClusterCache v1.ClusterCache
+}
+
 // Admit handles the webhook admission request sent to this webhook.
-func (v *Validator) Admit(req *admission.Request) (*admissionv1.AdmissionResponse, error) {
+func (a *admitter) Admit(req *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	listTrace := trace.New("PodSecurityAdmissionConfigurationTemplate Admit", trace.Field{Key: "user", Value: req.UserInfo.Username})
 	defer listTrace.LogIfLong(2 * time.Second)
 
@@ -97,7 +109,7 @@ func (v *Validator) Admit(req *admission.Request) (*admissionv1.AdmissionRespons
 
 	switch req.Operation {
 	case admissionv1.Create, admissionv1.Update:
-		err = v.validateConfiguration(newTemplate)
+		err = a.validateConfiguration(newTemplate)
 		if err != nil {
 			resp.Result = &metav1.Status{
 				Status:  "Failure",
@@ -122,7 +134,7 @@ func (v *Validator) Admit(req *admission.Request) (*admissionv1.AdmissionRespons
 			break
 		}
 
-		clustersUsingTemplate, clusterType, err := v.handleDeletion(oldTemplate)
+		clustersUsingTemplate, clusterType, err := a.handleDeletion(oldTemplate)
 		if err != nil {
 			// error encountered with indexer
 			resp.Result = &metav1.Status{
@@ -159,18 +171,18 @@ func (v *Validator) Admit(req *admission.Request) (*admissionv1.AdmissionRespons
 	return resp, nil
 }
 
-func (v *Validator) handleDeletion(oldTemplate *mgmtv3.PodSecurityAdmissionConfigurationTemplate) (clustersUsingTemplate int, clusterType string, err error) {
+func (a *admitter) handleDeletion(oldTemplate *mgmtv3.PodSecurityAdmissionConfigurationTemplate) (clustersUsingTemplate int, clusterType string, err error) {
 
 	// we can't allow templates to be deleted if they are being used by active clusters. Depending on the distro,
 	// the template reference could be stored on the v1.Cluster or v3.Cluster.
-	mgmtClusters, err := v.ManagementClusterCache.GetByIndex(byPodSecurityAdmissionConfigurationName, oldTemplate.Name)
+	mgmtClusters, err := a.ManagementClusterCache.GetByIndex(byPodSecurityAdmissionConfigurationName, oldTemplate.Name)
 	if err != nil {
 		return 0, "management", fmt.Errorf("error encountered within management cluster indexer: %w", err)
 	} else if len(mgmtClusters) > 0 {
 		return len(mgmtClusters), "management", nil
 	}
 
-	provClusters, err := v.provisioningClusterCache.GetByIndex(byPodSecurityAdmissionConfigurationName, oldTemplate.Name)
+	provClusters, err := a.provisioningClusterCache.GetByIndex(byPodSecurityAdmissionConfigurationName, oldTemplate.Name)
 	if err != nil {
 		return 0, "provisioning", fmt.Errorf("error encountered within provisioning cluster indexer: %w", err)
 	} else if len(provClusters) > 0 {
@@ -180,7 +192,7 @@ func (v *Validator) handleDeletion(oldTemplate *mgmtv3.PodSecurityAdmissionConfi
 	return 0, "", nil
 }
 
-func (v *Validator) validateConfiguration(configurationTemplate *mgmtv3.PodSecurityAdmissionConfigurationTemplate) error {
+func (a *admitter) validateConfiguration(configurationTemplate *mgmtv3.PodSecurityAdmissionConfigurationTemplate) error {
 	defaults := configurationTemplate.Configuration.Defaults
 
 	// validate any provided defaults

@@ -20,7 +20,16 @@ var gvr = schema.GroupVersionResource{
 }
 
 // Validator for validating features.
-type Validator struct{}
+type Validator struct {
+	admitter admitter
+}
+
+// NewValidator returns a new validator for features.
+func NewValidator() *Validator {
+	return &Validator{
+		admitter: admitter{},
+	}
+}
 
 // GVR returns the GroupVersionKind for this CRD.
 func (v *Validator) GVR() schema.GroupVersionResource {
@@ -39,8 +48,15 @@ func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.Webho
 	return []admissionregistrationv1.ValidatingWebhook{*valWebhook}
 }
 
+// Admitters returns the admitter objects used to validate features.
+func (v *Validator) Admitters() []admission.Admitter {
+	return []admission.Admitter{&v.admitter}
+}
+
+type admitter struct{}
+
 // Admit handles the webhook admission request sent to this webhook.
-func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	listTrace := trace.New("featureValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 

@@ -1,4 +1,4 @@
-package namespace_test
+package namespace
 
 import (
 	"context"
@@ -8,7 +8,6 @@ import (
 
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/resources/validation"
-	"github.com/rancher/webhook/pkg/resources/validation/namespace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -36,7 +35,7 @@ type test struct {
 	wantErr      bool
 }
 
-func TestValidator_Admit(t *testing.T) {
+func TestValidatePSALabels(t *testing.T) {
 
 	tests := []test{
 		{
@@ -107,50 +106,6 @@ func TestValidator_Admit(t *testing.T) {
 			},
 			wantErr: false,
 			allowed: false,
-		},
-		{
-			name:        "Delete update PSA for NON admin user-should not be allowed",
-			userName:    failSarUser,
-			clusterName: "validcluster",
-			operation:   admissionv1.Update,
-			namespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   "anynamespace",
-					Labels: map[string]string{},
-				},
-			},
-			oldNamespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "anynamespace",
-					Labels: map[string]string{
-						validation.EnforceLabel: "baseline",
-					},
-				},
-			},
-			wantErr: false,
-			allowed: false,
-		},
-		{
-			name:        "Delete update PSA for admin user should be allowed",
-			userName:    allowSarUser,
-			clusterName: "validcluster",
-			operation:   admissionv1.Update,
-			namespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:   "anynamespace",
-					Labels: map[string]string{},
-				},
-			},
-			oldNamespace: v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "anynamespace",
-					Labels: map[string]string{
-						validation.EnforceLabel: "baseline",
-					},
-				},
-			},
-			wantErr: false,
-			allowed: true,
 		},
 		{
 			name:        "Update multiple PSA for allowed user",
@@ -316,11 +271,81 @@ func TestValidator_Admit(t *testing.T) {
 			wantErr: false,
 			allowed: false,
 		},
+		{
+			name:        "Delete update PSA for NON admin user-should not be allowed",
+			userName:    failSarUser,
+			clusterName: "validcluster",
+			operation:   admissionv1.Update,
+			namespace: v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "anynamespace",
+					Labels: map[string]string{},
+				},
+			},
+			oldNamespace: v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "anynamespace",
+					Labels: map[string]string{
+						validation.EnforceLabel: "baseline",
+					},
+				},
+			},
+			wantErr: false,
+			allowed: false,
+		},
+		{
+			name:        "Delete update PSA for admin user should be allowed",
+			userName:    allowSarUser,
+			clusterName: "validcluster",
+			operation:   admissionv1.Update,
+			namespace: v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "anynamespace",
+					Labels: map[string]string{},
+				},
+			},
+			oldNamespace: v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "anynamespace",
+					Labels: map[string]string{
+						validation.EnforceLabel: "baseline",
+					},
+				},
+			},
+			wantErr: false,
+			allowed: true,
+		},
+		{
+			name:        "Update multiple PSA for allowed user",
+			userName:    allowSarUser,
+			clusterName: "validcluster",
+			operation:   admissionv1.Update,
+			namespace: v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "anynamespace",
+					Labels: map[string]string{
+						validation.EnforceLabel: "baseline",
+						validation.WarnLabel:    "baseline",
+						validation.AuditLabel:   "baseline",
+					},
+				},
+			},
+			oldNamespace: v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "anynamespace",
+					Labels: map[string]string{},
+				},
+			},
+			wantErr: false,
+			allowed: true,
+		},
 	}
 
 	k8Fake := &k8testing.Fake{}
 	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
-	validator := namespace.NewValidator(fakeSAR)
+	admitter := psaLabelAdmitter{
+		sar: fakeSAR,
+	}
 
 	k8Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (handled bool, ret runtime.Object, err error) {
 		createAction := action.(k8testing.CreateActionImpl)
@@ -342,7 +367,7 @@ func TestValidator_Admit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			request := createNamespaceRequest(t, &tt)
-			resp, err := validator.Admit(request)
+			resp, err := admitter.Admit(request)
 			assert.Equal(t, tt.wantErr, err != nil)
 			if !tt.wantErr {
 				assert.Equal(t, tt.allowed, resp.Allowed)

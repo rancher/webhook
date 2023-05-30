@@ -277,7 +277,9 @@ func (p *ProjectRoleTemplateBindingSuite) Test_PrivilegeEscalation() {
 		p.Run(test.name, func() {
 			p.T().Parallel()
 			req := createPRTBRequest(p.T(), test.args.oldPRTB(), test.args.newPRTB(), test.args.username)
-			resp, err := validator.Admit(req)
+			admitters := validator.Admitters()
+			p.Len(admitters, 1)
+			resp, err := admitters[0].Admit(req)
 			p.NoError(err, "Admit failed")
 			if resp.Allowed != test.allowed {
 				p.Failf("Response was incorrectly validated", "Wanted response.Allowed = '%v' got %v: result=%+v", test.allowed, resp.Allowed, resp.Result)
@@ -578,7 +580,9 @@ func (p *ProjectRoleTemplateBindingSuite) Test_UpdateValidation() {
 		p.Run(test.name, func() {
 			p.T().Parallel()
 			req := createPRTBRequest(p.T(), test.args.oldPRTB(), test.args.newPRTB(), test.args.username)
-			resp, err := validator.Admit(req)
+			admitters := validator.Admitters()
+			p.Len(admitters, 1)
+			resp, err := admitters[0].Admit(req)
 			p.NoError(err, "Admit failed")
 			if resp.Allowed != test.allowed {
 				p.Failf("Response was incorrectly validated", "Wanted response.Allowed = '%v' got %v: result=%+v", test.allowed, resp.Allowed, resp.Result)
@@ -741,7 +745,9 @@ func (p *ProjectRoleTemplateBindingSuite) Test_Create() {
 		p.Run(test.name, func() {
 			p.T().Parallel()
 			req := createPRTBRequest(p.T(), test.args.oldPRTB(), test.args.newPRTB(), test.args.username)
-			resp, err := validator.Admit(req)
+			admitters := validator.Admitters()
+			p.Len(admitters, 1)
+			resp, err := admitters[0].Admit(req)
 			p.NoError(err, "Admit failed")
 			if resp.Allowed != test.allowed {
 				p.Failf("Response was incorrectly validated", "Wanted response.Allowed = '%v' got %v: result=%+v", test.allowed, resp.Allowed, resp.Result)

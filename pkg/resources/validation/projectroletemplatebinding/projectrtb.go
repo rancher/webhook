@@ -32,17 +32,17 @@ func NewValidator(prtb *resolvers.PRTBRuleResolver, crtb *resolvers.CRTBRuleReso
 	clusterResolver := resolvers.NewAggregateRuleResolver(defaultResolver, crtb)
 	projectResolver := resolvers.NewAggregateRuleResolver(defaultResolver, prtb)
 	return &Validator{
-		clusterResolver:      clusterResolver,
-		projectResolver:      projectResolver,
-		roleTemplateResolver: roleTemplateResolver,
+		admitter: admitter{
+			clusterResolver:      clusterResolver,
+			projectResolver:      projectResolver,
+			roleTemplateResolver: roleTemplateResolver,
+		},
 	}
 }
 
 // Validator validates PRTB admission request.
 type Validator struct {
-	clusterResolver      k8validation.AuthorizationRuleResolver
-	projectResolver      k8validation.AuthorizationRuleResolver
-	roleTemplateResolver *auth.RoleTemplateResolver
+	admitter admitter
 }
 
 // GVR returns the GroupVersionKind for this CRD.
@@ -60,9 +60,20 @@ func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.Webho
 	return []admissionregistrationv1.ValidatingWebhook{*admission.NewDefaultValidatingWebhook(v, clientConfig, admissionregistrationv1.NamespacedScope, v.Operations())}
 }
 
+// Admitters returns the admitter objects used to validate ProjectRoleTemplateBindings.
+func (v *Validator) Admitters() []admission.Admitter {
+	return []admission.Admitter{&v.admitter}
+}
+
+type admitter struct {
+	clusterResolver      k8validation.AuthorizationRuleResolver
+	projectResolver      k8validation.AuthorizationRuleResolver
+	roleTemplateResolver *auth.RoleTemplateResolver
+}
+
 // Admit is the entrypoint for the validator. Admit will return an error if it unable to process the request.
 // If this function is called without NewValidator(..) calls will panic.
-func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	listTrace := trace.New("projectRoleTemplateBindingValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
@@ -91,7 +102,7 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 	}
 
 	if request.Operation == admissionv1.Create {
-		if err = v.validateCreateFields(prtb); err != nil {
+		if err = a.validateCreateFields(prtb); err != nil {
 			return &admissionv1.AdmissionResponse{
 				Result: &metav1.Status{
 					Status:  "Failure",
@@ -106,7 +117,7 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 
 	clusterNS, projectNS := clusterFromProject(prtb.ProjectName)
 
-	roleTemplate, err := v.roleTemplateResolver.RoleTemplateCache().Get(prtb.RoleTemplateName)
+	roleTemplate, err := a.roleTemplateResolver.RoleTemplateCache().Get(prtb.RoleTemplateName)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return &admissionv1.AdmissionResponse{
@@ -116,18 +127,18 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 		return nil, fmt.Errorf("failed to get referenced roleTemplate '%s' for PRTB: %w", roleTemplate.Name, err)
 	}
 
-	rules, err := v.roleTemplateResolver.RulesFromTemplate(roleTemplate)
+	rules, err := a.roleTemplateResolver.RulesFromTemplate(roleTemplate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get rules from referenced roleTemplate '%s': %w", roleTemplate.Name, err)
 	}
 
-	err = auth.ConfirmNoEscalation(request, rules, clusterNS, v.clusterResolver)
+	err = auth.ConfirmNoEscalation(request, rules, clusterNS, a.clusterResolver)
 	if err == nil {
 		return &admissionv1.AdmissionResponse{Allowed: true}, nil
 	}
 
 	response := &admissionv1.AdmissionResponse{}
-	auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, rules, projectNS, v.projectResolver))
+	auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, rules, projectNS, a.projectResolver))
 
 	return response, nil
 }
@@ -166,7 +177,7 @@ func validateUpdateFields(oldPRTB, newPRTB *apisv3.ProjectRoleTemplateBinding) e
 }
 
 // validateCreateFields checks if all required fields are present and valid.
-func (v *Validator) validateCreateFields(newPRTB *apisv3.ProjectRoleTemplateBinding) error {
+func (a *admitter) validateCreateFields(newPRTB *apisv3.ProjectRoleTemplateBinding) error {
 	hasUserTarget := newPRTB.UserName != "" || newPRTB.UserPrincipalName != ""
 	hasGroupTarget := newPRTB.GroupName != "" || newPRTB.GroupPrincipalName != ""
 
@@ -178,7 +189,7 @@ func (v *Validator) validateCreateFields(newPRTB *apisv3.ProjectRoleTemplateBind
 		return fmt.Errorf("binding must have field projectName set: %w", admission.ErrInvalidRequest)
 	}
 
-	roleTemplate, err := v.roleTemplateResolver.RoleTemplateCache().Get(newPRTB.RoleTemplateName)
+	roleTemplate, err := a.roleTemplateResolver.RoleTemplateCache().Get(newPRTB.RoleTemplateName)
 	if err != nil {
 		return fmt.Errorf("unknown reference roleTemplate '%s': %w", newPRTB.RoleTemplateName, err)
 	}

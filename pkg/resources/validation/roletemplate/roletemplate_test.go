@@ -85,7 +85,7 @@ func TestCheckCircularRef(t *testing.T) {
 			}
 			inputRole := createNestedRoleTemplate(rtName, mockCache, testCase.depth, testCase.circleDepth, testCase.errorDepth)
 			validator := createValidator(mockCache)
-			result, err := validator.checkCircularRef(inputRole)
+			result, err := validator.admitter.checkCircularRef(inputRole)
 			if testCase.errDesired {
 				assert.NotNil(t, err, "checkCircularRef(), expected err but did not get an error")
 			} else {
@@ -139,6 +139,8 @@ func createRoleTemplate(name string, rules []rbacv1.PolicyRule) *v3.RoleTemplate
 
 func createValidator(cache controllerv3.RoleTemplateCache) *Validator {
 	return &Validator{
-		roleTemplateResolver: auth.NewRoleTemplateResolver(cache, nil),
+		admitter: admitter{
+			roleTemplateResolver: auth.NewRoleTemplateResolver(cache, nil),
+		},
 	}
 }

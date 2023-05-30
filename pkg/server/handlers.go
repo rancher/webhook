@@ -18,15 +18,16 @@ import (
 	"github.com/rancher/webhook/pkg/resources/validation/podsecurityadmissionconfigurationtemplate"
 	"github.com/rancher/webhook/pkg/resources/validation/projectroletemplatebinding"
 	"github.com/rancher/webhook/pkg/resources/validation/roletemplate"
+	validationSecret "github.com/rancher/webhook/pkg/resources/validation/secret"
 )
 
 // Validation returns a list of all ValidatingAdmissionHandlers used by the webhook.
 func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandler, error) {
 	handlers := []admission.ValidatingAdmissionHandler{
-		&feature.Validator{},
+		feature.NewValidator(),
 		cluster.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache()),
 		cluster.NewProvisioningClusterValidator(clients),
-		&machineconfig.Validator{},
+		machineconfig.NewValidator(),
 		nshandler.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews()),
 	}
 
@@ -39,19 +40,24 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		prtbs := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver)
 		crtbs := clusterroletemplatebinding.NewValidator(crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver)
 		roleTemplates := roletemplate.NewValidator(clients.DefaultResolver, clients.RoleTemplateResolver, clients.K8s.AuthorizationV1().SubjectAccessReviews())
+		secrets := validationSecret.NewValidator(clients.RBAC.Role().Cache(), clients.RBAC.RoleBinding().Cache())
 
-		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates)
+		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets)
 	}
 	return handlers, nil
 }
 
 // Mutation returns a list of all MutatingAdmissionHandlers used by the webhook.
 func Mutation(clients *clients.Clients) ([]admission.MutatingAdmissionHandler, error) {
-	return []admission.MutatingAdmissionHandler{
+	mutators := []admission.MutatingAdmissionHandler{
 		mutationCluster.NewProvisioningClusterMutator(clients.Core.Secret(), clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache()),
 		mutationCluster.NewManagementClusterMutator(clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache()),
 		fleetworkspace.NewMutator(clients),
-		&secret.Mutator{},
 		&machineconfigs.Mutator{},
-	}, nil
+	}
+
+	if clients.MultiClusterManagement {
+		mutators = append(mutators, secret.NewMutator(clients.RBAC.Role(), clients.RBAC.RoleBinding()))
+	}
+	return mutators, nil
 }

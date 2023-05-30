@@ -24,20 +24,21 @@ var roleTemplateGVR = schema.GroupVersionResource{
 	Resource: "roletemplates",
 }
 
+// NewValidator returns a new validator used for validating roleTemplates.
 func NewValidator(resolver validation.AuthorizationRuleResolver, roleTemplateResolver *auth.RoleTemplateResolver,
 	sar authorizationv1.SubjectAccessReviewInterface) *Validator {
 	return &Validator{
-		resolver:             resolver,
-		roleTemplateResolver: roleTemplateResolver,
-		sar:                  sar,
+		admitter: admitter{
+			resolver:             resolver,
+			roleTemplateResolver: roleTemplateResolver,
+			sar:                  sar,
+		},
 	}
 }
 
 // Validator for validating roleTemplates.
 type Validator struct {
-	resolver             validation.AuthorizationRuleResolver
-	roleTemplateResolver *auth.RoleTemplateResolver
-	sar                  authorizationv1.SubjectAccessReviewInterface
+	admitter admitter
 }
 
 // GVR returns the GroupVersionKind for this CRD.
@@ -55,8 +56,19 @@ func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.Webho
 	return []admissionregistrationv1.ValidatingWebhook{*admission.NewDefaultValidatingWebhook(v, clientConfig, admissionregistrationv1.ClusterScope, v.Operations())}
 }
 
+// Admitters returns the admitter objects used to validate RoleTemplates.
+func (v *Validator) Admitters() []admission.Admitter {
+	return []admission.Admitter{&v.admitter}
+}
+
+type admitter struct {
+	resolver             validation.AuthorizationRuleResolver
+	roleTemplateResolver *auth.RoleTemplateResolver
+	sar                  authorizationv1.SubjectAccessReviewInterface
+}
+
 // Admit handles the webhook admission request sent to this webhook.
-func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	listTrace := trace.New("Validator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
@@ -71,7 +83,7 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 		return &admissionv1.AdmissionResponse{Allowed: true}, nil
 	}
 	//check for circular references produced by this role
-	circularTemplate, err := v.checkCircularRef(roleTemplate)
+	circularTemplate, err := a.checkCircularRef(roleTemplate)
 	if err != nil {
 		logrus.Errorf("Error when trying to check for a circular ref: %s", err)
 		return nil, err
@@ -88,7 +100,7 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 		}, nil
 	}
 
-	rules, err := v.roleTemplateResolver.RulesFromTemplate(roleTemplate)
+	rules, err := a.roleTemplateResolver.RulesFromTemplate(roleTemplate)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +120,7 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 		}
 	}
 
-	allowed, err := auth.EscalationAuthorized(request, roleTemplateGVR, v.sar, "")
+	allowed, err := auth.EscalationAuthorized(request, roleTemplateGVR, a.sar, "")
 	if err != nil {
 		logrus.Warnf("Failed to check for the 'escalate' verb on RoleTemplates: %v", err)
 	}
@@ -117,7 +129,7 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 		return &admissionv1.AdmissionResponse{Allowed: true}, nil
 	}
 	response := &admissionv1.AdmissionResponse{}
-	auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, rules, "", v.resolver))
+	auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, rules, "", a.resolver))
 	return response, nil
 }
 
@@ -125,7 +137,7 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 // for example - template 1 inherits template 2 which inherits template 1. These setups can cause high cpu usage/crashes
 // If a circular ref was found, returns the first template which inherits this role template. Returns nil otherwise.
 // Can return an error if any role template was not found.
-func (v *Validator) checkCircularRef(template *v3.RoleTemplate) (*v3.RoleTemplate, error) {
+func (a *admitter) checkCircularRef(template *v3.RoleTemplate) (*v3.RoleTemplate, error) {
 	seen := make(map[string]struct{})
 	queue := []*v3.RoleTemplate{template}
 	for len(queue) > 0 {
@@ -140,7 +152,7 @@ func (v *Validator) checkCircularRef(template *v3.RoleTemplate) (*v3.RoleTemplat
 			}
 			// if we haven't seen this yet, we add to the queue to process
 			if _, ok := seen[inherited]; !ok {
-				newTemplate, err := v.roleTemplateResolver.RoleTemplateCache().Get(inherited)
+				newTemplate, err := a.roleTemplateResolver.RoleTemplateCache().Get(inherited)
 				if err != nil {
 					return nil, fmt.Errorf("unable to get roletemplate %s with error %w", inherited, err)
 				}
