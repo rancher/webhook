@@ -21,7 +21,11 @@ func Mutation(client *clients.Clients) (http.Handler, error) {
 	router := webhook.NewRouter()
 	router.Kind("FleetWorkspace").Group(management.GroupName).Type(&v3.FleetWorkspace{}).Handle(fleetworkspace.NewMutator(client))
 	router.Kind("Cluster").Group(provisioning.GroupName).Type(&v1.Cluster{}).Handle(cluster.NewMutator())
-	router.Kind("Secret").Type(&k8sv1.Secret{}).Handle(secret.NewMutator())
 	router.Group("rke-machine-config.cattle.io").Type(&unstructured.Unstructured{}).Handle(machineconfigs.NewMutator())
+
+	if client.MultiClusterManagement {
+		router.Kind("Secret").Type(&k8sv1.Secret{}).Handle(secret.NewMutator(client.RBAC.Role(), client.RBAC.RoleBinding()))
+	}
+
 	return router, nil
 }

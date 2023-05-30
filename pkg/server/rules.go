@@ -53,6 +53,31 @@ var rancherAuthBaseRules = []v1.RuleWithOperations{
 			Scope:       &namespaceScope,
 		},
 	},
+	{
+		Operations: []v1.OperationType{
+			v1.Update,
+		},
+		Rule: v1.Rule{
+			APIGroups:   []string{""},
+			APIVersions: []string{"v1"},
+			Resources:   []string{"namespaces"},
+			Scope:       &clusterScope,
+		},
+	},
+}
+
+var rancherNamespaceRules = []v1.RuleWithOperations{
+	{
+		Operations: []v1.OperationType{
+			v1.Create,
+		},
+		Rule: v1.Rule{
+			APIGroups:   []string{""},
+			APIVersions: []string{"v1"},
+			Resources:   []string{"namespaces"},
+			Scope:       &clusterScope,
+		},
+	},
 }
 
 var rancherAuthMCMRules = []v1.RuleWithOperations{
@@ -117,6 +142,17 @@ var rancherAuthMCMRules = []v1.RuleWithOperations{
 			Scope:       &clusterScope,
 		},
 	},
+	{
+		Operations: []v1.OperationType{
+			v1.Delete,
+		},
+		Rule: v1.Rule{
+			APIGroups:   []string{""},
+			APIVersions: []string{"v1"},
+			Resources:   []string{"secrets"},
+			Scope:       &namespaceScope,
+		},
+	},
 }
 
 var fleetMutationRules = []v1.RuleWithOperations{
@@ -156,9 +192,13 @@ var rancherMutationRules = []v1.RuleWithOperations{
 			Scope:       &namespaceScope,
 		},
 	},
+}
+
+var rancherMutationMCMRules = []v1.RuleWithOperations{
 	{
 		Operations: []v1.OperationType{
 			v1.Create,
+			v1.Delete,
 		},
 		Rule: v1.Rule{
 			APIGroups:   []string{""},
