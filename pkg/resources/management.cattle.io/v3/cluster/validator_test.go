@@ -77,7 +77,9 @@ func TestAdmit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			v := &Validator{
-				sar: &mockReviewer{},
+				admitter: admitter{
+					sar: &mockReviewer{},
+				},
 			}
 
 			oldClusterBytes, err := json.Marshal(tt.oldCluster)
@@ -85,7 +87,10 @@ func TestAdmit(t *testing.T) {
 			newClusterBytes, err := json.Marshal(tt.newCluster)
 			assert.NoError(t, err)
 
-			res, err := v.Admit(&admission.Request{
+			admitters := v.Admitters()
+			assert.Len(t, admitters, 1)
+
+			res, err := admitters[0].Admit(&admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Object: runtime.RawExtension{
 						Raw: newClusterBytes,
