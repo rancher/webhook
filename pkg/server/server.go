@@ -137,6 +137,7 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 		rancherAuthRules := rancherAuthBaseRules
 		if clients.MultiClusterManagement { // register additional rbac rules if mcm is enabled
 			rancherAuthRules = append(rancherAuthRules, rancherAuthMCMRules...)
+			rancherMutationRules = append(rancherMutationRules, rancherMutationMCMRules...)
 		}
 
 		validationClientConfig := v1.WebhookClientConfig{
@@ -178,6 +179,40 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, handler http.
 					Rules:                   rancherAuthRules,
 					FailurePolicy:           &failPolicyFail,
 					SideEffects:             &sideEffectClassNone,
+					AdmissionReviewVersions: []string{"v1", "v1beta1"},
+				},
+				{
+					Name:          "rancher.cattle.io.namespaces.create-non-kubesystem",
+					ClientConfig:  validationClientConfig,
+					Rules:         rancherNamespaceRules,
+					FailurePolicy: &failPolicyFail,
+					SideEffects:   &sideEffectClassNone,
+					NamespaceSelector: &metav1.LabelSelector{
+						MatchExpressions: []metav1.LabelSelectorRequirement{
+							{
+								Key:      corev1.LabelMetadataName,
+								Operator: metav1.LabelSelectorOpNotIn,
+								Values:   []string{"kube-system"},
+							},
+						},
+					},
+					AdmissionReviewVersions: []string{"v1", "v1beta1"},
+				},
+				{
+					Name:          "rancher.cattle.io.namespaces.create-kubesystem-only",
+					ClientConfig:  validationClientConfig,
+					Rules:         rancherNamespaceRules,
+					FailurePolicy: &failPolicyIgnore,
+					SideEffects:   &sideEffectClassNone,
+					NamespaceSelector: &metav1.LabelSelector{
+						MatchExpressions: []metav1.LabelSelectorRequirement{
+							{
+								Key:      corev1.LabelMetadataName,
+								Operator: metav1.LabelSelectorOpIn,
+								Values:   []string{"kube-system"},
+							},
+						},
+					},
 					AdmissionReviewVersions: []string{"v1", "v1beta1"},
 				},
 			},
