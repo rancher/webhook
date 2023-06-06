@@ -223,6 +223,9 @@ func sendError(responseWriter http.ResponseWriter, review *admissionv1.Admission
 		http.Error(responseWriter, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if review.Response == nil {
+		review.Response = &admissionv1.AdmissionResponse{}
+	}
 	review.Response.Result = &errors.NewInternalError(err).ErrStatus
 	writeResponse(responseWriter, review)
 }
