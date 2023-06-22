@@ -40,6 +40,7 @@ func main() {
 					v3.RoleTemplate{},
 					v3.ClusterRoleTemplateBinding{},
 					v3.ProjectRoleTemplateBinding{},
+					v3.Node{},
 				},
 			},
 			"provisioning.cattle.io": {
@@ -63,6 +64,7 @@ func main() {
 				&v3.GlobalRoleBinding{},
 				&v3.RoleTemplate{},
 				&v3.ProjectRoleTemplateBinding{},
+				&v3.NodeDriver{},
 			},
 		},
 		"provisioning.cattle.io": {

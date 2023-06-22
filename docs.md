@@ -69,6 +69,16 @@ Users can only create/update GlobalRoleBindings with rights less than or equal t
 
 GlobalRoleBindings must refer to a valid global role (i.e. an existing `GlobalRole` object in the `management.cattle.io/v3` apiGroup).
 
+## NodeDriver 
+
+### Validation Checks
+
+Note: checks only run if a node driver is being disabled or deleted
+
+#### Machine Deletion Prevention
+
+This admission webhook prevents the disabling or deletion of a NodeDriver if there are any Nodes that are under management by said driver. If there are _any_ nodes that use the driver the request will be denied.
+
 ## ProjectRoleTemplateBinding 
 
 ### Validation Checks

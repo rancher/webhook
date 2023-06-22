@@ -33,6 +33,7 @@ type Interface interface {
 	Cluster() ClusterController
 	ClusterRoleTemplateBinding() ClusterRoleTemplateBindingController
 	GlobalRole() GlobalRoleController
+	Node() NodeController
 	PodSecurityAdmissionConfigurationTemplate() PodSecurityAdmissionConfigurationTemplateController
 	ProjectRoleTemplateBinding() ProjectRoleTemplateBindingController
 	RoleTemplate() RoleTemplateController
@@ -56,6 +57,9 @@ func (c *version) ClusterRoleTemplateBinding() ClusterRoleTemplateBindingControl
 }
 func (c *version) GlobalRole() GlobalRoleController {
 	return NewGlobalRoleController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "GlobalRole"}, "globalroles", false, c.controllerFactory)
+}
+func (c *version) Node() NodeController {
+	return NewNodeController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Node"}, "nodes", true, c.controllerFactory)
 }
 func (c *version) PodSecurityAdmissionConfigurationTemplate() PodSecurityAdmissionConfigurationTemplateController {
 	return NewPodSecurityAdmissionConfigurationTemplateController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "PodSecurityAdmissionConfigurationTemplate"}, "podsecurityadmissionconfigurationtemplates", false, c.controllerFactory)
