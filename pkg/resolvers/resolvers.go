@@ -14,7 +14,7 @@ type ruleAccumulator struct {
 	errors []error
 }
 
-func (r *ruleAccumulator) visit(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool {
+func (r *ruleAccumulator) visit(_ fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool {
 	if rule != nil {
 		r.rules = append(r.rules, *rule)
 	}

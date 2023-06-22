@@ -34,7 +34,7 @@ func NewPRTBRuleResolver(prtbCache v3.ProjectRoleTemplateBindingCache, roleTempl
 
 // GetRoleReferenceRules is used to find which roles are granted by a rolebinding/clusterrolebinding. Since we don't
 // use these primitives to refer to role templates return empty list.
-func (p *PRTBRuleResolver) GetRoleReferenceRules(roleRef rbacv1.RoleRef, namespace string) ([]rbacv1.PolicyRule, error) {
+func (p *PRTBRuleResolver) GetRoleReferenceRules(rbacv1.RoleRef, string) ([]rbacv1.PolicyRule, error) {
 	return []rbacv1.PolicyRule{}, nil
 }
 
