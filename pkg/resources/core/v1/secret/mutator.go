@@ -123,8 +123,8 @@ func (m *Mutator) admitCreate(secret *corev1.Secret, request *admission.Request)
 	return response, nil
 }
 
-// admitDelete checks to see if there are any roleBindings owned by this secret which provide access to a role granting access to this secret
-// if so, it redacts the role so that it only grants delete access. This handles cases where users were given owner access to an individual secret
+// admitDelete checks if there are any roleBindings owned by this secret which provide access to a role granting access to this secret.
+// If yes, it redacts the role, so that it only grants a deletion permission. This handles cases where users were given owner access to an individual secret
 // through a controller (like cloud-credentials), and delete the secret but keep the rbac
 func (m *Mutator) admitDelete(secret *corev1.Secret) (*admissionv1.AdmissionResponse, error) {
 	roleBindings, err := m.roleBindingController.Cache().GetByIndex(mutatorRoleBindingOwnerIndex, fmt.Sprintf(ownerFormat, secret.Namespace, secret.Name))

@@ -1,14 +1,11 @@
 package globalrole
 
 import (
-	"net/http"
-
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 	"k8s.io/utils/trace"
@@ -58,7 +55,7 @@ type admitter struct {
 	resolver validation.AuthorizationRuleResolver
 }
 
-// Admit is the entrypoint for the validator. Admit will return an error if it unable to process the request.
+// Admit is the entrypoint for the validator. Admit will return an error if it's unable to process the request.
 // If this function is called without NewValidator(..) calls will panic.
 func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	listTrace := trace.New("globalRoleValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
@@ -72,23 +69,13 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	// object is in the process of being deleted, so admit it
 	// this admits update operations that happen to remove finalizers
 	if newGR.DeletionTimestamp != nil {
-		return &admissionv1.AdmissionResponse{
-			Allowed: true,
-		}, nil
+		return admission.ResponseAllowed(), nil
 	}
 
 	// ensure all PolicyRules have at least one verb, otherwise RBAC controllers may encounter issues when creating Roles and ClusterRoles
 	for _, rule := range newGR.Rules {
 		if len(rule.Verbs) == 0 {
-			return &admissionv1.AdmissionResponse{
-				Result: &metav1.Status{
-					Status:  "Failure",
-					Message: "GlobalRole.Rules: PolicyRules must have at least one verb",
-					Reason:  metav1.StatusReasonBadRequest,
-					Code:    http.StatusBadRequest,
-				},
-				Allowed: false,
-			}, nil
+			return admission.ResponseBadRequest("GlobalRole.Rules: PolicyRules must have at least one verb"), nil
 		}
 	}
 

@@ -75,9 +75,10 @@ func generateDocs(resourcesBaseDir, outputFilePath string) (err error) {
 			if err != nil {
 				return fmt.Errorf("unable to write content for %s/%s.%s: %w", docFile.group, docFile.version, docFile.resource, err)
 			}
-
 		}
-
+		if scanner.Err() != nil {
+			return fmt.Errorf("got an error scanning content for %s/%s.%s: %w", docFile.group, docFile.version, docFile.resource, err)
+		}
 	}
 	return nil
 }
