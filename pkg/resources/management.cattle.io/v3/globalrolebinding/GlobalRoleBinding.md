@@ -1,6 +1,6 @@
 ## Validation Checks
 
-Note: all checks are bypassed if the GlobalRoleBinding is being deleted
+Note: all checks are bypassed if the GlobalRoleBinding is being deleted.
 
 ### Escalation Prevention
 

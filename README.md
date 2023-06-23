@@ -27,7 +27,7 @@ It handles TLS certificates and the management of associated Secrets for secure 
 Documentation on each of the resources that are validated or mutated can be found in `docs.md`. It is recommended to review the [kubernetes docs on CRDs](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/#customresourcedefinitions) as well.
 
 Docs are added by creating a resource-specific readme in the directory of your mutator/validator (e.x. `pkg/resources/$GROUP/$GROUP_VERSION/$RESOURCE/$READABLE_RESOURCE.MD`). 
-These files should be named with a human-readable version of the resource's name.
+These files should be named with a human-readable version of the resource's name. For example, `GlobalRole.md`.
 Running `go generate` will then aggregate these into the user-facing docs in the `docs.md` file.
 
 ## Webhooks

@@ -1,6 +1,9 @@
 ## Validation Checks
 
-Note: all checks are bypassed if the GlobalRole is being deleted
+Note: all checks are bypassed if the GlobalRole is being deleted.
+
+### Invalid Fields - Create and Update
+When a GlobalRole is created or updated, the webhook checks that each rule has at least one verb.
 
 ### Escalation Prevention
 
