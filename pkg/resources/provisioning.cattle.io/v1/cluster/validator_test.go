@@ -1,7 +1,12 @@
 package cluster
 
 import (
+	"strings"
 	"testing"
+
+	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
+	"github.com/rancher/webhook/pkg/admission"
+	admissionv1 "k8s.io/api/admission/v1"
 )
 
 func Test_isValidName(t *testing.T) {
@@ -127,6 +132,70 @@ func Test_isValidName(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := isValidName(tt.clusterName, tt.clusterNamespace, tt.clusterExists); got != tt.want {
 				t.Errorf("isValidName() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidateMachinePoolName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name, value string
+		fail        bool
+	}{
+		{
+			name:  "muchTooLong",
+			value: strings.Repeat("12345678", 8),
+			fail:  true,
+		},
+		{
+			name:  "barelyUnderLimit",
+			value: strings.Repeat("12345678", 7),
+			fail:  false,
+		},
+		{
+			name:  "regularLookingString",
+			value: "regular-string-test",
+			fail:  false,
+		},
+	}
+
+	a := provisioningAdmitter{}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			resp := admissionv1.AdmissionResponse{}
+
+			err := a.validateMachinePoolNames(
+				&admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+				&resp,
+				&v1.Cluster{
+					Spec: v1.ClusterSpec{
+						RKEConfig: &v1.RKEConfig{
+							MachinePools: []v1.RKEMachinePool{{Name: tt.value}},
+						},
+					},
+				},
+			)
+
+			if err != nil {
+				t.Errorf("got error when none was expected: %v", err)
+			}
+
+			if tt.fail {
+				if resp.Result == nil {
+					t.Error("got no result on response when one was expected")
+				}
+				if resp.Result.Status != "Failure" {
+					t.Errorf("got %v when Failure was expected", resp.Result.Status)
+				}
+			} else {
+				if resp.Result != nil {
+					t.Error("got result on response when none was expected")
+				}
 			}
 		})
 	}
