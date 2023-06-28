@@ -4,9 +4,14 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -38,7 +43,10 @@ const (
 	defaultWebhookHTTPSPort = 9443
 	webhookPortEnvKey       = "CATTLE_PORT"
 	webhookURLEnvKey        = "CATTLE_WEBHOOK_URL"
+	allowedCNsEnv           = "ALLOWED_CNS"
 )
+
+var caFile = filepath.Join(os.TempDir(), "k8s-webhook-server", "client-ca", "ca.crt")
 
 // tlsOpt option function applied to all webhook servers.
 var tlsOpt = func(config *tls.Config) {
@@ -51,6 +59,7 @@ var tlsOpt = func(config *tls.Config) {
 		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
 	}
+	config.ClientAuth = tls.RequestClientCert
 }
 
 // ListenAndServe starts the webhook server.
@@ -118,6 +127,7 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, validators []
 	router := mux.NewRouter()
 	errChecker := health.NewErrorChecker("Config Applied")
 	health.RegisterHealthCheckers(router, errChecker)
+	router.Use(certAuth())
 
 	logrus.Debug("Creating Webhook routes")
 	for _, webhook := range validators {
@@ -282,4 +292,81 @@ func (s *secretHandler) ensureWebhookConfiguration(validatingConfig *v1.Validati
 	}
 
 	return nil
+}
+
+// certAuth returns a middleware for cert-based authentication.
+// This is done as a middleware instead of using tls.RequireAndVerifyClientCert because an exception
+// needs to be made for the unauthenticated /healthz endpoint.
+func certAuth() func(next http.Handler) http.Handler {
+	opts := getVerifyOptions()
+	allowedCNs := getAllowedCNs()
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			logrus.Tracef("running cert check middleware for request %s", r.URL.Path)
+			if opts == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if r.URL.Path == "/healthz" { // apiserver does not present client cert for health checks
+				next.ServeHTTP(w, r)
+				return
+			}
+			if len(r.TLS.PeerCertificates) == 0 {
+				logrus.Warn("client did not present certificates")
+				http.Error(w, "could not verify client certificates", http.StatusUnauthorized)
+				return
+			}
+			for _, cert := range r.TLS.PeerCertificates[1:] {
+				opts.Intermediates.AddCert(cert)
+			}
+			_, err := r.TLS.PeerCertificates[0].Verify(*opts)
+			if err != nil {
+				logrus.Warnf("could not verify client certificates: %v", err)
+				http.Error(w, "could not verify client certificates", http.StatusUnauthorized)
+				return
+			}
+			if len(allowedCNs) == 0 {
+				next.ServeHTTP(w, r)
+				return
+			}
+			requestCN := r.TLS.PeerCertificates[0].Subject.CommonName
+			found := false
+			for _, allowed := range allowedCNs {
+				if allowed == requestCN {
+					found = true
+					break
+				}
+			}
+			if !found {
+				logrus.Warnf("could not find common name %s in allowed list", requestCN)
+				http.Error(w, "common name is not allowed", http.StatusUnauthorized)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func getVerifyOptions() *x509.VerifyOptions {
+	caCert, err := ioutil.ReadFile(caFile)
+	if err != nil {
+		logrus.Infof("could not read client CA file at %s, incoming requests will not be authenticated", caFile)
+		return nil
+	}
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(caCert)
+	opts := x509.VerifyOptions{
+		Roots:         caCertPool,
+		Intermediates: x509.NewCertPool(),
+		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	}
+	return &opts
+}
+
+func getAllowedCNs() []string {
+	allowedCNString := os.Getenv(allowedCNsEnv)
+	if len(allowedCNString) == 0 {
+		return nil
+	}
+	return strings.Split(allowedCNString, ",")
 }
