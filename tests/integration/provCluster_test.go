@@ -16,7 +16,7 @@ func (m *IntegrationSuite) TestProvisioningCluster() {
 	}
 	invalidCreate := func() *provisioningv1.Cluster {
 		invalidCreate := validCreateObj.DeepCopy()
-		invalidCreate.Name = "local"
+		invalidCreate.Name = "this-name-is-too-long-bigger-than-63-characters-it-should-be-rejected"
 		return invalidCreate
 	}
 	invalidUpdate := func(created *provisioningv1.Cluster) *provisioningv1.Cluster {
