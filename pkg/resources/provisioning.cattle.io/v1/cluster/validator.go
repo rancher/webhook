@@ -172,7 +172,7 @@ func (p *provisioningAdmitter) validateClusterName(request *admission.Request, r
 	if err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
-	if !isValidName(cluster.Name, cluster.Namespace, err == nil) {
+	if !isValidName(cluster.Name, err == nil) {
 		response.Result = &metav1.Status{
 			Status:  "Failure",
 			Message: "cluster name must be 63 characters or fewer, must not begin with a hyphen, cannot be \"local\" nor of the form \"c-xxxxx\", and can only contain lowercase alphanumeric characters or ' - '",
@@ -287,12 +287,7 @@ func validateACEConfig(cluster *v1.Cluster) *metav1.Status {
 	return nil
 }
 
-func isValidName(clusterName, clusterNamespace string, clusterExists bool) bool {
-	// A provisioning cluster with name "local" is only expected to be created in the "fleet-local" namespace.
-	if clusterName == "local" {
-		return clusterNamespace == "fleet-local"
-	}
-
+func isValidName(clusterName string, clusterExists bool) bool {
 	if mgmtNameRegex.MatchString(clusterName) {
 		// A provisioning cluster with a name of the form "c-xxxxx" is expected to be created if a management cluster
 		// of the same name already exists because Rancher will create such a provisioning cluster.

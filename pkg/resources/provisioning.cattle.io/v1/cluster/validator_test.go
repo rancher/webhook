@@ -29,7 +29,7 @@ func Test_isValidName(t *testing.T) {
 			clusterName:      "local",
 			clusterNamespace: "fleet-default",
 			clusterExists:    true,
-			want:             false,
+			want:             true,
 		},
 		{
 			name:             "c-xxxxx cluster exists",
@@ -125,7 +125,7 @@ func Test_isValidName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := isValidName(tt.clusterName, tt.clusterNamespace, tt.clusterExists); got != tt.want {
+			if got := isValidName(tt.clusterName, tt.clusterExists); got != tt.want {
 				t.Errorf("isValidName() = %v, want %v", got, tt.want)
 			}
 		})
