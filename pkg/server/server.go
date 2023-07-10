@@ -175,7 +175,7 @@ type secretHandler struct {
 }
 
 // sync updates the validating admission configuration whenever the TLS cert changes.
-func (s *secretHandler) sync(key string, secret *corev1.Secret) (*corev1.Secret, error) {
+func (s *secretHandler) sync(_ string, secret *corev1.Secret) (*corev1.Secret, error) {
 	if secret == nil || secret.Name != caName || secret.Namespace != namespace || len(secret.Data[corev1.TLSCertKey]) == 0 {
 		return nil, nil
 	}

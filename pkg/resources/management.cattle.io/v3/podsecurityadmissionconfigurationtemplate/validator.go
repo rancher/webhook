@@ -226,11 +226,7 @@ func (a *admitter) validateConfiguration(configurationTemplate *mgmtv3.PodSecuri
 		return err
 	}
 
-	if err := validateNamespaces(configurationTemplate).ToAggregate(); err != nil {
-		return err
-	}
-
-	return nil
+	return validateNamespaces(configurationTemplate).ToAggregate()
 }
 
 func validateLevel(p *field.Path, value string) field.ErrorList {

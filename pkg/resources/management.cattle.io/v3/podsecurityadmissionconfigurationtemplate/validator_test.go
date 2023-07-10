@@ -603,22 +603,22 @@ func createRequest(obj *v3.PodSecurityAdmissionConfigurationTemplate, operation 
 
 type mockMgmtCache struct{}
 
-func (m mockMgmtCache) Get(name string) (*v3.Cluster, error) {
+func (m mockMgmtCache) Get(string) (*v3.Cluster, error) {
 	// intentionally unimplemented
 	panic("implement me")
 }
 
-func (m mockMgmtCache) List(selector labels.Selector) ([]*v3.Cluster, error) {
+func (m mockMgmtCache) List(labels.Selector) ([]*v3.Cluster, error) {
 	// intentionally unimplemented
 	panic("implement me")
 }
 
-func (m mockMgmtCache) AddIndexer(indexName string, indexer controllerv3.ClusterIndexer) {
+func (m mockMgmtCache) AddIndexer(string, controllerv3.ClusterIndexer) {
 	// intentionally unimplemented
 	panic("implement me")
 }
 
-func (m mockMgmtCache) GetByIndex(indexName, key string) ([]*v3.Cluster, error) {
+func (m mockMgmtCache) GetByIndex(_, key string) ([]*v3.Cluster, error) {
 	x := []*v3.Cluster{
 		{
 			Spec: v3.ClusterSpec{
@@ -637,22 +637,22 @@ func (m mockMgmtCache) GetByIndex(indexName, key string) ([]*v3.Cluster, error) 
 
 type mockProvisioningCache struct{}
 
-func (m mockProvisioningCache) Get(namespace, name string) (*provv1.Cluster, error) {
+func (m mockProvisioningCache) Get(string, string) (*provv1.Cluster, error) {
 	// intentionally unimplemented
 	panic("implement me")
 }
 
-func (m mockProvisioningCache) List(namespace string, selector labels.Selector) ([]*provv1.Cluster, error) {
+func (m mockProvisioningCache) List(string, labels.Selector) ([]*provv1.Cluster, error) {
 	// intentionally unimplemented
 	panic("implement me")
 }
 
-func (m mockProvisioningCache) AddIndexer(indexName string, indexer v1.ClusterIndexer) {
+func (m mockProvisioningCache) AddIndexer(string, v1.ClusterIndexer) {
 	// intentionally unimplemented
 	panic("implement me")
 }
 
-func (m mockProvisioningCache) GetByIndex(indexName, key string) ([]*provv1.Cluster, error) {
+func (m mockProvisioningCache) GetByIndex(_, key string) ([]*provv1.Cluster, error) {
 	x := []*provv1.Cluster{
 		{
 			Spec: provv1.ClusterSpec{

@@ -371,7 +371,7 @@ func (f *fakeValidatingAdmissionHandler) Operations() []v1.OperationType {
 	return f.operations
 }
 
-func (f *fakeValidatingAdmissionHandler) ValidatingWebhook(clientConfig v1.WebhookClientConfig) []v1.ValidatingWebhook {
+func (f *fakeValidatingAdmissionHandler) ValidatingWebhook(_ v1.WebhookClientConfig) []v1.ValidatingWebhook {
 	return nil
 }
 
@@ -401,7 +401,7 @@ func (f *fakeMutatingAdmissionHandler) Admit(req *admission.Request) (*admission
 	return f.admitter.Admit(req)
 }
 
-func (f *fakeMutatingAdmissionHandler) MutatingWebhook(clientConfig v1.WebhookClientConfig) []v1.MutatingWebhook {
+func (f *fakeMutatingAdmissionHandler) MutatingWebhook(_ v1.WebhookClientConfig) []v1.MutatingWebhook {
 	return nil
 }
 
@@ -410,6 +410,6 @@ type fakeAdmitter struct {
 	err      error
 }
 
-func (f *fakeAdmitter) Admit(req *admission.Request) (*admissionv1.AdmissionResponse, error) {
+func (f *fakeAdmitter) Admit(_ *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	return &f.response, f.err
 }

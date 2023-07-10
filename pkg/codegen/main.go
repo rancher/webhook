@@ -24,6 +24,10 @@ type typeInfo struct {
 
 func main() {
 	os.Unsetenv("GOPATH")
+	err := generateDocs("pkg/resources", "docs.md")
+	if err != nil {
+		panic(err)
+	}
 	controllergen.Run(args.Options{
 		OutputPackage: "github.com/rancher/webhook/pkg/generated",
 		Boilerplate:   "scripts/boilerplate.go.txt",
@@ -36,6 +40,7 @@ func main() {
 					v3.RoleTemplate{},
 					v3.ClusterRoleTemplateBinding{},
 					v3.ProjectRoleTemplateBinding{},
+					v3.Node{},
 				},
 			},
 			"provisioning.cattle.io": {
@@ -59,6 +64,7 @@ func main() {
 				&v3.GlobalRoleBinding{},
 				&v3.RoleTemplate{},
 				&v3.ProjectRoleTemplateBinding{},
+				&v3.NodeDriver{},
 			},
 		},
 		"provisioning.cattle.io": {
