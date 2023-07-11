@@ -88,6 +88,10 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 			return response, err
 		}
 
+		if err := p.validateMachinePoolNames(request, response, cluster); err != nil || response.Result != nil {
+			return response, err
+		}
+
 		if response.Result = common.CheckCreatorID(request, oldCluster, cluster); response.Result != nil {
 			return response, nil
 		}
@@ -178,6 +182,30 @@ func (p *provisioningAdmitter) validateClusterName(request *admission.Request, r
 			Message: "cluster name must be 63 characters or fewer, must not begin with a hyphen, cannot be \"local\" nor of the form \"c-xxxxx\", and can only contain lowercase alphanumeric characters or ' - '",
 			Reason:  metav1.StatusReasonInvalid,
 			Code:    http.StatusUnprocessableEntity,
+		}
+	}
+
+	return nil
+}
+
+func (p *provisioningAdmitter) validateMachinePoolNames(request *admission.Request, response *admissionv1.AdmissionResponse, cluster *v1.Cluster) error {
+	if request.Operation != admissionv1.Create {
+		return nil
+	}
+
+	if cluster.Spec.RKEConfig == nil {
+		return nil
+	}
+
+	for _, pool := range cluster.Spec.RKEConfig.MachinePools {
+		if len(pool.Name) > 63 {
+			response.Result = &metav1.Status{
+				Status:  "Failure",
+				Message: "pool name must be 63 characters or fewer",
+				Reason:  metav1.StatusReasonInvalid,
+				Code:    http.StatusUnprocessableEntity,
+			}
+			break
 		}
 	}
 
