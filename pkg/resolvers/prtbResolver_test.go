@@ -6,8 +6,8 @@ import (
 	"github.com/golang/mock/gomock"
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/auth"
-	"github.com/rancher/webhook/pkg/fakes"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
+	"github.com/rancher/wrangler/pkg/generic/fake"
 	"github.com/stretchr/testify/suite"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -275,8 +275,8 @@ func (p *PRTBResolverSuite) NewTestPRTBResolver() *PRTBRuleResolver {
 	bindings := []*apisv3.ProjectRoleTemplateBinding{p.user1AdminPRTB, p.user1AReadNS2PRTB, p.user1InvalidNS2PRTB,
 		p.user2WritePRTB, p.user2ReadPRTB, p.groupAdminPRTB, p.groupReadPRTB, p.groupWritePRTB, p.group2WritePRTB}
 	PRTBCache := NewPRTBCache(ctrl, bindings)
-	clusterRoleCache := fakes.NewMockClusterRoleCache(ctrl)
-	roleTemplateCache := fakes.NewMockRoleTemplateCache(ctrl)
+	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
+	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 	roleTemplateCache.EXPECT().Get(p.adminRT.Name).Return(p.adminRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().Get(p.readRT.Name).Return(p.readRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().Get(p.writeRT.Name).Return(p.writeRT, nil).AnyTimes()
@@ -286,7 +286,7 @@ func (p *PRTBResolverSuite) NewTestPRTBResolver() *PRTBRuleResolver {
 }
 
 func NewPRTBCache(ctrl *gomock.Controller, bindings []*apisv3.ProjectRoleTemplateBinding) v3.ProjectRoleTemplateBindingCache {
-	projectCache := fakes.NewMockProjectRoleTemplateBindingCache(ctrl)
+	projectCache := fake.NewMockCacheInterface[*apisv3.ProjectRoleTemplateBinding](ctrl)
 
 	projectCache.EXPECT().AddIndexer(prtbSubjectIndex, gomock.Any()).AnyTimes()
 

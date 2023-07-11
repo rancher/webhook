@@ -7,7 +7,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/rancher/webhook/pkg/admission"
-	"github.com/rancher/webhook/pkg/fakes"
+	"github.com/rancher/wrangler/pkg/generic/fake"
 	"github.com/stretchr/testify/assert"
 	admissionv1 "k8s.io/api/admission/v1"
 	v1authentication "k8s.io/api/authentication/v1"
@@ -232,8 +232,9 @@ func TestAdmit(t *testing.T) {
 				assert.NoError(t, err)
 			}
 
-			roleCache := fakes.NewMockRoleCache(ctrl)
-			roleBindingCache := fakes.NewMockRoleBindingCache(ctrl)
+			roleCache := fake.NewMockCacheInterface[*rbacv1.Role](ctrl)
+			roleBindingCache := fake.NewMockCacheInterface[*rbacv1.RoleBinding](ctrl)
+
 			roleCache.EXPECT().GetByIndex(roleOwnerIndex, fmt.Sprintf("%s/%s", secretNamespace, secretName)).Return(roles, test.roleIndexerError).AnyTimes()
 			roleBindingCache.EXPECT().GetByIndex(roleBindingOwnerIndex, fmt.Sprintf("%s/%s", secretNamespace, secretName)).Return(roleBindings, test.roleBindingIndexerError).AnyTimes()
 

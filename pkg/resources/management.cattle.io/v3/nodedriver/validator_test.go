@@ -8,7 +8,7 @@ import (
 	"github.com/golang/mock/gomock"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
-	"github.com/rancher/webhook/pkg/fakes"
+	"github.com/rancher/wrangler/pkg/generic/fake"
 	"github.com/stretchr/testify/suite"
 	admissionv1 "k8s.io/api/admission/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,7 +36,7 @@ func (m *mockLister) List(_ schema.GroupVersionKind, _ string, _ labels.Selector
 
 func (suite *NodeDriverValidationSuite) TestHappyPath() {
 	ctrl := gomock.NewController(suite.T())
-	mockCache := fakes.NewMockNodeCache(ctrl)
+	mockCache := fake.NewMockCacheInterface[*v3.Node](ctrl)
 	mockCache.EXPECT().List("", labels.Everything()).Return([]*v3.Node{}, nil)
 
 	a := admitter{
@@ -58,7 +58,7 @@ func (suite *NodeDriverValidationSuite) TestHappyPath() {
 
 func (suite *NodeDriverValidationSuite) TestRKE1NotDeleted() {
 	ctrl := gomock.NewController(suite.T())
-	mockCache := fakes.NewMockNodeCache(ctrl)
+	mockCache := fake.NewMockCacheInterface[*v3.Node](ctrl)
 	mockCache.EXPECT().List("", labels.Everything()).Return([]*v3.Node{
 		{Status: v3.NodeStatus{NodeTemplateSpec: &v3.NodeTemplateSpec{
 			Driver: "testing",
@@ -84,7 +84,7 @@ func (suite *NodeDriverValidationSuite) TestRKE1NotDeleted() {
 
 func (suite *NodeDriverValidationSuite) TestRKE2NotDeleted() {
 	ctrl := gomock.NewController(suite.T())
-	mockCache := fakes.NewMockNodeCache(ctrl)
+	mockCache := fake.NewMockCacheInterface[*v3.Node](ctrl)
 	mockCache.EXPECT().List("", labels.Everything()).Return([]*v3.Node{}, nil)
 
 	a := admitter{
@@ -120,7 +120,7 @@ func (suite *NodeDriverValidationSuite) TestNotDisablingDriver() {
 
 func (suite *NodeDriverValidationSuite) TestDeleteGood() {
 	ctrl := gomock.NewController(suite.T())
-	mockCache := fakes.NewMockNodeCache(ctrl)
+	mockCache := fake.NewMockCacheInterface[*v3.Node](ctrl)
 	mockCache.EXPECT().List("", labels.Everything()).Return([]*v3.Node{}, nil)
 
 	a := admitter{
@@ -141,7 +141,7 @@ func (suite *NodeDriverValidationSuite) TestDeleteGood() {
 
 func (suite *NodeDriverValidationSuite) TestDeleteRKE1Bad() {
 	ctrl := gomock.NewController(suite.T())
-	mockCache := fakes.NewMockNodeCache(ctrl)
+	mockCache := fake.NewMockCacheInterface[*v3.Node](ctrl)
 	mockCache.EXPECT().List("", labels.Everything()).Return([]*v3.Node{
 		{Status: v3.NodeStatus{NodeTemplateSpec: &v3.NodeTemplateSpec{
 			Driver: "testing",
@@ -166,7 +166,7 @@ func (suite *NodeDriverValidationSuite) TestDeleteRKE1Bad() {
 
 func (suite *NodeDriverValidationSuite) TestDeleteRKE2Bad() {
 	ctrl := gomock.NewController(suite.T())
-	mockCache := fakes.NewMockNodeCache(ctrl)
+	mockCache := fake.NewMockCacheInterface[*v3.Node](ctrl)
 	mockCache.EXPECT().List("", labels.Everything()).Return([]*v3.Node{}, nil)
 
 	a := admitter{

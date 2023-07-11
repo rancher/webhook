@@ -6,8 +6,8 @@ import (
 	"github.com/golang/mock/gomock"
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/auth"
-	"github.com/rancher/webhook/pkg/fakes"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
+	"github.com/rancher/wrangler/pkg/generic/fake"
 	"github.com/stretchr/testify/suite"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -272,8 +272,8 @@ func (c *CRTBResolverSuite) NewTestCRTBResolver() *CRTBRuleResolver {
 	bindings := []*apisv3.ClusterRoleTemplateBinding{c.user1AdminCRTB, c.user1AReadNS2CRTB, c.user1InvalidNS2CRTB,
 		c.user2WriteCRTB, c.user2ReadCRTB, c.groupAdminCRTB, c.groupReadCRTB, c.groupWriteCRTB, c.group2WriteCRTB}
 	crtbCache := NewCRTBCache(ctrl, bindings)
-	clusterRoleCache := fakes.NewMockClusterRoleCache(ctrl)
-	roleTemplateCache := fakes.NewMockRoleTemplateCache(ctrl)
+	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
+	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 	roleTemplateCache.EXPECT().Get(c.adminRT.Name).Return(c.adminRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().Get(c.readRT.Name).Return(c.readRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().Get(c.writeRT.Name).Return(c.writeRT, nil).AnyTimes()
@@ -283,7 +283,7 @@ func (c *CRTBResolverSuite) NewTestCRTBResolver() *CRTBRuleResolver {
 }
 
 func NewCRTBCache(ctrl *gomock.Controller, bindings []*apisv3.ClusterRoleTemplateBinding) v3.ClusterRoleTemplateBindingCache {
-	clusterCache := fakes.NewMockClusterRoleTemplateBindingCache(ctrl)
+	clusterCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
 
 	clusterCache.EXPECT().Get(gomock.Any(), gomock.Any()).DoAndReturn(func(namespace, name string) (*apisv3.ClusterRoleTemplateBinding, error) {
 		for _, binding := range bindings {

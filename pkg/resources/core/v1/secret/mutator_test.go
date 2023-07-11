@@ -7,7 +7,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/rancher/webhook/pkg/admission"
-	"github.com/rancher/webhook/pkg/fakes"
+	"github.com/rancher/wrangler/pkg/generic/fake"
 	"github.com/stretchr/testify/require"
 	admissionv1 "k8s.io/api/admission/v1"
 	authenicationv1 "k8s.io/api/authentication/v1"
@@ -332,15 +332,15 @@ func TestMutatorAdmitOnDelete(t *testing.T) {
 
 			ctrl := gomock.NewController(t)
 
-			roleBindingController := fakes.NewMockRoleBindingController(ctrl)
-			roleBindingCache := fakes.NewMockRoleBindingCache(ctrl)
+			roleBindingController := fake.NewMockControllerInterface[*rbacv1.RoleBinding, *rbacv1.RoleBindingList](ctrl)
+			roleBindingCache := fake.NewMockCacheInterface[*rbacv1.RoleBinding](ctrl)
 			roleBindingController.EXPECT().Cache().Return(roleBindingCache).AnyTimes()
 
 			roleBindingCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
 			roleBindingCache.EXPECT().GetByIndex(gomock.Any(), fmt.Sprintf("%s/%s", secretNamespace, secretName)).Return(test.ownedRoleBindings, test.bindingIndexerError).AnyTimes()
 
-			roleController := fakes.NewMockRoleController(ctrl)
-			roleCache := fakes.NewMockRoleCache(ctrl)
+			roleController := fake.NewMockControllerInterface[*rbacv1.Role, *rbacv1.RoleList](ctrl)
+			roleCache := fake.NewMockCacheInterface[*rbacv1.Role](ctrl)
 			roleController.EXPECT().Cache().Return(roleCache).AnyTimes()
 			for _, role := range []rbacv1.Role{testValidRole, testValidRoleNorman, testInValidRole} {
 				role := role
@@ -389,9 +389,9 @@ func TestMutatorAdmitOnCreate(t *testing.T) {
 	}
 
 	ctrl := gomock.NewController(t)
-	roleBindingController := fakes.NewMockRoleBindingController(ctrl)
-	roleController := fakes.NewMockRoleController(ctrl)
-	roleBindingCache := fakes.NewMockRoleBindingCache(ctrl)
+	roleBindingController := fake.NewMockControllerInterface[*rbacv1.RoleBinding, *rbacv1.RoleBindingList](ctrl)
+	roleController := fake.NewMockControllerInterface[*rbacv1.Role, *rbacv1.RoleList](ctrl)
+	roleBindingCache := fake.NewMockCacheInterface[*rbacv1.RoleBinding](ctrl)
 	roleBindingController.EXPECT().Cache().Return(roleBindingCache).AnyTimes()
 	roleBindingCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
 

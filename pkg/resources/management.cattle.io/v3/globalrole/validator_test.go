@@ -5,10 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
-	"github.com/rancher/webhook/pkg/fakes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -16,6 +14,7 @@ import (
 	v1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
 
 var (
@@ -61,7 +60,7 @@ func TestAdmitInvalidOrDeletedGlobalRole(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			// The resolver should not run in these tests. Making it not nil to get test errors instead of panics.
-			resolver := fakes.NewMockAuthorizationRuleResolver(gomock.NewController(t))
+			resolver, _ := validation.NewTestRuleResolver(nil, nil, nil, nil)
 			admitters := NewValidator(resolver).Admitters()
 			assert.Len(t, admitters, 1)
 
@@ -97,7 +96,7 @@ func TestAdmitInvalidOrDeletedGlobalRole(t *testing.T) {
 func TestRejectsBadRequest(t *testing.T) {
 	t.Parallel()
 	// The resolver should not run in these tests. Making it not nil to get test errors instead of panics.
-	resolver := fakes.NewMockAuthorizationRuleResolver(gomock.NewController(t))
+	resolver, _ := validation.NewTestRuleResolver(nil, nil, nil, nil)
 	admitters := NewValidator(resolver).Admitters()
 	assert.Len(t, admitters, 1)
 
@@ -122,8 +121,8 @@ func TestRejectsBadRequest(t *testing.T) {
 
 func TestAdmitValidGlobalRole(t *testing.T) {
 	t.Parallel()
-	resolver := fakes.NewMockAuthorizationRuleResolver(gomock.NewController(t))
-	resolver.EXPECT().RulesFor(gomock.Any(), gomock.Any())
+	// The resolver should not run in these tests. Making it not nil to get test errors instead of panics.
+	resolver, _ := validation.NewTestRuleResolver(nil, nil, nil, nil)
 
 	admitters := NewValidator(resolver).Admitters()
 	assert.Len(t, admitters, 1)

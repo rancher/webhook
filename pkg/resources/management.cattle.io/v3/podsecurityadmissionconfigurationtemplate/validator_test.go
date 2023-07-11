@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/webhook/pkg/admission"
-	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
-	v1 "github.com/rancher/webhook/pkg/generated/controllers/provisioning.cattle.io/v1"
+	"github.com/rancher/wrangler/pkg/generic/fake"
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/pod-security-admission/api"
 )
 
@@ -35,10 +34,45 @@ var (
 )
 
 func TestAdmit(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mgmtCache := fake.NewMockNonNamespacedCacheInterface[*v3.Cluster](ctrl)
+	provCache := fake.NewMockCacheInterface[*provv1.Cluster](ctrl)
+
+	mgmtCache.EXPECT().GetByIndex(gomock.Any(), gomock.AssignableToTypeOf("")).DoAndReturn(func(_, key string) ([]*v3.Cluster, error) {
+		x := []*v3.Cluster{
+			{
+				Spec: v3.ClusterSpec{
+					DisplayName: "validationTest-cluster",
+					ClusterSpecBase: v3.ClusterSpecBase{
+						DefaultPodSecurityAdmissionConfigurationTemplateName: "mgmttesting",
+					},
+				},
+			},
+		}
+		if key != "mgmttesting" {
+			return nil, nil
+		}
+		return x, nil
+	}).AnyTimes()
+
+	provCache.EXPECT().GetByIndex(gomock.Any(), gomock.AssignableToTypeOf("")).DoAndReturn(func(_, key string) ([]*provv1.Cluster, error) {
+		x := []*provv1.Cluster{
+			{
+				Spec: provv1.ClusterSpec{
+					DefaultPodSecurityAdmissionConfigurationTemplateName: "provtesting",
+				},
+			},
+		}
+		if key != "provtesting" {
+			return nil, nil
+		}
+		return x, nil
+	}).AnyTimes()
+
 	validator = Validator{
 		admitter: admitter{
-			ManagementClusterCache:   mockMgmtCache{},
-			provisioningClusterCache: mockProvisioningCache{},
+			ManagementClusterCache:   mgmtCache,
+			provisioningClusterCache: provCache,
 		},
 	}
 	validConfiguration := v3.PodSecurityAdmissionConfigurationTemplateSpec{
@@ -597,71 +631,4 @@ func createRequest(obj *v3.PodSecurityAdmissionConfigurationTemplate, operation 
 	req.Object.Raw = j
 	req.OldObject.Raw = j
 	return req, nil
-}
-
-// mocks
-
-type mockMgmtCache struct{}
-
-func (m mockMgmtCache) Get(string) (*v3.Cluster, error) {
-	// intentionally unimplemented
-	panic("implement me")
-}
-
-func (m mockMgmtCache) List(labels.Selector) ([]*v3.Cluster, error) {
-	// intentionally unimplemented
-	panic("implement me")
-}
-
-func (m mockMgmtCache) AddIndexer(string, controllerv3.ClusterIndexer) {
-	// intentionally unimplemented
-	panic("implement me")
-}
-
-func (m mockMgmtCache) GetByIndex(_, key string) ([]*v3.Cluster, error) {
-	x := []*v3.Cluster{
-		{
-			Spec: v3.ClusterSpec{
-				DisplayName: "validationTest-cluster",
-				ClusterSpecBase: v3.ClusterSpecBase{
-					DefaultPodSecurityAdmissionConfigurationTemplateName: "mgmttesting",
-				},
-			},
-		},
-	}
-	if key != "mgmttesting" {
-		return nil, nil
-	}
-	return x, nil
-}
-
-type mockProvisioningCache struct{}
-
-func (m mockProvisioningCache) Get(string, string) (*provv1.Cluster, error) {
-	// intentionally unimplemented
-	panic("implement me")
-}
-
-func (m mockProvisioningCache) List(string, labels.Selector) ([]*provv1.Cluster, error) {
-	// intentionally unimplemented
-	panic("implement me")
-}
-
-func (m mockProvisioningCache) AddIndexer(string, v1.ClusterIndexer) {
-	// intentionally unimplemented
-	panic("implement me")
-}
-
-func (m mockProvisioningCache) GetByIndex(_, key string) ([]*provv1.Cluster, error) {
-	x := []*provv1.Cluster{
-		{
-			Spec: provv1.ClusterSpec{
-				DefaultPodSecurityAdmissionConfigurationTemplateName: "provtesting",
-			},
-		},
-	}
-	if key != "provtesting" {
-		return nil, nil
-	}
-	return x, nil
 }
