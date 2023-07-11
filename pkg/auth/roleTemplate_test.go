@@ -9,9 +9,9 @@ import (
 	"github.com/golang/mock/gomock"
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/auth"
-	"github.com/rancher/webhook/pkg/fakes"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	wranglerv1 "github.com/rancher/wrangler/pkg/generated/controllers/rbac/v1"
+	"github.com/rancher/wrangler/pkg/generic/fake"
 	"github.com/stretchr/testify/suite"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -167,9 +167,9 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 			args: args{
 				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
 					ctrl := gomock.NewController(r.T())
-					roleTemplateCache := fakes.NewMockRoleTemplateCache(ctrl)
+					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 					roleTemplateCache.EXPECT().Get(r.adminRT.Name).Return(r.adminRT, nil).AnyTimes()
-					clusterRoleCache := fakes.NewMockClusterRoleCache(ctrl)
+					clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 					return roleTemplateCache, clusterRoleCache
 				},
 				name: r.adminRT.Name,
@@ -183,11 +183,11 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 			args: args{
 				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
 					ctrl := gomock.NewController(r.T())
-					roleTemplateCache := fakes.NewMockRoleTemplateCache(ctrl)
+					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 					roleTemplateCache.EXPECT().Get(r.inheritedRT.Name).Return(r.inheritedRT, nil)
 					roleTemplateCache.EXPECT().Get(r.readNodesRT.Name).Return(r.readNodesRT, nil)
 					roleTemplateCache.EXPECT().Get(r.writeNodesRT.Name).Return(r.writeNodesRT, nil)
-					clusterRoleCache := fakes.NewMockClusterRoleCache(ctrl)
+					clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 					return roleTemplateCache, clusterRoleCache
 				},
 				name: r.inheritedRT.Name,
@@ -201,9 +201,9 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 			args: args{
 				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
 					ctrl := gomock.NewController(r.T())
-					roleTemplateCache := fakes.NewMockRoleTemplateCache(ctrl)
+					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 					roleTemplateCache.EXPECT().Get(r.externalRT.Name).Return(r.externalRT, nil)
-					clusterRoleCache := fakes.NewMockClusterRoleCache(ctrl)
+					clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 					clusterRoleCache.EXPECT().Get(r.readServiceCR.Name).Return(r.readServiceCR, nil)
 					return roleTemplateCache, clusterRoleCache
 				},
@@ -218,9 +218,9 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 			args: args{
 				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
 					ctrl := gomock.NewController(r.T())
-					roleTemplateCache := fakes.NewMockRoleTemplateCache(ctrl)
+					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 					roleTemplateCache.EXPECT().Get(invalidName).Return(nil, errExpected)
-					clusterRoleCache := fakes.NewMockClusterRoleCache(ctrl)
+					clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 					return roleTemplateCache, clusterRoleCache
 				},
 				name: invalidName,
@@ -234,10 +234,10 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 			args: args{
 				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
 					ctrl := gomock.NewController(r.T())
-					roleTemplateCache := fakes.NewMockRoleTemplateCache(ctrl)
+					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 					roleTemplateCache.EXPECT().Get(r.invalidInhertedRT.Name).Return(r.invalidInhertedRT, nil)
 					roleTemplateCache.EXPECT().Get(invalidName).Return(nil, errExpected)
-					clusterRoleCache := fakes.NewMockClusterRoleCache(ctrl)
+					clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 					return roleTemplateCache, clusterRoleCache
 				},
 				name: r.invalidInhertedRT.Name,
@@ -267,8 +267,8 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 
 func (r *RoleTemplateResolverSuite) TestGetCache() {
 	ctrl := gomock.NewController(r.T())
-	roleTemplateCache := fakes.NewMockRoleTemplateCache(ctrl)
-	clusterRoleCache := fakes.NewMockClusterRoleCache(ctrl)
+	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
+	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 	resolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
 	r.Equal(resolver.RoleTemplateCache(), roleTemplateCache, "Resolver did not correctly return cache")
 }
