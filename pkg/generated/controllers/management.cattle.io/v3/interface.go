@@ -21,6 +21,7 @@ package v3
 import (
 	"github.com/rancher/lasso/pkg/controller"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/wrangler/pkg/generic"
 	"github.com/rancher/wrangler/pkg/schemes"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -49,24 +50,30 @@ type version struct {
 	controllerFactory controller.SharedControllerFactory
 }
 
-func (c *version) Cluster() ClusterController {
-	return NewClusterController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Cluster"}, "clusters", false, c.controllerFactory)
+func (v *version) Cluster() ClusterController {
+	return generic.NewNonNamespacedController[*v3.Cluster, *v3.ClusterList](schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Cluster"}, "clusters", v.controllerFactory)
 }
-func (c *version) ClusterRoleTemplateBinding() ClusterRoleTemplateBindingController {
-	return NewClusterRoleTemplateBindingController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "ClusterRoleTemplateBinding"}, "clusterroletemplatebindings", true, c.controllerFactory)
+
+func (v *version) ClusterRoleTemplateBinding() ClusterRoleTemplateBindingController {
+	return generic.NewController[*v3.ClusterRoleTemplateBinding, *v3.ClusterRoleTemplateBindingList](schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "ClusterRoleTemplateBinding"}, "clusterroletemplatebindings", true, v.controllerFactory)
 }
-func (c *version) GlobalRole() GlobalRoleController {
-	return NewGlobalRoleController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "GlobalRole"}, "globalroles", false, c.controllerFactory)
+
+func (v *version) GlobalRole() GlobalRoleController {
+	return generic.NewNonNamespacedController[*v3.GlobalRole, *v3.GlobalRoleList](schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "GlobalRole"}, "globalroles", v.controllerFactory)
 }
-func (c *version) Node() NodeController {
-	return NewNodeController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Node"}, "nodes", true, c.controllerFactory)
+
+func (v *version) Node() NodeController {
+	return generic.NewController[*v3.Node, *v3.NodeList](schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Node"}, "nodes", true, v.controllerFactory)
 }
-func (c *version) PodSecurityAdmissionConfigurationTemplate() PodSecurityAdmissionConfigurationTemplateController {
-	return NewPodSecurityAdmissionConfigurationTemplateController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "PodSecurityAdmissionConfigurationTemplate"}, "podsecurityadmissionconfigurationtemplates", false, c.controllerFactory)
+
+func (v *version) PodSecurityAdmissionConfigurationTemplate() PodSecurityAdmissionConfigurationTemplateController {
+	return generic.NewNonNamespacedController[*v3.PodSecurityAdmissionConfigurationTemplate, *v3.PodSecurityAdmissionConfigurationTemplateList](schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "PodSecurityAdmissionConfigurationTemplate"}, "podsecurityadmissionconfigurationtemplates", v.controllerFactory)
 }
-func (c *version) ProjectRoleTemplateBinding() ProjectRoleTemplateBindingController {
-	return NewProjectRoleTemplateBindingController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "ProjectRoleTemplateBinding"}, "projectroletemplatebindings", true, c.controllerFactory)
+
+func (v *version) ProjectRoleTemplateBinding() ProjectRoleTemplateBindingController {
+	return generic.NewController[*v3.ProjectRoleTemplateBinding, *v3.ProjectRoleTemplateBindingList](schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "ProjectRoleTemplateBinding"}, "projectroletemplatebindings", true, v.controllerFactory)
 }
-func (c *version) RoleTemplate() RoleTemplateController {
-	return NewRoleTemplateController(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "RoleTemplate"}, "roletemplates", false, c.controllerFactory)
+
+func (v *version) RoleTemplate() RoleTemplateController {
+	return generic.NewNonNamespacedController[*v3.RoleTemplate, *v3.RoleTemplateList](schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "RoleTemplate"}, "roletemplates", v.controllerFactory)
 }
