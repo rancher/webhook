@@ -19,7 +19,9 @@ import (
 )
 
 const (
-	webhookQualifier = "rancher.cattle.io"
+	webhookQualifier     = "rancher.cattle.io"
+	bypassServiceAccount = "system:serviceaccount:cattle-system:rancher-webhook-sudo"
+	systemMasters        = "system:masters"
 )
 
 var (
@@ -187,6 +189,13 @@ func NewValidatingHandlerFunc(handler ValidatingAdmissionHandler) http.HandlerFu
 			sendError(responseWriter, review, err)
 			return
 		}
+
+		if bypassValidation(review.Request) {
+			sendResponse(responseWriter, review, ResponseAllowed())
+			logrus.Debugf("admit bypassed: %s %s %s", webReq.Operation, webReq.Kind.String(), resourceString(webReq.Namespace, webReq.Name))
+			return
+		}
+
 		// save the response from the loop so we can return on success
 		var response *admissionv1.AdmissionResponse
 		for _, admitter := range handler.Admitters() {
@@ -198,6 +207,7 @@ func NewValidatingHandlerFunc(handler ValidatingAdmissionHandler) http.HandlerFu
 				response = &admissionv1.AdmissionResponse{}
 			}
 			logrus.Debugf("admit result: %s %s %s user=%s allowed=%v err=%v", webReq.Operation, webReq.Kind.String(), resourceString(webReq.Namespace, webReq.Name), webReq.UserInfo.Username, response.Allowed, err)
+
 			// if we get an error or are not allowed, short circuit the admits
 			if err != nil {
 				review.Response = response
@@ -223,11 +233,19 @@ func NewMutatingHandlerFunc(handler MutatingAdmissionHandler) http.HandlerFunc {
 			sendError(responseWriter, review, err)
 			return
 		}
+
+		if bypassValidation(review.Request) {
+			sendResponse(responseWriter, review, ResponseAllowed())
+			logrus.Debugf("admit bypassed: %s %s %s", webReq.Operation, webReq.Kind.String(), resourceString(webReq.Namespace, webReq.Name))
+			return
+		}
+
 		response, err := handler.Admit(webReq)
 		if response == nil {
 			response = &admissionv1.AdmissionResponse{}
 		}
 		logrus.Debugf("admit result: %s %s %s user=%s allowed=%v err=%v", webReq.Operation, webReq.Kind.String(), resourceString(webReq.Namespace, webReq.Name), webReq.UserInfo.Username, response.Allowed, err)
+
 		if err != nil {
 			review.Response = response
 			sendError(responseWriter, review, err)
@@ -346,4 +364,17 @@ func CreateWebhookName(handler WebhookHandler, suffix string) string {
 		return fmt.Sprintf("%s.%s", webhookQualifier, subPath)
 	}
 	return fmt.Sprintf("%s.%s.%s", webhookQualifier, subPath, suffix)
+}
+
+// bypassValidation users can bypass the webhook if they are the sudo account and system:masters group
+func bypassValidation(request *admissionv1.AdmissionRequest) bool {
+	if request.UserInfo.Username != bypassServiceAccount {
+		return false
+	}
+	for _, group := range request.UserInfo.Groups {
+		if group == systemMasters {
+			return true
+		}
+	}
+	return false
 }
