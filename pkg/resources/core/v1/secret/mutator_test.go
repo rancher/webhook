@@ -19,6 +19,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
+var (
+	secretGVR = metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
+	secretGVK = metav1.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}
+)
+
 func Test_roleBindingIndexer(t *testing.T) {
 	testNamespace := "test-ns"
 	createBinding := func(roleRefKind string, ownerRefs ...metav1.OwnerReference) rbacv1.RoleBinding {
@@ -116,9 +121,7 @@ func Test_roleBindingIndexer(t *testing.T) {
 	}
 }
 
-func TestMutatorAdmit(t *testing.T) {
-	secretGVR := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
-	secretGVK := metav1.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}
+func TestMutatorAdmitOnDelete(t *testing.T) {
 	const secretName = "test-secret"
 	const secretNamespace = "test-ns"
 
@@ -352,6 +355,71 @@ func TestMutatorAdmit(t *testing.T) {
 			}
 
 			mutator := NewMutator(roleController, roleBindingController)
+			resp, err := mutator.Admit(&req)
+			if test.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, test.wantAdmit, resp.Allowed)
+			}
+		})
+	}
+}
+
+func TestMutatorAdmitOnCreate(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		secret    corev1.Secret
+		wantAdmit bool
+		wantErr   bool
+	}{
+		{
+			name:      "create secret",
+			secret:    corev1.Secret{},
+			wantAdmit: true,
+		},
+		{
+			name: "create cloud credential secret",
+			secret: corev1.Secret{
+				Type: "provisioning.cattle.io/cloud-credential",
+			},
+			wantAdmit: true,
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	roleBindingController := fakes.NewMockRoleBindingController(ctrl)
+	roleController := fakes.NewMockRoleController(ctrl)
+	roleBindingCache := fakes.NewMockRoleBindingCache(ctrl)
+	roleBindingController.EXPECT().Cache().Return(roleBindingCache).AnyTimes()
+	roleBindingCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
+
+	mutator := NewMutator(roleController, roleBindingController)
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			req := admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					UID:             "2",
+					Kind:            secretGVK,
+					Resource:        secretGVR,
+					RequestKind:     &secretGVK,
+					RequestResource: &secretGVR,
+					Name:            "my-secret",
+					Namespace:       "test-ns",
+					Operation:       admissionv1.Create,
+					UserInfo:        authenicationv1.UserInfo{Username: "test-user", UID: ""},
+					Object:          runtime.RawExtension{},
+					OldObject:       runtime.RawExtension{},
+				},
+			}
+			var err error
+			req.Object.Raw, err = json.Marshal(test.secret)
+			require.NoError(t, err)
+
 			resp, err := mutator.Admit(&req)
 			if test.wantErr {
 				require.Error(t, err)

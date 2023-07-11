@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
+	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -65,7 +66,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, err
 	}
 
-	if !isValidFeatureValue(newFeature.Status.LockedValue, oldFeature.Spec.Value, newFeature.Spec.Value) {
+	if !isUpdateAllowed(oldFeature, newFeature) {
 		return &admissionv1.AdmissionResponse{
 			Result: &metav1.Status{
 				Status:  "Failure",
@@ -82,24 +83,23 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	}, nil
 }
 
-// isValidFeatureValue checks that desired value does not change value on spec unless lockedValue
-// is nil or it is equal to the lockedValue.
-func isValidFeatureValue(lockedValue *bool, oldSpecValue *bool, desiredSpecValue *bool) bool {
-	if lockedValue == nil {
+// isUpdateAllowed checks that the new value does not change on spec unless it's equal to the lockedValue,
+// or lockedValue is nil.
+func isUpdateAllowed(old, new *v3.Feature) bool {
+	if old == nil || new == nil {
+		return false
+	}
+	if new.Status.LockedValue == nil {
 		return true
 	}
-
-	if oldSpecValue == nil && desiredSpecValue == nil {
+	if old.Spec.Value == nil && new.Spec.Value == nil {
 		return true
 	}
-
-	if oldSpecValue != nil && desiredSpecValue != nil && *oldSpecValue == *desiredSpecValue {
+	if old.Spec.Value != nil && new.Spec.Value != nil && *old.Spec.Value == *new.Spec.Value {
 		return true
 	}
-
-	if desiredSpecValue != nil && *desiredSpecValue == *lockedValue {
+	if new.Spec.Value != nil && *new.Spec.Value == *new.Status.LockedValue {
 		return true
 	}
-
 	return false
 }

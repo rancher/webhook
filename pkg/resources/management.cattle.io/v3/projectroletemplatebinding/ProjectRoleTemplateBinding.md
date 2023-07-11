@@ -7,10 +7,10 @@ Users can only create/update ProjectRoleTemplateBindings with rights less than o
 ### Invalid Fields - Create
 
 Users cannot create ProjectRoleTemplateBindings which violate the following constraints:
-- Either a user subject (through "UserName" or "UserPrincipalName") or a group subject (through "GroupName" or "GroupPrincipalName") must be specified; both a user subject and group subject cannot be specified
-- A "ProjectName" must be specified
-- The roleTemplate indicated in "RoleTemplateName" must be:
-  - Valid (i.e. is an existing `roleTemplate` object in the `management.cattle.io/v3` apiGroup)
+- Either a user subject (through `UserName` or `UserPrincipalName`) or a group subject (through `GroupName` or `GroupPrincipalName`) must be specified; both a user subject and a group subject cannot be specified
+- `ProjectName` must be specified
+- The roleTemplate indicated in `RoleTemplateName` must be:
+  - Valid (i.e. is an existing `roleTemplate` object in the `management.cattle.io/v3` API group)
   - Not locked (i.e. `roleTemplate.Locked` must be `false`)
 
 ### Invalid Fields - Update
@@ -19,7 +19,7 @@ Users cannot update the following fields after creation:
 - RoleTemplateName
 - ProjectName
 
-Users can update the following fields if they have not been set, but after they have been set they cannot be changed:
+Users can update the following fields if they have not been set, but after they have been set, they cannot be changed:
 - UserName
 - UserPrincipalName
 - GroupName

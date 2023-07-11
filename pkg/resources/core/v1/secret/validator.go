@@ -3,7 +3,6 @@ package secret
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 
 	"github.com/rancher/webhook/pkg/admission"
 	objectsv1 "github.com/rancher/webhook/pkg/generated/objects/core/v1"
@@ -99,13 +98,15 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	// we are only concerned with requests that attempt to orphan resources
 	if !hasOrphanDependents && !hasOrphanPolicy {
 		return admission.ResponseAllowed(), nil
-
 	}
 	secret, err := objectsv1.SecretFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read secret from request: %w", err)
 	}
 	roles, roleBindings, err := a.getRbacRefs(secret)
+	if err != nil {
+		return nil, fmt.Errorf("unable to determine if secret has rbac refs: %w", err)
+	}
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
 		roleNames := make([]string, len(roles))
 		roleBindingNames := make([]string, len(roleBindings))
@@ -117,23 +118,12 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		}
 		logrus.Debugf("[%s] secret %s owns roles: %v and roleBindings %v", logPrefix, secret.Name, roleNames, roleBindingNames)
 	}
-	if err != nil {
-		return nil, fmt.Errorf("unable to determine if secret has rbac refs: %w", err)
-	}
 	// requests which orphan non-rbac resources are allowed
 	if len(roles) == 0 && len(roleBindings) == 0 {
 		return admission.ResponseAllowed(), nil
 	}
 	// secret orphans rbac resources, deny the request
-	return &admissionv1.AdmissionResponse{
-		Allowed: false,
-		Result: &metav1.Status{
-			Status:  "Failure",
-			Message: "A secret which owns RBAC objects cannot be deleted with OrphanDependents: true or PropagationPolicy: Orphan",
-			Reason:  metav1.StatusReasonBadRequest,
-			Code:    http.StatusBadRequest,
-		},
-	}, nil
+	return admission.ResponseBadRequest("A secret which owns RBAC objects cannot be deleted with OrphanDependents: true or PropagationPolicy: Orphan"), nil
 }
 
 // getRbacRefs checks to see if there are any existing rbac resources which could be orphaned by this delete call
