@@ -1,12 +1,15 @@
 package common
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
 	admissionv1 "k8s.io/api/admission/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
 func CheckCreatorID(request *admission.Request, oldObj, newObj metav1.Object) *metav1.Status {
@@ -39,5 +42,16 @@ func CheckCreatorID(request *admission.Request, oldObj, newObj metav1.Object) *m
 		return status
 	}
 
+	return nil
+}
+
+// CheckForVerbs checks that all the rules in the given list have a verb set
+func CheckForVerbs(rules []rbacv1.PolicyRule, fldPath *field.Path) error {
+	for i := range rules {
+		rule := rules[i]
+		if len(rule.Verbs) == 0 {
+			return fmt.Errorf("policyRules must have at least one verb: %s", rule.String())
+		}
+	}
 	return nil
 }

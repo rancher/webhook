@@ -339,6 +339,20 @@ func ResponseBadRequest(message string) *admissionv1.AdmissionResponse {
 	}
 }
 
+// ResponseFailedEscalation returns an AdmissionResponse a failed escalation check.
+func ResponseFailedEscalation(message string) *admissionv1.AdmissionResponse {
+	return &admissionv1.AdmissionResponse{
+		Result: &metav1.Status{
+			Status:  "Failure",
+			Message: message,
+			// TODO: This is the reason and code we have been using but we should verify this matches K8s privilege escalation reason and code.
+			Reason: metav1.StatusReasonInvalid,
+			Code:   http.StatusUnprocessableEntity,
+		},
+		Allowed: false,
+	}
+}
+
 // CreateWebhookName returns a new name for the given webhook handler with the given suffix.
 func CreateWebhookName(handler WebhookHandler, suffix string) string {
 	subPath := SubPath(handler.GVR())
