@@ -1,143 +1,397 @@
-package globalrole
+package globalrole_test
 
 import (
-	"encoding/json"
-	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
-	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-	"github.com/rancher/webhook/pkg/admission"
-	"github.com/rancher/webhook/pkg/fakes"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	admissionv1 "k8s.io/api/admission/v1"
-	authenicationv1 "k8s.io/api/authentication/v1"
-	v1 "k8s.io/api/rbac/v1"
+	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/globalrole"
+	v1 "k8s.io/api/admission/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
 
-var (
-	globalRoleGVR = metav1.GroupVersionResource{Group: "management.cattle.io", Version: "v3", Resource: "globalRoles"}
-	globalRoleGVK = metav1.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "GlobalRole"}
+const (
+	adminUser = "admin-userid"
+	testUser  = "test-userid"
+	errorUser = "error-userid"
 )
 
-func TestAdmitInvalidOrDeletedGlobalRole(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name       string
-		globalRole v3.GlobalRole
-		wantError  bool
-		wantAdmit  bool
-	}{
+type TableTest struct {
+	name    string
+	args    args
+	allowed bool
+}
+
+func (g *GlobalRoleSuite) Test_PrivilegeEscalation() {
+	clusterRoles := []*rbacv1.ClusterRole{g.adminCR, g.readPodsCR}
+
+	clusterRoleBindings := []*rbacv1.ClusterRoleBinding{
 		{
-			name: "global role in the process of being deleted is admitted",
-			globalRole: v3.GlobalRole{
-				ObjectMeta: metav1.ObjectMeta{
-					DeletionTimestamp: admission.Ptr(metav1.NewTime(time.Now())),
-				},
+			Subjects: []rbacv1.Subject{
+				{Kind: rbacv1.UserKind, Name: adminUser},
 			},
-			wantAdmit: true,
+			RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: g.adminCR.Name},
 		},
 		{
-			name: "a policy rule lacks a verb",
-			globalRole: v3.GlobalRole{
-				Rules: []v1.PolicyRule{
-					{
-						Verbs: []string{"list"},
-					},
-					{
-						Verbs: nil,
-					},
+			Subjects: []rbacv1.Subject{
+				{Kind: rbacv1.UserKind, Name: testUser},
+			},
+			RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: g.readPodsCR.Name},
+		},
+	}
+	resolver, _ := validation.NewTestRuleResolver(nil, nil, clusterRoles, clusterRoleBindings)
+	validator := globalrole.NewValidator(resolver)
+	admitters := validator.Admitters()
+	g.Len(admitters, 1, "wanted only one admitter")
+	admitter := admitters[0]
+
+	tests := []TableTest{
+		// base test, admin user correctly creates a global role
+		{
+			name: "base test valid privileges",
+			args: args{
+				username: adminUser,
+				newGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = g.adminCR.Rules
+					return baseGR
+				},
+				oldGR: func() *apisv3.GlobalRole { return nil },
+			},
+			allowed: true,
+		},
+
+		// User attempts to create a globalrole with rules equal to one they hold.
+		{
+			name: "creating with equal privilege level",
+			args: args{
+				username: testUser,
+				newGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = g.readPodsCR.Rules
+					return baseGR
+				},
+				oldGR: func() *apisv3.GlobalRole { return nil },
+			},
+			allowed: true,
+		},
+
+		// User attempts to create a globalrole with more rules than the ones they hold.
+		{
+			name: "creation with privilege escalation",
+			args: args{
+				username: testUser,
+				newGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = g.adminCR.Rules
+					return baseGR
+				},
+				oldGR: func() *apisv3.GlobalRole { return nil },
+			},
+			allowed: false,
+		},
+
+		// User attempts to update a globalrole with more rules than the ones they hold.
+		{
+			name: "update with privilege escalation",
+			args: args{
+				username: testUser,
+				oldGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = g.readPodsCR.Rules
+					return baseGR
+				},
+				newGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = append(baseGR.Rules, g.ruleReadPods, g.ruleWriteNodes)
+					return baseGR
 				},
 			},
-			wantAdmit: false,
+			allowed: false,
 		},
 	}
 
-	for _, test := range tests {
-		test := test
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-			// The resolver should not run in these tests. Making it not nil to get test errors instead of panics.
-			resolver := fakes.NewMockAuthorizationRuleResolver(gomock.NewController(t))
-			admitters := NewValidator(resolver).Admitters()
-			assert.Len(t, admitters, 1)
-
-			req := admission.Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation:       admissionv1.Create,
-					UID:             "2",
-					Kind:            globalRoleGVK,
-					Resource:        globalRoleGVR,
-					RequestKind:     &globalRoleGVK,
-					RequestResource: &globalRoleGVR,
-					Name:            "my-global-role",
-					UserInfo:        authenicationv1.UserInfo{Username: "test-user", UID: ""},
-					Object:          runtime.RawExtension{},
-					OldObject:       runtime.RawExtension{},
-				},
-			}
-			var err error
-			req.Object.Raw, err = json.Marshal(test.globalRole)
-			require.NoError(t, err, "Failed to marshal new GlobalRole while creating request")
-
-			response, err := admitters[0].Admit(&req)
-			if test.wantError {
-				assert.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, test.wantAdmit, response.Allowed)
-			}
+	for i := range tests {
+		test := tests[i]
+		g.Run(test.name, func() {
+			req := createGRRequest(g.T(), test.args.oldGR(), test.args.newGR(), test.args.username)
+			resp, err := admitter.Admit(req)
+			g.NoError(err, "Admit failed")
+			g.Equalf(test.allowed, resp.Allowed, "Response was incorrectly validated wanted response.Allowed = '%v' got '%v' message=%+v", test.allowed, resp.Allowed, resp.Result)
 		})
 	}
 }
 
-func TestRejectsBadRequest(t *testing.T) {
-	t.Parallel()
-	// The resolver should not run in these tests. Making it not nil to get test errors instead of panics.
-	resolver := fakes.NewMockAuthorizationRuleResolver(gomock.NewController(t))
-	admitters := NewValidator(resolver).Admitters()
-	assert.Len(t, admitters, 1)
+func (g *GlobalRoleSuite) Test_UpdateValidation() {
+	clusterRoles := []*rbacv1.ClusterRole{g.adminCR}
+	clusterRoleBindings := []*rbacv1.ClusterRoleBinding{
+		{
+			Subjects: []rbacv1.Subject{
+				{Kind: rbacv1.UserKind, Name: adminUser},
+			},
+			RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: g.adminCR.Name},
+		},
+	}
+	resolver, _ := validation.NewTestRuleResolver(nil, nil, clusterRoles, clusterRoleBindings)
+	validator := globalrole.NewValidator(resolver)
+	admitters := validator.Admitters()
+	g.Len(admitters, 1, "wanted only one admitter")
+	admitter := admitters[0]
 
-	req := admission.Request{
-		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation:       admissionv1.Create,
-			UID:             "2",
-			Kind:            globalRoleGVK,
-			Resource:        globalRoleGVR,
-			RequestKind:     &globalRoleGVK,
-			RequestResource: &globalRoleGVR,
-			Name:            "my-global-role",
-			UserInfo:        authenicationv1.UserInfo{Username: "test-user", UID: ""},
-			Object:          runtime.RawExtension{},
-			OldObject:       runtime.RawExtension{},
+	tests := []TableTest{
+		{
+			name: "base test valid GR annotation update",
+			args: args{
+				username: adminUser,
+				oldGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = g.readPodsCR.Rules
+					baseGR.Annotations = nil
+					return baseGR
+				},
+				newGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = g.readPodsCR.Rules
+					baseGR.Annotations = map[string]string{"foo": "bar"}
+					return baseGR
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "update displayName",
+			args: args{
+				username: adminUser,
+				oldGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = g.readPodsCR.Rules
+					baseGR.DisplayName = "old display"
+					return baseGR
+				},
+				newGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = g.readPodsCR.Rules
+					baseGR.DisplayName = "new display"
+					return baseGR
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "update displayName of builtin",
+			args: args{
+				username: testUser,
+				oldGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.DisplayName = "old display"
+					baseGR.Builtin = true
+					return baseGR
+				},
+				newGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.DisplayName = "new display"
+					baseGR.Builtin = true
+					return baseGR
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "update newUserDefault of builtin",
+			args: args{
+				username: adminUser,
+				oldGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.NewUserDefault = true
+					baseGR.Builtin = true
+					return baseGR
+				},
+				newGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.NewUserDefault = false
+					baseGR.Builtin = true
+					return baseGR
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "update annotation of builtin",
+			args: args{
+				username: adminUser,
+				oldGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = g.readPodsCR.Rules
+					baseGR.Builtin = true
+					baseGR.Annotations = nil
+					return baseGR
+				},
+				newGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = g.readPodsCR.Rules
+					baseGR.Builtin = true
+					baseGR.Annotations = map[string]string{"foo": "bar"}
+					return baseGR
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "update Builtin field",
+			args: args{
+				username: testUser,
+				oldGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Builtin = true
+					return baseGR
+				},
+				newGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Builtin = false
+					return baseGR
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "update empty rules",
+			args: args{
+				username: adminUser,
+				oldGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = []rbacv1.PolicyRule{g.ruleReadPods, g.ruleEmptyVerbs}
+					return baseGR
+				},
+				newGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = []rbacv1.PolicyRule{g.ruleReadPods, g.ruleEmptyVerbs}
+					return baseGR
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "update empty rules being deleted",
+			args: args{
+				username: adminUser,
+				oldGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = []rbacv1.PolicyRule{g.ruleReadPods, g.ruleEmptyVerbs}
+					return baseGR
+				},
+				newGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = []rbacv1.PolicyRule{g.ruleReadPods, g.ruleEmptyVerbs}
+					baseGR.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+					return baseGR
+				},
+			},
+			allowed: true,
 		},
 	}
 
-	_, err := admitters[0].Admit(&req)
-	require.Error(t, err)
+	for i := range tests {
+		test := tests[i]
+		g.Run(test.name, func() {
+			req := createGRRequest(g.T(), test.args.oldGR(), test.args.newGR(), test.args.username)
+			resp, err := admitter.Admit(req)
+			g.NoError(err, "Admit failed")
+			g.Equalf(test.allowed, resp.Allowed, "Response was incorrectly validated wanted response.Allowed = '%v' got '%v' message=%+v", test.allowed, resp.Allowed, resp.Result)
+		})
+	}
 }
 
-func TestAdmitValidGlobalRole(t *testing.T) {
-	t.Parallel()
-	resolver := fakes.NewMockAuthorizationRuleResolver(gomock.NewController(t))
-	resolver.EXPECT().RulesFor(gomock.Any(), gomock.Any())
-
-	admitters := NewValidator(resolver).Admitters()
-	assert.Len(t, admitters, 1)
-
-	req := admission.Request{
-		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation: admissionv1.Create,
+func (g *GlobalRoleSuite) Test_Create() {
+	clusterRoles := []*rbacv1.ClusterRole{g.adminCR}
+	clusterRoleBindings := []*rbacv1.ClusterRoleBinding{
+		{
+			Subjects: []rbacv1.Subject{
+				{Kind: rbacv1.UserKind, Name: adminUser},
+			},
+			RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: g.adminCR.Name},
 		},
 	}
-	var err error
-	req.Object.Raw, err = json.Marshal(v3.GlobalRole{})
-	require.NoError(t, err, "Failed to marshal new GlobalRole while creating request")
+	resolver, _ := validation.NewTestRuleResolver(nil, nil, clusterRoles, clusterRoleBindings)
+	validator := globalrole.NewValidator(resolver)
+	admitters := validator.Admitters()
+	g.Len(admitters, 1, "wanted only one admitter")
+	admitter := admitters[0]
 
-	response, err := admitters[0].Admit(&req)
-	require.NoError(t, err)
-	assert.True(t, response.Allowed)
+	tests := []TableTest{
+		{
+			name: "base test valid GR",
+			args: args{
+				username: adminUser,
+				oldGR: func() *apisv3.GlobalRole {
+					return nil
+				},
+				newGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = []rbacv1.PolicyRule{g.ruleWriteNodes}
+					return baseGR
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "missing displayName",
+			args: args{
+				username: adminUser,
+				oldGR: func() *apisv3.GlobalRole {
+					return nil
+				},
+				newGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.DisplayName = ""
+					return baseGR
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "missing rule verbs",
+			args: args{
+				username: adminUser,
+				oldGR: func() *apisv3.GlobalRole {
+					return nil
+				},
+				newGR: func() *apisv3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = []rbacv1.PolicyRule{g.ruleReadPods, g.ruleEmptyVerbs}
+					return baseGR
+				},
+			},
+			allowed: false,
+		},
+	}
+
+	for i := range tests {
+		test := tests[i]
+		g.Run(test.name, func() {
+			// g.T().Parallel()
+			req := createGRRequest(g.T(), test.args.oldGR(), test.args.newGR(), test.args.username)
+			resp, err := admitter.Admit(req)
+			g.NoError(err, "Admit failed")
+			g.Equalf(test.allowed, resp.Allowed, "Response was incorrectly validated wanted response.Allowed = '%v' got '%v' message=%+v", test.allowed, resp.Allowed, resp.Result)
+		})
+	}
+}
+
+func (g *GlobalRoleSuite) Test_ErrorHandling() {
+	resolver, _ := validation.NewTestRuleResolver(nil, nil, nil, nil)
+	validator := globalrole.NewValidator(resolver)
+	admitters := validator.Admitters()
+	g.Len(admitters, 1, "wanted only one admitter")
+	admitter := admitters[0]
+	req := createGRRequest(g.T(), newDefaultGR(), newDefaultGR(), testUser)
+	req.Operation = v1.Connect
+	_, err := admitter.Admit(req)
+	g.Error(err, "Admit should fail on unknown handled operations")
+
+	req = createGRRequest(g.T(), newDefaultGR(), newDefaultGR(), testUser)
+	req.Object = runtime.RawExtension{}
+	_, err = admitter.Admit(req)
+	g.Error(err, "Admit should fail on bad request object")
 }
