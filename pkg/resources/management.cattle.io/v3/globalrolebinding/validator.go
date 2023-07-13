@@ -2,8 +2,8 @@ package globalrolebinding
 
 import (
 	"fmt"
-	"net/http"
 
+	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
@@ -11,8 +11,8 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	rbacvalidation "k8s.io/kubernetes/pkg/registry/rbac/validation"
 	"k8s.io/utils/trace"
 )
@@ -68,43 +68,78 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	listTrace := trace.New("globalRoleBindingValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
-	newGRB, err := objectsv3.GlobalRoleBindingFromRequest(&request.AdmissionRequest)
+	oldGRB, newGRB, err := objectsv3.GlobalRoleBindingOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get %s from request: %w", gvr.Resource, err)
+	}
+
+	fldPath := field.NewPath(gvr.Resource)
+	var fieldErr *field.Error
+	switch request.Operation {
+	case admissionv1.Update:
+		fieldErr = validateUpdateFields(oldGRB, newGRB, fldPath)
+	case admissionv1.Create:
+		fieldErr = validateCreateFields(newGRB, fldPath)
+	case admissionv1.Delete:
+		// do nothing
+	default:
+		return nil, fmt.Errorf("%s operation %v: %w", gvr.Resource, request.Operation, admission.ErrUnsupportedOperation)
+	}
+
+	if fieldErr != nil {
+		return admission.ResponseBadRequest(fieldErr.Error()), nil
 	}
 
 	// Pull the global role to get the rules
 	globalRole, err := a.globalRoles.Get(newGRB.GlobalRoleName)
 	if err != nil {
 		if !errors.IsNotFound(err) {
-			return nil, err
+			return nil, fmt.Errorf("failed to get globalrole: %w", err)
 		}
-		switch request.Operation {
-		case admissionv1.Delete: // allow delete operations if the GR is not found
-			return &admissionv1.AdmissionResponse{
-				Allowed: true,
-			}, nil
-		case admissionv1.Update: // only allow updates to the finalizers if the GR is not found
-			if newGRB.DeletionTimestamp != nil {
-				return &admissionv1.AdmissionResponse{
-					Allowed: true,
-				}, nil
-			}
+		if canSkipEscalation(request.Operation, newGRB) {
+			return admission.ResponseAllowed(), nil
 		}
-		// other operations not allowed
-		return &admissionv1.AdmissionResponse{
-			Result: &metav1.Status{
-				Status:  "Failure",
-				Message: fmt.Sprintf("referenced globalRole %s not found, only deletions allowed", newGRB.Name),
-				Reason:  metav1.StatusReasonUnauthorized,
-				Code:    http.StatusUnauthorized,
-			},
-			Allowed: false,
-		}, nil
+		fieldErr := field.NotFound(fldPath.Child("globalRoleName"), newGRB.Name)
+		return admission.ResponseBadRequest(fieldErr.Error()), nil
 	}
 
-	response := &admissionv1.AdmissionResponse{}
-	auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, globalRole.Rules, "", a.resolver))
+	// if we found the global role perform an escalation check
+	if err = auth.ConfirmNoEscalation(request, globalRole.Rules, "", a.resolver); err != nil {
+		return admission.ResponseFailedEscalation(err.Error()), nil
+	}
 
-	return response, nil
+	return admission.ResponseAllowed(), nil
+}
+
+func canSkipEscalation(op admissionv1.Operation, newGRB *apisv3.GlobalRoleBinding) bool {
+	return op == admissionv1.Delete || (op == admissionv1.Update && newGRB.DeletionTimestamp != nil)
+}
+
+// validUpdateFields checks if the fields being changed are valid update fields.
+func validateUpdateFields(oldBinding, newBinding *apisv3.GlobalRoleBinding, fldPath *field.Path) *field.Error {
+	var err *field.Error
+	const immutable = "field is immutable"
+	switch {
+	case newBinding.UserName != oldBinding.UserName:
+		err = field.Invalid(fldPath.Child("userName"), newBinding.UserName, immutable)
+	case newBinding.GroupPrincipalName != oldBinding.GroupPrincipalName:
+		err = field.Invalid(fldPath.Child("groupPrincipalName"), newBinding.GroupPrincipalName, immutable)
+	case newBinding.GlobalRoleName != oldBinding.GlobalRoleName:
+		err = field.Invalid(fldPath.Child("globalRoleName"), newBinding.GlobalRoleName, immutable)
+	}
+
+	return err
+}
+
+// validateCreateFields checks if all required fields are present and valid.
+func validateCreateFields(newBinding *apisv3.GlobalRoleBinding, fldPath *field.Path) *field.Error {
+	var err *field.Error
+	switch {
+	case newBinding.UserName != "" && newBinding.GroupPrincipalName != "":
+		err = field.Forbidden(fldPath, "bindings can not set both userName and groupPrincipalName")
+	case newBinding.UserName == "" && newBinding.GroupPrincipalName == "":
+		err = field.Required(fldPath, "bindings must have either userName or groupPrincipalName set")
+	}
+
+	return err
 }
