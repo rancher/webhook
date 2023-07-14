@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/globalrolebinding"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/nodedriver"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/podsecurityadmissionconfigurationtemplate"
+	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/project"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/projectroletemplatebinding"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/roletemplate"
 	provisioningCluster "github.com/rancher/webhook/pkg/resources/provisioning.cattle.io/v1/cluster"
@@ -41,8 +42,9 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		roleTemplates := roletemplate.NewValidator(clients.DefaultResolver, clients.RoleTemplateResolver, clients.K8s.AuthorizationV1().SubjectAccessReviews())
 		secrets := secret.NewValidator(clients.RBAC.Role().Cache(), clients.RBAC.RoleBinding().Cache())
 		nodeDriver := nodedriver.NewValidator(clients.Management.Node().Cache(), clients.Dynamic)
+		projects := project.NewValidator(clients.Core.Namespace().Cache())
 
-		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, nodeDriver)
+		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, nodeDriver, projects)
 	}
 	return handlers, nil
 }
@@ -57,7 +59,9 @@ func Mutation(clients *clients.Clients) ([]admission.MutatingAdmissionHandler, e
 	}
 
 	if clients.MultiClusterManagement {
-		mutators = append(mutators, secret.NewMutator(clients.RBAC.Role(), clients.RBAC.RoleBinding()))
+		secrets := secret.NewMutator(clients.RBAC.Role(), clients.RBAC.RoleBinding())
+		projects := project.NewMutator(clients.Management.RoleTemplate().Cache())
+		mutators = append(mutators, secrets, projects)
 	}
 	return mutators, nil
 }
