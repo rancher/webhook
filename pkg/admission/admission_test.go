@@ -17,6 +17,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
+const (
+	bypassServiceAccount = "system:serviceaccount:cattle-system:rancher-webhook-sudo"
+	systemMasters        = "system:masters"
+)
+
 type handlerResponse struct {
 	hasAllow bool
 	hasError bool
@@ -29,20 +34,19 @@ type reviewResponse struct {
 
 func TestNewValidatingHandlerFunc(t *testing.T) {
 	tests := []struct {
-		name                    string
-		operationMatchesHandler bool
-		firstHandlerResponse    *handlerResponse
-		secondHandlerResponse   *handlerResponse
+		name                  string
+		firstHandlerResponse  *handlerResponse
+		secondHandlerResponse *handlerResponse
+		request               func() *admissionv1.AdmissionRequest
 
-		hasDecodeError    bool
-		hasMissingRequest bool
+		hasDecodeError bool
 
 		wantHTTPError bool
 		wantResponse  *reviewResponse
 	}{
 		{
-			name:                    "handler matches, both allow",
-			operationMatchesHandler: true,
+			name:    "handler matches, both allow",
+			request: defaultRequest,
 			firstHandlerResponse: &handlerResponse{
 				hasAllow: true,
 			},
@@ -54,8 +58,8 @@ func TestNewValidatingHandlerFunc(t *testing.T) {
 			},
 		},
 		{
-			name:                    "handler matches, first denies, second allows",
-			operationMatchesHandler: true,
+			name:    "handler matches, first denies, second allows",
+			request: defaultRequest,
 			firstHandlerResponse: &handlerResponse{
 				hasAllow: false,
 			},
@@ -67,8 +71,8 @@ func TestNewValidatingHandlerFunc(t *testing.T) {
 			},
 		},
 		{
-			name:                    "handler matches, first allows, second denies",
-			operationMatchesHandler: true,
+			name:    "handler matches, first allows, second denies",
+			request: defaultRequest,
 			firstHandlerResponse: &handlerResponse{
 				hasAllow: true,
 			},
@@ -80,8 +84,8 @@ func TestNewValidatingHandlerFunc(t *testing.T) {
 			},
 		},
 		{
-			name:                    "handler matches, both deny",
-			operationMatchesHandler: true,
+			name:    "handler matches, both deny",
+			request: defaultRequest,
 			firstHandlerResponse: &handlerResponse{
 				hasAllow: false,
 			},
@@ -93,8 +97,8 @@ func TestNewValidatingHandlerFunc(t *testing.T) {
 			},
 		},
 		{
-			name:                    "handler matches, first error",
-			operationMatchesHandler: true,
+			name:    "handler matches, first error",
+			request: defaultRequest,
 			firstHandlerResponse: &handlerResponse{
 				hasError: true,
 			},
@@ -105,8 +109,8 @@ func TestNewValidatingHandlerFunc(t *testing.T) {
 			},
 		},
 		{
-			name:                    "handler matches, first allow, second error",
-			operationMatchesHandler: true,
+			name:    "handler matches, first allow, second error",
+			request: defaultRequest,
 			firstHandlerResponse: &handlerResponse{
 				hasAllow: true,
 			},
@@ -120,9 +124,13 @@ func TestNewValidatingHandlerFunc(t *testing.T) {
 			},
 		},
 		{
-			name:                    "handler doesn't match",
-			operationMatchesHandler: false,
-			wantHTTPError:           true,
+			name: "handler doesn't match",
+			request: func() *admissionv1.AdmissionRequest {
+				req := defaultRequest()
+				req.Operation = admissionv1.Delete
+				return req
+			},
+			wantHTTPError: true,
 		},
 		{
 			name:           "decode error",
@@ -130,9 +138,110 @@ func TestNewValidatingHandlerFunc(t *testing.T) {
 			wantHTTPError:  true,
 		},
 		{
-			name:           "missing request",
-			hasDecodeError: true,
-			wantHTTPError:  true,
+			name:          "missing request",
+			request:       func() *admissionv1.AdmissionRequest { return nil },
+			wantHTTPError: true,
+		},
+		{
+			name: "bypass webhook on error",
+			request: func() *admissionv1.AdmissionRequest {
+				req := defaultRequest()
+				req.UserInfo.Username = bypassServiceAccount
+				req.UserInfo.Groups = []string{systemMasters}
+				return req
+			},
+			firstHandlerResponse: &handlerResponse{
+				hasError: true,
+			},
+			wantResponse: &reviewResponse{
+				wantReviewAllow: true,
+				wantReviewError: false,
+			},
+		},
+		{
+			name: "bypass webhook on denied",
+			request: func() *admissionv1.AdmissionRequest {
+				req := defaultRequest()
+				req.UserInfo.Username = bypassServiceAccount
+				req.UserInfo.Groups = []string{systemMasters}
+				return req
+			},
+			firstHandlerResponse: &handlerResponse{
+				hasAllow: false,
+			},
+			wantResponse: &reviewResponse{
+				wantReviewAllow: true,
+				wantReviewError: false,
+			},
+		},
+		{
+			name: "bypass, first allow, second error",
+			request: func() *admissionv1.AdmissionRequest {
+				req := defaultRequest()
+				req.UserInfo.Username = bypassServiceAccount
+				req.UserInfo.Groups = []string{systemMasters}
+				return req
+			},
+			firstHandlerResponse: &handlerResponse{
+				hasAllow: true,
+			},
+			secondHandlerResponse: &handlerResponse{
+				hasError: true,
+			},
+			wantResponse: &reviewResponse{
+				wantReviewAllow: true,
+				wantReviewError: false,
+			},
+		},
+
+		{
+			name: "bypass, first allow, second denied",
+			request: func() *admissionv1.AdmissionRequest {
+				req := defaultRequest()
+				req.UserInfo.Username = bypassServiceAccount
+				req.UserInfo.Groups = []string{systemMasters}
+				return req
+			},
+			firstHandlerResponse: &handlerResponse{
+				hasAllow: true,
+			},
+			secondHandlerResponse: &handlerResponse{
+				hasAllow: false,
+			},
+			wantResponse: &reviewResponse{
+				wantReviewAllow: true,
+				wantReviewError: false,
+			},
+		},
+		{
+			name: "bypass fails with only user set",
+			request: func() *admissionv1.AdmissionRequest {
+				req := defaultRequest()
+				req.UserInfo.Username = bypassServiceAccount
+				return req
+			},
+			firstHandlerResponse: &handlerResponse{
+				hasAllow: false,
+			},
+			wantResponse: &reviewResponse{
+				wantReviewAllow: false,
+				wantReviewError: false,
+			},
+		},
+		{
+			name: "bypass fails with only group set",
+			request: func() *admissionv1.AdmissionRequest {
+				req := defaultRequest()
+				req.UserInfo.Groups = []string{systemMasters}
+				return req
+			},
+			firstHandlerResponse: &handlerResponse{
+				hasAllow: false,
+			},
+			wantResponse: &reviewResponse{
+				wantReviewAllow: false,
+				wantReviewError: false,
+			},
 		},
 	}
 
@@ -153,11 +262,7 @@ func TestNewValidatingHandlerFunc(t *testing.T) {
 			}
 			var bodyBytes []byte
 			var err error
-			if test.hasMissingRequest {
-				review := admissionv1.AdmissionReview{}
-				bodyBytes, err = json.Marshal(review)
-				assert.NoError(t, err)
-			} else if test.hasDecodeError {
+			if test.hasDecodeError {
 				data := map[string]any{
 					"request": "value",
 				}
@@ -165,23 +270,7 @@ func TestNewValidatingHandlerFunc(t *testing.T) {
 				assert.NoError(t, err)
 			} else {
 				review := admissionv1.AdmissionReview{
-					Request: &admissionv1.AdmissionRequest{
-						Operation: admissionv1.Delete,
-						Kind: metav1.GroupVersionKind{
-							Group:   "test.cattle.io",
-							Version: "v1alpha1",
-							Kind:    "Resource",
-						},
-						Namespace: "test-ns",
-						Name:      "test",
-						UserInfo: authenticationv1.UserInfo{
-							Username: "test-user",
-						},
-						UID: "1",
-					},
-				}
-				if test.operationMatchesHandler {
-					review.Request.Operation = admissionv1.Create
+					Request: test.request(),
 				}
 				bodyBytes, err = json.Marshal(review)
 				assert.NoError(t, err)
@@ -211,20 +300,19 @@ func TestNewValidatingHandlerFunc(t *testing.T) {
 
 func TestNewMutatingHandlerFunc(t *testing.T) {
 	tests := []struct {
-		name                    string
-		operationMatchesHandler bool
-		handlerResponse         *handlerResponse
+		name            string
+		handlerResponse *handlerResponse
+		request         func() *admissionv1.AdmissionRequest
 
-		hasDecodeError    bool
-		hasMissingRequest bool
+		hasDecodeError bool
 
 		wantHTTPError   bool
 		wantReviewAllow bool
 		wantResponse    *reviewResponse
 	}{
 		{
-			name:                    "handler matches and allows",
-			operationMatchesHandler: true,
+			name:    "handler matches and allows",
+			request: defaultRequest,
 			handlerResponse: &handlerResponse{
 				hasAllow: true,
 			},
@@ -233,8 +321,8 @@ func TestNewMutatingHandlerFunc(t *testing.T) {
 			},
 		},
 		{
-			name:                    "handler matches and denies",
-			operationMatchesHandler: true,
+			name:    "handler matches and denies",
+			request: defaultRequest,
 			handlerResponse: &handlerResponse{
 				hasAllow: false,
 			},
@@ -243,15 +331,19 @@ func TestNewMutatingHandlerFunc(t *testing.T) {
 			},
 		},
 		{
-			name:                    "handler does not match",
-			operationMatchesHandler: false,
+			name: "handler does not match",
+			request: func() *admissionv1.AdmissionRequest {
+				req := defaultRequest()
+				req.Operation = admissionv1.Delete
+				return req
+			},
 			wantResponse: &reviewResponse{
 				wantReviewAllow: false,
 			},
 		},
 		{
-			name:                    "handler matches but gets an error",
-			operationMatchesHandler: true,
+			name:    "handler matches but gets an error",
+			request: defaultRequest,
 			handlerResponse: &handlerResponse{
 				hasError: true,
 			},
@@ -267,9 +359,71 @@ func TestNewMutatingHandlerFunc(t *testing.T) {
 			wantHTTPError:  true,
 		},
 		{
-			name:              "missing request",
-			hasMissingRequest: true,
-			wantHTTPError:     true,
+			name:          "missing request",
+			request:       func() *admissionv1.AdmissionRequest { return nil },
+			wantHTTPError: true,
+		},
+		{
+			name: "bypass webhook on error",
+			request: func() *admissionv1.AdmissionRequest {
+				req := defaultRequest()
+				req.UserInfo.Username = bypassServiceAccount
+				req.UserInfo.Groups = []string{systemMasters}
+				return req
+			},
+			handlerResponse: &handlerResponse{
+				hasError: true,
+			},
+			wantResponse: &reviewResponse{
+				wantReviewAllow: true,
+				wantReviewError: false,
+			},
+		},
+		{
+			name: "bypass webhook on denied",
+			request: func() *admissionv1.AdmissionRequest {
+				req := defaultRequest()
+				req.UserInfo.Username = bypassServiceAccount
+				req.UserInfo.Groups = []string{systemMasters}
+				return req
+			},
+			handlerResponse: &handlerResponse{
+				hasAllow: false,
+			},
+			wantResponse: &reviewResponse{
+				wantReviewAllow: true,
+				wantReviewError: false,
+			},
+		},
+		{
+			name: "bypass fails with only user set",
+			request: func() *admissionv1.AdmissionRequest {
+				req := defaultRequest()
+				req.UserInfo.Username = bypassServiceAccount
+				return req
+			},
+			handlerResponse: &handlerResponse{
+				hasAllow: false,
+			},
+			wantResponse: &reviewResponse{
+				wantReviewAllow: false,
+				wantReviewError: false,
+			},
+		},
+		{
+			name: "bypass fails with only group set",
+			request: func() *admissionv1.AdmissionRequest {
+				req := defaultRequest()
+				req.UserInfo.Groups = []string{systemMasters}
+				return req
+			},
+			handlerResponse: &handlerResponse{
+				hasAllow: false,
+			},
+			wantResponse: &reviewResponse{
+				wantReviewAllow: false,
+				wantReviewError: false,
+			},
 		},
 	}
 	for _, test := range tests {
@@ -288,11 +442,7 @@ func TestNewMutatingHandlerFunc(t *testing.T) {
 			}
 			var bodyBytes []byte
 			var err error
-			if test.hasMissingRequest {
-				review := admissionv1.AdmissionReview{}
-				bodyBytes, err = json.Marshal(review)
-				assert.NoError(t, err)
-			} else if test.hasDecodeError {
+			if test.hasDecodeError {
 				data := map[string]any{
 					"request": "value",
 				}
@@ -300,23 +450,7 @@ func TestNewMutatingHandlerFunc(t *testing.T) {
 				assert.NoError(t, err)
 			} else {
 				review := admissionv1.AdmissionReview{
-					Request: &admissionv1.AdmissionRequest{
-						Operation: admissionv1.Delete,
-						Kind: metav1.GroupVersionKind{
-							Group:   "test.cattle.io",
-							Version: "v1alpha1",
-							Kind:    "Resource",
-						},
-						Namespace: "test-ns",
-						Name:      "test",
-						UserInfo: authenticationv1.UserInfo{
-							Username: "test-user",
-						},
-						UID: "1",
-					},
-				}
-				if test.operationMatchesHandler {
-					review.Request.Operation = admissionv1.Create
+					Request: test.request(),
 				}
 				bodyBytes, err = json.Marshal(review)
 				assert.NoError(t, err)
@@ -341,6 +475,23 @@ func TestNewMutatingHandlerFunc(t *testing.T) {
 			}
 
 		})
+	}
+}
+
+func defaultRequest() *admissionv1.AdmissionRequest {
+	return &admissionv1.AdmissionRequest{
+		Operation: admissionv1.Create,
+		Kind: metav1.GroupVersionKind{
+			Group:   "test.cattle.io",
+			Version: "v1alpha1",
+			Kind:    "Resource",
+		},
+		Namespace: "test-ns",
+		Name:      "test",
+		UserInfo: authenticationv1.UserInfo{
+			Username: "test-user",
+		},
+		UID: "1",
 	}
 }
 
