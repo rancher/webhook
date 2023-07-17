@@ -12,13 +12,16 @@ rm -rf build/charts
 mkdir -p build dist/artifacts
 cp -rf charts build/
 
-sed -i \
+# must use sed -i'<backup_extension>'` for GNU and OSX compatibility
+sed -i'.bkp' \
     -e 's/^version:.*/version: '${HELM_VERSION}'/' \
     -e 's/appVersion:.*/appVersion: '${HELM_VERSION}'/' \
     build/charts/rancher-webhook/Chart.yaml
 
-sed -i \
+sed -i'.bkb' \
     -e 's/tag: latest/tag: '${HELM_TAG}'/' \
     build/charts/rancher-webhook/values.yaml
+
+rm build/charts/rancher-webhook/Chart.yaml.bkp build/charts/rancher-webhook/values.yaml.bkb
 
 helm package -d ./dist/artifacts ./build/charts/rancher-webhook

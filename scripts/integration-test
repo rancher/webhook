@@ -10,6 +10,7 @@ cd $(dirname $0)/../
 
 echo "Starting Rancher Server"
 entrypoint.sh >./rancher.log 2>&1 &
+RANCHER_PID=$!
 
 echo "Waiting for Rancher health check..."
 while ! curl -sf http://localhost:80/healthz >/dev/null 2>&1; do
@@ -27,9 +28,36 @@ while ! kubectl rollout status -w -n cattle-system deploy/rancher-webhook >/dev/
     echo "Waiting for rancher to deploy rancher-webhook..."
     sleep 2
 done
+echo "Webhook deployed"
 
 # After rancher deploys webhook kill the bash command running tail.
 kill ${TAIL_PID}
+
+# Wait for helm operation to complete and save rancher-webhook release info before we kill rancher and the cluster.
+while
+    pods=$(kubectl get pods -n cattle-system --field-selector=status.phase=Running -o jsonpath='{.items[?(@.metadata.generateName=="helm-operation-")].metadata.name}')
+    [[ -n "$pods" ]]
+do
+    echo "Waiting for helm operation to finish"
+    sleep 2
+done
+
+# Kill Rancher since we only need the CRDs and the initial webhook values.
+# We do not want Rancher to reconcile an older version of the webhook during test.
+kill ${RANCHER_PID}
+
+echo "Rancher has been stopped starting K3s."
+# Start Cluster without Rancher.
+k3s server --cluster-init --disable=traefik,servicelb,metrics-server,local-storage --node-name=local-node --log=./k3s.log >/dev/null 2>&1 &
+KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+# Wait for cluster to start.
+while ! kubectl version >/dev/null 2>&1; do
+    echo "Waiting for cluster to start"
+    sleep 5
+done
+
+echo "Uploading new webhook image"
 
 ###### Upload the newly created webhook image to containerd, then install the webhook chart using the new image
 IMAGE_FILE=./dist/rancher-webhook-image.tar
@@ -40,15 +68,28 @@ WEBHOOK_REPO=$(ctr image import ${IMAGE_FILE} | cut -d ' ' -f 2 | cut -d ':' -f 
 source ./dist/tags
 
 # Install the webhook chart we just built.
-helm upgrade rancher-webhook ./dist/artifacts/rancher-webhook-${HELM_VERSION}.tgz -n cattle-system --set image.repository=${WEBHOOK_REPO} --set image.tag=${TAG} --reuse-values
-
-while ! kubectl rollout status -w -n cattle-system deploy/rancher-webhook; do
+# This command can fail since it is so close to the cluster start so we will give it 3 retires.
+RETRIES=0
+while ! helm upgrade rancher-webhook ./dist/artifacts/rancher-webhook-${HELM_VERSION}.tgz -n cattle-system \
+    --wait --set image.repository=${WEBHOOK_REPO} --set image.tag=${TAG} --reuse-values; do
+    if [ "$RETRIES" -ge 3 ]; then
+        exit 1
+    fi
+    RETRIES=$((RETRIES + 1))
     sleep 2
 done
 
 ./bin/rancher-webhook-integration.test -test.v -test.run IntegrationTest
 
-# Scale down rancher-webhook so that we can run tests on the FailurePolicy
+# Install the webhook chart with new ports.
+helm upgrade rancher-webhook ./dist/artifacts/rancher-webhook-${HELM_VERSION}.tgz -n cattle-system \
+    --wait --reuse-values --set port=443 --set capi.port=2319
+
+# Test that the ports are set as expected and run a single integration test to verify the webhook is still accessible.
+./bin/rancher-webhook-integration.test -test.v -test.run PortTest
+./bin/rancher-webhook-integration.test -test.v -test.run IntegrationTest -testify.m TestGlobalRole
+
+# Scale down rancher-webhook so that we can run tests on the FailurePolicy.
 kubectl scale deploy rancher-webhook -n cattle-system --replicas=0
 kubectl wait pods -l app=rancher-webhook --for=delete -n cattle-system
 ./bin/rancher-webhook-integration.test -test.v -test.run FailurePolicyTest

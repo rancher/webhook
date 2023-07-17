@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -25,20 +26,18 @@ import (
 )
 
 const (
-	serviceName      = "rancher-webhook"
-	namespace        = "cattle-system"
-	tlsName          = "rancher-webhook.cattle-system.svc"
-	certName         = "cattle-webhook-tls"
-	caName           = "cattle-webhook-ca"
-	webhookHTTPPort  = 0 // value of 0 indicates we do not want to use http.
-	webhookHTTPSPort = 9443
-)
-
-var (
-	// These strings have to remain as vars since we need the address below.
-	validationPath = "/v1/webhook/validation"
-	mutationPath   = "/v1/webhook/mutation"
-	clientPort     = int32(443)
+	serviceName             = "rancher-webhook"
+	namespace               = "cattle-system"
+	tlsName                 = "rancher-webhook.cattle-system.svc"
+	certName                = "cattle-webhook-tls"
+	caName                  = "cattle-webhook-ca"
+	validationPath          = "/v1/webhook/validation"
+	mutationPath            = "/v1/webhook/mutation"
+	clientPort              = int32(443)
+	webhookHTTPPort         = 0 // value of 0 indicates we do not want to use http.
+	defaultWebhookHTTPSPort = 9443
+	webhookPortEnvKey       = "CATTLE_PORT"
+	webhookURLEnvKey        = "CATTLE_WEBHOOK_URL"
 )
 
 // tlsOpt option function applied to all webhook servers.
@@ -150,7 +149,14 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, validators []
 
 	tlsConfig := &tls.Config{}
 	tlsOpt(tlsConfig)
-
+	webhookHTTPSPort := defaultWebhookHTTPSPort
+	if portStr := os.Getenv(webhookPortEnvKey); portStr != "" {
+		var err error
+		webhookHTTPSPort, err = strconv.Atoi(portStr)
+		if err != nil {
+			return fmt.Errorf("failed to decode webhook port value '%s': %w", portStr, err)
+		}
+	}
 	return server.ListenAndServe(ctx, webhookHTTPSPort, webhookHTTPPort, router, &server.ListenOpts{
 		Secrets:       clients.Core.Secret(),
 		CertNamespace: namespace,
@@ -188,8 +194,8 @@ func (s *secretHandler) sync(_ string, secret *corev1.Secret) (*corev1.Secret, e
 		Service: &v1.ServiceReference{
 			Namespace: namespace,
 			Name:      serviceName,
-			Path:      &validationPath,
-			Port:      &clientPort,
+			Path:      admission.Ptr(validationPath),
+			Port:      admission.Ptr(clientPort),
 		},
 		CABundle: secret.Data[corev1.TLSCertKey],
 	}
@@ -198,12 +204,12 @@ func (s *secretHandler) sync(_ string, secret *corev1.Secret) (*corev1.Secret, e
 		Service: &v1.ServiceReference{
 			Namespace: namespace,
 			Name:      serviceName,
-			Path:      &mutationPath,
-			Port:      &clientPort,
+			Path:      admission.Ptr(mutationPath),
+			Port:      admission.Ptr(clientPort),
 		},
 		CABundle: secret.Data[corev1.TLSCertKey],
 	}
-	if devURL, ok := os.LookupEnv("CATTLE_WEBHOOK_URL"); ok {
+	if devURL, ok := os.LookupEnv(webhookURLEnvKey); ok {
 		validationURL := devURL + validationPath
 		mutationURL := devURL + mutationPath
 		validationClientConfig = v1.WebhookClientConfig{

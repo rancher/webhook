@@ -1,0 +1,15 @@
+#! /bin/bash
+set -e
+cd $(dirname $0)/..
+
+./scripts/package-helm
+echo Running helm lint
+helm lint ./charts/rancher-webhook
+# Check for unittest plugin
+if helm unittest --help >/dev/null 2>&1; then
+    helm unittest build/charts/rancher-webhook
+else
+    echo "skipping helm unittest"
+    echo "helm plugin unittest not found."
+    echo "Run to install plugin: helm plugin install https://github.com/helm-unittest/helm-unittest.git"
+fi

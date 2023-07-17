@@ -10,6 +10,7 @@ global:
 
 capi:
   enabled: false
+  port: 8777
 
 mcm:
   enabled: true
@@ -20,3 +21,6 @@ nodeSelector: {}
 
 ## PriorityClassName assigned to deployment.
 priorityClassName: ""
+
+# port assigns which port to use when running rancher-webhook
+port: 9443
