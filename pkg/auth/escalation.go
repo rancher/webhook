@@ -78,6 +78,7 @@ func ToExtraString(extra map[string]authenticationv1.ExtraValue) map[string][]st
 }
 
 // SetEscalationResponse will update the given webhook response based on the provided error from an escalation request.
+// Deprecated: use admission.ResponseFailedEscalation() instead.
 func SetEscalationResponse(response *admissionv1.AdmissionResponse, err error) {
 	if err == nil {
 		response.Allowed = true

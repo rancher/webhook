@@ -3,23 +3,32 @@ package roletemplate
 
 import (
 	"fmt"
-	"net/http"
+	"strings"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/resources/common"
 	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 	"k8s.io/utils/trace"
 )
 
-var roleTemplateGVR = schema.GroupVersionResource{
+const (
+	clusterContext = "cluster"
+	projectContext = "project"
+	emptyContext   = ""
+	rtRefIndex     = "management.cattle.io/rt-by-reference"
+)
+
+var gvr = schema.GroupVersionResource{
 	Group:    "management.cattle.io",
 	Version:  "v3",
 	Resource: "roletemplates",
@@ -28,6 +37,7 @@ var roleTemplateGVR = schema.GroupVersionResource{
 // NewValidator returns a new validator used for validating roleTemplates.
 func NewValidator(resolver validation.AuthorizationRuleResolver, roleTemplateResolver *auth.RoleTemplateResolver,
 	sar authorizationv1.SubjectAccessReviewInterface) *Validator {
+	roleTemplateResolver.RoleTemplateCache().AddIndexer(rtRefIndex, roleTemplatesByReference)
 	return &Validator{
 		admitter: admitter{
 			resolver:             resolver,
@@ -44,12 +54,12 @@ type Validator struct {
 
 // GVR returns the GroupVersionKind for this CRD.
 func (v *Validator) GVR() schema.GroupVersionResource {
-	return roleTemplateGVR
+	return gvr
 }
 
 // Operations returns list of operations handled by this validator.
 func (v *Validator) Operations() []admissionregistrationv1.OperationType {
-	return []admissionregistrationv1.OperationType{admissionregistrationv1.Update, admissionregistrationv1.Create}
+	return []admissionregistrationv1.OperationType{admissionregistrationv1.Update, admissionregistrationv1.Create, admissionregistrationv1.Delete}
 }
 
 // ValidatingWebhook returns the ValidatingWebhook used for this CRD.
@@ -73,65 +83,146 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	listTrace := trace.New("Validator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
-	roleTemplate, err := objectsv3.RoleTemplateFromRequest(&request.AdmissionRequest)
+	oldRT, newRT, err := objectsv3.RoleTemplateOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get RoleTemplate from request: %w", err)
 	}
 
-	// object is in the process of being deleted, so admit it
-	// this admits update operations that happen to remove finalizers
-	if roleTemplate.DeletionTimestamp != nil {
-		return &admissionv1.AdmissionResponse{Allowed: true}, nil
+	fldPath := field.NewPath("roletemplate")
+	var fieldErr *field.Error
+
+	switch request.Operation {
+	case admissionv1.Update:
+		if newRT.DeletionTimestamp != nil {
+			// Object is in the process of being deleted, so admit it.
+			// This admits update operations that happen to remove finalizers.
+			// This is needed to supported the deletion of old RoleTemplates that would not pass the update check that verifies all rules have verbs.
+			return admission.ResponseAllowed(), nil
+		}
+		fieldErr = a.validateUpdateFields(oldRT, newRT, fldPath)
+	case admissionv1.Create:
+		fieldErr = validateCreateFields(newRT, fldPath)
+	case admissionv1.Delete:
+		return a.validateDelete(oldRT)
+	default:
+		return nil, fmt.Errorf("roleTemplate operation %v: %w", request.Operation, admission.ErrUnsupportedOperation)
 	}
-	//check for circular references produced by this role
-	circularTemplate, err := a.checkCircularRef(roleTemplate)
+	if fieldErr != nil {
+		return admission.ResponseBadRequest(fieldErr.Error()), nil
+	}
+
+	// check for circular references produced by this role.
+	circularTemplate, err := a.checkCircularRef(newRT)
 	if err != nil {
 		logrus.Errorf("Error when trying to check for a circular ref: %s", err)
 		return nil, err
 	}
 	if circularTemplate != nil {
-		return &admissionv1.AdmissionResponse{
-			Result: &metav1.Status{
-				Status:  "Failure",
-				Message: fmt.Sprintf("Circular Reference: RoleTemplate %s already inherits RoleTemplate %s", circularTemplate.Name, roleTemplate.Name),
-				Reason:  metav1.StatusReasonBadRequest,
-				Code:    http.StatusBadRequest,
-			},
-			Allowed: false,
-		}, nil
+		return admission.ResponseBadRequest(fmt.Sprintf("Circular Reference: RoleTemplate %s already inherits RoleTemplate %s", circularTemplate.Name, newRT.Name)), nil
 	}
 
-	rules, err := a.roleTemplateResolver.RulesFromTemplate(roleTemplate)
+	rules, err := a.roleTemplateResolver.RulesFromTemplate(newRT)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get all rules for '%s': %w", newRT.Name, err)
 	}
 
-	// ensure all PolicyRules have at least one verb, otherwise RBAC controllers may encounter issues when creating Roles and ClusterRoles
-	for i := range rules {
-		if len(rules[i].Verbs) == 0 {
-			return &admissionv1.AdmissionResponse{
-				Result: &metav1.Status{
-					Status:  "Failure",
-					Message: "RoleTemplate.Rules: PolicyRules must have at least one verb",
-					Reason:  metav1.StatusReasonBadRequest,
-					Code:    http.StatusBadRequest,
-				},
-				Allowed: false,
-			}, nil
-		}
+	// verify inherited rules have verbs
+	if err := common.CheckForVerbs(rules); err != nil {
+		return admission.ResponseBadRequest(err.Error()), nil
 	}
 
-	allowed, err := auth.EscalationAuthorized(request, roleTemplateGVR, a.sar, "")
+	allowed, err := auth.EscalationAuthorized(request, gvr, a.sar, "")
 	if err != nil {
 		logrus.Warnf("Failed to check for the 'escalate' verb on RoleTemplates: %v", err)
+	} else if allowed {
+		return admission.ResponseAllowed(), nil
 	}
 
-	if allowed {
-		return &admissionv1.AdmissionResponse{Allowed: true}, nil
+	err = auth.ConfirmNoEscalation(request, rules, "", a.resolver)
+	if err != nil {
+		return admission.ResponseFailedEscalation(err.Error()), nil
 	}
-	response := &admissionv1.AdmissionResponse{}
-	auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, rules, "", a.resolver))
-	return response, nil
+
+	return admission.ResponseAllowed(), nil
+}
+
+// validateUpdateFields checks if the fields being changed are valid update fields.
+func (a *admitter) validateUpdateFields(oldRole, newRole *v3.RoleTemplate, fldPath *field.Path) *field.Error {
+	if err := validateContextValue(newRole, fldPath); err != nil {
+		return err
+	}
+
+	// if this is not a built in role no further validation is needed
+	if !oldRole.Builtin {
+		return nil
+	}
+
+	// allow changes to meta data and defaults
+	oldRole.ClusterCreatorDefault = newRole.ClusterCreatorDefault
+	oldRole.ProjectCreatorDefault = newRole.ProjectCreatorDefault
+	oldRole.Locked = newRole.Locked
+
+	// we do not want to block K8s controllers from adding metadata or typemeta to the object.
+	oldRole.ObjectMeta = newRole.ObjectMeta
+	oldRole.TypeMeta = newRole.TypeMeta
+
+	if !equality.Semantic.DeepEqual(oldRole, newRole) {
+		return field.Forbidden(fldPath, "updates to builtIn RoleTemplates for fields other than CreatorDefault are forbidden")
+	}
+	return nil
+}
+
+// validateCreateFields checks if all required fields are present and valid.
+func validateCreateFields(newRole *v3.RoleTemplate, fldPath *field.Path) *field.Error {
+	return validateContextValue(newRole, fldPath)
+}
+
+func validateContextValue(newRole *v3.RoleTemplate, fldPath *field.Path) *field.Error {
+	if newRole.Administrative && newRole.Context != clusterContext {
+		return field.Forbidden(fldPath.Child("administrative"), "only cluster roles can be administrative")
+	}
+	if newRole.Context != clusterContext && newRole.Context != projectContext && newRole.Context != emptyContext {
+		return field.NotSupported(fldPath.Child("context"), newRole.Context, []string{clusterContext, projectContext})
+	}
+	return nil
+}
+
+func (a *admitter) validateDelete(oldRT *v3.RoleTemplate) (*admissionv1.AdmissionResponse, error) {
+	refRT, err := a.roleTemplateResolver.RoleTemplateCache().GetByIndex(rtRefIndex, oldRT.Name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list RoleTemplates that reference '%s': %w", oldRT.Name, err)
+	}
+
+	// verify that the role is not currently inherited
+	if len(refRT) != 0 {
+		return admission.ResponseBadRequest(fmt.Sprintf("roletemplate '%s' cannot be deleted because it is inherited by roletemplate/s '%s'", oldRT.Name, rtListToNames(refRT))), nil
+	}
+
+	return admission.ResponseAllowed(), nil
+}
+
+// rtListToNames convert a list of RoleTemplate into a joined list of names.
+func rtListToNames(templates []*v3.RoleTemplate) string {
+	n := len(templates)
+	if n == 0 {
+		return ""
+	}
+	if n == 1 {
+		return templates[0].Name
+	}
+	builder := strings.Builder{}
+	builder.WriteString(templates[0].Name)
+	for i := 1; i < n; i++ {
+		builder.WriteString(", ")
+		builder.WriteString(templates[i].Name)
+	}
+	return builder.String()
+}
+
+// roleTemplatesByReference returns a list of keys that can be used to retrieve the provided RT.
+// each key represents the name of a RoleTemplate that the provided object references.
+func roleTemplatesByReference(rt *v3.RoleTemplate) ([]string, error) {
+	return rt.RoleTemplateNames, nil
 }
 
 // checkCircularRef looks for a circular ref between this role template and any role template that it inherits

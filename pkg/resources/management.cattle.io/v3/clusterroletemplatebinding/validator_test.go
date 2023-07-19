@@ -8,11 +8,12 @@ import (
 
 	"github.com/golang/mock/gomock"
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
-	"github.com/rancher/webhook/pkg/fakes"
 	"github.com/rancher/webhook/pkg/resolvers"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/clusterroletemplatebinding"
+	"github.com/rancher/wrangler/pkg/generic/fake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	v1 "k8s.io/api/admission/v1"
@@ -132,11 +133,11 @@ func (c *ClusterRoleTemplateBindingSuite) Test_PrivilegeEscalation() {
 	resolver, _ := validation.NewTestRuleResolver(roles, roleBindings, clusterRoles, clusterRoleBindings)
 
 	ctrl := gomock.NewController(c.T())
-	roleTemplateCache := fakes.NewMockRoleTemplateCache(ctrl)
+	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
 	roleTemplateCache.EXPECT().Get(c.adminRT.Name).Return(c.adminRT, nil).AnyTimes()
-	clusterRoleCache := fakes.NewMockClusterRoleCache(ctrl)
+	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
-	crtbCache := fakes.NewMockClusterRoleTemplateBindingCache(ctrl)
+	crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
 	crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
 	crtbCache.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(crtbUser, newDefaultCRTB().ClusterName)).Return([]*apisv3.ClusterRoleTemplateBinding{
 		{
@@ -274,12 +275,12 @@ func (c *ClusterRoleTemplateBindingSuite) Test_UpdateValidation() {
 	resolver, _ := validation.NewTestRuleResolver(nil, nil, clusterRoles, clusterRoleBindings)
 
 	ctrl := gomock.NewController(c.T())
-	roleTemplateCache := fakes.NewMockRoleTemplateCache(ctrl)
+	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
 	roleTemplateCache.EXPECT().Get(c.adminRT.Name).Return(c.adminRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().List(gomock.Any()).Return([]*apisv3.RoleTemplate{c.adminRT}, nil).AnyTimes()
-	clusterRoleCache := fakes.NewMockClusterRoleCache(ctrl)
+	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
-	crtbCache := fakes.NewMockClusterRoleTemplateBindingCache(ctrl)
+	crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
 	crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
 	crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
@@ -572,14 +573,14 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 	resolver, _ := validation.NewTestRuleResolver(nil, nil, clusterRoles, clusterRoleBindings)
 
 	ctrl := gomock.NewController(c.T())
-	roleTemplateCache := fakes.NewMockRoleTemplateCache(ctrl)
+	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
 	roleTemplateCache.EXPECT().Get(c.adminRT.Name).Return(c.adminRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().Get(c.lockedRT.Name).Return(c.lockedRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().Get(badRoleTemplateName).Return(nil, errExpected).AnyTimes()
 	roleTemplateCache.EXPECT().Get("").Return(nil, errExpected).AnyTimes()
-	clusterRoleCache := fakes.NewMockClusterRoleCache(ctrl)
+	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
-	crtbCache := fakes.NewMockClusterRoleTemplateBindingCache(ctrl)
+	crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
 	crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
 	crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 

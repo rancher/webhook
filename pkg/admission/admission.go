@@ -357,6 +357,19 @@ func ResponseBadRequest(message string) *admissionv1.AdmissionResponse {
 	}
 }
 
+// ResponseFailedEscalation returns an AdmissionResponse a failed escalation check.
+func ResponseFailedEscalation(message string) *admissionv1.AdmissionResponse {
+	return &admissionv1.AdmissionResponse{
+		Result: &metav1.Status{
+			Status:  "Failure",
+			Message: message,
+			Reason:  metav1.StatusReasonForbidden,
+			Code:    http.StatusForbidden,
+		},
+		Allowed: false,
+	}
+}
+
 // CreateWebhookName returns a new name for the given webhook handler with the given suffix.
 func CreateWebhookName(handler WebhookHandler, suffix string) string {
 	subPath := SubPath(handler.GVR())
