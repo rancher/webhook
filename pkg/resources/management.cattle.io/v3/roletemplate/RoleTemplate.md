@@ -30,9 +30,3 @@ The `roletemplates.builtin` field is immutable. If `roletemplates.builtin` is tr
  ### Deletion check
 
 RoleTemplate can not be deleted if they are referenced by other RoleTemplates via `roletemplates.roleTemplateNames`
-
-## Mutation
-
-### Creation mutations
-
-When a RoleTemplate is created a `cleanup.cattle.io/rtUpgradeCluster` annotation is added for Rancher controllers.
