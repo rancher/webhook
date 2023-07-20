@@ -4,8 +4,10 @@ package capi
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	controllerruntime "github.com/rancher/lasso/controller-runtime"
 	"github.com/rancher/webhook/pkg/clients"
@@ -43,13 +45,23 @@ func init() {
 	_ = apiextensionsv1.AddToScheme(schemes.All)
 }
 
-var (
-	tlsCert  = filepath.Join(os.TempDir(), "k8s-webhook-server", "serving-certs", "tls.crt")
-	capiPort = 8777
+const (
+	defaultCapiPort = 8777
+	capiPortEnvKey  = "CATTLE_CAPI_PORT"
 )
+
+var tlsCert = filepath.Join(os.TempDir(), "k8s-webhook-server", "serving-certs", "tls.crt")
 
 // Register registers a new CAPI webhook server and returns a start function.
 func Register(clients *clients.Clients, tlsOpts ...func(*tls.Config)) (func(ctx context.Context) error, error) {
+	capiPort := defaultCapiPort
+	if portStr := os.Getenv(capiPortEnvKey); portStr != "" {
+		var err error
+		capiPort, err = strconv.Atoi(portStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode CAPI port value '%s': %w", portStr, err)
+		}
+	}
 	mgr, err := ctrl.NewManager(clients.RESTConfig, ctrl.Options{
 		MetricsBindAddress: "0",
 		NewCache: controllerruntime.NewNewCacheFunc(clients.SharedControllerFactory.SharedCacheFactory(),
