@@ -21,7 +21,9 @@ If the `roletemplates.administrative` is set to true the context must equal `"cl
 
 ### Builtin Validation
 
-The `roletemplates.builtin` field is immutable. If `roletemplates.builtin` is true then all fields are immutable except:
+The `roletemplates.builtin` field is immutable, and new builtIn RoleTemplates cannot be created.
+
+If `roletemplates.builtin` is true then all fields are immutable except:
 - `metadata` 
 - `clusterCreatorDefault` 
 - `projectCreatorDefault`

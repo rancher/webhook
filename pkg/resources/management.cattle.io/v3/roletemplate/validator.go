@@ -152,8 +152,11 @@ func (a *admitter) validateUpdateFields(oldRole, newRole *v3.RoleTemplate, fldPa
 		return err
 	}
 
-	// if this is not a built in role no further validation is needed
+	// if this is not a built in role, prevent it from becoming one. Otherwise, no further validation is needed
 	if !oldRole.Builtin {
+		if newRole.Builtin {
+			return field.Forbidden(fldPath, fmt.Sprintf("cannot update non-builtIn RoleTemplate %s to be builtIn", oldRole.Name))
+		}
 		return nil
 	}
 
@@ -174,6 +177,9 @@ func (a *admitter) validateUpdateFields(oldRole, newRole *v3.RoleTemplate, fldPa
 
 // validateCreateFields checks if all required fields are present and valid.
 func validateCreateFields(newRole *v3.RoleTemplate, fldPath *field.Path) *field.Error {
+	if newRole.Builtin {
+		return field.Forbidden(fldPath, "creating new builtIn RoleTemplates is forbidden")
+	}
 	return validateContextValue(newRole, fldPath)
 }
 

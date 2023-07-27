@@ -342,7 +342,7 @@ func (r *RoleTemplateSuite) Test_UpdateValidation() {
 			allowed: true,
 		},
 		{
-			name: "update Builtin field",
+			name: "update Builtin field from true to false",
 			args: args{
 				username: testUser,
 				oldRT: func() *v3.RoleTemplate {
@@ -353,6 +353,23 @@ func (r *RoleTemplateSuite) Test_UpdateValidation() {
 				newRT: func() *v3.RoleTemplate {
 					baseRT := newDefaultRT()
 					baseRT.Builtin = false
+					return baseRT
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "update Builtin field from false to true",
+			args: args{
+				username: testUser,
+				oldRT: func() *v3.RoleTemplate {
+					baseRT := newDefaultRT()
+					baseRT.Builtin = false
+					return baseRT
+				},
+				newRT: func() *v3.RoleTemplate {
+					baseRT := newDefaultRT()
+					baseRT.Builtin = true
 					return baseRT
 				},
 			},
@@ -535,6 +552,21 @@ func (r *RoleTemplateSuite) Test_Create() {
 					baseRT.Rules = r.manageNodeRole.Rules
 					baseRT.Administrative = true
 					baseRT.Context = "namespace"
+					return baseRT
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "create new builtIn RoleTemplate",
+			args: args{
+				username: adminUser,
+				oldRT: func() *v3.RoleTemplate {
+					return nil
+				},
+				newRT: func() *v3.RoleTemplate {
+					baseRT := newDefaultRT()
+					baseRT.Builtin = true
 					return baseRT
 				},
 			},
