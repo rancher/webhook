@@ -34,12 +34,12 @@ echo "Webhook deployed"
 kill ${TAIL_PID}
 
 # Wait for helm operation to complete and save rancher-webhook release info before we kill rancher and the cluster.
-while
-    pods=$(kubectl get pods -n cattle-system --field-selector=status.phase=Running -o jsonpath='{.items[?(@.metadata.generateName=="helm-operation-")].metadata.name}')
-    [[ -n "$pods" ]]
-do
-    echo "Waiting for helm operation to finish"
-    sleep 2
+while 
+	status=$(kubectl get apps.catalog.cattle.io -n cattle-system rancher-webhook -o jsonpath="{@.status.summary.state}")
+	[[ "$status" != "deployed" ]]
+do 
+	echo "Waiting for helm operation to finish, current status $status"
+	sleep 2
 done
 
 # Kill Rancher since we only need the CRDs and the initial webhook values.
