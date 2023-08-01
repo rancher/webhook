@@ -42,7 +42,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		roleTemplates := roletemplate.NewValidator(clients.DefaultResolver, clients.RoleTemplateResolver, clients.K8s.AuthorizationV1().SubjectAccessReviews())
 		secrets := secret.NewValidator(clients.RBAC.Role().Cache(), clients.RBAC.RoleBinding().Cache())
 		nodeDriver := nodedriver.NewValidator(clients.Management.Node().Cache(), clients.Dynamic)
-		projects := project.NewValidator(clients.Core.Namespace().Cache())
+		projects := project.NewValidator()
 
 		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, nodeDriver, projects)
 	}

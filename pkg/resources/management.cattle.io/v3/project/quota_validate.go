@@ -1,64 +1,33 @@
 package project
 
 import (
-	"sync"
-	"time"
-
-	"github.com/rancher/norman/types/convert"
-	v32 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-	api "k8s.io/api/core/v1"
+	mgmtv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/wrangler/pkg/data/convert"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/util/cache"
-	quota "k8s.io/apiserver/pkg/quota/v1"
+	quotav1 "k8s.io/apiserver/pkg/quota/v1"
 )
 
-var (
-	projectLockCache = cache.NewLRUExpireCache(1000)
-)
-
-func GetProjectLock(projectID string) *sync.Mutex {
-	val, ok := projectLockCache.Get(projectID)
-	if !ok {
-		projectLockCache.Add(projectID, &sync.Mutex{}, time.Hour)
-		val, _ = projectLockCache.Get(projectID)
-	}
-	mu := val.(*sync.Mutex)
-	return mu
-}
-
-func IsQuotaFit(nsLimit *v32.ResourceQuotaLimit, nsLimits []*v32.ResourceQuotaLimit, projectLimit *v32.ResourceQuotaLimit) (bool, api.ResourceList, error) {
-	nssResourceList := api.ResourceList{}
-	nsResourceList, err := ConvertLimitToResourceList(nsLimit)
-	if err != nil {
-		return false, nil, err
-	}
-	nssResourceList = quota.Add(nssResourceList, nsResourceList)
-
-	for _, nsLimit := range nsLimits {
-		nsResourceList, err := ConvertLimitToResourceList(nsLimit)
-		if err != nil {
-			return false, nil, err
-		}
-		nssResourceList = quota.Add(nssResourceList, nsResourceList)
-	}
-
-	projectResourceList, err := ConvertLimitToResourceList(projectLimit)
-	if err != nil {
-		return false, nil, err
-	}
-
-	_, exceeded := quota.LessThanOrEqual(nssResourceList, projectResourceList)
+// quotaFits checks whether the quota in the second argument is sufficient for the requested quota in the first argument.
+// If it is not sufficient, a list of the resources that exceed the allotment is returned.
+// The ResourceList to be checked can be compiled by passing a
+// ResourceQuotaLimit to convertLimitToResourceList before calling this
+// function on the result.
+func quotaFits(resourceListA corev1.ResourceList, resourceListB corev1.ResourceList) (bool, corev1.ResourceList) {
+	_, exceeded := quotav1.LessThanOrEqual(resourceListA, resourceListB)
 	// Include resources with negative values among exceeded resources.
-	exceeded = append(exceeded, quota.IsNegative(nsResourceList)...)
+	exceeded = append(exceeded, quotav1.IsNegative(resourceListA)...)
 	if len(exceeded) == 0 {
-		return true, nil, nil
+		return true, nil
 	}
-	failedHard := quota.Mask(nssResourceList, exceeded)
-	return false, failedHard, nil
+	failedHard := quotav1.Mask(resourceListA, exceeded)
+	return false, failedHard
 }
 
-func ConvertLimitToResourceList(limit *v32.ResourceQuotaLimit) (api.ResourceList, error) {
-	toReturn := api.ResourceList{}
+// convertLimitToResourceList converts a management.cattle.io/v3 ResourceQuotaLimit object to a core/v1 ResourceList,
+// which can then be used to compare quotas.
+func convertLimitToResourceList(limit *mgmtv3.ResourceQuotaLimit) (corev1.ResourceList, error) {
+	toReturn := corev1.ResourceList{}
 	converted, err := convert.EncodeToMap(limit)
 	if err != nil {
 		return nil, err
@@ -68,7 +37,7 @@ func ConvertLimitToResourceList(limit *v32.ResourceQuotaLimit) (api.ResourceList
 		if err != nil {
 			return nil, err
 		}
-		toReturn[api.ResourceName(key)] = q
+		toReturn[corev1.ResourceName(key)] = q
 	}
 	return toReturn, nil
 }

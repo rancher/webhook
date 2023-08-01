@@ -5,16 +5,12 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
-	"github.com/rancher/wrangler/pkg/generic/fake"
 	"github.com/stretchr/testify/assert"
 	admissionv1 "k8s.io/api/admission/v1"
 	v1 "k8s.io/api/admission/v1"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -25,7 +21,6 @@ func TestProjectValidation(t *testing.T) {
 		operation   v1.Operation
 		newProject  *v3.Project
 		oldProject  *v3.Project
-		namespaces  []*corev1.Namespace
 		wantAllowed bool
 		wantErr     bool
 	}{
@@ -512,67 +507,6 @@ func TestProjectValidation(t *testing.T) {
 			wantAllowed: false,
 		},
 		{
-			name:      "update with project quota less than namespace quota times number of namespaces",
-			operation: admissionv1.Update,
-			oldProject: &v3.Project{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test",
-					Namespace: "testcluster",
-				},
-				Spec: v3.ProjectSpec{
-					ResourceQuota: &v3.ProjectResourceQuota{
-						Limit: v3.ResourceQuotaLimit{
-							ConfigMaps: "20",
-						},
-						UsedLimit: v3.ResourceQuotaLimit{
-							ConfigMaps: "10",
-						},
-					},
-					NamespaceDefaultResourceQuota: &v3.NamespaceResourceQuota{
-						Limit: v3.ResourceQuotaLimit{
-							ConfigMaps: "5",
-						},
-					},
-				},
-			},
-			newProject: &v3.Project{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test",
-					Namespace: "testcluster",
-				},
-				Spec: v3.ProjectSpec{
-					ResourceQuota: &v3.ProjectResourceQuota{
-						Limit: v3.ResourceQuotaLimit{
-							ConfigMaps: "20",
-							LimitsCPU:  "15m",
-						},
-						UsedLimit: v3.ResourceQuotaLimit{
-							ConfigMaps: "10",
-						},
-					},
-					NamespaceDefaultResourceQuota: &v3.NamespaceResourceQuota{
-						Limit: v3.ResourceQuotaLimit{
-							ConfigMaps: "5",
-							LimitsCPU:  "10m",
-						},
-					},
-				},
-			},
-			namespaces: []*corev1.Namespace{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "testns1",
-					},
-				},
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "testns2",
-					},
-				},
-			},
-			wantAllowed: false,
-		},
-		{
 			name:      "update with fields changed in project quota less than used quota",
 			operation: admissionv1.Update,
 			oldProject: &v3.Project{
@@ -610,13 +544,6 @@ func TestProjectValidation(t *testing.T) {
 						Limit: v3.ResourceQuotaLimit{
 							ConfigMaps: "50",
 						},
-					},
-				},
-			},
-			namespaces: []*corev1.Namespace{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "testns1",
 					},
 				},
 			},
@@ -695,14 +622,7 @@ func TestProjectValidation(t *testing.T) {
 			t.Parallel()
 			req, err := createProjectRequest(test.oldProject, test.newProject, test.operation, false)
 			assert.NoError(t, err)
-			namespaceCache := fake.NewMockNonNamespacedCacheInterface[*corev1.Namespace](gomock.NewController(t))
-			if test.namespaces != nil {
-				namespaceCache.EXPECT().List(labels.Set(map[string]string{"field.cattle.io/projectId": test.oldProject.Name}).AsSelector()).Return(
-					test.namespaces,
-					nil,
-				).AnyTimes()
-			}
-			validator := NewValidator(namespaceCache)
+			validator := NewValidator()
 			admitters := validator.Admitters()
 			assert.Len(t, admitters, 1)
 			response, err := admitters[0].Admit(req)
