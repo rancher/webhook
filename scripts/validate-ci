@@ -18,6 +18,7 @@ source ./scripts/version
 
 if [ -n "$DIRTY" ]; then
     echo Git is dirty
+    echo "You may need to run 'go generate' to re-generate the docs."
     git status
     git --no-pager diff
     exit 1
