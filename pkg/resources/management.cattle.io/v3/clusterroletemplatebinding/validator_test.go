@@ -30,6 +30,7 @@ type ClusterRoleTemplateBindingSuite struct {
 	adminRT         *apisv3.RoleTemplate
 	readNodesRT     *apisv3.RoleTemplate
 	lockedRT        *apisv3.RoleTemplate
+	projectRT       *apisv3.RoleTemplate
 	adminCR         *rbacv1.ClusterRole
 	writeNodeCR     *rbacv1.ClusterRole
 	readServiceRole *rbacv1.Role
@@ -87,6 +88,14 @@ func (c *ClusterRoleTemplateBindingSuite) SetupSuite() {
 		Rules:       []rbacv1.PolicyRule{ruleReadServices},
 		Locked:      true,
 		Context:     "cluster",
+	}
+	c.projectRT = &apisv3.RoleTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "project-role",
+		},
+		DisplayName: "Project Role",
+		Rules:       []rbacv1.PolicyRule{ruleReadServices},
+		Context:     "project",
 	}
 	c.adminCR = &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
@@ -575,6 +584,7 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
 	roleTemplateCache.EXPECT().Get(c.adminRT.Name).Return(c.adminRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().Get(c.lockedRT.Name).Return(c.lockedRT, nil).AnyTimes()
+	roleTemplateCache.EXPECT().Get(c.projectRT.Name).Return(c.projectRT, nil).AnyTimes()
 	expectedError := apierrors.NewNotFound(schema.GroupResource{}, "")
 	roleTemplateCache.EXPECT().Get(badRoleTemplateName).Return(nil, expectedError).AnyTimes()
 	roleTemplateCache.EXPECT().Get("").Return(nil, expectedError).AnyTimes()
@@ -697,6 +707,21 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
 					baseCRTB := newDefaultCRTB()
 					baseCRTB.RoleTemplateName = c.lockedRT.Name
+					return baseCRTB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "role template with wrong context",
+			args: args{
+				username: adminUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					return nil
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.RoleTemplateName = c.projectRT.Name
 					return baseCRTB
 				},
 			},

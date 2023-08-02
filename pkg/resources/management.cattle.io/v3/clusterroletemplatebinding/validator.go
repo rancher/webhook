@@ -174,5 +174,10 @@ func (a *admitter) validateCreateFields(newCRTB *apisv3.ClusterRoleTemplateBindi
 		return field.Forbidden(fieldPath.Child("roleTemplate"), fmt.Sprintf("referenced role %s is locked and cannot be assigned", roleTemplate.DisplayName))
 	}
 
+	const clusterContext = "cluster"
+	if roleTemplate.Context != clusterContext {
+		return field.NotSupported(fieldPath.Child("roleTemplate", "context"), roleTemplate.Context, []string{clusterContext})
+	}
+
 	return nil
 }
