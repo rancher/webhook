@@ -57,6 +57,7 @@ func (m *IntegrationSuite) TestClusterRoleTemplateBinding() {
 				Resources: []string{"pods"},
 			},
 		},
+		Context: "cluster",
 	}
 	m.createObj(testRT, schema.GroupVersionKind{})
 	validateEndpoints(m.T(), endPoints, m.clientFactory)

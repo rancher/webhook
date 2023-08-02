@@ -10,8 +10,10 @@ Users cannot create ClusterRoleTemplateBindings which violate the following cons
 - Either a user subject (through `UserName` or `UserPrincipalName`) or a group subject (through `GroupName` or `GroupPrincipalName`) must be specified; both a user subject and a group subject cannot be specified
 - `ClusterName` must be specified
 - The roleTemplate indicated in `RoleTemplateName` must be:
-  - Valid (i.e. is an existing `roleTemplate` object in the `management.cattle.io/v3` API group)
+  - Provided as a non-empty value
+  - Valid (i.e. is an existing `roleTemplate` object of given name in the `management.cattle.io/v3` API group)
   - Not locked (i.e. `roleTemplate.Locked` must be `false`)
+  - Associated with its appropriate context (`roleTemplate.Context` must be equal to "cluster")
 
 ### Invalid Fields - Update
 
