@@ -22,6 +22,7 @@ type Clients struct {
 	Management             managementv3.Interface
 	Provisioning           provv1.Interface
 	RoleTemplateResolver   *auth.RoleTemplateResolver
+	GlobalRoleResolver     *auth.GlobalRoleResolver
 	DefaultResolver        validation.AuthorizationRuleResolver
 }
 
@@ -66,6 +67,7 @@ func New(ctx context.Context, rest *rest.Config, mcmEnabled bool) (*Clients, err
 
 	if mcmEnabled {
 		result.RoleTemplateResolver = auth.NewRoleTemplateResolver(mgmt.Management().V3().RoleTemplate().Cache(), clients.RBAC.ClusterRole().Cache())
+		result.GlobalRoleResolver = auth.NewGlobalRoleResolver(result.RoleTemplateResolver, mgmt.Management().V3().GlobalRole().Cache())
 	}
 
 	return result, nil

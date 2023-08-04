@@ -8,6 +8,7 @@ import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
+	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/resources/common"
 	"github.com/sirupsen/logrus"
@@ -22,10 +23,11 @@ import (
 )
 
 const (
-	clusterContext = "cluster"
-	projectContext = "project"
-	emptyContext   = ""
-	rtRefIndex     = "management.cattle.io/rt-by-reference"
+	clusterContext   = "cluster"
+	projectContext   = "project"
+	emptyContext     = ""
+	rtRefIndex       = "management.cattle.io/rt-by-reference"
+	rtGlobalRefIndex = "management.cattle.io/rt-by-ref-grb"
 )
 
 var gvr = schema.GroupVersionResource{
@@ -36,10 +38,12 @@ var gvr = schema.GroupVersionResource{
 
 // NewValidator returns a new validator used for validating roleTemplates.
 func NewValidator(resolver validation.AuthorizationRuleResolver, roleTemplateResolver *auth.RoleTemplateResolver,
-	sar authorizationv1.SubjectAccessReviewInterface) *Validator {
+	sar authorizationv1.SubjectAccessReviewInterface, grCache controllerv3.GlobalRoleCache) *Validator {
 	roleTemplateResolver.RoleTemplateCache().AddIndexer(rtRefIndex, roleTemplatesByReference)
+	grCache.AddIndexer(rtGlobalRefIndex, roleTemplatesByGlobalReference)
 	return &Validator{
 		admitter: admitter{
+			grCache:              grCache,
 			resolver:             resolver,
 			roleTemplateResolver: roleTemplateResolver,
 			sar:                  sar,
@@ -73,6 +77,7 @@ func (v *Validator) Admitters() []admission.Admitter {
 }
 
 type admitter struct {
+	grCache              controllerv3.GlobalRoleCache
 	resolver             validation.AuthorizationRuleResolver
 	roleTemplateResolver *auth.RoleTemplateResolver
 	sar                  authorizationv1.SubjectAccessReviewInterface
@@ -201,34 +206,37 @@ func (a *admitter) validateDelete(oldRT *v3.RoleTemplate) (*admissionv1.Admissio
 
 	// verify that the role is not currently inherited
 	if len(refRT) != 0 {
-		return admission.ResponseBadRequest(fmt.Sprintf("roletemplate '%s' cannot be deleted because it is inherited by roletemplate/s '%s'", oldRT.Name, rtListToNames(refRT))), nil
+		var names []string
+		for _, rt := range refRT {
+			names = append(names, rt.Name)
+		}
+		joinedNames := strings.Join(names, ", ")
+		return admission.ResponseBadRequest(fmt.Sprintf("roletemplate %q cannot be deleted because it is inherited by roletemplate(s) %q", oldRT.Name, joinedNames)), nil
+	}
+	globalRefs, err := a.grCache.GetByIndex(rtGlobalRefIndex, oldRT.Name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list GlobalRoles that reference %q: %w", oldRT.Name, err)
+	}
+	if len(globalRefs) != 0 {
+		var names []string
+		for _, globalRef := range globalRefs {
+			names = append(names, globalRef.Name)
+		}
+		joinedNames := strings.Join(names, ", ")
+		return admission.ResponseBadRequest(fmt.Sprintf("roletemplate %q cannot be deleted because it is inherited by globalRole(s) %q", oldRT.Name, joinedNames)), nil
 	}
 
 	return admission.ResponseAllowed(), nil
-}
-
-// rtListToNames convert a list of RoleTemplate into a joined list of names.
-func rtListToNames(templates []*v3.RoleTemplate) string {
-	n := len(templates)
-	if n == 0 {
-		return ""
-	}
-	if n == 1 {
-		return templates[0].Name
-	}
-	builder := strings.Builder{}
-	builder.WriteString(templates[0].Name)
-	for i := 1; i < n; i++ {
-		builder.WriteString(", ")
-		builder.WriteString(templates[i].Name)
-	}
-	return builder.String()
 }
 
 // roleTemplatesByReference returns a list of keys that can be used to retrieve the provided RT.
 // each key represents the name of a RoleTemplate that the provided object references.
 func roleTemplatesByReference(rt *v3.RoleTemplate) ([]string, error) {
 	return rt.RoleTemplateNames, nil
+}
+
+func roleTemplatesByGlobalReference(gr *v3.GlobalRole) ([]string, error) {
+	return gr.InheritedClusterRoles, nil
 }
 
 // checkCircularRef looks for a circular ref between this role template and any role template that it inherits
