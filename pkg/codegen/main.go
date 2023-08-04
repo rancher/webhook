@@ -36,6 +36,7 @@ func main() {
 				Types: []interface{}{
 					v3.Cluster{},
 					v3.GlobalRole{},
+					v3.GlobalRoleBinding{},
 					v3.PodSecurityAdmissionConfigurationTemplate{},
 					v3.RoleTemplate{},
 					v3.ClusterRoleTemplateBinding{},

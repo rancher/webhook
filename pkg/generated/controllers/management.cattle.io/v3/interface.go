@@ -34,6 +34,7 @@ type Interface interface {
 	Cluster() ClusterController
 	ClusterRoleTemplateBinding() ClusterRoleTemplateBindingController
 	GlobalRole() GlobalRoleController
+	GlobalRoleBinding() GlobalRoleBindingController
 	Node() NodeController
 	PodSecurityAdmissionConfigurationTemplate() PodSecurityAdmissionConfigurationTemplateController
 	ProjectRoleTemplateBinding() ProjectRoleTemplateBindingController
@@ -60,6 +61,10 @@ func (v *version) ClusterRoleTemplateBinding() ClusterRoleTemplateBindingControl
 
 func (v *version) GlobalRole() GlobalRoleController {
 	return generic.NewNonNamespacedController[*v3.GlobalRole, *v3.GlobalRoleList](schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "GlobalRole"}, "globalroles", v.controllerFactory)
+}
+
+func (v *version) GlobalRoleBinding() GlobalRoleBindingController {
+	return generic.NewNonNamespacedController[*v3.GlobalRoleBinding, *v3.GlobalRoleBindingList](schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "GlobalRoleBinding"}, "globalrolebindings", v.controllerFactory)
 }
 
 func (v *version) Node() NodeController {

@@ -8,6 +8,7 @@ import (
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
+	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/resolvers"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -25,14 +26,19 @@ var gvr = schema.GroupVersionResource{
 	Resource: "clusterroletemplatebindings",
 }
 
+const (
+	grbOwnerLabel = "authz.management.cattle.io/grb-owner"
+)
+
 // NewValidator will create a newly allocated Validator.
 func NewValidator(crtb *resolvers.CRTBRuleResolver, defaultResolver k8validation.AuthorizationRuleResolver,
-	roleTemplateResolver *auth.RoleTemplateResolver) *Validator {
+	roleTemplateResolver *auth.RoleTemplateResolver, grbCache v3.GlobalRoleBindingCache) *Validator {
 	resolver := resolvers.NewAggregateRuleResolver(defaultResolver, crtb)
 	return &Validator{
 		admitter: admitter{
 			resolver:             resolver,
 			roleTemplateResolver: roleTemplateResolver,
+			grbCache:             grbCache,
 		},
 	}
 }
@@ -65,6 +71,7 @@ func (v *Validator) Admitters() []admission.Admitter {
 type admitter struct {
 	resolver             k8validation.AuthorizationRuleResolver
 	roleTemplateResolver *auth.RoleTemplateResolver
+	grbCache             v3.GlobalRoleBindingCache
 }
 
 // Admit is the entrypoint for the validator. Admit will return an error if it unable to process the request.
@@ -138,6 +145,8 @@ func validateUpdateFields(oldCRTB, newCRTB *apisv3.ClusterRoleTemplateBinding, f
 	case (newCRTB.GroupName != "" || oldCRTB.GroupPrincipalName != "") && (newCRTB.UserName != "" || oldCRTB.UserPrincipalName != ""):
 		return field.Forbidden(fieldPath,
 			"binding target must target either a user [userName]/[userPrincipalName] OR a group [groupName]/[groupPrincipalName]")
+	case (newCRTB.Labels[grbOwnerLabel] != oldCRTB.Labels[grbOwnerLabel]):
+		return field.Forbidden(fieldPath.Child("labels"), fmt.Sprintf("label %s is immutable after creation", grbOwnerLabel))
 	default:
 		return nil
 	}
@@ -171,6 +180,23 @@ func (a *admitter) validateCreateFields(newCRTB *apisv3.ClusterRoleTemplateBindi
 	}
 
 	if roleTemplate.Locked {
+		owningGRB, hasGRBLabel := newCRTB.Labels[grbOwnerLabel]
+		// if the grb that owns this role is active then allow this binding to use a locked roleTemplate. This allows
+		// grbs which inheritClusterRoles to rollout permissions across new clusters, even on a locked roleTemplate.
+		if hasGRBLabel {
+			grb, err := a.grbCache.Get(owningGRB)
+			// confirm that the owning grb actually exists
+			if err != nil {
+				if apierrors.IsNotFound(err) {
+					reason := fmt.Sprintf("label %s refers to a global role that doesn't exist", owningGRB)
+					return field.Invalid(fieldPath.Child("labels"), owningGRB, reason)
+				}
+				return fmt.Errorf("unable to confirm the existence of backing grb %s: %w", owningGRB, err)
+			}
+			if grb != nil && grb.DeletionTimestamp == nil {
+				return nil
+			}
+		}
 		return field.Forbidden(fieldPath.Child("roleTemplate"), fmt.Sprintf("referenced role %s is locked and cannot be assigned", roleTemplate.DisplayName))
 	}
 
