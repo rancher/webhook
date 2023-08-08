@@ -3,7 +3,9 @@ package clusterroletemplatebinding_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -24,6 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
+
+const grbOwnerLabel = "authz.management.cattle.io/grb-owner"
 
 type ClusterRoleTemplateBindingSuite struct {
 	suite.Suite
@@ -156,7 +160,7 @@ func (c *ClusterRoleTemplateBindingSuite) Test_PrivilegeEscalation() {
 	crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
 	crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
-	validator := clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver)
+	validator := clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver, nil)
 	type args struct {
 		oldCRTB  func() *apisv3.ClusterRoleTemplateBinding
 		newCRTB  func() *apisv3.ClusterRoleTemplateBinding
@@ -293,7 +297,7 @@ func (c *ClusterRoleTemplateBindingSuite) Test_UpdateValidation() {
 	crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
 	crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
-	validator := clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver)
+	validator := clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver, nil)
 	type args struct {
 		oldCRTB  func() *apisv3.ClusterRoleTemplateBinding
 		newCRTB  func() *apisv3.ClusterRoleTemplateBinding
@@ -312,11 +316,13 @@ func (c *ClusterRoleTemplateBindingSuite) Test_UpdateValidation() {
 				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
 					baseCRTB := newDefaultCRTB()
 					baseCRTB.Name = "oldName"
+					baseCRTB.Labels[grbOwnerLabel] = "some-grb"
 					return baseCRTB
 				},
 				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
 					baseCRTB := newDefaultCRTB()
 					baseCRTB.Name = "newName"
+					baseCRTB.Labels[grbOwnerLabel] = "some-grb"
 					return baseCRTB
 				},
 			},
@@ -548,6 +554,39 @@ func (c *ClusterRoleTemplateBindingSuite) Test_UpdateValidation() {
 			},
 			allowed: false,
 		},
+		{
+			name: "update grbOwnerLabel",
+			args: args{
+				username: adminUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.Labels[grbOwnerLabel] = "some-grb"
+					return baseCRTB
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.Labels[grbOwnerLabel] = "some-other-grb"
+					return baseCRTB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "update previously unset grbOwnerLabel",
+			args: args{
+				username: adminUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					return baseCRTB
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.Labels[grbOwnerLabel] = "some-new-grb"
+					return baseCRTB
+				},
+			},
+			allowed: false,
+		},
 	}
 
 	for i := range tests {
@@ -578,6 +617,23 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 			RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: c.adminCR.Name},
 		},
 	}
+
+	validGRB := v3.GlobalRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "valid-grb",
+		},
+		UserName:       adminUser,
+		GlobalRoleName: "some-gr",
+	}
+	deletingGRB := v3.GlobalRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "deleting-grb",
+			DeletionTimestamp: &metav1.Time{Time: time.Now()},
+		},
+		UserName:       adminUser,
+		GlobalRoleName: "some-gr",
+	}
+
 	resolver, _ := validation.NewTestRuleResolver(nil, nil, clusterRoles, clusterRoleBindings)
 
 	ctrl := gomock.NewController(c.T())
@@ -593,9 +649,19 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 	crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
 	crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
 	crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	grbCache := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRoleBinding](ctrl)
+	notFoundError := apierrors.NewNotFound(schema.GroupResource{
+		Group:    "management.cattle.io",
+		Resource: "globalrolebindings",
+	}, "not-found")
+	grbCache.EXPECT().Get(validGRB.Name).Return(&validGRB, nil).AnyTimes()
+	grbCache.EXPECT().Get(deletingGRB.Name).Return(&deletingGRB, nil).AnyTimes()
+	grbCache.EXPECT().Get("error").Return(nil, fmt.Errorf("server not available")).AnyTimes()
+	grbCache.EXPECT().Get("not-found").Return(nil, notFoundError).AnyTimes()
+	grbCache.EXPECT().Get("nil-grb").Return(nil, nil).AnyTimes()
 
 	crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
-	validator := clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver)
+	validator := clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver, grbCache)
 	type args struct {
 		oldCRTB  func() *apisv3.ClusterRoleTemplateBinding
 		newCRTB  func() *apisv3.ClusterRoleTemplateBinding
@@ -698,21 +764,6 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 			allowed: false,
 		},
 		{
-			name: "locked role template",
-			args: args{
-				username: adminUser,
-				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
-					return nil
-				},
-				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
-					baseCRTB := newDefaultCRTB()
-					baseCRTB.RoleTemplateName = c.lockedRT.Name
-					return baseCRTB
-				},
-			},
-			allowed: false,
-		},
-		{
 			name: "role template with wrong context",
 			args: args{
 				username: adminUser,
@@ -727,6 +778,103 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 			},
 			allowed: false,
 		},
+		{
+			name: "locked role template",
+			args: args{
+				username: adminUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					return nil
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.RoleTemplateName = c.lockedRT.Name
+					return baseCRTB
+				},
+			},
+			allowed: false,
+		},
+
+		{
+			name: "locked role template, crtb owned by grb",
+			args: args{
+				username: adminUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					return nil
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.RoleTemplateName = c.lockedRT.Name
+					baseCRTB.Labels[grbOwnerLabel] = validGRB.Name
+					return baseCRTB
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "locked role template, crtb owned by deleting grb",
+			args: args{
+				username: adminUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					return nil
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.RoleTemplateName = c.lockedRT.Name
+					baseCRTB.Labels[grbOwnerLabel] = deletingGRB.Name
+					return baseCRTB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "locked role template, crtb owned by nil grb",
+			args: args{
+				username: adminUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					return nil
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.RoleTemplateName = c.lockedRT.Name
+					baseCRTB.Labels[grbOwnerLabel] = "nil-grb"
+					return baseCRTB
+				},
+			},
+			allowed: false,
+		},
+
+		{
+			name: "locked role template, crtb owned by missing grb",
+			args: args{
+				username: adminUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					return nil
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.RoleTemplateName = c.lockedRT.Name
+					baseCRTB.Labels[grbOwnerLabel] = "not-found"
+					return baseCRTB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "locked role template, crtb owned by error grb",
+			args: args{
+				username: adminUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					return nil
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.RoleTemplateName = c.lockedRT.Name
+					baseCRTB.Labels[grbOwnerLabel] = "error"
+					return baseCRTB
+				},
+			},
+			wantErr: true,
+		},
 	}
 
 	for i := range tests {
@@ -737,9 +885,13 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 			admitters := validator.Admitters()
 			assert.Len(c.T(), admitters, 1)
 			resp, err := admitters[0].Admit(req)
-			c.NoError(err, "Admit failed")
-			if resp.Allowed != test.allowed {
-				c.Failf("Response was incorrectly validated", "Wanted response.Allowed = '%v' got '%v': result=%+v", test.name, test.allowed, resp.Allowed, resp.Result)
+			if test.wantErr {
+				c.Error(err)
+			} else {
+				c.NoError(err, "Admit failed")
+				if resp.Allowed != test.allowed {
+					c.Failf("Response was incorrectly validated", "Wanted response.Allowed = '%v' got '%v': result=%+v", test.name, test.allowed, resp.Allowed, resp.Result)
+				}
 			}
 		})
 	}
@@ -792,6 +944,7 @@ func newDefaultCRTB() *apisv3.ClusterRoleTemplateBinding {
 			Generation:        1,
 			CreationTimestamp: metav1.Time{},
 			ManagedFields:     []metav1.ManagedFieldsEntry{},
+			Labels:            map[string]string{},
 		},
 		UserName:         "user1",
 		ClusterName:      "c-namespace",
