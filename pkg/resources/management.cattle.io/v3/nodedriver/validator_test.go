@@ -193,10 +193,10 @@ func newNodeDriver(active bool, annotations map[string]string) []byte {
 	driver := v3.NodeDriver{
 		ObjectMeta: v1.ObjectMeta{
 			Annotations: annotations,
+			Name:        "testing",
 		},
 		Spec: v3.NodeDriverSpec{
-			DisplayName: "testing",
-			Active:      active,
+			Active: active,
 		},
 	}
 

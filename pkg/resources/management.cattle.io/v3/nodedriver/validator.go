@@ -123,7 +123,7 @@ func (a *admitter) rke1ResourcesDeleted(driver *v3.NodeDriver) (bool, error) {
 			continue
 		}
 
-		if node.Status.NodeTemplateSpec.Driver == driver.Spec.DisplayName {
+		if node.Status.NodeTemplateSpec.Driver == driver.Name {
 			return false, nil
 		}
 	}
@@ -133,16 +133,16 @@ func (a *admitter) rke1ResourcesDeleted(driver *v3.NodeDriver) (bool, error) {
 
 // // RKE2
 // this one is pretty weird since we have to get the name of the CR we're
-// looking from the displayName of the driver.
+// looking from the Name of the driver.
 func (a *admitter) rke2ResourcesDeleted(driver *v3.NodeDriver) (bool, error) {
 	gvk := schema.GroupVersionKind{
 		Group:   "rke-machine.cattle.io",
 		Version: "v1",
-		Kind:    driver.Spec.DisplayName + "machine",
+		Kind:    driver.Name + "machine",
 	}
 	machines, err := a.dynamic.List(gvk, "", labels.Everything())
 	if err != nil {
-		return false, fmt.Errorf("error listing %smachines: %w", driver.Spec.DisplayName, err)
+		return false, fmt.Errorf("error listing %smachines: %w", driver.Name, err)
 	}
 
 	if len(machines) != 0 {
