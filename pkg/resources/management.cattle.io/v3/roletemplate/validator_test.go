@@ -8,6 +8,7 @@ import (
 	"github.com/golang/mock/gomock"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/auth"
+	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/roletemplate"
 	"github.com/rancher/wrangler/pkg/generic/fake"
 	v1 "k8s.io/api/admission/v1"
@@ -28,6 +29,7 @@ const (
 	noPrivUser               = "no-priv-userid"
 	notFoundRoleTemplateName = "not-found-roleTemplate"
 	expectedIndexerName      = "management.cattle.io/rt-by-reference"
+	expectedGlobalRefIndex   = "management.cattle.io/rt-by-ref-grb"
 )
 
 func (r *RoleTemplateSuite) Test_PrivilegeEscalation() {
@@ -59,6 +61,8 @@ func (r *RoleTemplateSuite) Test_PrivilegeEscalation() {
 	roleTemplateCache.EXPECT().List(gomock.Any()).Return([]*v3.RoleTemplate{r.adminRT, r.readNodesRT}, nil).AnyTimes()
 	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
+	grCache := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRole](ctrl)
+	grCache.EXPECT().AddIndexer(expectedGlobalRefIndex, gomock.Any())
 
 	k8Fake := &k8testing.Fake{}
 	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
@@ -74,7 +78,7 @@ func (r *RoleTemplateSuite) Test_PrivilegeEscalation() {
 			spec.ResourceAttributes.Verb == "escalate"
 		return true, review, nil
 	})
-	validator := roletemplate.NewValidator(resolver, roleResolver, fakeSAR)
+	validator := roletemplate.NewValidator(resolver, roleResolver, fakeSAR, grCache)
 	admitters := validator.Admitters()
 	r.Len(admitters, 1, "wanted only one admitter")
 
@@ -182,6 +186,8 @@ func (r *RoleTemplateSuite) Test_UpdateValidation() {
 	roleTemplateCache.EXPECT().Get(r.adminRT.Name).Return(r.adminRT, nil).AnyTimes()
 	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
+	grCache := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRole](ctrl)
+	grCache.EXPECT().AddIndexer(expectedGlobalRefIndex, gomock.Any())
 
 	k8Fake := &k8testing.Fake{}
 	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
@@ -195,7 +201,7 @@ func (r *RoleTemplateSuite) Test_UpdateValidation() {
 		return true, review, nil
 	})
 
-	validator := roletemplate.NewValidator(resolver, roleResolver, fakeSAR)
+	validator := roletemplate.NewValidator(resolver, roleResolver, fakeSAR, grCache)
 	admitters := validator.Admitters()
 	r.Len(admitters, 1, "wanted only one admitter")
 
@@ -485,11 +491,13 @@ func (r *RoleTemplateSuite) Test_Create() {
 	roleTemplateCache.EXPECT().Get(r.adminRT.Name).Return(r.adminRT, nil).AnyTimes()
 	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
+	grCache := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRole](ctrl)
+	grCache.EXPECT().AddIndexer(expectedGlobalRefIndex, gomock.Any())
 
 	k8Fake := &k8testing.Fake{}
 	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
 
-	validator := roletemplate.NewValidator(resolver, roleResolver, fakeSAR)
+	validator := roletemplate.NewValidator(resolver, roleResolver, fakeSAR, grCache)
 	admitters := validator.Admitters()
 	r.Len(admitters, 1, "wanted only one admitter")
 
@@ -591,11 +599,15 @@ func (r *RoleTemplateSuite) Test_Delete() {
 
 	k8Fake := &k8testing.Fake{}
 	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
+	type testMocks struct {
+		rtResolver *auth.RoleTemplateResolver
+		grCache    controllerv3.GlobalRoleCache
+	}
 
 	tests := []struct {
 		tableTest
-		wantError      bool
-		createResolver func(ctrl *gomock.Controller) *auth.RoleTemplateResolver
+		wantError   bool
+		createMocks func(ctrl *gomock.Controller) testMocks
 	}{
 		{
 			tableTest: tableTest{
@@ -611,7 +623,7 @@ func (r *RoleTemplateSuite) Test_Delete() {
 				},
 				allowed: true,
 			},
-			createResolver: func(ctrl *gomock.Controller) *auth.RoleTemplateResolver {
+			createMocks: func(ctrl *gomock.Controller) testMocks {
 				roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
 				cacheIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, map[string]cache.IndexFunc{})
 				roleTemplateCache.EXPECT().AddIndexer(expectedIndexerName, gomock.Any()).Do(func(name string, indexFunc func(rt *v3.RoleTemplate) ([]string, error)) {
@@ -634,12 +646,18 @@ func (r *RoleTemplateSuite) Test_Delete() {
 				defaultRT.RoleTemplateNames = []string{r.adminRT.Name}
 				cacheIndexer.Add(defaultRT)
 				cacheIndexer.Add(r.readNodesRT)
-				return auth.NewRoleTemplateResolver(roleTemplateCache, nil)
+				grCache := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRole](ctrl)
+				grCache.EXPECT().AddIndexer(expectedGlobalRefIndex, gomock.Any())
+				grCache.EXPECT().GetByIndex(expectedGlobalRefIndex, gomock.Any()).Return([]*v3.GlobalRole{}, nil).AnyTimes()
+				return testMocks{
+					rtResolver: auth.NewRoleTemplateResolver(roleTemplateCache, nil),
+					grCache:    grCache,
+				}
 			},
 		},
 		{
 			tableTest: tableTest{
-				name: "test inherited delete",
+				name: "test inherited rt delete",
 				args: args{
 					username: adminUser,
 					oldRT: func() *v3.RoleTemplate {
@@ -652,7 +670,7 @@ func (r *RoleTemplateSuite) Test_Delete() {
 				allowed: false,
 			},
 
-			createResolver: func(ctrl *gomock.Controller) *auth.RoleTemplateResolver {
+			createMocks: func(ctrl *gomock.Controller) testMocks {
 				roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
 				cacheIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, map[string]cache.IndexFunc{})
 				roleTemplateCache.EXPECT().AddIndexer(expectedIndexerName, gomock.Any()).Do(func(name string, indexFunc func(rt *v3.RoleTemplate) ([]string, error)) {
@@ -679,7 +697,14 @@ func (r *RoleTemplateSuite) Test_Delete() {
 				cacheIndexer.Add(defaultRT)
 				cacheIndexer.Add(defaultRT2)
 				cacheIndexer.Add(r.readNodesRT)
-				return auth.NewRoleTemplateResolver(roleTemplateCache, nil)
+				grCache := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRole](ctrl)
+				grCache.EXPECT().AddIndexer(expectedGlobalRefIndex, gomock.Any())
+				grCache.EXPECT().GetByIndex(expectedGlobalRefIndex, gomock.Any()).Return([]*v3.GlobalRole{}, nil).AnyTimes()
+
+				return testMocks{
+					rtResolver: auth.NewRoleTemplateResolver(roleTemplateCache, nil),
+					grCache:    grCache,
+				}
 			},
 		},
 		{
@@ -696,11 +721,17 @@ func (r *RoleTemplateSuite) Test_Delete() {
 				},
 			},
 			wantError: true,
-			createResolver: func(ctrl *gomock.Controller) *auth.RoleTemplateResolver {
+			createMocks: func(ctrl *gomock.Controller) testMocks {
 				roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
 				roleTemplateCache.EXPECT().AddIndexer(expectedIndexerName, gomock.Any())
 				roleTemplateCache.EXPECT().GetByIndex(expectedIndexerName, gomock.Any()).Return(nil, errTest)
-				return auth.NewRoleTemplateResolver(roleTemplateCache, nil)
+				grCache := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRole](ctrl)
+				grCache.EXPECT().AddIndexer(expectedGlobalRefIndex, gomock.Any())
+				grCache.EXPECT().GetByIndex(expectedGlobalRefIndex, gomock.Any()).Return([]*v3.GlobalRole{}, nil).AnyTimes()
+				return testMocks{
+					rtResolver: auth.NewRoleTemplateResolver(roleTemplateCache, nil),
+					grCache:    grCache,
+				}
 			},
 		},
 	}
@@ -710,7 +741,8 @@ func (r *RoleTemplateSuite) Test_Delete() {
 		r.Run(test.name, func() {
 			r.T().Parallel()
 			ctrl := gomock.NewController(r.T())
-			validator := roletemplate.NewValidator(resolver, test.createResolver(ctrl), fakeSAR)
+			mocks := test.createMocks(ctrl)
+			validator := roletemplate.NewValidator(resolver, mocks.rtResolver, fakeSAR, mocks.grCache)
 			req := createRTRequest(r.T(), test.args.oldRT(), test.args.newRT(), test.args.username)
 			admitters := validator.Admitters()
 			r.Len(admitters, 1, "wanted only one admitter")
@@ -734,10 +766,12 @@ func (r *RoleTemplateSuite) Test_ErrorHandling() {
 	roleTemplateCache.EXPECT().AddIndexer(expectedIndexerName, gomock.Any())
 	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
+	grCache := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRole](ctrl)
+	grCache.EXPECT().AddIndexer(expectedGlobalRefIndex, gomock.Any())
 
 	k8Fake := &k8testing.Fake{}
 	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
-	validator := roletemplate.NewValidator(resolver, roleResolver, fakeSAR)
+	validator := roletemplate.NewValidator(resolver, roleResolver, fakeSAR, grCache)
 	admitters := validator.Admitters()
 	r.Len(admitters, 1, "wanted only one admitter")
 	admitter := admitters[0]
@@ -838,6 +872,8 @@ func (r *RoleTemplateSuite) Test_CheckCircularRef() {
 			roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
 			roleTemplateCache.EXPECT().Get(r.adminRT.Name).Return(r.adminRT, nil).AnyTimes()
 			roleTemplateCache.EXPECT().AddIndexer(expectedIndexerName, gomock.Any())
+			grCache := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRole](ctrl)
+			grCache.EXPECT().AddIndexer(expectedGlobalRefIndex, gomock.Any())
 
 			newRT := createNestedRoleTemplate(rtName, roleTemplateCache, testCase.depth, testCase.circleDepth, testCase.errorDepth)
 
@@ -845,7 +881,7 @@ func (r *RoleTemplateSuite) Test_CheckCircularRef() {
 			clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 			roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
 
-			validator := roletemplate.NewValidator(resolver, roleResolver, fakeSAR)
+			validator := roletemplate.NewValidator(resolver, roleResolver, fakeSAR, grCache)
 			admitters := validator.Admitters()
 			r.Len(admitters, 1, "wanted only one admitter")
 			resp, err := admitters[0].Admit(req)
