@@ -3,6 +3,7 @@ package nodedriver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -11,6 +12,8 @@ import (
 	"github.com/rancher/wrangler/pkg/generic/fake"
 	"github.com/stretchr/testify/suite"
 	admissionv1 "k8s.io/api/admission/v1"
+	apiextensions "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -36,11 +39,14 @@ func (m *mockLister) List(_ schema.GroupVersionKind, _ string, _ labels.Selector
 
 func (suite *NodeDriverValidationSuite) TestHappyPath() {
 	ctrl := gomock.NewController(suite.T())
-	mockCache := fake.NewMockCacheInterface[*v3.Node](ctrl)
-	mockCache.EXPECT().List("", labels.Everything()).Return([]*v3.Node{}, nil)
+	mockNodeCache := fake.NewMockCacheInterface[*v3.Node](ctrl)
+	mockNodeCache.EXPECT().List("", labels.Everything()).Return([]*v3.Node{}, nil)
+	mockCRDCache := fake.NewMockNonNamespacedCacheInterface[*apiextensions.CustomResourceDefinition](ctrl)
+	mockCRDCache.EXPECT().Get("testingmachines.rke-machine.cattle.io").Return(&apiextensions.CustomResourceDefinition{}, nil)
 
 	a := admitter{
-		nodeCache: mockCache,
+		nodeCache: mockNodeCache,
+		crdCache:  mockCRDCache,
 		dynamic:   &mockLister{},
 	}
 
@@ -58,15 +64,18 @@ func (suite *NodeDriverValidationSuite) TestHappyPath() {
 
 func (suite *NodeDriverValidationSuite) TestRKE1NotDeleted() {
 	ctrl := gomock.NewController(suite.T())
-	mockCache := fake.NewMockCacheInterface[*v3.Node](ctrl)
-	mockCache.EXPECT().List("", labels.Everything()).Return([]*v3.Node{
+	mockNodeCache := fake.NewMockCacheInterface[*v3.Node](ctrl)
+	mockNodeCache.EXPECT().List("", labels.Everything()).Return([]*v3.Node{
 		{Status: v3.NodeStatus{NodeTemplateSpec: &v3.NodeTemplateSpec{
 			Driver: "testing",
 		}}},
 	}, nil)
+	mockCRDCache := fake.NewMockNonNamespacedCacheInterface[*apiextensions.CustomResourceDefinition](ctrl)
+	mockCRDCache.EXPECT().Get("testingmachines.rke-machine.cattle.io").Return(&apiextensions.CustomResourceDefinition{}, nil)
 
 	a := admitter{
-		nodeCache: mockCache,
+		nodeCache: mockNodeCache,
+		crdCache:  mockCRDCache,
 		dynamic:   &mockLister{},
 	}
 
@@ -84,11 +93,14 @@ func (suite *NodeDriverValidationSuite) TestRKE1NotDeleted() {
 
 func (suite *NodeDriverValidationSuite) TestRKE2NotDeleted() {
 	ctrl := gomock.NewController(suite.T())
-	mockCache := fake.NewMockCacheInterface[*v3.Node](ctrl)
-	mockCache.EXPECT().List("", labels.Everything()).Return([]*v3.Node{}, nil)
+	mockNodeCache := fake.NewMockCacheInterface[*v3.Node](ctrl)
+	mockNodeCache.EXPECT().List("", labels.Everything()).Return([]*v3.Node{}, nil)
+	mockCRDCache := fake.NewMockNonNamespacedCacheInterface[*apiextensions.CustomResourceDefinition](ctrl)
+	mockCRDCache.EXPECT().Get("testingmachines.rke-machine.cattle.io").Return(&apiextensions.CustomResourceDefinition{}, nil)
 
 	a := admitter{
-		nodeCache: mockCache,
+		nodeCache: mockNodeCache,
+		crdCache:  mockCRDCache,
 		dynamic:   &mockLister{toReturn: []runtime.Object{&runtime.Unknown{}}},
 	}
 
@@ -120,11 +132,14 @@ func (suite *NodeDriverValidationSuite) TestNotDisablingDriver() {
 
 func (suite *NodeDriverValidationSuite) TestDeleteGood() {
 	ctrl := gomock.NewController(suite.T())
-	mockCache := fake.NewMockCacheInterface[*v3.Node](ctrl)
-	mockCache.EXPECT().List("", labels.Everything()).Return([]*v3.Node{}, nil)
+	mockNodeCache := fake.NewMockCacheInterface[*v3.Node](ctrl)
+	mockNodeCache.EXPECT().List("", labels.Everything()).Return([]*v3.Node{}, nil)
+	mockCRDCache := fake.NewMockNonNamespacedCacheInterface[*apiextensions.CustomResourceDefinition](ctrl)
+	mockCRDCache.EXPECT().Get("testingmachines.rke-machine.cattle.io").Return(&apiextensions.CustomResourceDefinition{}, nil)
 
 	a := admitter{
-		nodeCache: mockCache,
+		nodeCache: mockNodeCache,
+		crdCache:  mockCRDCache,
 		dynamic:   &mockLister{},
 	}
 
@@ -147,9 +162,12 @@ func (suite *NodeDriverValidationSuite) TestDeleteRKE1Bad() {
 			Driver: "testing",
 		}}},
 	}, nil)
+	mockCRDCache := fake.NewMockNonNamespacedCacheInterface[*apiextensions.CustomResourceDefinition](ctrl)
+	mockCRDCache.EXPECT().Get("testingmachines.rke-machine.cattle.io").Return(&apiextensions.CustomResourceDefinition{}, nil)
 
 	a := admitter{
 		nodeCache: mockCache,
+		crdCache:  mockCRDCache,
 		dynamic:   &mockLister{},
 	}
 
@@ -168,9 +186,12 @@ func (suite *NodeDriverValidationSuite) TestDeleteRKE2Bad() {
 	ctrl := gomock.NewController(suite.T())
 	mockCache := fake.NewMockCacheInterface[*v3.Node](ctrl)
 	mockCache.EXPECT().List("", labels.Everything()).Return([]*v3.Node{}, nil)
+	mockCRDCache := fake.NewMockNonNamespacedCacheInterface[*apiextensions.CustomResourceDefinition](ctrl)
+	mockCRDCache.EXPECT().Get("testingmachines.rke-machine.cattle.io").Return(&apiextensions.CustomResourceDefinition{}, nil)
 
 	a := admitter{
 		nodeCache: mockCache,
+		crdCache:  mockCRDCache,
 		dynamic:   &mockLister{toReturn: []runtime.Object{&runtime.Unknown{}}},
 	}
 
@@ -183,6 +204,55 @@ func (suite *NodeDriverValidationSuite) TestDeleteRKE2Bad() {
 
 	suite.Nil(err)
 	suite.False(resp.Allowed, "admission request was allowed")
+}
+
+func (suite *NodeDriverValidationSuite) TestCRDNotCreated() {
+	ctrl := gomock.NewController(suite.T())
+	mockNodeCache := fake.NewMockCacheInterface[*v3.Node](ctrl)
+	mockNodeCache.EXPECT().List("", labels.Everything()).Return([]*v3.Node{}, nil)
+	mockCRDCache := fake.NewMockNonNamespacedCacheInterface[*apiextensions.CustomResourceDefinition](ctrl)
+	mockCRDCache.EXPECT().Get("testingmachines.rke-machine.cattle.io").Return(nil, apierrors.NewNotFound(schema.GroupResource{}, "foobar"))
+
+	a := admitter{
+		nodeCache: mockNodeCache,
+		crdCache:  mockCRDCache,
+		dynamic:   &mockLister{},
+	}
+
+	resp, err := a.Admit(&admission.Request{
+		Context: context.Background(),
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Update,
+			OldObject: runtime.RawExtension{Raw: newNodeDriver(true, nil)},
+			Object:    runtime.RawExtension{Raw: newNodeDriver(false, nil)},
+		}})
+
+	suite.Nil(err)
+	suite.True(resp.Allowed, "admission request was denied")
+}
+
+func (suite *NodeDriverValidationSuite) TestErrorFetchingCRD() {
+	ctrl := gomock.NewController(suite.T())
+	mockNodeCache := fake.NewMockCacheInterface[*v3.Node](ctrl)
+	mockNodeCache.EXPECT().List("", labels.Everything()).Return([]*v3.Node{}, nil)
+	mockCRDCache := fake.NewMockNonNamespacedCacheInterface[*apiextensions.CustomResourceDefinition](ctrl)
+	mockCRDCache.EXPECT().Get("testingmachines.rke-machine.cattle.io").Return(nil, errors.New("boom"))
+
+	a := admitter{
+		nodeCache: mockNodeCache,
+		crdCache:  mockCRDCache,
+		dynamic:   &mockLister{},
+	}
+
+	_, err := a.Admit(&admission.Request{
+		Context: context.Background(),
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Update,
+			OldObject: runtime.RawExtension{Raw: newNodeDriver(true, nil)},
+			Object:    runtime.RawExtension{Raw: newNodeDriver(false, nil)},
+		}})
+
+	suite.Error(err)
 }
 
 func newNodeDriver(active bool, annotations map[string]string) []byte {

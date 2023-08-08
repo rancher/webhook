@@ -9,8 +9,12 @@ import (
 	"github.com/rancher/webhook/pkg/admission"
 	controllersv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
+	"github.com/rancher/wrangler/pkg/generic"
+	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -40,6 +44,7 @@ type Validator struct {
 
 type admitter struct {
 	nodeCache controllersv3.NodeCache
+	crdCache  generic.NonNamespacedCacheInterface[*v1.CustomResourceDefinition]
 	dynamic   dynamicLister
 }
 
@@ -49,9 +54,10 @@ type dynamicLister interface {
 }
 
 // NewValidator returns a new Validator for NodeDriver resources
-func NewValidator(nodeCache controllersv3.NodeCache, dynamic *dynamic.Controller) admission.ValidatingAdmissionHandler {
+func NewValidator(nodeCache controllersv3.NodeCache, dynamic *dynamic.Controller, crdCache generic.NonNamespacedCacheInterface[*v1.CustomResourceDefinition]) admission.ValidatingAdmissionHandler {
 	return &Validator{admitter: admitter{
 		nodeCache: nodeCache,
+		crdCache:  crdCache,
 		dynamic:   dynamic,
 	}}
 }
@@ -140,6 +146,20 @@ func (a *admitter) rke2ResourcesDeleted(driver *v3.NodeDriver) (bool, error) {
 		Version: "v1",
 		Kind:    driver.Name + "machine",
 	}
+
+	_, err := a.crdCache.Get(fmt.Sprintf("%ss.%s", gvk.Kind, gvk.Group))
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			// in this case the CRD just isn't present for the NodeDriver itself or
+			// hasn't been created yet. If there isn't a CRD -> there can't be any
+			// machines so we authorize the request
+			logrus.Debugf("CRD Not found for %s when disabling NodeDriver, admitting request", gvk)
+			return true, nil
+		}
+
+		return false, fmt.Errorf("error fetching CRD from cache: %w", err)
+	}
+
 	machines, err := a.dynamic.List(gvk, "", labels.Everything())
 	if err != nil {
 		return false, fmt.Errorf("error listing %smachines: %w", driver.Name, err)
