@@ -14,12 +14,14 @@ Users cannot create ClusterRoleTemplateBindings which violate the following cons
   - Valid (i.e. is an existing `roleTemplate` object of given name in the `management.cattle.io/v3` API group)
   - Not locked (i.e. `roleTemplate.Locked` must be `false`)
   - Associated with its appropriate context (`roleTemplate.Context` must be equal to "cluster")
+- If the label indicating ownership by a GlobalRoleBinding (`authz.management.cattle.io/grb-owner`) exists, it must refer to a valid (existing and not deleting) GlobalRoleBinding
 
 ### Invalid Fields - Update
 
 Users cannot update the following fields after creation:
 - RoleTemplateName
 - ClusterName
+- The label indicating ownership by a GlobalRoleBinding (`authz.management.cattle.io/grb-owner`)
 
 Users can update the following fields if they have not been set, but after they have been set they cannot be changed:
 - UserName
