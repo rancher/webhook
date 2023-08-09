@@ -6,32 +6,32 @@ go 1.19
 replace github.com/rancher/wrangler v1.1.1 => github.com/rancher/wrangler v1.1.1-0.20230705223603-201b4da5bdaf
 
 replace (
-	k8s.io/api => k8s.io/api v0.25.5
-	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.25.5
-	k8s.io/apimachinery => k8s.io/apimachinery v0.25.5
-	k8s.io/apiserver => k8s.io/apiserver v0.25.5
-	k8s.io/cli-runtime => k8s.io/cli-runtime v0.25.5
+	k8s.io/api => k8s.io/api v0.25.12
+	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.25.12
+	k8s.io/apimachinery => k8s.io/apimachinery v0.25.12
+	k8s.io/apiserver => k8s.io/apiserver v0.25.12
+	k8s.io/cli-runtime => k8s.io/cli-runtime v0.25.12
 	k8s.io/client-go => github.com/rancher/client-go v1.25.4-rancher1
-	k8s.io/cloud-provider => k8s.io/cloud-provider v0.25.5
-	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.25.5
-	k8s.io/code-generator => k8s.io/code-generator v0.25.5
-	k8s.io/component-base => k8s.io/component-base v0.25.5
-	k8s.io/component-helpers => k8s.io/component-helpers v0.25.5
-	k8s.io/controller-manager => k8s.io/controller-manager v0.25.5
-	k8s.io/cri-api => k8s.io/cri-api v0.25.5
-	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.25.5
-	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.25.5
-	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.25.5
-	k8s.io/kube-proxy => k8s.io/kube-proxy v0.25.5
-	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.25.5
-	k8s.io/kubectl => k8s.io/kubectl v0.25.5
-	k8s.io/kubelet => k8s.io/kubelet v0.25.5
-	k8s.io/kubernetes => k8s.io/kubernetes v1.24.5
-	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.25.5
-	k8s.io/metrics => k8s.io/metrics v0.25.5
-	k8s.io/mount-utils => k8s.io/mount-utils v0.25.5
-	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.25.5
-	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.25.5
+	k8s.io/cloud-provider => k8s.io/cloud-provider v0.25.12
+	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.25.12
+	k8s.io/code-generator => k8s.io/code-generator v0.25.12
+	k8s.io/component-base => k8s.io/component-base v0.25.12
+	k8s.io/component-helpers => k8s.io/component-helpers v0.25.12
+	k8s.io/controller-manager => k8s.io/controller-manager v0.25.12
+	k8s.io/cri-api => k8s.io/cri-api v0.25.12
+	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.25.12
+	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.25.12
+	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.25.12
+	k8s.io/kube-proxy => k8s.io/kube-proxy v0.25.12
+	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.25.12
+	k8s.io/kubectl => k8s.io/kubectl v0.25.12
+	k8s.io/kubelet => k8s.io/kubelet v0.25.12
+	k8s.io/kubernetes => k8s.io/kubernetes v1.25.12
+	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.25.12
+	k8s.io/metrics => k8s.io/metrics v0.25.12
+	k8s.io/mount-utils => k8s.io/mount-utils v0.25.12
+	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.25.12
+	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.25.12
 )
 
 require (
@@ -49,13 +49,13 @@ require (
 	golang.org/x/exp v0.0.0-20230206171751-46f607a40771
 	golang.org/x/text v0.11.0
 	golang.org/x/tools v0.9.3
-	k8s.io/api v0.25.5
-	k8s.io/apiextensions-apiserver v0.25.5
-	k8s.io/apimachinery v0.25.5
-	k8s.io/apiserver v0.25.5
+	k8s.io/api v0.25.12
+	k8s.io/apiextensions-apiserver v0.25.12
+	k8s.io/apimachinery v0.25.12
+	k8s.io/apiserver v0.25.12
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/kubernetes v1.25.4
-	k8s.io/pod-security-admission v0.25.4
+	k8s.io/kubernetes v1.25.12
+	k8s.io/pod-security-admission v0.25.12
 	k8s.io/utils v0.0.0-20230209194617-a36077c30491
 	sigs.k8s.io/cluster-api v1.2.12
 	sigs.k8s.io/controller-runtime v0.12.3
@@ -84,7 +84,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
-	github.com/google/cel-go v0.12.5 // indirect
+	github.com/google/cel-go v0.12.6 // indirect
 	github.com/google/gnostic v0.5.7-v3refs // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
@@ -133,8 +133,8 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/code-generator v0.27.1 // indirect
-	k8s.io/component-base v0.25.5 // indirect
-	k8s.io/component-helpers v0.25.5 // indirect
+	k8s.io/component-base v0.25.12 // indirect
+	k8s.io/component-helpers v0.25.12 // indirect
 	k8s.io/gengo v0.0.0-20220902162205-c0856e24416d // indirect
 	k8s.io/klog v1.0.0 // indirect
 	k8s.io/klog/v2 v2.90.1 // indirect
