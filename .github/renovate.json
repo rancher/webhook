@@ -3,7 +3,7 @@
     "github>rancher/renovate-config#release"
   ],
   "baseBranches": [
-    "release/v0.3"
+    "release/v0.4"
   ],
   "prHourlyLimit": 2,
   "enabledManagers": [
