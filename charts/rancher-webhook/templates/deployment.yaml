@@ -1,3 +1,4 @@
+{{- $auth := .Values.auth | default dict }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -11,11 +12,18 @@ spec:
       labels:
         app: rancher-webhook
     spec:
-      {{- if .Values.capi.enabled }}
+      {{- if or .Values.capi.enabled $auth.clientCA }}
       volumes:
+      {{- end }}
+      {{- if .Values.capi.enabled }}
       - name: tls
         secret:
           secretName: rancher-webhook-tls
+      {{- end }}
+      {{- if $auth.clientCA }}
+      - name: client-ca
+        secret:
+          secretName: client-ca
       {{- end }}
       {{- if .Values.global.hostNetwork }}
       hostNetwork: true
@@ -44,6 +52,10 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        {{- if $auth.allowedCNs }}
+        - name: ALLOWED_CNS
+          value: '{{ join "," $auth.allowedCNs }}'
+        {{- end }}
         image: '{{ template "system_default_registry" . }}{{ .Values.image.repository }}:{{ .Values.image.tag }}'
         name: rancher-webhook
         imagePullPolicy: "{{ .Values.image.imagePullPolicy }}"
@@ -65,19 +77,26 @@ spec:
             port: "https"
             scheme: "HTTPS"
           periodSeconds: 5
-        {{- if .Values.capi.enabled }}
+        {{- if or .Values.capi.enabled $auth.clientCA }}
         volumeMounts:
+        {{- end }}
+        {{- if .Values.capi.enabled }}
         - name: tls
           mountPath: /tmp/k8s-webhook-server/serving-certs
+          readOnly: true
+        {{- end }}
+        {{- if $auth.clientCA }}
+        - name: client-ca
+          mountPath: /tmp/k8s-webhook-server/client-ca
+          readOnly: true
         {{- end }}
         {{- if .Values.capNetBindService }}
         securityContext:
           capabilities:
             add:
-            - NET_BIND_SERVICE 
+            - NET_BIND_SERVICE
         {{- end }}
       serviceAccountName: rancher-webhook
       {{- if .Values.priorityClassName }}
       priorityClassName: "{{.Values.priorityClassName}}"
       {{- end }}
-      

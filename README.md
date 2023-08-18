@@ -167,6 +167,9 @@ export CATTLE_WEBHOOK_URL="https://<NGROK_URL>.ngrok.io"
 ./bin/webhook
 ```
 After 15 seconds the webhook will update the `ValidatingWebhookConfiguration` and `MutatingWebhookConfiguration` in the Kubernetes cluster to point at the locally running instance.
+
+> :warning: Kubernetes API server authentication will not work with ngrok.
+
 ## License
 Copyright (c) 2019-2021 [Rancher Labs, Inc.](http://rancher.com)
 
