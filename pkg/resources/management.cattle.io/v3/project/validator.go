@@ -2,6 +2,8 @@ package project
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
@@ -9,9 +11,9 @@ import (
 	"github.com/rancher/wrangler/pkg/data/convert"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	"k8s.io/kubernetes/pkg/kubelet/util/format"
 	"k8s.io/utils/trace"
 )
 
@@ -161,7 +163,7 @@ func namespaceQuotaFits(namespaceQuota, projectQuota *v3.ResourceQuotaLimit) (*f
 	}
 	fits, exceeded := quotaFits(namespaceQuotaResourceList, projectQuotaResourceList)
 	if !fits {
-		return field.Forbidden(projectSpecFieldPath.Child(namespaceQuotaField), fmt.Sprintf("namespace default quota limit exceeds project limit on fields: %s", format.ResourceList(exceeded))), nil
+		return field.Forbidden(projectSpecFieldPath.Child(namespaceQuotaField), fmt.Sprintf("namespace default quota limit exceeds project limit on fields: %s", formatResourceList(exceeded))), nil
 	}
 	return nil, nil
 }
@@ -177,7 +179,18 @@ func usedQuotaFits(usedQuota, projectQuota *v3.ResourceQuotaLimit) (*field.Error
 	}
 	fits, exceeded := quotaFits(usedQuotaResourceList, projectQuotaResourceList)
 	if !fits {
-		return field.Forbidden(projectSpecFieldPath.Child(projectQuotaField), fmt.Sprintf("resourceQuota is below the used limit on fields: %s", format.ResourceList(exceeded))), nil
+		return field.Forbidden(projectSpecFieldPath.Child(projectQuotaField), fmt.Sprintf("resourceQuota is below the used limit on fields: %s", formatResourceList(exceeded))), nil
 	}
 	return nil, nil
+}
+
+// directly copied from https://github.com/kubernetes/kubernetes/blob/a66aad2d80dacc70025f95a8f97d2549ebd3208c/pkg/kubelet/util/format/resources.go
+func formatResourceList(resources v1.ResourceList) string {
+	resourceStrings := make([]string, 0, len(resources))
+	for key, value := range resources {
+		resourceStrings = append(resourceStrings, fmt.Sprintf("%v=%v", key, value.String()))
+	}
+	// sort the results for consistent log output
+	sort.Strings(resourceStrings)
+	return strings.Join(resourceStrings, ",")
 }
