@@ -31,4 +31,4 @@ If `roletemplates.builtin` is true then all fields are immutable except:
 
  ### Deletion check
 
-RoleTemplate can not be deleted if they are referenced by other RoleTemplates via `roletemplates.roleTemplateNames`
+RoleTemplate can not be deleted if they are referenced by other RoleTemplates via `roletemplates.roleTemplateNames` or by GlobalRoles via `globalRoles.inheritedClusterRoles`

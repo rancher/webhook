@@ -63,12 +63,14 @@ Users cannot create ClusterRoleTemplateBindings which violate the following cons
   - Valid (i.e. is an existing `roleTemplate` object of given name in the `management.cattle.io/v3` API group)
   - Not locked (i.e. `roleTemplate.Locked` must be `false`)
   - Associated with its appropriate context (`roleTemplate.Context` must be equal to "cluster")
+- If the label indicating ownership by a GlobalRoleBinding (`authz.management.cattle.io/grb-owner`) exists, it must refer to a valid (existing and not deleting) GlobalRoleBinding
 
 #### Invalid Fields - Update
 
 Users cannot update the following fields after creation:
 - RoleTemplateName
 - ClusterName
+- The label indicating ownership by a GlobalRoleBinding (`authz.management.cattle.io/grb-owner`)
 
 Users can update the following fields if they have not been set, but after they have been set they cannot be changed:
 - UserName
@@ -90,20 +92,23 @@ The desired value must not change on new spec unless it's equal to the `lockedVa
 
 ### Validation Checks
 
-Note: all checks are bypassed if the GlobalRole is being deleted.
+Note: all checks are bypassed if the GlobalRole is being deleted, or if only the metadata fields are being updated.
 
 #### Invalid Fields - Create and Update
-When a GlobalRole is created or updated, the webhook checks that each rule has at least one verb.
+
+On create or update, the following checks take place:
+- The webhook checks that each rule has at least one verb.
+- Each new RoleTemplate referred to in `inheritedClusterRoles` must have a context of `cluster` and not be `locked`. This validation is skipped for RoleTemplates in `inheritedClusterRoles` for the prior version of this object.
 
 #### Escalation Prevention
 
-Users can only change GlobalRoles with rights less than or equal to those they currently possess. This is to prevent privilege escalation. 
+Users can only change GlobalRoles with rights less than or equal to those they currently possess. This is to prevent privilege escalation. This includes the rules in the RoleTemplates referred to in `inheritedClusterRoles`. 
 
 ## GlobalRoleBinding 
 
 ### Validation Checks
 
-Note: all checks are bypassed if the GlobalRoleBinding is being deleted.
+Note: all checks are bypassed if the GlobalRoleBinding is being deleted, or if only the metadata fields are being updated.
 
 #### Escalation Prevention
 
@@ -111,7 +116,7 @@ Users can only create/update GlobalRoleBindings with rights less than or equal t
 
 #### Valid Global Role Reference
 
-GlobalRoleBindings must refer to a valid global role (i.e. an existing `GlobalRole` object in the `management.cattle.io/v3` apiGroup).
+GlobalRoleBindings must refer to a valid global role (i.e. an existing `GlobalRole` object in the `management.cattle.io/v3` apiGroup). In addition, on creation, all RoleTemplates which are referred to in the `inheritedClusterRoles` field must exist and not be locked. 
 
 ## NodeDriver 
 
@@ -217,4 +222,4 @@ If `roletemplates.builtin` is true then all fields are immutable except:
 
  ### Deletion check
 
-RoleTemplate can not be deleted if they are referenced by other RoleTemplates via `roletemplates.roleTemplateNames`
+RoleTemplate can not be deleted if they are referenced by other RoleTemplates via `roletemplates.roleTemplateNames` or by GlobalRoles via `globalRoles.inheritedClusterRoles`
