@@ -159,7 +159,7 @@ func validateUpdateFields(oldPRTB, newPRTB *apisv3.ProjectRoleTemplateBinding, f
 	case (newPRTB.GroupName != "" || oldPRTB.GroupPrincipalName != "") && (newPRTB.UserName != "" || oldPRTB.UserPrincipalName != ""):
 		return field.Forbidden(fieldPath,
 			"binding must target either a user [userName]/[userPrincipalName] OR a group [groupName]/[groupPrincipalName]")
-	case newPRTB.ServiceAccount != "":
+	case oldPRTB.ServiceAccount != newPRTB.ServiceAccount:
 		return field.Forbidden(fieldPath.Child("serviceAccount"), "update is not allowed")
 	default:
 		return nil
