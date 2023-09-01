@@ -409,6 +409,59 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnUpdate() {
 			allowed: false,
 		},
 		{
+			name: "update removing a previously set service account",
+			args: args{
+				username: adminUser,
+				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.UserName = ""
+					basePRTB.ServiceAccount = "p1:default"
+					return basePRTB
+				},
+				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.UserName = ""
+					return basePRTB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "update previously set service account",
+			args: args{
+				username: adminUser,
+				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.UserName = ""
+					basePRTB.ServiceAccount = "p1:default"
+					return basePRTB
+				},
+				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.UserName = ""
+					basePRTB.ServiceAccount = "p1:another"
+					return basePRTB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "set a previously unset service account with a user name already present",
+			args: args{
+				username: adminUser,
+				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					return basePRTB
+				},
+				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.ServiceAccount = "p1:another"
+					return basePRTB
+				},
+			},
+			allowed: false,
+		},
+		{
 			name: "update previously unset user",
 			args: args{
 				username: adminUser,
@@ -462,25 +515,6 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnUpdate() {
 				},
 			},
 			allowed: false,
-		},
-		{
-			name: "update previously unset user principal",
-			args: args{
-				username: adminUser,
-				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
-					basePRTB := newBasePRTB()
-					basePRTB.UserName = newUser
-					basePRTB.UserPrincipalName = ""
-					return basePRTB
-				},
-				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
-					basePRTB := newBasePRTB()
-					basePRTB.UserName = newUser
-					basePRTB.UserPrincipalName = newUserPrinc
-					return basePRTB
-				},
-			},
-			allowed: true,
 		},
 		{
 			name: "update previously set group",
