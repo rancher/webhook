@@ -1,6 +1,8 @@
+// Package globalrole holds admission logic for the v3 management.cattle.io.globalroles CRD.
 package globalrole
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -9,10 +11,12 @@ import (
 	"github.com/rancher/webhook/pkg/auth"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/resolvers"
+	"github.com/rancher/webhook/pkg/resources/common"
+	"golang.org/x/exp/slices"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
@@ -49,7 +53,7 @@ func (v *Validator) GVR() schema.GroupVersionResource {
 
 // Operations returns list of operations handled by this validator.
 func (v *Validator) Operations() []admissionregistrationv1.OperationType {
-	return []admissionregistrationv1.OperationType{admissionregistrationv1.Update, admissionregistrationv1.Create}
+	return []admissionregistrationv1.OperationType{admissionregistrationv1.Update, admissionregistrationv1.Create, admissionregistrationv1.Delete}
 }
 
 // ValidatingWebhook returns the ValidatingWebhook used for this CRD.
@@ -75,23 +79,41 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 
 	oldGR, newGR, err := objectsv3.GlobalRoleOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
-		return nil, err
-	}
-	// object is in the process of being deleted, so admit it
-	// this admits update operations that happen to remove finalizers
-	if newGR.DeletionTimestamp != nil {
-		return admission.ResponseAllowed(), nil
+		return nil, fmt.Errorf("failed to get GlobalRole from request: %w", err)
 	}
 
-	// if this change only affects metadata, don't validate any further
-	// this allows users with the appropriate permissions to manage labels/annotations/finalizers
-	if request.Operation == admissionv1.Update && isMetaOnlyChange(oldGR, newGR) {
-		return admission.ResponseAllowed(), nil
+	fldPath := field.NewPath("globalrole")
+	switch request.Operation {
+	case admissionv1.Delete:
+		return validateDelete(oldGR, fldPath)
+	case admissionv1.Update:
+		if newGR.DeletionTimestamp != nil {
+			// Object is in the process of being deleted, so admit it.
+			// This admits update operations that happen to remove finalizers.
+			// This is needed to supported the deletion of old GlobalRoles that would not pass the update check that verifies all rules have verbs.
+			return admission.ResponseAllowed(), nil
+		}
+		if isMetaOnlyChange(oldGR, newGR) {
+			// if this change only affects metadata, don't validate any further
+			// this allows users with the appropriate permissions to manage labels/annotations/finalizers
+			return admission.ResponseAllowed(), nil
+		}
+		fieldErr := a.validateUpdateFields(oldGR, newGR, fldPath)
+		if fieldErr != nil {
+			return admission.ResponseBadRequest(fieldErr.Error()), nil
+		}
+	case admissionv1.Create:
+		fieldErr := validateCreateFields(newGR, fldPath)
+		if fieldErr != nil {
+			return admission.ResponseBadRequest(fieldErr.Error()), nil
+		}
+	default:
+		return nil, fmt.Errorf("%s operation %v: %w", gvr.Resource, request.Operation, admission.ErrUnsupportedOperation)
 	}
 
-	err = a.validateInheritedClusterRoles(oldGR, newGR, field.NewPath("globalrole").Child("inheritedClusterRoles"))
+	err = a.validateFields(oldGR, newGR, fldPath)
 	if err != nil {
-		if _, ok := err.(*field.Error); ok {
+		if errors.As(err, admission.Ptr(new(field.Error))) {
 			return admission.ResponseBadRequest(err.Error()), nil
 		}
 		return nil, err
@@ -107,13 +129,6 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return admission.ResponseFailedEscalation(err.Error()), nil
 	}
 
-	// ensure all PolicyRules have at least one verb, otherwise RBAC controllers may encounter issues when creating Roles and ClusterRoles
-	for _, rule := range newGR.Rules {
-		if len(rule.Verbs) == 0 {
-			return admission.ResponseBadRequest("GlobalRole.Rules: PolicyRules must have at least one verb"), nil
-		}
-	}
-
 	rules := a.grbResolver.GlobalRoleResolver.GlobalRulesFromRole(newGR)
 
 	err = auth.ConfirmNoEscalation(request, rules, "", a.resolver)
@@ -122,6 +137,30 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	}
 
 	return admission.ResponseAllowed(), nil
+}
+
+// validateDelete checks if a global role can be deleted and returns the appropriate response.
+func validateDelete(oldRole *v3.GlobalRole, fldPath *field.Path) (*admissionv1.AdmissionResponse, error) {
+	if oldRole.Builtin {
+		return admission.ResponseBadRequest(field.Forbidden(fldPath, "cannot delete builtin GlobalRoles").Error()), nil
+	}
+	return admission.ResponseAllowed(), nil
+}
+
+// validateCreateFields blocks the creation of builtin globalRoles
+func validateCreateFields(oldRole *v3.GlobalRole, fldPath *field.Path) *field.Error {
+	if oldRole.Builtin {
+		return field.Forbidden(fldPath, "cannot create builtin GlobalRoles")
+	}
+	return nil
+}
+
+// validateFields validates fields validates that the defined rules all have verbs and check the inheritedClusterRoles.
+func (a *admitter) validateFields(oldRole, newRole *v3.GlobalRole, fldPath *field.Path) error {
+	if err := common.CheckForVerbs(newRole.Rules); err != nil {
+		return field.Required(fldPath.Child("rules"), err.Error())
+	}
+	return a.validateInheritedClusterRoles(oldRole, newRole, fldPath.Child("inheritedClusterRoles"))
 }
 
 // validateInheritedClusterRoles validates that new RoleTemplates specified by InheritedClusterRoles have a context of
@@ -171,22 +210,79 @@ func (a *admitter) validateInheritedClusterRoles(oldGR *v3.GlobalRole, newGR *v3
 	return nil
 }
 
-// isMetaOnlyChange checks if old and new are deep equal in all fields except metadata. Will return false on a
-// non-effectual change
-func isMetaOnlyChange(oldGR *v3.GlobalRole, newGR *v3.GlobalRole) bool {
-	oldMeta := oldGR.ObjectMeta
-	newMeta := newGR.ObjectMeta
+// validUpdateFields checks if the fields being changed are valid update fields.
+func (a *admitter) validateUpdateFields(oldRole, newRole *v3.GlobalRole, fldPath *field.Path) *field.Error {
+	if !oldRole.Builtin {
+		return nil
+	}
 
+	// ignore changes to meta data and newUserDefault
+	origDefault := oldRole.NewUserDefault
+	defer func() {
+		oldRole.NewUserDefault = origDefault
+	}()
+	oldRole.NewUserDefault = newRole.NewUserDefault
+
+	if !grContentEqual(oldRole, newRole) {
+		return field.Forbidden(fldPath, "updates to builtIn GlobalRoles for fields other than 'newUserDefault' are forbidden")
+	}
+	return nil
+}
+
+// isMetaOnlyChange checks if old and new are deep equal in all fields except metadata and typemeta. Will return false on a
+// non-effectual change.
+func isMetaOnlyChange(oldGR *v3.GlobalRole, newGR *v3.GlobalRole) bool {
 	// if the metadata between old/new hasn't changed, then this isn't a metadata only change
-	if reflect.DeepEqual(oldMeta, newMeta) {
-		// checking equality of global role rules can be very expensive from a cpu perspective
+	if grMetaEqual(oldGR, newGR) {
 		return false
 	}
 
-	oldGR.ObjectMeta = metav1.ObjectMeta{}
-	newGR.ObjectMeta = metav1.ObjectMeta{}
-	result := reflect.DeepEqual(oldGR, newGR)
-	oldGR.ObjectMeta = oldMeta
-	newGR.ObjectMeta = newMeta
-	return result
+	return grContentEqual(oldGR, newGR)
+}
+
+func grMetaEqual(oldGR *v3.GlobalRole, newGR *v3.GlobalRole) bool {
+	if oldGR == newGR {
+		// same pointer or both objects are nil
+		return true
+	}
+	if oldGR == nil || newGR == nil {
+		// one object is nil and the other is not.
+		return false
+	}
+	return reflect.DeepEqual(oldGR.ObjectMeta, newGR.ObjectMeta)
+}
+
+// grContentEqual checks if two globalRoles have equivalent content (all fields excluding metadata && typeMeta).
+// this function is used instead of reflect.DeepEqual since it is less costly and faster.
+// this function ignores the typeMeta field of the object.
+func grContentEqual(oldGR *v3.GlobalRole, newGR *v3.GlobalRole) bool {
+	if oldGR == newGR {
+		// same pointer or both objects are nil
+		return true
+	}
+	if oldGR == nil || newGR == nil {
+		// one object is nil and the other is not.
+		return false
+	}
+
+	return oldGR.DisplayName == newGR.DisplayName &&
+		oldGR.Description == newGR.Description &&
+		oldGR.NewUserDefault == newGR.NewUserDefault &&
+		oldGR.Builtin == newGR.Builtin &&
+		slices.Equal(oldGR.InheritedClusterRoles, newGR.InheritedClusterRoles) &&
+		policyRulesEqual(oldGR.Rules, newGR.Rules)
+}
+
+// policyRulesEqual checks for equivalence between two list of policy rules.
+// This function considers both empty list and nil list as equivalent.
+func policyRulesEqual(rules1, rules2 []rbacv1.PolicyRule) bool {
+	return slices.EqualFunc(rules1, rules2, rulesAreEqual)
+}
+
+func rulesAreEqual(rule1, rule2 rbacv1.PolicyRule) bool {
+	return slices.Equal(rule1.Verbs, rule2.Verbs) &&
+		slices.Equal(rule1.APIGroups, rule2.APIGroups) &&
+		slices.Equal(rule1.Resources, rule2.Resources) &&
+		slices.Equal(rule1.ResourceNames, rule2.ResourceNames) &&
+		slices.Equal(rule1.NonResourceURLs, rule2.NonResourceURLs)
 }

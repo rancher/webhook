@@ -1,21 +1,14 @@
-package globalrole
+package globalrole_test
 
 import (
-	"encoding/json"
-	"fmt"
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-	"github.com/rancher/webhook/pkg/admission"
-	"github.com/rancher/webhook/pkg/auth"
-	"github.com/rancher/webhook/pkg/resolvers"
-	"github.com/rancher/wrangler/pkg/generic/fake"
+	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/globalrole"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	admissionv1 "k8s.io/api/admission/v1"
-	authenicationv1 "k8s.io/api/authentication/v1"
 	v1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,348 +17,8 @@ import (
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
 
-var (
-	globalRoleGVR = metav1.GroupVersionResource{Group: "management.cattle.io", Version: "v3", Resource: "globalRoles"}
-	globalRoleGVK = metav1.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "GlobalRole"}
-	clusterRole   = v1.ClusterRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-cr",
-		},
-		Rules: []v1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"pods", "configmaps"},
-				Verbs:     []string{"get"},
-			},
-		},
-	}
-	clusterRoleBinding = v1.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-crb",
-		},
-		RoleRef: v1.RoleRef{
-			APIGroup: "rbac.authorization.k8s.io",
-			Kind:     "ClusterRole",
-			Name:     clusterRole.Name,
-		},
-		Subjects: []v1.Subject{
-			{
-				APIGroup: "rbac.authorization.k8s.io",
-				Kind:     "User",
-				Name:     "test-user",
-			},
-		},
-	}
-	baseRT = v3.RoleTemplate{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "base-rt",
-		},
-		Rules: []v1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"pods", "configmaps"},
-				Verbs:     []string{"get"},
-			},
-		},
-	}
-	baseGR = v3.GlobalRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "base-gr",
-		},
-		Rules: []v1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"pods", "configmaps"},
-				Verbs:     []string{"get"},
-			},
-		},
-		InheritedClusterRoles: []string{baseRT.Name},
-	}
-	baseGRB = v3.GlobalRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "base-grb",
-		},
-		GlobalRoleName: baseGR.Name,
-		UserName:       "test-user",
-	}
-)
-
-func TestAdmitInvalidOrDeletedGlobalRole(t *testing.T) {
+func TestAdmit(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
-		name       string
-		globalRole v3.GlobalRole
-		wantError  bool
-		wantAdmit  bool
-	}{
-		{
-			name: "global role in the process of being deleted is admitted",
-			globalRole: v3.GlobalRole{
-				ObjectMeta: metav1.ObjectMeta{
-					DeletionTimestamp: admission.Ptr(metav1.NewTime(time.Now())),
-				},
-			},
-			wantAdmit: true,
-		},
-		{
-			name: "a policy rule lacks a verb",
-			globalRole: v3.GlobalRole{
-				Rules: []v1.PolicyRule{
-					{
-						Verbs: []string{"list"},
-					},
-					{
-						Verbs: nil,
-					},
-				},
-			},
-			wantAdmit: false,
-		},
-	}
-
-	for _, test := range tests {
-		test := test
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-			// The resolver should not run in these tests. Making it not nil to get test errors instead of panics.
-			resolver, _ := validation.NewTestRuleResolver(nil, nil, nil, nil)
-
-			ctrl := gomock.NewController(t)
-			rtCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
-			grbResolver := createBaseGRBResolver(ctrl, rtCache)
-			admitters := NewValidator(resolver, grbResolver).Admitters()
-			assert.Len(t, admitters, 1)
-
-			req := admission.Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation:       admissionv1.Create,
-					UID:             "2",
-					Kind:            globalRoleGVK,
-					Resource:        globalRoleGVR,
-					RequestKind:     &globalRoleGVK,
-					RequestResource: &globalRoleGVR,
-					Name:            "my-global-role",
-					UserInfo:        authenicationv1.UserInfo{Username: "test-user", UID: ""},
-					Object:          runtime.RawExtension{},
-					OldObject:       runtime.RawExtension{},
-				},
-			}
-			var err error
-			req.Object.Raw, err = json.Marshal(test.globalRole)
-			require.NoError(t, err, "Failed to marshal new GlobalRole while creating request")
-
-			response, err := admitters[0].Admit(&req)
-			if test.wantError {
-				assert.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, test.wantAdmit, response.Allowed)
-			}
-		})
-	}
-}
-
-func TestRejectsBadRequest(t *testing.T) {
-	t.Parallel()
-	// The resolver should not run in these tests. Making it not nil to get test errors instead of panics.
-	resolver, _ := validation.NewTestRuleResolver(nil, nil, nil, nil)
-	admitters := NewValidator(resolver, nil).Admitters()
-	assert.Len(t, admitters, 1)
-
-	req := admission.Request{
-		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation:       admissionv1.Create,
-			UID:             "2",
-			Kind:            globalRoleGVK,
-			Resource:        globalRoleGVR,
-			RequestKind:     &globalRoleGVK,
-			RequestResource: &globalRoleGVR,
-			Name:            "my-global-role",
-			UserInfo:        authenicationv1.UserInfo{Username: "test-user", UID: ""},
-			Object:          runtime.RawExtension{},
-			OldObject:       runtime.RawExtension{},
-		},
-	}
-
-	_, err := admitters[0].Admit(&req)
-	require.Error(t, err)
-}
-
-func TestAdmitValidGlobalRole(t *testing.T) {
-	t.Parallel()
-	// The resolver should not run in these tests. Making it not nil to get test errors instead of panics.
-	resolver, _ := validation.NewTestRuleResolver(nil, nil, nil, nil)
-	ctrl := gomock.NewController(t)
-	rtCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
-	grbResolver := createBaseGRBResolver(ctrl, rtCache)
-
-	admitters := NewValidator(resolver, grbResolver).Admitters()
-	assert.Len(t, admitters, 1)
-
-	req := admission.Request{
-		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation: admissionv1.Create,
-			UserInfo:  authenicationv1.UserInfo{Username: "test-user", UID: ""},
-		},
-	}
-	var err error
-	req.Object.Raw, err = json.Marshal(v3.GlobalRole{})
-	require.NoError(t, err, "Failed to marshal new GlobalRole while creating request")
-
-	response, err := admitters[0].Admit(&req)
-	require.NoError(t, err)
-	assert.True(t, response.Allowed)
-}
-
-func TestRejectsEscalation(t *testing.T) {
-	t.Parallel()
-	type testState struct {
-		rtCacheMock *fake.MockNonNamespacedCacheInterface[*v3.RoleTemplate]
-	}
-
-	roleTemplate := v3.RoleTemplate{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-rt",
-		},
-		Context: "cluster",
-		Rules: []v1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"configmaps"},
-				Verbs:     []string{"*"},
-			},
-		},
-	}
-	tests := []struct {
-		name       string
-		globalRole v3.GlobalRole
-		stateSetup func(testState)
-		wantError  bool
-		wantAdmit  bool
-	}{
-		{
-			name: "escalation in Global Rules",
-			globalRole: v3.GlobalRole{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-gr",
-				},
-				Rules: []v1.PolicyRule{
-					{
-						APIGroups: []string{""},
-						Resources: []string{"pods"},
-						Verbs:     []string{"*"},
-					},
-				},
-			},
-			wantAdmit: false,
-		},
-		{
-			name: "escalation in Cluster Rules",
-			globalRole: v3.GlobalRole{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-gr",
-				},
-				Rules: []v1.PolicyRule{
-					{
-						APIGroups: []string{""},
-						Resources: []string{"pods"},
-						Verbs:     []string{"get"},
-					},
-				},
-				InheritedClusterRoles: []string{roleTemplate.Name},
-			},
-			stateSetup: func(state testState) {
-				state.rtCacheMock.EXPECT().Get(roleTemplate.Name).Return(&roleTemplate, nil).AnyTimes()
-			},
-			wantAdmit: false,
-		},
-		{
-			name: "error in GR cluster rules resolve",
-			globalRole: v3.GlobalRole{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-gr",
-				},
-				Rules: []v1.PolicyRule{
-					{
-						APIGroups: []string{""},
-						Resources: []string{"pods"},
-						Verbs:     []string{"get"},
-					},
-				},
-				InheritedClusterRoles: []string{"error"},
-			},
-			stateSetup: func(state testState) {
-				state.rtCacheMock.EXPECT().Get("error").Return(&v3.RoleTemplate{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "error",
-					},
-					Rules: []v1.PolicyRule{
-						{
-							APIGroups: []string{""},
-							Resources: []string{"pods"},
-							Verbs:     []string{"get"},
-						},
-					},
-					Context: "cluster",
-				}, nil)
-				state.rtCacheMock.EXPECT().Get("error").Return(nil, fmt.Errorf("server unavailable"))
-			},
-			wantAdmit: false,
-			wantError: true,
-		},
-	}
-
-	for _, test := range tests {
-		test := test
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-			ctrl := gomock.NewController(t)
-			rtCacheMock := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
-			state := testState{
-				rtCacheMock: rtCacheMock,
-			}
-			if test.stateSetup != nil {
-				test.stateSetup(state)
-			}
-			resolver, _ := validation.NewTestRuleResolver(nil, nil, []*v1.ClusterRole{&clusterRole}, []*v1.ClusterRoleBinding{&clusterRoleBinding})
-			grbResolver := createBaseGRBResolver(ctrl, state.rtCacheMock)
-			admitters := NewValidator(resolver, grbResolver).Admitters()
-			assert.Len(t, admitters, 1)
-
-			req := admission.Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation:       admissionv1.Create,
-					UID:             "2",
-					Kind:            globalRoleGVK,
-					Resource:        globalRoleGVR,
-					RequestKind:     &globalRoleGVK,
-					RequestResource: &globalRoleGVR,
-					Name:            "my-global-role",
-					UserInfo:        authenicationv1.UserInfo{Username: "test-user", UID: ""},
-					Object:          runtime.RawExtension{},
-					OldObject:       runtime.RawExtension{},
-				},
-			}
-			var err error
-			req.Object.Raw, err = json.Marshal(test.globalRole)
-			require.NoError(t, err, "Failed to marshal new GlobalRole while creating request")
-
-			response, err := admitters[0].Admit(&req)
-			if test.wantError {
-				assert.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, test.wantAdmit, response.Allowed)
-			}
-		})
-	}
-}
-
-func TestValidateInheritedClusterRoles(t *testing.T) {
-	t.Parallel()
-	type testState struct {
-		rtCacheMock *fake.MockNonNamespacedCacheInterface[*v3.RoleTemplate]
-	}
 	lockedRoleTemplate := v3.RoleTemplate{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "locked",
@@ -420,332 +73,452 @@ func TestValidateInheritedClusterRoles(t *testing.T) {
 		},
 	}
 	notFoundError := apierrors.NewNotFound(schema.GroupResource{Group: "management.cattle.io", Resource: "roletemplates"}, "not-found")
-	tests := []struct {
-		name          string
-		oldGlobalRole *v3.GlobalRole
-		newGlobalRole *v3.GlobalRole
-		operation     admissionv1.Operation
-		stateSetup    func(testState)
-		wantError     bool
-		wantAdmit     bool
-	}{
+	tests := []testCase{
 		{
 			name: "new role not found roleTemplate",
-			newGlobalRole: &v3.GlobalRole{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-gr",
+			args: args{
+				newGR: func() *v3.GlobalRole {
+					gr := newDefaultGR()
+					gr.InheritedClusterRoles = []string{"not-found"}
+					return gr
 				},
-				Rules: []v1.PolicyRule{
-					{
-						APIGroups: []string{""},
-						Resources: []string{"pods"},
-						Verbs:     []string{"get"},
-					},
+				stateSetup: func(ts testState) {
+					ts.rtCacheMock.EXPECT().Get("not-found").Return(nil, notFoundError)
 				},
-				InheritedClusterRoles: []string{"not-found"},
 			},
-			operation: admissionv1.Create,
-			stateSetup: func(ts testState) {
-				ts.rtCacheMock.EXPECT().Get("not-found").Return(nil, notFoundError)
-			},
-			wantAdmit: false,
-			wantError: false,
+			allowed: false,
 		},
 		{
 			name: "new role misc. error roleTemplate",
-			newGlobalRole: &v3.GlobalRole{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-gr",
+			args: args{
+				newGR: func() *v3.GlobalRole {
+					gr := newDefaultGR()
+					gr.InheritedClusterRoles = []string{"error"}
+					return gr
 				},
-				Rules: []v1.PolicyRule{
-					{
-						APIGroups: []string{""},
-						Resources: []string{"pods"},
-						Verbs:     []string{"get"},
-					},
+				stateSetup: func(ts testState) {
+					ts.rtCacheMock.EXPECT().Get("error").Return(nil, errServer)
 				},
-				InheritedClusterRoles: []string{"error"},
 			},
-			operation: admissionv1.Create,
-			stateSetup: func(ts testState) {
-				ts.rtCacheMock.EXPECT().Get("error").Return(nil, fmt.Errorf("server unavailable"))
-			},
-			wantError: true,
+			wantErr: true,
 		},
 		{
 			name: "new role locked roleTemplate",
-			newGlobalRole: &v3.GlobalRole{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-gr",
+			args: args{
+				newGR: func() *v3.GlobalRole {
+					gr := newDefaultGR()
+					gr.InheritedClusterRoles = []string{lockedRoleTemplate.Name}
+					return gr
 				},
-				Rules: []v1.PolicyRule{
-					{
-						APIGroups: []string{""},
-						Resources: []string{"pods"},
-						Verbs:     []string{"get"},
-					},
+				stateSetup: func(ts testState) {
+					ts.rtCacheMock.EXPECT().Get(lockedRoleTemplate.Name).Return(&lockedRoleTemplate, nil)
 				},
-				InheritedClusterRoles: []string{lockedRoleTemplate.Name},
 			},
-			operation: admissionv1.Create,
-			stateSetup: func(ts testState) {
-				ts.rtCacheMock.EXPECT().Get(lockedRoleTemplate.Name).Return(&lockedRoleTemplate, nil)
-			},
-			wantAdmit: false,
-			wantError: false,
+			allowed: false,
 		},
 		{
 			name: "new role project context roleTemplate",
-			newGlobalRole: &v3.GlobalRole{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-gr",
+			args: args{
+				newGR: func() *v3.GlobalRole {
+					gr := newDefaultGR()
+					gr.InheritedClusterRoles = []string{projectCtxRoleTemplate.Name}
+					return gr
 				},
-				Rules: []v1.PolicyRule{
-					{
-						APIGroups: []string{""},
-						Resources: []string{"pods"},
-						Verbs:     []string{"get"},
-					},
+				stateSetup: func(ts testState) {
+					ts.rtCacheMock.EXPECT().Get(projectCtxRoleTemplate.Name).Return(&projectCtxRoleTemplate, nil)
 				},
-				InheritedClusterRoles: []string{projectCtxRoleTemplate.Name},
 			},
-			operation: admissionv1.Create,
-			stateSetup: func(ts testState) {
-				ts.rtCacheMock.EXPECT().Get(projectCtxRoleTemplate.Name).Return(&projectCtxRoleTemplate, nil)
-			},
-			wantAdmit: false,
-			wantError: false,
+			allowed: false,
 		},
 		{
 			name: "new role no context roleTemplate",
-			newGlobalRole: &v3.GlobalRole{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-gr",
+			args: args{
+				newGR: func() *v3.GlobalRole {
+					gr := newDefaultGR()
+					gr.InheritedClusterRoles = []string{noCtxRoleTemplate.Name}
+					return gr
 				},
-				Rules: []v1.PolicyRule{
-					{
-						APIGroups: []string{""},
-						Resources: []string{"pods"},
-						Verbs:     []string{"get"},
-					},
+				stateSetup: func(ts testState) {
+					ts.rtCacheMock.EXPECT().Get(noCtxRoleTemplate.Name).Return(&noCtxRoleTemplate, nil)
 				},
-				InheritedClusterRoles: []string{noCtxRoleTemplate.Name},
 			},
-			operation: admissionv1.Create,
-			stateSetup: func(ts testState) {
-				ts.rtCacheMock.EXPECT().Get(noCtxRoleTemplate.Name).Return(&noCtxRoleTemplate, nil)
-			},
-			wantAdmit: false,
-			wantError: false,
+			allowed: false,
 		},
 		{
 			name: "old role invalid roleTemplates, new role valid",
-			oldGlobalRole: &v3.GlobalRole{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-gr",
+			args: args{
+				oldGR: func() *v3.GlobalRole {
+					gr := newDefaultGR()
+					gr.InheritedClusterRoles = []string{noCtxRoleTemplate.Name, projectCtxRoleTemplate.Name, lockedRoleTemplate.Name}
+					return gr
 				},
-				Rules: []v1.PolicyRule{
-					{
-						APIGroups: []string{""},
-						Resources: []string{"pods"},
-						Verbs:     []string{"get"},
-					},
+				newGR: func() *v3.GlobalRole {
+					gr := newDefaultGR()
+					gr.InheritedClusterRoles = []string{validRoleTemplate.Name}
+					return gr
 				},
-				InheritedClusterRoles: []string{noCtxRoleTemplate.Name, projectCtxRoleTemplate.Name, lockedRoleTemplate.Name},
+				stateSetup: func(ts testState) {
+					ts.rtCacheMock.EXPECT().Get(validRoleTemplate.Name).Return(&validRoleTemplate, nil).AnyTimes()
+				},
 			},
-			newGlobalRole: &v3.GlobalRole{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-gr",
-				},
-				Rules: []v1.PolicyRule{
-					{
-						APIGroups: []string{""},
-						Resources: []string{"pods"},
-						Verbs:     []string{"get"},
-					},
-				},
-				InheritedClusterRoles: []string{validRoleTemplate.Name},
-			},
-			operation: admissionv1.Update,
-			stateSetup: func(ts testState) {
-				ts.rtCacheMock.EXPECT().Get(validRoleTemplate.Name).Return(&validRoleTemplate, nil).AnyTimes()
-			},
-			wantAdmit: true,
-			wantError: false,
+			allowed: true,
 		},
-	}
-
-	for _, test := range tests {
-		test := test
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-			ctrl := gomock.NewController(t)
-			rtCacheMock := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
-			state := testState{
-				rtCacheMock: rtCacheMock,
-			}
-			if test.stateSetup != nil {
-				test.stateSetup(state)
-			}
-			resolver, _ := validation.NewTestRuleResolver(nil, nil, []*v1.ClusterRole{&clusterRole}, []*v1.ClusterRoleBinding{&clusterRoleBinding})
-			grbResolver := createBaseGRBResolver(ctrl, state.rtCacheMock)
-			admitters := NewValidator(resolver, grbResolver).Admitters()
-			assert.Len(t, admitters, 1)
-
-			req := admission.Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation:       test.operation,
-					UID:             "2",
-					Kind:            globalRoleGVK,
-					Resource:        globalRoleGVR,
-					RequestKind:     &globalRoleGVK,
-					RequestResource: &globalRoleGVR,
-					Name:            "my-global-role",
-					UserInfo:        authenicationv1.UserInfo{Username: "test-user", UID: ""},
-					Object:          runtime.RawExtension{},
-					OldObject:       runtime.RawExtension{},
-				},
-			}
-			var err error
-			if test.oldGlobalRole != nil {
-				req.OldObject.Raw, err = json.Marshal(test.oldGlobalRole)
-				require.NoError(t, err, "Failed to marshal new GlobalRole while creating request")
-			}
-			req.Object.Raw, err = json.Marshal(test.newGlobalRole)
-			require.NoError(t, err, "Failed to marshal new GlobalRole while creating request")
-
-			response, err := admitters[0].Admit(&req)
-			if test.wantError {
-				assert.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, test.wantAdmit, response.Allowed)
-			}
-		})
-	}
-
-}
-
-func TestAllowMetaUpdate(t *testing.T) {
-	t.Parallel()
-	type testState struct {
-		rtCacheMock *fake.MockNonNamespacedCacheInterface[*v3.RoleTemplate]
-	}
-
-	roleTemplate := v3.RoleTemplate{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-rt",
-		},
-		Context: "cluster",
-		Rules: []v1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"configmaps"},
-				Verbs:     []string{"*"},
-			},
-		},
-	}
-	tests := []struct {
-		name          string
-		newGlobalRole *v3.GlobalRole
-		oldGlobalRole *v3.GlobalRole
-		stateSetup    func(testState)
-		wantError     bool
-		wantAdmit     bool
-	}{
 		{
 			name: "escalation in global + cluster rules, and invalid RT, but only meta changed",
-			newGlobalRole: &v3.GlobalRole{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "meta-gr",
-					Labels: map[string]string{
+			args: args{
+				newGR: func() *v3.GlobalRole {
+					gr := newDefaultGR()
+					gr.Labels = map[string]string{
 						"new-label": "just-added",
-					},
+					}
+					gr.Rules = []v1.PolicyRule{ruleAdmin}
+					return gr
 				},
-				Rules: []v1.PolicyRule{
-					{
-						APIGroups: []string{""},
-						Resources: []string{"pods"},
-						Verbs:     []string{"*"},
-					},
+				oldGR: func() *v3.GlobalRole {
+					gr := newDefaultGR()
+					gr.Rules = []v1.PolicyRule{ruleAdmin}
+					return gr
 				},
-				InheritedClusterRoles: []string{roleTemplate.Name, "error"},
 			},
-			oldGlobalRole: &v3.GlobalRole{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "meta-gr",
+			allowed: true,
+		},
+		{
+			name: "escalation in global + cluster rules, and invalid RT, but metadata and field changed",
+			args: args{
+				newGR: func() *v3.GlobalRole {
+					gr := newDefaultGR()
+					gr.Labels = map[string]string{
+						"new-label": "just-added",
+					}
+					gr.Description = "new desc"
+					gr.Rules = []v1.PolicyRule{ruleAdmin}
+					return gr
 				},
-				Rules: []v1.PolicyRule{
-					{
-						APIGroups: []string{""},
-						Resources: []string{"pods"},
-						Verbs:     []string{"*"},
-					},
+				oldGR: func() *v3.GlobalRole {
+					gr := newDefaultGR()
+					gr.Rules = []v1.PolicyRule{ruleAdmin}
+					return gr
 				},
-				InheritedClusterRoles: []string{roleTemplate.Name, "error"},
 			},
-			wantAdmit: true,
+			allowed: false,
+		},
+		{
+			name: "creating with equal privilege level", // User attempts to create a globalrole with rules equal to one they hold.
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = readPodsCR.Rules
+					return baseGR
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "creation with privilege escalation", // User attempts to create a globalrole with more rules than the ones they hold.
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = adminCR.Rules
+					return baseGR
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "update with privilege escalation", // User attempts to update a globalrole with more rules than the ones they hold.
+			args: args{
+				username: testUser,
+				oldGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = readPodsCR.Rules
+					return baseGR
+				},
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = append(baseGR.Rules, ruleReadPods, ruleWriteNodes)
+					return baseGR
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "escalation in Cluster Rules", // User attempts to create a global with a cluster rules it does not currently have
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					gr := newDefaultGR()
+					gr.InheritedClusterRoles = []string{roleTemplate.Name}
+					return gr
+				},
+				stateSetup: func(state testState) {
+					state.rtCacheMock.EXPECT().Get(roleTemplate.Name).Return(&roleTemplate, nil).AnyTimes()
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "error in GR cluster rules resolver", // User attempts to create a globalRole but there are errors in the rule resolver.
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					gr := newDefaultGR()
+					gr.InheritedClusterRoles = []string{"error"}
+					return gr
+				},
+				stateSetup: func(state testState) {
+					state.rtCacheMock.EXPECT().Get("error").Return(&v3.RoleTemplate{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "error",
+						},
+						Rules: []v1.PolicyRule{
+							{
+								APIGroups: []string{""},
+								Resources: []string{"pods"},
+								Verbs:     []string{"get"},
+							},
+						},
+						Context: "cluster",
+					}, nil)
+					state.rtCacheMock.EXPECT().Get("error").Return(nil, errServer)
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "base test valid GR update",
+			args: args{
+				oldGR: newDefaultGR,
+				newGR: newDefaultGR,
+			},
+			allowed: true,
+		},
+		{
+			name: "update displayName",
+			args: args{
+				oldGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.DisplayName = "old display"
+					return baseGR
+				},
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.DisplayName = "new display"
+					return baseGR
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "update displayName of builtin",
+			args: args{
+				oldGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.DisplayName = "old display"
+					baseGR.Builtin = true
+					return baseGR
+				},
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.DisplayName = "new display"
+					baseGR.Builtin = true
+					return baseGR
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "update newUserDefault of builtin",
+			args: args{
+				oldGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.NewUserDefault = true
+					baseGR.Builtin = true
+					return baseGR
+				},
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.NewUserDefault = false
+					baseGR.Builtin = true
+					return baseGR
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "update annotation of builtin",
+			args: args{
+				oldGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Builtin = true
+					baseGR.Annotations = nil
+					return baseGR
+				},
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Builtin = true
+					baseGR.Annotations = map[string]string{"foo": "bar"}
+					return baseGR
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "update Builtin field",
+			args: args{
+				oldGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Builtin = true
+					return baseGR
+				},
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Builtin = false
+					return baseGR
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "update empty rules",
+			args: args{
+				oldGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = []v1.PolicyRule{ruleReadPods, ruleEmptyVerbs}
+					return baseGR
+				},
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = []v1.PolicyRule{ruleReadPods, ruleEmptyVerbs}
+					return baseGR
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "update empty rules being deleted",
+			args: args{
+				oldGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = []v1.PolicyRule{ruleReadPods, ruleEmptyVerbs}
+					return baseGR
+				},
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = []v1.PolicyRule{ruleReadPods, ruleEmptyVerbs}
+					baseGR.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+					return baseGR
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "base test valid GR create",
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = []v1.PolicyRule{ruleReadPods}
+					return baseGR
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "create missing rule verbs",
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = []v1.PolicyRule{ruleReadPods, ruleEmptyVerbs}
+					return baseGR
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "can delete non builtin",
+			args: args{
+				username: testUser,
+				oldGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = []v1.PolicyRule{ruleAdmin}
+					return baseGR
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "can not delete builtin",
+			args: args{
+				username: testUser,
+				oldGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = []v1.PolicyRule{ruleAdmin}
+					baseGR.Builtin = true
+					return baseGR
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "can not create builtin roles",
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Builtin = true
+					return baseGR
+				},
+			},
+			allowed: false,
 		},
 	}
+
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			ctrl := gomock.NewController(t)
-			rtCacheMock := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
-			state := testState{
-				rtCacheMock: rtCacheMock,
+			state := newDefaultState(t)
+			if test.args.stateSetup != nil {
+				test.args.stateSetup(state)
 			}
-			if test.stateSetup != nil {
-				test.stateSetup(state)
-			}
-			resolver, _ := validation.NewTestRuleResolver(nil, nil, []*v1.ClusterRole{&clusterRole}, []*v1.ClusterRoleBinding{&clusterRoleBinding})
-			grbResolver := createBaseGRBResolver(ctrl, state.rtCacheMock)
-			admitters := NewValidator(resolver, grbResolver).Admitters()
+			grbResolver := state.createBaseGRBResolver()
+			admitters := globalrole.NewValidator(state.resolver, grbResolver).Admitters()
 			assert.Len(t, admitters, 1)
 
-			req := admission.Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation:       admissionv1.Update,
-					UID:             "2",
-					Kind:            globalRoleGVK,
-					Resource:        globalRoleGVR,
-					RequestKind:     &globalRoleGVK,
-					RequestResource: &globalRoleGVR,
-					Name:            "my-global-role",
-					UserInfo:        authenicationv1.UserInfo{Username: "test-user", UID: ""},
-					Object:          runtime.RawExtension{},
-					OldObject:       runtime.RawExtension{},
-				},
-			}
-			var err error
-			req.Object.Raw, err = json.Marshal(test.newGlobalRole)
-			require.NoError(t, err, "Failed to marshal new GlobalRole while creating request")
-
-			req.OldObject.Raw, err = json.Marshal(test.oldGlobalRole)
-			require.NoError(t, err, "Failed to marshal new GlobalRole while creating request")
-
-			response, err := admitters[0].Admit(&req)
-			if test.wantError {
+			req := createGRRequest(t, test)
+			response, err := admitters[0].Admit(req)
+			if test.wantErr {
 				assert.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, test.wantAdmit, response.Allowed)
+				return
 			}
+			require.NoError(t, err)
+			require.Equalf(t, test.allowed, response.Allowed, "Response was incorrectly validated wanted response.Allowed = '%v' got '%v' message=%+v", test.allowed, response.Allowed, response.Result)
 		})
 	}
 }
 
-// createBaseGRBResolver creates a GRB resolver with some basic permissions setup for escalation checking
-func createBaseGRBResolver(ctrl *gomock.Controller, rtCacheMock *fake.MockNonNamespacedCacheInterface[*v3.RoleTemplate]) *resolvers.GRBClusterRuleResolver {
-	grCacheMock := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRole](ctrl)
-	grbCacheMock := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRoleBinding](ctrl)
-	grbs := []*v3.GlobalRoleBinding{&baseGRB}
-	grbCacheMock.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey("test-user", "")).Return(grbs, nil).AnyTimes()
-	grbCacheMock.EXPECT().AddIndexer(gomock.Any(), gomock.Any()).AnyTimes()
-	grCacheMock.EXPECT().Get(baseGR.Name).Return(&baseGR, nil).AnyTimes()
-	rtCacheMock.EXPECT().Get(baseRT.Name).Return(&baseRT, nil).AnyTimes()
-
-	grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(rtCacheMock, nil), grCacheMock)
-	return resolvers.NewGRBClusterRuleResolver(grbCacheMock, grResolver)
+func Test_UnexpectedErrors(t *testing.T) {
+	t.Parallel()
+	resolver, _ := validation.NewTestRuleResolver(nil, nil, nil, nil)
+	validator := globalrole.NewValidator(resolver, nil)
+	admitters := validator.Admitters()
+	require.Len(t, admitters, 1, "wanted only one admitter")
+	test := testCase{
+		args: args{
+			oldGR:    newDefaultGR,
+			newGR:    newDefaultGR,
+			username: testUser,
+		},
+	}
+	req := createGRRequest(t, test)
+	req.Object = runtime.RawExtension{}
+	_, err := admitters[0].Admit(req)
+	require.Error(t, err, "Admit should fail on bad request object")
+	req = createGRRequest(t, test)
+	req.Operation = admissionv1.Connect
+	_, err = admitters[0].Admit(req)
+	require.Error(t, err, "Admit should fail on unhandled operations")
 }

@@ -104,6 +104,12 @@ On create or update, the following checks take place:
 
 Users can only change GlobalRoles with rights less than or equal to those they currently possess. This is to prevent privilege escalation. This includes the rules in the RoleTemplates referred to in `inheritedClusterRoles`. 
 
+#### Builtin Validation
+
+The `globalroles.builtin` field is immutable, and new builtIn GlobalRoles cannot be created.
+If `globalroles.builtin` is true then all fields are immutable except  `metadata` and `newUserDefault`.
+If `globalroles.builtin` is true then the GlobalRole can not be deleted.
+
 ## GlobalRoleBinding 
 
 ### Validation Checks
@@ -116,7 +122,24 @@ Users can only create/update GlobalRoleBindings with rights less than or equal t
 
 #### Valid Global Role Reference
 
-GlobalRoleBindings must refer to a valid global role (i.e. an existing `GlobalRole` object in the `management.cattle.io/v3` apiGroup). In addition, on creation, all RoleTemplates which are referred to in the `inheritedClusterRoles` field must exist and not be locked. 
+GlobalRoleBindings must refer to a valid global role (i.e. an existing `GlobalRole` object in the `management.cattle.io/v3` apiGroup).
+
+#### Invalid Fields - Update
+Users cannot update the following fields after creation:
+- `userName`
+- `groupPrincipalName`
+- `globalRoleName`
+
+
+#### Invalid Fields - Create
+GlobalRoleBindings must have either `userName` or `groupPrincipalName`, but not both.
+All RoleTemplates which are referred to in the `inheritedClusterRoles` field must exist and not be locked. 
+
+### Mutation Checks
+
+#### On create
+
+When a GlobalRoleBinding is created an owner reference is created on the binding referring to the backing GlobalRole defined by `globalRoleName`.
 
 ## NodeDriver 
 

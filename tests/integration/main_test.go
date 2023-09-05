@@ -27,7 +27,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-const testNamespace = "foo"
+const (
+	testNamespace = "foo"
+	testUser      = "test-user"
+)
 
 type IntegrationSuite struct {
 	suite.Suite
