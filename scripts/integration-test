@@ -5,9 +5,6 @@ export CATTLE_DEV_MODE=yes
 export CATTLE_SERVER_URL="https://$(ip route get 8.8.8.8 | awk '{print $7}'):443"
 export CATTLE_BOOTSTRAP_PASSWORD="admin"
 export CATTLE_FEATURES="harvester=false"
-export CATTLE_CHART_DEFAULT_BRANCH="dev-v2.8"
-export CATTLE_SYSTEM_CHART_DEFAULT_BRANCH="dev-v2.8"
-export CATTLE_RANCHER_WEBHOOK_VERSION="103.0.0+up0.4.0-rc3"
 
 cd $(dirname $0)/../
 
