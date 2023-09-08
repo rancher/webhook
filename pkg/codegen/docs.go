@@ -129,15 +129,26 @@ func getDocFiles(baseDir string) ([]docFile, error) {
 		})
 	}
 	// if the groups differ, sort based on the group. If the groups are the same, sort based on the resource
-	slices.SortFunc(docFiles, func(a, b docFile) bool {
+	slices.SortFunc(docFiles, func(a, b docFile) int {
 		if a.group == b.group {
 			if a.resource == b.resource {
-				return a.version < b.version
+				return stringCompare(a.version, b.version)
 			}
-			return a.resource == b.resource
+			return stringCompare(a.resource, b.resource)
 		}
-		return a.group < b.group
+		return stringCompare(a.group, b.group)
 	})
 
 	return docFiles, nil
+}
+
+// until we can use cmp.Compare from Go 1.21
+func stringCompare(a, b string) int {
+	if a < b {
+		return -1
+	} else if a > b {
+		return 1
+	} else {
+		return 0
+	}
 }
