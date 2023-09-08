@@ -1,583 +1,591 @@
 package globalrolebinding_test
 
 import (
-	"encoding/json"
-	"fmt"
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
 	"github.com/rancher/webhook/pkg/resolvers"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/globalrolebinding"
-	"github.com/rancher/wrangler/pkg/generic/fake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	admissionv1 "k8s.io/api/admission/v1"
-	authenticationv1 "k8s.io/api/authentication/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
+	v1 "k8s.io/api/admission/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/kubernetes/pkg/registry/rbac/validation"
-)
-
-var (
-	globalRoleBindingGVR = metav1.GroupVersionResource{Group: "management.cattle.io", Version: "v3", Resource: "globalRoleBindings"}
-	globalRoleBindingGVK = metav1.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "GlobalRoleBinding"}
-	clusterRole          = rbacv1.ClusterRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-cr",
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"pods", "configmaps"},
-				Verbs:     []string{"get"},
-			},
-		},
-	}
-	clusterRoleBinding = rbacv1.ClusterRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-crb",
-		},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: "rbac.authorization.k8s.io",
-			Kind:     "ClusterRole",
-			Name:     clusterRole.Name,
-		},
-		Subjects: []rbacv1.Subject{
-			{
-				APIGroup: "rbac.authorization.k8s.io",
-				Kind:     "User",
-				Name:     "test-user",
-			},
-		},
-	}
-	baseRT = v3.RoleTemplate{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "base-rt",
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"pods", "configmaps"},
-				Verbs:     []string{"get"},
-			},
-		},
-	}
-	baseGR = v3.GlobalRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "base-gr",
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"pods", "configmaps"},
-				Verbs:     []string{"get"},
-			},
-		},
-		InheritedClusterRoles: []string{baseRT.Name},
-	}
-	baseGRB = v3.GlobalRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "base-grb",
-		},
-		GlobalRoleName: baseGR.Name,
-		UserName:       "test-user",
-	}
-	escalationRT = v3.RoleTemplate{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "escalation-rt",
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"configmaps"},
-				Verbs:     []string{"*"},
-			},
-		},
-	}
-
-	lockedRT = v3.RoleTemplate{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "locked-rt",
-		},
-		Locked: true,
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"configmaps"},
-				Verbs:     []string{"get"},
-			},
-		},
-	}
-	allowedGR = v3.GlobalRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "allowed-gr",
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"pods"},
-				Verbs:     []string{"get"},
-			},
-		},
-	}
-	escalationRulesGR = v3.GlobalRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "allowed-gr",
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"pods"},
-				Verbs:     []string{"*"},
-			},
-		},
-	}
-	escalationClusterGR = v3.GlobalRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "allowed-gr",
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"pods"},
-				Verbs:     []string{"get"},
-			},
-		},
-		InheritedClusterRoles: []string{
-			escalationRT.Name,
-		},
-	}
-	lockedRoleGR = v3.GlobalRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "locked-gr",
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"pods"},
-				Verbs:     []string{"get"},
-			},
-		},
-		InheritedClusterRoles: []string{
-			lockedRT.Name,
-		},
-	}
-	notFoundRoleGR = v3.GlobalRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "not-found-gr",
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"pods"},
-				Verbs:     []string{"get"},
-			},
-		},
-		InheritedClusterRoles: []string{
-			"not-found",
-		},
-	}
-	errorRoleGR = v3.GlobalRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "error-gr",
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{""},
-				Resources: []string{"pods"},
-				Verbs:     []string{"get"},
-			},
-		},
-		InheritedClusterRoles: []string{
-			"error",
-		},
-	}
 )
 
 func TestAdmit(t *testing.T) {
-	type testState struct {
-		rtCacheMock  *fake.MockNonNamespacedCacheInterface[*v3.RoleTemplate]
-		grCacheMock  *fake.MockNonNamespacedCacheInterface[*v3.GlobalRole]
-		grbCacheMock *fake.MockNonNamespacedCacheInterface[*v3.GlobalRoleBinding]
-	}
-
-	type testCase struct {
-		name                 string
-		globalRoleBinding    *v3.GlobalRoleBinding
-		oldGlobalRoleBinding *v3.GlobalRoleBinding
-		operation            admissionv1.Operation
-		stateSetup           func(testState)
-		wantError            bool
-		wantAdmit            bool
-	}
-
+	t.Parallel()
 	tests := []testCase{
 		{
-			name: "test create global role not found",
-			globalRoleBinding: &v3.GlobalRoleBinding{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-grb",
+			name: "create global role not found",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					gr := newDefaultGRB()
+					gr.GlobalRoleName = notFoundName
+					return gr
 				},
-				UserName:       "test-user",
-				GlobalRoleName: "not-found",
 			},
-			operation: admissionv1.Create,
-			stateSetup: func(ts testState) {
-				notFoundError := apierrors.NewNotFound(schema.GroupResource{
-					Group:    "management.cattle.io",
-					Resource: "globalroles",
-				}, "not-found")
-				ts.grCacheMock.EXPECT().Get("not-found").Return(nil, notFoundError)
-			},
-			wantError: false,
-			wantAdmit: false,
-		},
-
-		{
-			name: "test delete global role not found",
-			globalRoleBinding: &v3.GlobalRoleBinding{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-grb",
-				},
-				UserName:       "test-user",
-				GlobalRoleName: "not-found",
-			},
-			operation: admissionv1.Delete,
-			stateSetup: func(ts testState) {
-				notFoundError := apierrors.NewNotFound(schema.GroupResource{
-					Group:    "management.cattle.io",
-					Resource: "globalroles",
-				}, "not-found")
-				ts.grCacheMock.EXPECT().Get("not-found").Return(nil, notFoundError)
-			},
-			wantError: false,
-			wantAdmit: true,
+			allowed: false,
 		},
 		{
-			name: "test update gr not found, grb not deleting",
-			globalRoleBinding: &v3.GlobalRoleBinding{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-grb",
+			name: "update gr not found, grb not deleting",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					gr := newDefaultGRB()
+					gr.GlobalRoleName = notFoundName
+					return gr
 				},
-				UserName:       "test-user",
-				GlobalRoleName: "not-found",
+				oldGRB: func() *v3.GlobalRoleBinding {
+					gr := newDefaultGRB()
+					gr.GlobalRoleName = notFoundName
+					return gr
+				},
 			},
-			operation: admissionv1.Update,
-			stateSetup: func(ts testState) {
-				notFoundError := apierrors.NewNotFound(schema.GroupResource{
-					Group:    "management.cattle.io",
-					Resource: "globalroles",
-				}, "not-found")
-				ts.grCacheMock.EXPECT().Get("not-found").Return(nil, notFoundError)
-			},
-			wantError: false,
-			wantAdmit: false,
+			allowed: false,
 		},
 		{
-			name: "test update gr not found, grb deleting",
-			globalRoleBinding: &v3.GlobalRoleBinding{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:              "test-grb",
-					DeletionTimestamp: &metav1.Time{Time: time.Now()},
+			name: "update gr not found, grb deleting",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					gr := newDefaultGRB()
+					gr.GlobalRoleName = notFoundName
+					gr.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+					return gr
 				},
-				UserName:       "test-user",
-				GlobalRoleName: "not-found",
+				oldGRB: func() *v3.GlobalRoleBinding {
+					gr := newDefaultGRB()
+					gr.GlobalRoleName = notFoundName
+					gr.UserName = notFoundName
+					return gr
+				},
 			},
-			operation: admissionv1.Update,
-			stateSetup: func(ts testState) {
-				notFoundError := apierrors.NewNotFound(schema.GroupResource{
-					Group:    "management.cattle.io",
-					Resource: "globalroles",
-				}, "not-found")
-				ts.grCacheMock.EXPECT().Get("not-found").Return(nil, notFoundError)
-			},
-			wantError: false,
-			wantAdmit: true,
+			allowed: true,
 		},
 		{
-			name: "test create gr refers to locked RT",
-			globalRoleBinding: &v3.GlobalRoleBinding{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-grb",
+			name: "update gr refers to not found RT",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					gr := newDefaultGRB()
+					gr.GlobalRoleName = notFoundRoleGR.Name
+					return gr
 				},
-				UserName:       "test-user",
-				GlobalRoleName: lockedRoleGR.Name,
+				oldGRB: func() *v3.GlobalRoleBinding {
+					gr := newDefaultGRB()
+					gr.GlobalRoleName = notFoundRoleGR.Name
+					return gr
+				},
+				stateSetup: func(ts testState) {
+					ts.grCacheMock.EXPECT().Get(notFoundRoleGR.Name).Return(&notFoundRoleGR, nil)
+					ts.rtCacheMock.EXPECT().Get(notFoundName).Return(nil, newNotFound(notFoundName))
+				},
 			},
-			operation: admissionv1.Create,
-			stateSetup: func(ts testState) {
-				ts.grCacheMock.EXPECT().Get(lockedRoleGR.Name).Return(&lockedRoleGR, nil)
-				ts.rtCacheMock.EXPECT().Get(lockedRT.Name).Return(&lockedRT, nil)
-			},
-			wantError: false,
-			wantAdmit: false,
+			allowed: false,
 		},
 		{
-			name: "test create gr refers to not found RT",
-			globalRoleBinding: &v3.GlobalRoleBinding{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-grb",
+			name: "create gr refers to locked RT",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					gr := newDefaultGRB()
+					gr.GlobalRoleName = lockedRoleGR.Name
+					return gr
 				},
-				UserName:       "test-user",
-				GlobalRoleName: notFoundRoleGR.Name,
+				stateSetup: func(ts testState) {
+					ts.grCacheMock.EXPECT().Get(lockedRoleGR.Name).Return(&lockedRoleGR, nil)
+					ts.rtCacheMock.EXPECT().Get(lockedRT.Name).Return(&lockedRT, nil)
+				},
 			},
-			operation: admissionv1.Create,
-			stateSetup: func(ts testState) {
-				notFoundError := apierrors.NewNotFound(schema.GroupResource{
-					Group:    "management.cattle.io",
-					Resource: "roletemplates",
-				}, "not-found")
-				ts.grCacheMock.EXPECT().Get(notFoundRoleGR.Name).Return(&notFoundRoleGR, nil)
-				ts.rtCacheMock.EXPECT().Get("not-found").Return(nil, notFoundError)
-			},
-			wantError: false,
-			wantAdmit: false,
+			allowed: false,
 		},
 		{
-			name: "test create gr refers to RT misc error",
-			globalRoleBinding: &v3.GlobalRoleBinding{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-grb",
+			name: "create gr refers to not found RT",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					gr := newDefaultGRB()
+					gr.GlobalRoleName = notFoundRoleGR.Name
+					return gr
 				},
-				UserName:       "test-user",
-				GlobalRoleName: errorRoleGR.Name,
+				stateSetup: func(ts testState) {
+					ts.grCacheMock.EXPECT().Get(notFoundRoleGR.Name).Return(&notFoundRoleGR, nil)
+					ts.rtCacheMock.EXPECT().Get(notFoundName).Return(nil, newNotFound(notFoundName))
+				},
 			},
-			operation: admissionv1.Create,
-			stateSetup: func(ts testState) {
-				ts.grCacheMock.EXPECT().Get(errorRoleGR.Name).Return(&errorRoleGR, nil)
-				ts.rtCacheMock.EXPECT().Get("error").Return(nil, fmt.Errorf("server not available"))
+			allowed: false,
+		},
+		{
+			name: "create gr refers to RT misc error",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					gr := newDefaultGRB()
+					gr.GlobalRoleName = errorRoleGR.Name
+					return gr
+				},
+				stateSetup: func(ts testState) {
+					ts.grCacheMock.EXPECT().Get(errorRoleGR.Name).Return(&errorRoleGR, nil)
+					ts.rtCacheMock.EXPECT().Get(errName).Return(nil, errServer)
+				},
 			},
 			wantError: true,
 		},
 		{
-			name: "test update gr refers to RT misc error",
-			globalRoleBinding: &v3.GlobalRoleBinding{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-grb",
+			name: "update gr refers to RT misc error",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					gr := newDefaultGRB()
+					gr.GlobalRoleName = errorRoleGR.Name
+					return gr
 				},
-				UserName:       "test-user",
-				GlobalRoleName: errorRoleGR.Name,
-			},
-			operation: admissionv1.Update,
-			stateSetup: func(ts testState) {
-				ts.grCacheMock.EXPECT().Get(errorRoleGR.Name).Return(&errorRoleGR, nil)
-				ts.rtCacheMock.EXPECT().Get("error").Return(nil, fmt.Errorf("server not available"))
+				oldGRB: func() *v3.GlobalRoleBinding {
+					gr := newDefaultGRB()
+					gr.GlobalRoleName = errorRoleGR.Name
+					return gr
+				},
+				stateSetup: func(ts testState) {
+					ts.grCacheMock.EXPECT().Get(errorRoleGR.Name).Return(&errorRoleGR, nil)
+					ts.rtCacheMock.EXPECT().Get(errName).Return(nil, errServer)
+				},
 			},
 			wantError: true,
 		},
 		{
-			name: "test update gr refers to locked RT",
-			globalRoleBinding: &v3.GlobalRoleBinding{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-grb",
+			name: "update gr refers to locked RT",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					gr := newDefaultGRB()
+					gr.GlobalRoleName = lockedRoleGR.Name
+					return gr
 				},
-				UserName:       "test-user",
-				GlobalRoleName: lockedRoleGR.Name,
+				oldGRB: func() *v3.GlobalRoleBinding {
+					gr := newDefaultGRB()
+					gr.GlobalRoleName = lockedRoleGR.Name
+					return gr
+				},
+				stateSetup: func(ts testState) {
+					ts.grCacheMock.EXPECT().Get(lockedRoleGR.Name).Return(&lockedRoleGR, nil)
+					ts.rtCacheMock.EXPECT().Get(lockedRT.Name).Return(&lockedRT, nil)
+				},
 			},
-			operation: admissionv1.Update,
-			stateSetup: func(ts testState) {
-				ts.grCacheMock.EXPECT().Get(lockedRoleGR.Name).Return(&lockedRoleGR, nil)
-				ts.rtCacheMock.EXPECT().Get(lockedRT.Name).Return(&lockedRT, nil)
-			},
-			wantError: false,
-			wantAdmit: true,
+			allowed: true,
 		},
 		{
-			name: "test update meta-only changed",
-			globalRoleBinding: &v3.GlobalRoleBinding{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-grb",
-					Labels: map[string]string{
-						"updated": "yes",
-					},
+			name: "update meta-only changed",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					gr := newDefaultGRB()
+					gr.Labels = map[string]string{"updated": "yes"}
+					gr.GlobalRoleName = errName
+					return gr
 				},
-				UserName:       "test-user",
-				GlobalRoleName: "error",
-			},
-			oldGlobalRoleBinding: &v3.GlobalRoleBinding{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-grb",
+				oldGRB: func() *v3.GlobalRoleBinding {
+					gr := newDefaultGRB()
+					gr.GlobalRoleName = errName
+					return gr
 				},
-				UserName:       "test-user",
-				GlobalRoleName: "error",
 			},
-			operation: admissionv1.Update,
-			wantError: false,
-			wantAdmit: true,
+			allowed: true,
 		},
-	}
-
-	// some tests work the same way across all operations - they are added here to avoid duplicate code
-	operations := []admissionv1.Operation{admissionv1.Create, admissionv1.Update, admissionv1.Delete}
-	for _, operation := range operations {
-		commonTests := []testCase{
-			{
-				name: fmt.Sprintf("test %s no escalation", operation),
-				globalRoleBinding: &v3.GlobalRoleBinding{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-grb",
-					},
-					UserName:       "test-user",
-					GlobalRoleName: allowedGR.Name,
+		// Start privilege test
+		{
+			name: "base test valid privileges",
+			args: args{
+				username: adminUser,
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.UserName = testUser
+					baseGRB.GlobalRoleName = adminGR.Name
+					return baseGRB
 				},
-				operation: operation,
-				stateSetup: func(ts testState) {
-					ts.grCacheMock.EXPECT().Get(allowedGR.Name).Return(&allowedGR, nil)
-				},
-				wantAdmit: true,
+				oldGRB: func() *v3.GlobalRoleBinding { return nil },
 			},
-			{
-				name: fmt.Sprintf("test %s escalation in GR rules", operation),
-				globalRoleBinding: &v3.GlobalRoleBinding{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-grb",
-					},
-					UserName:       "test-user",
-					GlobalRoleName: escalationRulesGR.Name,
+			allowed: true,
+		},
+		{
+			name: "binding to equal privilege level",
+			args: args{
+				username: testUser,
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.UserName = noPrivUser
+					baseGRB.GlobalRoleName = baseGR.Name
+					return baseGRB
 				},
-				operation: operation,
-				stateSetup: func(ts testState) {
-					ts.grCacheMock.EXPECT().Get(escalationRulesGR.Name).Return(&escalationRulesGR, nil)
-				},
-				wantAdmit: false,
+				oldGRB: func() *v3.GlobalRoleBinding { return nil },
 			},
-			{
-				name: fmt.Sprintf("test %s escalation in GR Cluster Roles", operation),
-				globalRoleBinding: &v3.GlobalRoleBinding{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-grb",
-					},
-					UserName:       "test-user",
-					GlobalRoleName: escalationClusterGR.Name,
+			allowed: true,
+		},
+		{
+			name: "privilege escalation other user",
+			args: args{
+				username: testUser,
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.UserName = noPrivUser
+					baseGRB.GlobalRoleName = adminGR.Name
+					return baseGRB
 				},
-				operation: operation,
-				stateSetup: func(ts testState) {
-					ts.grCacheMock.EXPECT().Get(escalationClusterGR.Name).Return(&escalationClusterGR, nil)
-					ts.rtCacheMock.EXPECT().Get(escalationRT.Name).Return(&escalationRT, nil).AnyTimes()
-				},
-				wantAdmit: false,
+				oldGRB: func() *v3.GlobalRoleBinding { return nil },
 			},
-			{
-				name: fmt.Sprintf("test %s not found error resolving rules", operation),
-				globalRoleBinding: &v3.GlobalRoleBinding{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-grb",
-					},
-					UserName:       "test-user",
-					GlobalRoleName: notFoundRoleGR.Name,
+			allowed: false,
+		},
+		{
+			name: "privilege escalation self",
+			args: args{
+				username: testUser,
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.UserName = testUser
+					baseGRB.GlobalRoleName = adminGR.Name
+					return baseGRB
 				},
-				operation: operation,
+				oldGRB: func() *v3.GlobalRoleBinding { return nil },
+			},
+			allowed: false,
+		},
+		{
+			name: "correct user privileges are evaluated.", // test that the privileges evaluated are those of the user in the request not the user being bound.
+			args: args{
+				username: testUser,
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.UserName = adminUser
+					baseGRB.GlobalRoleName = adminGR.Name
+					return baseGRB
+				},
+				oldGRB: func() *v3.GlobalRoleBinding { return nil },
+			},
+			allowed: false,
+		},
+		{
+			name: "escalation in GR Cluster Roles",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					return &v3.GlobalRoleBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-grb",
+						},
+						UserName:       testUser,
+						GlobalRoleName: adminClusterGR.Name,
+					}
+				},
+				stateSetup: func(ts testState) {
+					ts.grCacheMock.EXPECT().Get(adminClusterGR.Name).Return(&adminClusterGR, nil)
+					ts.rtCacheMock.EXPECT().Get(adminRT.Name).Return(&adminRT, nil).AnyTimes()
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "not found error resolving rules",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					return &v3.GlobalRoleBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-grb",
+						},
+						UserName:       testUser,
+						GlobalRoleName: notFoundRoleGR.Name,
+					}
+				},
 				stateSetup: func(ts testState) {
 					notFoundError := apierrors.NewNotFound(schema.GroupResource{
 						Group:    "management.cattle.io",
 						Resource: "roletemplates",
-					}, "not-found")
+					}, notFoundName)
 					ts.grCacheMock.EXPECT().Get(notFoundRoleGR.Name).Return(&notFoundRoleGR, nil)
-					ts.rtCacheMock.EXPECT().Get("not-found").Return(nil, notFoundError)
+					ts.rtCacheMock.EXPECT().Get(notFoundName).Return(nil, notFoundError)
 				},
-				wantAdmit: false,
 			},
-			{
-				name: fmt.Sprintf("test %s error getting global role", operation),
-				globalRoleBinding: &v3.GlobalRoleBinding{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-grb",
-					},
-					UserName:       "test-user",
-					GlobalRoleName: "error",
+			allowed: false,
+		},
+		{
+			name: "error getting global role",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					return &v3.GlobalRoleBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-grb",
+						},
+						UserName:       testUser,
+						GlobalRoleName: errName,
+					}
 				},
-				operation: operation,
 				stateSetup: func(ts testState) {
-					ts.grCacheMock.EXPECT().Get("error").Return(nil, fmt.Errorf("server unavailable"))
+					ts.grCacheMock.EXPECT().Get(errName).Return(nil, errServer)
 				},
-				wantError: true,
 			},
-
-			{
-				name:              fmt.Sprintf("test %s decode error", operation),
-				globalRoleBinding: nil,
-				operation:         operation,
-				wantAdmit:         false,
-				wantError:         true,
+			wantError: true,
+		},
+		{
+			name: "base test valid GRB annotation update",
+			args: args{
+				username: adminUser,
+				oldGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.Annotations = nil
+					return baseGRB
+				},
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.Annotations = map[string]string{"foo": "bar"}
+					return baseGRB
+				},
 			},
-		}
-		tests = append(tests, commonTests...)
+			allowed: true,
+		},
+		{
+			name: "update GlobalRole",
+			args: args{
+				username: adminUser,
+				oldGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.GlobalRoleName = baseGR.Name
+					return baseGRB
+				},
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.GlobalRoleName = adminGR.Name
+					return baseGRB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "unknown globalRole",
+			args: args{
+				username: adminUser,
+				oldGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.GlobalRoleName = notFoundName
+					return baseGRB
+				},
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.GlobalRoleName = notFoundName
+					return baseGRB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "unknown globalRole that is being deleted",
+			args: args{
+				username: adminUser,
+				oldGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.GlobalRoleName = notFoundName
+					return baseGRB
+				},
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.GlobalRoleName = notFoundName
+					baseGRB.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+					return baseGRB
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "update previously set user",
+			args: args{
+				username: adminUser,
+				oldGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.UserName = adminUser
+					return baseGRB
+				},
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.UserName = newUser
+					return baseGRB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "update previously unset user and set group ",
+			args: args{
+				username: adminUser,
+				oldGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.UserName = ""
+					baseGRB.GroupPrincipalName = testGroup
+					return baseGRB
+				},
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.UserName = newUser
+					baseGRB.GroupPrincipalName = testGroup
+					return baseGRB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "update previously set group principal",
+			args: args{
+				username: adminUser,
+				oldGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.UserName = ""
+					baseGRB.GroupPrincipalName = testGroup
+					return baseGRB
+				},
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.UserName = ""
+					baseGRB.GroupPrincipalName = newGroupPrinc
+					return baseGRB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "update previously unset group and set user ",
+			args: args{
+				username: adminUser,
+				oldGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.UserName = adminUser
+					baseGRB.GroupPrincipalName = ""
+					return baseGRB
+				},
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.UserName = adminUser
+					baseGRB.GroupPrincipalName = newGroupPrinc
+					return baseGRB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "base test valid GRB",
+			args: args{
+				username: adminUser,
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					return baseGRB
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "missing globalRole name",
+			args: args{
+				username: adminUser,
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.GlobalRoleName = ""
+					return baseGRB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "missing user and group",
+			args: args{
+				username: adminUser,
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.UserName = ""
+					baseGRB.GroupPrincipalName = ""
+					return baseGRB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "both user and group set",
+			args: args{
+				username: adminUser,
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.UserName = testUser
+					baseGRB.GroupPrincipalName = testGroup
+					return baseGRB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "Group set but not user",
+			args: args{
+				username: adminUser,
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.UserName = ""
+					baseGRB.GroupPrincipalName = testGroup
+					return baseGRB
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "unknown globalRole",
+			args: args{
+				username: adminUser,
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.GlobalRoleName = notFoundName
+					return baseGRB
+				},
+			},
+			allowed: false,
+		},
 	}
 
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			ctrl := gomock.NewController(t)
-			rtCacheMock := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
-			grCacheMock := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRole](ctrl)
-			grbCacheMock := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRoleBinding](ctrl)
-
-			grbs := []*v3.GlobalRoleBinding{&baseGRB}
-			grbCacheMock.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey("test-user", "")).Return(grbs, nil).AnyTimes()
-			grbCacheMock.EXPECT().AddIndexer(gomock.Any(), gomock.Any()).AnyTimes()
-			grCacheMock.EXPECT().Get(baseGR.Name).Return(&baseGR, nil).AnyTimes()
-			rtCacheMock.EXPECT().Get(baseRT.Name).Return(&baseRT, nil).AnyTimes()
-			state := testState{
-				rtCacheMock:  rtCacheMock,
-				grCacheMock:  grCacheMock,
-				grbCacheMock: grbCacheMock,
+			state := newDefaultState(t)
+			if test.args.stateSetup != nil {
+				test.args.stateSetup(state)
 			}
-			if test.stateSetup != nil {
-				test.stateSetup(state)
-			}
-			resolver, _ := validation.NewTestRuleResolver(nil, nil, []*rbacv1.ClusterRole{&clusterRole}, []*rbacv1.ClusterRoleBinding{&clusterRoleBinding})
 			grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCacheMock, nil), state.grCacheMock)
 			grbResolver := resolvers.NewGRBClusterRuleResolver(state.grbCacheMock, grResolver)
-			admitters := globalrolebinding.NewValidator(resolver, grbResolver).Admitters()
+			admitters := globalrolebinding.NewValidator(state.resolver, grbResolver).Admitters()
 			require.Len(t, admitters, 1)
 
-			req := admission.Request{
-				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation:       test.operation,
-					UID:             "2",
-					Kind:            globalRoleBindingGVK,
-					Resource:        globalRoleBindingGVR,
-					RequestKind:     &globalRoleBindingGVK,
-					RequestResource: &globalRoleBindingGVR,
-					Name:            "test-grb",
-					UserInfo:        authenticationv1.UserInfo{Username: "test-user", UID: ""},
-					Object:          runtime.RawExtension{},
-					OldObject:       runtime.RawExtension{},
-				},
-			}
-			if test.globalRoleBinding != nil {
-				var err error
-				switch test.operation {
-				case admissionv1.Create:
-					fallthrough
-				case admissionv1.Update:
-					req.Object.Raw, err = json.Marshal(test.globalRoleBinding)
-					require.NoError(t, err, "Failed to marshal new GlobalRole while creating request")
-					if test.oldGlobalRoleBinding != nil {
-						req.OldObject.Raw, err = json.Marshal(test.oldGlobalRoleBinding)
-					} else {
-						req.OldObject.Raw, err = json.Marshal(&v3.GlobalRoleBinding{})
-					}
-				case admissionv1.Delete:
-					req.OldObject.Raw, err = json.Marshal(test.globalRoleBinding)
-				}
-				require.NoError(t, err, "Failed to marshal GlobalRole while creating request")
-			}
+			req := createGRBRequest(t, test)
 
-			response, err := admitters[0].Admit(&req)
+			response, err := admitters[0].Admit(req)
 			if test.wantError {
 				assert.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, test.wantAdmit, response.Allowed)
+				return
 			}
+			require.NoError(t, err)
+			require.Equalf(t, test.allowed, response.Allowed, "Response was incorrectly validated wanted response.Allowed = '%v' got '%v' message=%+v", test.allowed, response.Allowed, response.Result)
 		})
 	}
+}
+
+func Test_UnexpectedErrors(t *testing.T) {
+	t.Parallel()
+	state := newDefaultState(t)
+	grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCacheMock, nil), state.grCacheMock)
+	grbResolver := resolvers.NewGRBClusterRuleResolver(state.grbCacheMock, grResolver)
+	validator := globalrolebinding.NewValidator(state.resolver, grbResolver)
+	admitters := validator.Admitters()
+	require.Len(t, admitters, 1, "wanted only one admitter")
+	admitter := admitters[0]
+	test := testCase{
+		args: args{
+			newGRB: newDefaultGRB,
+			oldGRB: newDefaultGRB,
+		},
+	}
+
+	req := createGRBRequest(t, test)
+	req.Operation = v1.Connect
+	_, err := admitter.Admit(req)
+	require.Error(t, err, "Admit should fail on unknown handled operations")
+
+	req = createGRBRequest(t, test)
+	req.Object = runtime.RawExtension{}
+	_, err = admitter.Admit(req)
+	require.Error(t, err, "Admit should fail on bad request object")
 }

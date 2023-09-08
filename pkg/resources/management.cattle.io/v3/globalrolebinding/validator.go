@@ -1,8 +1,9 @@
+// Package globalrolebinding holds admission logic for the v3 management.cattle.io.globalrolebindings CRD.
 package globalrolebinding
 
 import (
+	"errors"
 	"fmt"
-	"net/http"
 	"reflect"
 	"strings"
 
@@ -13,7 +14,7 @@ import (
 	"github.com/rancher/webhook/pkg/resolvers"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -49,7 +50,7 @@ func (v *Validator) GVR() schema.GroupVersionResource {
 
 // Operations returns list of operations handled by this validator.
 func (v *Validator) Operations() []admissionregistrationv1.OperationType {
-	return []admissionregistrationv1.OperationType{admissionregistrationv1.Create, admissionregistrationv1.Update, admissionregistrationv1.Delete}
+	return []admissionregistrationv1.OperationType{admissionregistrationv1.Create, admissionregistrationv1.Update}
 }
 
 // ValidatingWebhook returns the ValidatingWebhook used for this CRD.
@@ -74,62 +75,43 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 
 	oldGRB, newGRB, err := objectsv3.GlobalRoleBindingOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get %s from request: %w", gvr.Resource, err)
 	}
-	// if this change only affects metadata, don't validate any further
-	// this allows users with the appropriate permissions to manage labels/annotations/finalizers
-	if request.Operation == admissionv1.Update && isMetaOnlyChange(oldGRB, newGRB) {
+
+	if canSkipValidation(request.Operation, oldGRB, newGRB) {
 		return admission.ResponseAllowed(), nil
 	}
-	targetGRB := newGRB
-	if request.Operation == admissionv1.Delete {
-		targetGRB = oldGRB
-	}
-	// Pull the global role to get the rules
-	globalRole, err := a.grbResolver.GlobalRoleResolver.GlobalRoleCache().Get(targetGRB.GlobalRoleName)
+
+	fldPath := field.NewPath(gvr.Resource)
+	// Pull the global role for validation.
+	globalRole, err := a.grbResolver.GlobalRoleResolver.GlobalRoleCache().Get(newGRB.GlobalRoleName)
 	if err != nil {
-		if !errors.IsNotFound(err) {
-			return nil, err
+		if !apierrors.IsNotFound(err) {
+			return nil, fmt.Errorf("failed to get GlobalRole '%s': %w", newGRB.Name, err)
 		}
-		switch request.Operation {
-		case admissionv1.Delete: // allow delete operations if the GR is not found
-			return &admissionv1.AdmissionResponse{
-				Allowed: true,
-			}, nil
-		case admissionv1.Update: // only allow updates to the finalizers if the GR is not found
-			if targetGRB.DeletionTimestamp != nil {
-				return &admissionv1.AdmissionResponse{
-					Allowed: true,
-				}, nil
-			}
-		}
-		// other operations not allowed
-		return &admissionv1.AdmissionResponse{
-			Result: &metav1.Status{
-				Status:  "Failure",
-				Message: fmt.Sprintf("referenced globalRole %s not found, only deletions allowed", targetGRB.Name),
-				Reason:  metav1.StatusReasonUnauthorized,
-				Code:    http.StatusUnauthorized,
-			},
-			Allowed: false,
-		}, nil
+		fieldErr := field.NotFound(fldPath.Child("globalRoleName"), newGRB.Name)
+		return admission.ResponseBadRequest(fieldErr.Error()), nil
 	}
-	fieldPath := field.NewPath("globalrolebinding")
-	if request.Operation == admissionv1.Create {
-		// new bindings can't refer to a locked role template. The GR validator also checks this, but adding the check here
-		// allows the GR validator to permit updates to GRs using locked roleTemplates without removing the locked permission
-		err := a.validateGlobalRole(globalRole, fieldPath)
-		if err != nil {
-			if fieldError, ok := err.(*field.Error); ok {
-				return admission.ResponseBadRequest(fieldError.Error()), nil
-			}
-			return nil, err
+
+	switch request.Operation {
+	case admissionv1.Update:
+		err = validateUpdateFields(oldGRB, newGRB, fldPath)
+	case admissionv1.Create:
+		err = a.validateCreate(newGRB, globalRole, fldPath)
+	default:
+		return nil, fmt.Errorf("%s operation %v: %w", gvr.Resource, request.Operation, admission.ErrUnsupportedOperation)
+	}
+
+	if err != nil {
+		if errors.As(err, admission.Ptr(new(field.Error))) {
+			return admission.ResponseBadRequest(err.Error()), nil
 		}
+		return nil, err
 	}
 
 	clusterRules, err := a.grbResolver.GlobalRoleResolver.ClusterRulesFromRole(globalRole)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			reason := fmt.Sprintf("at least one roleTemplate was not found %s", err.Error())
 			return admission.ResponseBadRequest(reason), nil
 		}
@@ -148,11 +130,39 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	return admission.ResponseAllowed(), nil
 }
 
+// validUpdateFields checks if the fields being changed are valid update fields.
+func validateUpdateFields(oldBinding, newBinding *v3.GlobalRoleBinding, fldPath *field.Path) error {
+	var err error
+	const immutable = "field is immutable"
+	switch {
+	case newBinding.UserName != oldBinding.UserName:
+		err = field.Invalid(fldPath.Child("userName"), newBinding.UserName, immutable)
+	case newBinding.GroupPrincipalName != oldBinding.GroupPrincipalName:
+		err = field.Invalid(fldPath.Child("groupPrincipalName"), newBinding.GroupPrincipalName, immutable)
+	case newBinding.GlobalRoleName != oldBinding.GlobalRoleName:
+		err = field.Invalid(fldPath.Child("globalRoleName"), newBinding.GlobalRoleName, immutable)
+	}
+
+	return err
+}
+
+// validateCreateFields checks if all required fields are present and valid.
+func (a *admitter) validateCreate(newBinding *v3.GlobalRoleBinding, globalRole *v3.GlobalRole, fldPath *field.Path) error {
+	switch {
+	case newBinding.UserName != "" && newBinding.GroupPrincipalName != "":
+		return field.Forbidden(fldPath, "bindings can not set both userName and groupPrincipalName")
+	case newBinding.UserName == "" && newBinding.GroupPrincipalName == "":
+		return field.Required(fldPath, "bindings must have either userName or groupPrincipalName set")
+	}
+
+	return a.validateGlobalRole(globalRole, fldPath)
+}
+
 // validateGlobalRole validates that the attached global role isn't trying to use a locked RoleTemplate.
 func (a *admitter) validateGlobalRole(globalRole *v3.GlobalRole, fieldPath *field.Path) error {
 	roleTemplates, err := a.grbResolver.GlobalRoleResolver.GetRoleTemplatesForGlobalRole(globalRole)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if apierrors.IsNotFound(err) {
 			reason := fmt.Sprintf("unable to find all roleTemplates %s", err.Error())
 			return field.Invalid(fieldPath, "", reason)
 		}
@@ -172,15 +182,23 @@ func (a *admitter) validateGlobalRole(globalRole *v3.GlobalRole, fieldPath *fiel
 	return nil
 }
 
+// canSkipValidation checks if validation matches one of two scenarios which allow us to skip validation.
+// 1. Object is scheduled for deletion (deletion timestamp set)
+// 2. Object is a metadata only change. (this allows users with the appropriate permissions to manage labels/annotations/finalizers)
+// deletionIsScheduled returns true if the GlobalRoleBinding is being deleted.
+func canSkipValidation(op admissionv1.Operation, oldGRB, newGRB *v3.GlobalRoleBinding) bool {
+	return op == admissionv1.Update && (newGRB.DeletionTimestamp != nil || isMetaOnlyChange(oldGRB, newGRB))
+}
+
 // isMetaOnlyChange checks if old and new are deep equal in all fields except metadata. Will return false on a
-// non-effectual change
+// non-effectual change.
 func isMetaOnlyChange(oldGRB *v3.GlobalRoleBinding, newGRB *v3.GlobalRoleBinding) bool {
 	oldMeta := oldGRB.ObjectMeta
 	newMeta := newGRB.ObjectMeta
 
 	// if the metadata between old/new hasn't changed, then this isn't a metadata only change
 	if reflect.DeepEqual(oldMeta, newMeta) {
-		// checking equality of global role rules can be very expensive from a cpu perspective
+		// checking equality of global role bindings with reflect.DeepEqual() can be very expensive from a cpu perspective
 		return false
 	}
 

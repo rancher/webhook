@@ -18,6 +18,7 @@ steps:
 
   - name: integration-test
     image: rancher/rancher:v2.8-head
+    pull: always
     privileged: true
     commands:
       - zypper -n install helm
@@ -87,6 +88,7 @@ steps:
 
   - name: integration-test
     image: rancher/rancher:v2.8-head
+    pull: always
     privileged: true
     commands:
       - zypper -n install helm
@@ -160,6 +162,7 @@ steps:
 
   - name: integration-test
     image: rancher/rancher:v2.8-head
+    pull: always
     privileged: true
     commands:
       - zypper -n install helm

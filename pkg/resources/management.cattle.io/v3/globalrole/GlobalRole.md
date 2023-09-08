@@ -12,3 +12,8 @@ On create or update, the following checks take place:
 
 Users can only change GlobalRoles with rights less than or equal to those they currently possess. This is to prevent privilege escalation. This includes the rules in the RoleTemplates referred to in `inheritedClusterRoles`. 
 
+### Builtin Validation
+
+The `globalroles.builtin` field is immutable, and new builtIn GlobalRoles cannot be created.
+If `globalroles.builtin` is true then all fields are immutable except  `metadata` and `newUserDefault`.
+If `globalroles.builtin` is true then the GlobalRole can not be deleted.
