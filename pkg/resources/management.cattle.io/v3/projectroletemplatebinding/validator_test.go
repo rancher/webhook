@@ -849,7 +849,7 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnCreate() {
 			allowed: false,
 		},
 		{
-			name: "create with unset project name",
+			name: "unset project name",
 			args: args{
 				username: adminUser,
 				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
@@ -863,11 +863,28 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnCreate() {
 			},
 			allowed: false,
 		},
+		{
+			name: "namespace and the project id part of the project name differ",
+			args: args{
+				username: adminUser,
+				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					return nil
+				},
+				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.ObjectMeta.Namespace = "default"
+					basePRTB.ProjectName = fmt.Sprintf("%s:%s", clusterID, "p-cgtq4")
+					return basePRTB
+				},
+			},
+			allowed: false,
+		},
 	}
 
 	for i := range tests {
 		test := tests[i]
 		p.Run(test.name, func() {
+			p.T().Parallel()
 			req := createPRTBRequest(p.T(), test.args.oldPRTB(), test.args.newPRTB(), test.args.username)
 			admitters := validator.Admitters()
 			p.Len(admitters, 1)
@@ -926,7 +943,7 @@ func newBasePRTB() *apisv3.ProjectRoleTemplateBinding {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "PRTB-new",
 			GenerateName:      "PRTB-",
-			Namespace:         "p-namespace",
+			Namespace:         projectID,
 			UID:               "6534e4ef-f07b-4c61-b88d-95a92cce4852",
 			ResourceVersion:   "1",
 			Generation:        1,

@@ -182,10 +182,13 @@ This is to prevent privilege escalation.
 
 Users cannot create ProjectRoleTemplateBindings that violate the following constraints:
 
+- The `ProjectName` field must be:
+    - Provided as a non-empty value
+    - Specified using the format of `cluster-id:project-id`
+    - `project-id`, in particular, must match the namespace of the ProjectRoleTemplateBinding
 - Either a user subject (through `UserName` or `UserPrincipalName`), or a group subject (through `GroupName`
   or `GroupPrincipalName`), or a service account subject (through `ServiceAccount`) must be specified. Exactly one
   subject type of the three must be provided.
-- `ProjectName` must be specified
 - The roleTemplate indicated in `RoleTemplateName` must be:
     - Provided as a non-empty value
     - Valid (there must exist a `roleTemplate` object of given name in the `management.cattle.io/v3` API group)
