@@ -365,7 +365,7 @@ func TestAdmit(t *testing.T) {
 			allowed: true,
 		},
 		{
-			name: "update Builtin field",
+			name: "update Builtin field to false",
 			args: args{
 				oldGR: func() *v3.GlobalRole {
 					baseGR := newDefaultGR()
@@ -375,6 +375,22 @@ func TestAdmit(t *testing.T) {
 				newGR: func() *v3.GlobalRole {
 					baseGR := newDefaultGR()
 					baseGR.Builtin = false
+					return baseGR
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "update Builtin field to true",
+			args: args{
+				oldGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Builtin = false
+					return baseGR
+				},
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Builtin = true
 					return baseGR
 				},
 			},
