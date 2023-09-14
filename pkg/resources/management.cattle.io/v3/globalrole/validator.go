@@ -213,6 +213,9 @@ func (a *admitter) validateInheritedClusterRoles(oldGR *v3.GlobalRole, newGR *v3
 // validUpdateFields checks if the fields being changed are valid update fields.
 func (a *admitter) validateUpdateFields(oldRole, newRole *v3.GlobalRole, fldPath *field.Path) *field.Error {
 	if !oldRole.Builtin {
+		if newRole.Builtin {
+			return field.Forbidden(fldPath, fmt.Sprintf("cannot update non-builtIn GlobalRole %s to be builtIn", oldRole.Name))
+		}
 		return nil
 	}
 
