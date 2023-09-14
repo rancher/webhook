@@ -1,6 +1,8 @@
 package integration_test
 
 import (
+	"fmt"
+
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	rbacv1 "k8s.io/api/rbac/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,7 +19,7 @@ func (m *IntegrationSuite) TestProjectRoleTemplateBinding() {
 		},
 		UserName:         "bruce-wayne",
 		RoleTemplateName: rtName,
-		ProjectName:      "gotham:city",
+		ProjectName:      fmt.Sprintf("%s:%s", "gotham", testNamespace),
 	}
 	invalidCreate := func() *v3.ProjectRoleTemplateBinding {
 		invalidCreate := validCreateObj.DeepCopy()

@@ -104,8 +104,6 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		}
 	}
 
-	clusterNS, projectNS := clusterFromProject(prtb.ProjectName)
-
 	roleTemplate, err := a.roleTemplateResolver.RoleTemplateCache().Get(prtb.RoleTemplateName)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -121,6 +119,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, fmt.Errorf("failed to get rules from referenced roleTemplate '%s': %w", roleTemplate.Name, err)
 	}
 
+	clusterNS, projectNS := clusterAndProjectID(prtb.ProjectName)
 	err = auth.ConfirmNoEscalation(request, rules, clusterNS, a.clusterResolver)
 	if err == nil {
 		return &admissionv1.AdmissionResponse{Allowed: true}, nil
@@ -132,8 +131,8 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	return response, nil
 }
 
-func clusterFromProject(project string) (string, string) {
-	pieces := strings.Split(project, ":")
+func clusterAndProjectID(projectName string) (string, string) {
+	pieces := strings.Split(projectName, ":")
 	if len(pieces) < 2 {
 		return "", ""
 	}
@@ -197,6 +196,11 @@ func (a *admitter) validateCreateFields(newPRTB *apisv3.ProjectRoleTemplateBindi
 	const projectContext = "project"
 	if roleTemplate.Context != projectContext {
 		return field.NotSupported(fieldPath.Child("roleTemplate", "context"), roleTemplate.Context, []string{projectContext})
+	}
+
+	_, projectNS := clusterAndProjectID(newPRTB.ProjectName)
+	if projectNS != newPRTB.Namespace {
+		return field.Forbidden(fieldPath, "namespace and the project ID part of projectName must match")
 	}
 
 	return nil
