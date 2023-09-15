@@ -168,7 +168,7 @@ func (a *admitter) validateCreateFields(newCRTB *apisv3.ClusterRoleTemplateBindi
 	hasGroupTarget := newCRTB.GroupName != "" || newCRTB.GroupPrincipalName != ""
 
 	if (hasUserTarget && hasGroupTarget) || (!hasUserTarget && !hasGroupTarget) {
-		return field.Forbidden(fieldPath, "binding must target either a user [userId]/[userPrincipalId] OR a group [groupId]/[groupPrincipalId]")
+		return field.Forbidden(fieldPath, "binding must target either a user [userName]/[userPrincipalName] OR a group [groupName]/[groupPrincipalName]")
 	}
 
 	if newCRTB.ClusterName == "" {
