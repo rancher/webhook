@@ -668,11 +668,10 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 		username string
 	}
 	tests := []struct {
-		name     string
-		args     args
-		wantErr  bool
-		allowed  bool
-		warnings []string
+		name    string
+		args    args
+		wantErr bool
+		allowed bool
 	}{
 		{
 			name: "base test valid CRTB",
@@ -889,24 +888,6 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 			},
 			allowed: false,
 		},
-		{
-			name: "update mismatched clusterName and namespace",
-			args: args{
-				username: adminUser,
-				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
-					baseCRTB := newDefaultCRTB()
-					baseCRTB.ClusterName = "c-mismatch"
-					return baseCRTB
-				},
-				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
-					baseCRTB := newDefaultCRTB()
-					baseCRTB.ClusterName = "c-mismatch"
-					return baseCRTB
-				},
-			},
-			allowed:  true,
-			warnings: []string{"Using CRTBs with namespaces and clusterNames that differ is not supported"},
-		},
 	}
 
 	for i := range tests {
@@ -923,15 +904,6 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 				c.NoError(err, "Admit failed")
 				if resp.Allowed != test.allowed {
 					c.Failf("Response was incorrectly validated", "Wanted response.Allowed = '%v' got '%v': result=%+v", test.name, test.allowed, resp.Allowed, resp.Result)
-				}
-				// check warnings
-				if test.warnings != nil {
-					if len(test.warnings) != len(resp.Warnings) {
-						c.Failf("Number of warnings in response different from expected", "Wanted response.Warnings: '%v' got '%v'", test.warnings, resp.Warnings)
-					}
-					for w := range test.warnings {
-						assert.Equal(c.T(), test.warnings[w], resp.Warnings[w])
-					}
 				}
 			}
 		})

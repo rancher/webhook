@@ -81,7 +81,6 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
 	fieldPath := field.NewPath("clusterroletemplatebinding")
-	var warnings []string
 
 	if request.Operation == admissionv1.Update {
 		oldCRTB, newCRTB, err := objectsv3.ClusterRoleTemplateBindingOldAndNewFromRequest(&request.AdmissionRequest)
@@ -91,10 +90,6 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 
 		if err := validateUpdateFields(oldCRTB, newCRTB, fieldPath); err != nil {
 			return admission.ResponseBadRequest(err.Error()), nil
-		}
-
-		if newCRTB.ClusterName != newCRTB.Namespace {
-			warnings = append(warnings, "Using CRTBs with namespaces and clusterNames that differ is not supported")
 		}
 	}
 
@@ -128,9 +123,6 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	response := &admissionv1.AdmissionResponse{}
 	auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, rules, crtb.ClusterName, a.resolver))
 
-	if warnings != nil {
-		response.Warnings = warnings
-	}
 	return response, nil
 }
 
