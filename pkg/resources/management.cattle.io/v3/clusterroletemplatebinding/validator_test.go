@@ -41,7 +41,7 @@ type ClusterRoleTemplateBindingSuite struct {
 }
 
 func TestClusterRoleTemplateBindings(t *testing.T) {
-	//t.Parallel()
+	t.Parallel()
 	suite.Run(t, new(ClusterRoleTemplateBindingSuite))
 }
 
