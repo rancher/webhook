@@ -793,7 +793,6 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 			},
 			allowed: false,
 		},
-
 		{
 			name: "locked role template, crtb owned by grb",
 			args: args{
@@ -842,7 +841,6 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 			},
 			allowed: false,
 		},
-
 		{
 			name: "locked role template, crtb owned by missing grb",
 			args: args{
@@ -874,6 +872,21 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 				},
 			},
 			wantErr: true,
+		},
+		{
+			name: "create mismatched clusterName and namespace",
+			args: args{
+				username: adminUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					return nil
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.ClusterName = "c-mismatch"
+					return baseCRTB
+				},
+			},
+			allowed: false,
 		},
 	}
 

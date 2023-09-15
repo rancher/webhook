@@ -17,7 +17,7 @@ func (m *IntegrationSuite) TestClusterRoleTemplateBinding() {
 		},
 		UserName:         "bruce-wayne",
 		RoleTemplateName: rtName,
-		ClusterName:      "gotham",
+		ClusterName:      testNamespace,
 	}
 	invalidCreate := func() *v3.ClusterRoleTemplateBinding {
 		invalidCreate := validCreateObj.DeepCopy()

@@ -8,7 +8,9 @@ Users can only create/update ClusterRoleTemplateBindings which grant permissions
 
 Users cannot create ClusterRoleTemplateBindings which violate the following constraints:
 - Either a user subject (through `UserName` or `UserPrincipalName`) or a group subject (through `GroupName` or `GroupPrincipalName`) must be specified; both a user subject and a group subject cannot be specified
-- `ClusterName` must be specified
+- `ClusterName` must:
+  - Be provided as a non-empty value
+  - Match the namespace of the ClusterRoleTemplateBinding
 - The roleTemplate indicated in `RoleTemplateName` must be:
   - Provided as a non-empty value
   - Valid (i.e. is an existing `roleTemplate` object of given name in the `management.cattle.io/v3` API group)
