@@ -1,6 +1,8 @@
 package fleetworkspace
 
 import (
+	"fmt"
+
 	"github.com/rancher/rancher/pkg/apis/management.cattle.io"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
@@ -18,6 +20,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
+
+const k8sManagedLabel = "app.kubernetes.io/managed-by"
 
 var (
 	fleetAdminRole = "fleetworkspace-admin"
@@ -84,7 +88,8 @@ func (m *Mutator) Admit(request *admission.Request) (*admissionv1.AdmissionRespo
 
 	namespace := v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: fw.Name,
+			Name:   fw.Name,
+			Labels: map[string]string{k8sManagedLabel: "rancher"},
 		},
 	}
 	ns, err := m.namespaces.Create(&namespace)
@@ -92,17 +97,20 @@ func (m *Mutator) Admit(request *admission.Request) (*admissionv1.AdmissionRespo
 		if !errors.IsAlreadyExists(err) {
 			return nil, err
 		}
-		// check if user has enough privilege to create fleet admin rolebinding in the namespace
+		ns, err = m.namespaces.Get(fw.Name, metav1.GetOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get fleetworkspace namespace '%s': %w", fw.Name, err)
+		}
+		if ns.Labels[k8sManagedLabel] != "rancher" {
+			return admission.ResponseBadRequest(fmt.Sprintf("namespace '%s' already exists", fw.Name)), nil
+		}
 		cr, err := m.clusterroles.Cache().Get(fleetAdminRole)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to get fleetAdmin ClusterRole: %w", err)
 		}
-		response := &admissionv1.AdmissionResponse{}
-		auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, cr.Rules, namespace.Name, m.resolver))
-
-		ns, err = m.namespaces.Get(namespace.Name, metav1.GetOptions{})
+		err = auth.ConfirmNoEscalation(request, cr.Rules, namespace.Name, m.resolver)
 		if err != nil {
-			return nil, err
+			return admission.ResponseFailedEscalation(err.Error()), nil
 		}
 	}
 
