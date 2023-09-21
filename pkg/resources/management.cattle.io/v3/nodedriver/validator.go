@@ -3,6 +3,8 @@ package nodedriver
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
 
 	"github.com/rancher/lasso/pkg/dynamic"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -35,6 +37,16 @@ var (
 		},
 		Allowed: false,
 	}
+
+	invalidName = &admissionv1.AdmissionResponse{
+		Result: &metav1.Status{
+			Status:  metav1.StatusFailure,
+			Message: "Invalid Driver Name",
+		},
+		Allowed: false,
+	}
+
+	containsDigitRegex = regexp.MustCompile(`\d+`)
 )
 
 // Validator ValidatingWebhook for NodeDrivers
@@ -69,7 +81,7 @@ func (v *Validator) GVR() schema.GroupVersionResource {
 
 // Operations returns list of operations handled by this validator.
 func (v *Validator) Operations() []admissionregistrationv1.OperationType {
-	return []admissionregistrationv1.OperationType{admissionregistrationv1.Update, admissionregistrationv1.Delete}
+	return []admissionregistrationv1.OperationType{admissionregistrationv1.Create, admissionregistrationv1.Update, admissionregistrationv1.Delete}
 }
 
 // ValidatingWebhook returns the ValidatingWebhook used for this CRD.
@@ -90,29 +102,63 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, fmt.Errorf("failed to decode object from request: %w", err)
 	}
 
-	// the check to see if the driver is being disabled is either when we're
-	// running a delete operation OR an update operation where the active flag
-	// toggles from true -> false
-	if !(request.Operation == admissionv1.Delete && oldObject.Spec.Active) &&
-		!(request.Operation == admissionv1.Update && !newObject.Spec.Active && oldObject.Spec.Active) {
-		return admission.ResponseAllowed(), nil
-	}
+	switch request.Operation {
+	case admissionv1.Create:
+		// if the request is a create operation - sanitize the name a bit to make
+		// sure we can create dynamicSchemas cleanly from it
+		if !goodNameForCRD(newObject.Name) {
+			return invalidName, nil
+		}
 
-	// check if all node resources have been deleted for both cluster types
-	rke1Deleted, err := a.rke1ResourcesDeleted(oldObject)
-	if err != nil {
-		return nil, err
-	}
-	rke2Deleted, err := a.rke2ResourcesDeleted(oldObject)
-	if err != nil {
-		return nil, err
-	}
+	case admissionv1.Update:
+		// if the request is an update request - only check if there are any
+		// resources left if it's being toggled on/off (e.g. used to be disabled
+		// but is now active)
+		if newObject.Spec.Active || !oldObject.Spec.Active {
+			break
+		}
 
-	if !(rke1Deleted && rke2Deleted) {
-		return driverInUse, nil
+		deleted, err := a.checkAllResourcesDeleted(oldObject)
+		if err != nil {
+			return nil, err
+		}
+
+		if !deleted {
+			return driverInUse, nil
+		}
+
+	case admissionv1.Delete:
+		// for delete - only check if there are any resources left if the object
+		// was active upon deletion
+		if !oldObject.Spec.Active {
+			break
+		}
+
+		deleted, err := a.checkAllResourcesDeleted(oldObject)
+		if err != nil {
+			return nil, err
+		}
+
+		if !deleted {
+			return driverInUse, nil
+		}
 	}
 
 	return admission.ResponseAllowed(), nil
+}
+
+func (a *admitter) checkAllResourcesDeleted(driver *v3.NodeDriver) (bool, error) {
+	// check if all node resources have been deleted for both cluster types
+	rke1Deleted, err := a.rke1ResourcesDeleted(driver)
+	if err != nil {
+		return false, err
+	}
+	rke2Deleted, err := a.rke2ResourcesDeleted(driver)
+	if err != nil {
+		return false, err
+	}
+
+	return rke1Deleted && rke2Deleted, nil
 }
 
 // // RKE1
@@ -170,4 +216,12 @@ func (a *admitter) rke2ResourcesDeleted(driver *v3.NodeDriver) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// goodNameForCRD runs a few sanitation checks on the nodeDriver's name. Namely
+// just things that might make the CRD named funny such as numbers or dashes.
+func goodNameForCRD(name string) bool {
+	return !strings.Contains(name, "-") &&
+		!strings.Contains(name, " ") &&
+		!containsDigitRegex.MatchString(name)
 }

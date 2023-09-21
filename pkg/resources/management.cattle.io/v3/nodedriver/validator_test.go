@@ -255,7 +255,47 @@ func (suite *NodeDriverValidationSuite) TestErrorFetchingCRD() {
 	suite.Error(err)
 }
 
-func newNodeDriver(active bool, annotations map[string]string) []byte {
+func (suite *NodeDriverValidationSuite) TestCreateGoodFormat() {
+	a := admitter{}
+
+	resp, err := a.Admit(&admission.Request{
+		Context: context.Background(),
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Create,
+			Object:    runtime.RawExtension{Raw: newNodeDriver(false, nil)},
+		}})
+
+	suite.Nil(err)
+	suite.True(resp.Allowed, "admission request was denied")
+}
+
+func (suite *NodeDriverValidationSuite) TestCreateBadFormats() {
+	a := admitter{}
+
+	tests := []string{
+		"Thing ",
+		"2thing",
+		"thing2",
+		"th2ing",
+		"-thing",
+		"thing-",
+		"th-ing",
+	}
+
+	for _, t := range tests {
+		resp, err := a.Admit(&admission.Request{
+			Context: context.Background(),
+			AdmissionRequest: admissionv1.AdmissionRequest{
+				Operation: admissionv1.Create,
+				Object:    runtime.RawExtension{Raw: newNodeDriverWithName(t, false, nil)},
+			}})
+
+		suite.Nil(err)
+		suite.False(resp.Allowed, "operation was allowed even with bad name: "+t)
+	}
+}
+
+func newNodeDriverWithName(name string, active bool, annotations map[string]string) []byte {
 	if annotations == nil {
 		annotations = map[string]string{}
 	}
@@ -263,7 +303,7 @@ func newNodeDriver(active bool, annotations map[string]string) []byte {
 	driver := v3.NodeDriver{
 		ObjectMeta: v1.ObjectMeta{
 			Annotations: annotations,
-			Name:        "testing",
+			Name:        name,
 		},
 		Spec: v3.NodeDriverSpec{
 			Active: active,
@@ -272,4 +312,8 @@ func newNodeDriver(active bool, annotations map[string]string) []byte {
 
 	b, _ := json.Marshal(&driver)
 	return b
+}
+
+func newNodeDriver(active bool, annotations map[string]string) []byte {
+	return newNodeDriverWithName("testing", active, annotations)
 }
