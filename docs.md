@@ -60,6 +60,7 @@ Users cannot create ClusterRoleTemplateBindings which violate the following cons
 - `ClusterName` must:
   - Be provided as a non-empty value
   - Match the namespace of the ClusterRoleTemplateBinding
+  - Refer to an existing cluster
 - The roleTemplate indicated in `RoleTemplateName` must be:
   - Provided as a non-empty value
   - Valid (i.e. is an existing `roleTemplate` object of given name in the `management.cattle.io/v3` API group)

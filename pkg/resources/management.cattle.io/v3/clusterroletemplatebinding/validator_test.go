@@ -27,7 +27,10 @@ import (
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
 
-const grbOwnerLabel = "authz.management.cattle.io/grb-owner"
+const (
+	grbOwnerLabel    = "authz.management.cattle.io/grb-owner"
+	defaultClusterID = "c-namespace"
+)
 
 type ClusterRoleTemplateBindingSuite struct {
 	suite.Suite
@@ -159,8 +162,15 @@ func (c *ClusterRoleTemplateBindingSuite) Test_PrivilegeEscalation() {
 	}, nil).AnyTimes()
 	crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
+	clusterCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.Cluster](ctrl)
+	clusterCache.EXPECT().Get(defaultClusterID).Return(&apisv3.Cluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: defaultClusterID,
+		},
+	}, nil).AnyTimes()
+
 	crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
-	validator := clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver, nil)
+	validator := clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver, nil, clusterCache)
 	type args struct {
 		oldCRTB  func() *apisv3.ClusterRoleTemplateBinding
 		newCRTB  func() *apisv3.ClusterRoleTemplateBinding
@@ -296,8 +306,15 @@ func (c *ClusterRoleTemplateBindingSuite) Test_UpdateValidation() {
 	crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
 	crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
+	clusterCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.Cluster](ctrl)
+	clusterCache.EXPECT().Get(defaultClusterID).Return(&apisv3.Cluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: defaultClusterID,
+		},
+	}, nil).AnyTimes()
+
 	crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
-	validator := clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver, nil)
+	validator := clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver, nil, clusterCache)
 	type args struct {
 		oldCRTB  func() *apisv3.ClusterRoleTemplateBinding
 		newCRTB  func() *apisv3.ClusterRoleTemplateBinding
@@ -608,6 +625,9 @@ func (c *ClusterRoleTemplateBindingSuite) Test_UpdateValidation() {
 func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 	const adminUser = "admin-userid"
 	const badRoleTemplateName = "bad-roletemplate"
+	const missingCluster = "missing-cluster"
+	const errorCluster = "error-cluster"
+	const nilCluster = "nil-cluster"
 	clusterRoles := []*rbacv1.ClusterRole{c.adminCR}
 	clusterRoleBindings := []*rbacv1.ClusterRoleBinding{
 		{
@@ -660,8 +680,21 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 	grbCache.EXPECT().Get("not-found").Return(nil, notFoundError).AnyTimes()
 	grbCache.EXPECT().Get("nil-grb").Return(nil, nil).AnyTimes()
 
+	clusterCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.Cluster](ctrl)
+	clusterCache.EXPECT().Get(defaultClusterID).Return(&apisv3.Cluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: defaultClusterID,
+		},
+	}, nil).AnyTimes()
+	clusterCache.EXPECT().Get(errorCluster).Return(nil, fmt.Errorf("server not available")).AnyTimes()
+	clusterCache.EXPECT().Get(missingCluster).Return(nil, apierrors.NewNotFound(schema.GroupResource{
+		Group:    "management.cattle.io",
+		Resource: "clusters",
+	}, missingCluster)).AnyTimes()
+	clusterCache.EXPECT().Get(nilCluster).Return(nil, nil).AnyTimes()
+
 	crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
-	validator := clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver, grbCache)
+	validator := clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver, grbCache, clusterCache)
 	type args struct {
 		oldCRTB  func() *apisv3.ClusterRoleTemplateBinding
 		newCRTB  func() *apisv3.ClusterRoleTemplateBinding
@@ -888,6 +921,55 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 			},
 			allowed: false,
 		},
+		{
+			name: "create missing cluster name",
+			args: args{
+				username: adminUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					return nil
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.Namespace = missingCluster
+					baseCRTB.ClusterName = missingCluster
+					return baseCRTB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "create error cluster",
+			args: args{
+				username: adminUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					return nil
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.Namespace = errorCluster
+					baseCRTB.ClusterName = errorCluster
+					return baseCRTB
+				},
+			},
+			allowed: false,
+			wantErr: true,
+		},
+		{
+			name: "create nil cluster",
+			args: args{
+				username: adminUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					return nil
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.Namespace = nilCluster
+					baseCRTB.ClusterName = nilCluster
+					return baseCRTB
+				},
+			},
+			allowed: false,
+		},
 	}
 
 	for i := range tests {
@@ -950,7 +1032,7 @@ func newDefaultCRTB() *apisv3.ClusterRoleTemplateBinding {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "crtb-new",
 			GenerateName:      "crtb-",
-			Namespace:         "c-namespace",
+			Namespace:         defaultClusterID,
 			SelfLink:          "",
 			UID:               "6534e4ef-f07b-4c61-b88d-95a92cce4852",
 			ResourceVersion:   "1",
@@ -960,7 +1042,7 @@ func newDefaultCRTB() *apisv3.ClusterRoleTemplateBinding {
 			Labels:            map[string]string{},
 		},
 		UserName:         "user1",
-		ClusterName:      "c-namespace",
+		ClusterName:      defaultClusterID,
 		RoleTemplateName: "admin-role",
 	}
 }

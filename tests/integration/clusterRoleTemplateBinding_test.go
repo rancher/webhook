@@ -13,11 +13,11 @@ func (m *IntegrationSuite) TestClusterRoleTemplateBinding() {
 	validCreateObj := &v3.ClusterRoleTemplateBinding{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-clusterroletemplatebinding",
-			Namespace: testNamespace,
+			Namespace: clusterName,
 		},
 		UserName:         "bruce-wayne",
 		RoleTemplateName: rtName,
-		ClusterName:      testNamespace,
+		ClusterName:      clusterName,
 	}
 	invalidCreate := func() *v3.ClusterRoleTemplateBinding {
 		invalidCreate := validCreateObj.DeepCopy()

@@ -32,13 +32,14 @@ const (
 
 // NewValidator will create a newly allocated Validator.
 func NewValidator(crtb *resolvers.CRTBRuleResolver, defaultResolver k8validation.AuthorizationRuleResolver,
-	roleTemplateResolver *auth.RoleTemplateResolver, grbCache v3.GlobalRoleBindingCache) *Validator {
+	roleTemplateResolver *auth.RoleTemplateResolver, grbCache v3.GlobalRoleBindingCache, clusterCache v3.ClusterCache) *Validator {
 	resolver := resolvers.NewAggregateRuleResolver(defaultResolver, crtb)
 	return &Validator{
 		admitter: admitter{
 			resolver:             resolver,
 			roleTemplateResolver: roleTemplateResolver,
 			grbCache:             grbCache,
+			clusterCache:         clusterCache,
 		},
 	}
 }
@@ -72,6 +73,7 @@ type admitter struct {
 	resolver             k8validation.AuthorizationRuleResolver
 	roleTemplateResolver *auth.RoleTemplateResolver
 	grbCache             v3.GlobalRoleBindingCache
+	clusterCache         v3.ClusterCache
 }
 
 // Admit is the entrypoint for the validator. Admit will return an error if it unable to process the request.
@@ -169,6 +171,18 @@ func (a *admitter) validateCreateFields(newCRTB *apisv3.ClusterRoleTemplateBindi
 
 	if newCRTB.ClusterName != newCRTB.Namespace {
 		return field.Forbidden(fieldPath, "clusterName and namespace must be the same value")
+	}
+
+	cluster, err := a.clusterCache.Get(newCRTB.ClusterName)
+	clusterNotFoundErr := field.Invalid(fieldPath.Child("clusterName"), newCRTB.ClusterName, fmt.Sprintf("specified cluster %s not found", newCRTB.ClusterName))
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return clusterNotFoundErr
+		}
+		return fmt.Errorf("unable to verify cluster %s exists: %w", newCRTB.ClusterName, err)
+	}
+	if cluster == nil {
+		return clusterNotFoundErr
 	}
 
 	if newCRTB.RoleTemplateName == "" {
