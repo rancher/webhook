@@ -1,5 +1,9 @@
 ## Validation Checks
 
+### ClusterName validation
+
+ClusterName must be equal to the namespace, and must refer to an existing management.cattle.io/v3.Cluster object.
+
 ### Protects system project
 
 The system project cannot be deleted.
