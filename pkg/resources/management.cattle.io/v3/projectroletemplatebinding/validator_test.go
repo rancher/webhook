@@ -9,7 +9,6 @@ import (
 
 	"github.com/golang/mock/gomock"
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
 	"github.com/rancher/webhook/pkg/resolvers"
@@ -20,8 +19,10 @@ import (
 	v1 "k8s.io/api/admission/v1"
 	v1authentication "k8s.io/api/authentication/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
 
@@ -149,7 +150,7 @@ func (p *ProjectRoleTemplateBindingSuite) TestPrivilegeEscalation() {
 	resolver, _ := validation.NewTestRuleResolver(roles, roleBindings, clusterRoles, clusterRoleBindings)
 
 	ctrl := gomock.NewController(p.T())
-	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
+	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 	roleTemplateCache.EXPECT().Get(p.adminRT.Name).Return(p.adminRT, nil).AnyTimes()
 	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
@@ -173,7 +174,25 @@ func (p *ProjectRoleTemplateBindingSuite) TestPrivilegeEscalation() {
 
 	crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
 	prtbResolver := resolvers.NewPRTBRuleResolver(prtbCache, roleResolver)
-	validator := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, resolver, roleResolver)
+
+	clusterCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.Cluster](ctrl)
+	clusterCache.EXPECT().Get(clusterID).Return(&apisv3.Cluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: clusterID,
+		},
+	}, nil).AnyTimes()
+
+	projectCache := fake.NewMockCacheInterface[*apisv3.Project](ctrl)
+	projectCache.EXPECT().Get(clusterID, projectID).Return(&apisv3.Project{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: clusterID,
+			Name:      projectID,
+		},
+		Spec: apisv3.ProjectSpec{
+			ClusterName: clusterID,
+		},
+	}, nil).AnyTimes()
+	validator := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, resolver, roleResolver, clusterCache, projectCache)
 	type args struct {
 		oldPRTB  func() *apisv3.ProjectRoleTemplateBinding
 		newPRTB  func() *apisv3.ProjectRoleTemplateBinding
@@ -317,7 +336,7 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnUpdate() {
 	resolver, _ := validation.NewTestRuleResolver(nil, nil, clusterRoles, clusterRoleBindings)
 
 	ctrl := gomock.NewController(p.T())
-	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
+	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 	roleTemplateCache.EXPECT().Get(p.adminRT.Name).Return(p.adminRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().List(gomock.Any()).Return([]*apisv3.RoleTemplate{p.adminRT}, nil).AnyTimes()
 	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
@@ -330,7 +349,25 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnUpdate() {
 	crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 	crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
 	prtbResolver := resolvers.NewPRTBRuleResolver(prtbCache, roleResolver)
-	validator := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, resolver, roleResolver)
+	clusterCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.Cluster](ctrl)
+	clusterCache.EXPECT().Get(clusterID).Return(&apisv3.Cluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: clusterID,
+		},
+	}, nil).AnyTimes()
+
+	projectCache := fake.NewMockCacheInterface[*apisv3.Project](ctrl)
+	projectCache.EXPECT().Get(clusterID, projectID).Return(&apisv3.Project{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: clusterID,
+			Name:      projectID,
+		},
+		Spec: apisv3.ProjectSpec{
+			ClusterName: clusterID,
+		},
+	}, nil).AnyTimes()
+
+	validator := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, resolver, roleResolver, clusterCache, projectCache)
 	type args struct {
 		oldPRTB  func() *apisv3.ProjectRoleTemplateBinding
 		newPRTB  func() *apisv3.ProjectRoleTemplateBinding
@@ -654,6 +691,13 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnUpdate() {
 func (p *ProjectRoleTemplateBindingSuite) TestValidationOnCreate() {
 	const adminUser = "admin-userid"
 	const badRoleTemplateName = "bad-roletemplate"
+	const missingCluster = "missing-cluster"
+	const nilCluster = "nil-cluster"
+	const errCluster = "error-cluster"
+	const missingProject = "missing-project"
+	const nilProject = "nil-project"
+	const errProject = "error-project"
+	const badSpecProject = "bad-spec"
 	clusterRoles := []*rbacv1.ClusterRole{p.adminCR}
 	clusterRoleBindings := []*rbacv1.ClusterRoleBinding{
 		{
@@ -666,7 +710,7 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnCreate() {
 	resolver, _ := validation.NewTestRuleResolver(nil, nil, clusterRoles, clusterRoleBindings)
 
 	ctrl := gomock.NewController(p.T())
-	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
+	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 	roleTemplateCache.EXPECT().Get(p.adminRT.Name).Return(p.adminRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().Get(p.lockedRT.Name).Return(p.lockedRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().Get(p.clusterContextRT.Name).Return(p.clusterContextRT, nil).AnyTimes()
@@ -682,7 +726,48 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnCreate() {
 	crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 	crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
 	prtbResolver := resolvers.NewPRTBRuleResolver(prtbCache, roleResolver)
-	validator := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, resolver, roleResolver)
+
+	clusterCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.Cluster](ctrl)
+	clusterCache.EXPECT().Get(clusterID).Return(&apisv3.Cluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: clusterID,
+		},
+	}, nil).AnyTimes()
+	clusterCache.EXPECT().Get(nilCluster).Return(nil, nil).AnyTimes()
+	clusterCache.EXPECT().Get(errCluster).Return(nil, fmt.Errorf("server not available")).AnyTimes()
+	clusterCache.EXPECT().Get(missingCluster).Return(nil, apierrors.NewNotFound(schema.GroupResource{
+		Group:    "management.cattle.io",
+		Resource: "clusters",
+	}, missingCluster)).AnyTimes()
+
+	projectCache := fake.NewMockCacheInterface[*apisv3.Project](ctrl)
+	projectCache.EXPECT().Get(clusterID, projectID).Return(&apisv3.Project{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: clusterID,
+			Name:      projectID,
+		},
+		Spec: apisv3.ProjectSpec{
+			ClusterName: clusterID,
+		},
+	}, nil).AnyTimes()
+	projectCache.EXPECT().Get(clusterID, nilProject).Return(nil, nil).AnyTimes()
+	projectCache.EXPECT().Get(clusterID, errProject).Return(nil, fmt.Errorf("server not available")).AnyTimes()
+	projectCache.EXPECT().Get(clusterID, missingProject).Return(nil, apierrors.NewNotFound(schema.GroupResource{
+		Group:    "management.cattle.io",
+		Resource: "projects",
+	}, missingProject)).AnyTimes()
+
+	projectCache.EXPECT().Get(clusterID, badSpecProject).Return(&apisv3.Project{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: clusterID,
+			Name:      projectID,
+		},
+		Spec: apisv3.ProjectSpec{
+			ClusterName: missingCluster,
+		},
+	}, nil).AnyTimes()
+
+	validator := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, resolver, roleResolver, clusterCache, projectCache)
 	type args struct {
 		oldPRTB  func() *apisv3.ProjectRoleTemplateBinding
 		newPRTB  func() *apisv3.ProjectRoleTemplateBinding
@@ -874,6 +959,163 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnCreate() {
 					basePRTB := newBasePRTB()
 					basePRTB.ObjectMeta.Namespace = "default"
 					basePRTB.ProjectName = fmt.Sprintf("%s:%s", clusterID, "p-cgtq4")
+					return basePRTB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "missing cluster name",
+			args: args{
+				username: adminUser,
+				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					return nil
+				},
+				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.ProjectName = fmt.Sprintf(":%s", projectID)
+					return basePRTB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "missing project name",
+			args: args{
+				username: adminUser,
+				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					return nil
+				},
+				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.ProjectName = fmt.Sprintf("%s:", clusterID)
+					return basePRTB
+				},
+			},
+			allowed: false,
+		},
+
+		{
+			name: "missing cluster",
+			args: args{
+				username: adminUser,
+				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					return nil
+				},
+				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.ProjectName = fmt.Sprintf("%s:%s", missingCluster, projectID)
+					return basePRTB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "err when retrieving cluster",
+			args: args{
+				username: adminUser,
+				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					return nil
+				},
+				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.ProjectName = fmt.Sprintf("%s:%s", errCluster, projectID)
+					return basePRTB
+				},
+			},
+			allowed: false,
+			wantErr: true,
+		},
+		{
+			name: "nil return cluster",
+			args: args{
+				username: adminUser,
+				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					return nil
+				},
+				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.ProjectName = fmt.Sprintf("%s:%s", nilCluster, projectID)
+					return basePRTB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "missing project",
+			args: args{
+				username: adminUser,
+				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					return nil
+				},
+				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.Namespace = missingProject
+					basePRTB.ProjectName = fmt.Sprintf("%s:%s", clusterID, missingProject)
+					return basePRTB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "err when retrieving project",
+			args: args{
+				username: adminUser,
+				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					return nil
+				},
+				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.Namespace = errProject
+					basePRTB.ProjectName = fmt.Sprintf("%s:%s", clusterID, errProject)
+					return basePRTB
+				},
+			},
+			allowed: false,
+			wantErr: true,
+		},
+		{
+			name: "nil project",
+			args: args{
+				username: adminUser,
+				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					return nil
+				},
+				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.Namespace = nilProject
+					basePRTB.ProjectName = fmt.Sprintf("%s:%s", clusterID, nilProject)
+					return basePRTB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "project spec cluster name does not match cluster",
+			args: args{
+				username: adminUser,
+				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					return nil
+				},
+				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.Namespace = badSpecProject
+					basePRTB.ProjectName = fmt.Sprintf("%s:%s", clusterID, badSpecProject)
+					return basePRTB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "bad format projectName",
+			args: args{
+				username: adminUser,
+				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					return nil
+				},
+				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.ProjectName = "default"
 					return basePRTB
 				},
 			},

@@ -42,6 +42,7 @@ func main() {
 					v3.ClusterRoleTemplateBinding{},
 					v3.ProjectRoleTemplateBinding{},
 					v3.Node{},
+					v3.Project{},
 				},
 			},
 			"provisioning.cattle.io": {

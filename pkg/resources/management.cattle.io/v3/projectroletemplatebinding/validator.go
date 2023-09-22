@@ -9,6 +9,7 @@ import (
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
+	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/resolvers"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -28,7 +29,8 @@ var gvr = schema.GroupVersionResource{
 
 // NewValidator returns a new validator used for validation PRTB.
 func NewValidator(prtb *resolvers.PRTBRuleResolver, crtb *resolvers.CRTBRuleResolver,
-	defaultResolver k8validation.AuthorizationRuleResolver, roleTemplateResolver *auth.RoleTemplateResolver) *Validator {
+	defaultResolver k8validation.AuthorizationRuleResolver, roleTemplateResolver *auth.RoleTemplateResolver,
+	clusterCache v3.ClusterCache, projectCache v3.ProjectCache) *Validator {
 	clusterResolver := resolvers.NewAggregateRuleResolver(defaultResolver, crtb)
 	projectResolver := resolvers.NewAggregateRuleResolver(defaultResolver, prtb)
 	return &Validator{
@@ -36,6 +38,8 @@ func NewValidator(prtb *resolvers.PRTBRuleResolver, crtb *resolvers.CRTBRuleReso
 			clusterResolver:      clusterResolver,
 			projectResolver:      projectResolver,
 			roleTemplateResolver: roleTemplateResolver,
+			clusterCache:         clusterCache,
+			projectCache:         projectCache,
 		},
 	}
 }
@@ -69,6 +73,8 @@ type admitter struct {
 	clusterResolver      k8validation.AuthorizationRuleResolver
 	projectResolver      k8validation.AuthorizationRuleResolver
 	roleTemplateResolver *auth.RoleTemplateResolver
+	clusterCache         v3.ClusterCache
+	projectCache         v3.ProjectCache
 }
 
 // Admit is the entrypoint for the validator. Admit will return an error if it's unable to process the request.
@@ -197,10 +203,41 @@ func (a *admitter) validateCreateFields(newPRTB *apisv3.ProjectRoleTemplateBindi
 	if roleTemplate.Context != projectContext {
 		return field.NotSupported(fieldPath.Child("roleTemplate", "context"), roleTemplate.Context, []string{projectContext})
 	}
-
-	_, projectNS := clusterAndProjectID(newPRTB.ProjectName)
-	if projectNS != newPRTB.Namespace {
-		return field.Forbidden(fieldPath, "namespace and the project ID part of projectName must match")
+	if newPRTB.ProjectName == "" {
+		return field.Required(fieldPath.Child("projectName"), "projectName is required")
+	}
+	clusterName, projectName := clusterAndProjectID(newPRTB.ProjectName)
+	if clusterName == "" || projectName == "" {
+		return field.Invalid(fieldPath.Child("projectName"), newPRTB.ProjectName, "projectName must be of the form cluster.metadata.name:project.metadata.name, and both must refer to an existing object")
+	}
+	if projectName != newPRTB.Namespace {
+		return field.Forbidden(fieldPath, "namespace and the projectName part of projectName must match")
+	}
+	cluster, err := a.clusterCache.Get(clusterName)
+	clusterNotFoundErr := field.Invalid(fieldPath.Child("projectName"), newPRTB.ProjectName, fmt.Sprintf("specified cluster %s not found", clusterName))
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return clusterNotFoundErr
+		}
+		return fmt.Errorf("unable to verify cluster %s exists: %w", clusterName, err)
+	}
+	if cluster == nil {
+		return clusterNotFoundErr
+	}
+	project, err := a.projectCache.Get(clusterName, projectName)
+	projectNotFoundErr := field.Invalid(fieldPath.Child("projectName"), newPRTB.ProjectName, fmt.Sprintf("specified project %s not found in %s", projectName, clusterName))
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return projectNotFoundErr
+		}
+		return fmt.Errorf("unable to verify project %s exists for cluster %s: %w", projectName, clusterName, err)
+	}
+	if project == nil {
+		return projectNotFoundErr
+	}
+	if project.Spec.ClusterName != clusterName {
+		reason := fmt.Sprintf("project %s is for cluster %s, prtb specified cluster %s", projectName, project.Spec.ClusterName, clusterName)
+		return field.Invalid(fieldPath.Child("projectName"), newPRTB.ProjectName, reason)
 	}
 
 	return nil

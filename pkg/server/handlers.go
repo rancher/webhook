@@ -38,7 +38,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		psact := podsecurityadmissionconfigurationtemplate.NewValidator(clients.Management.Cluster().Cache(), clients.Provisioning.Cluster().Cache())
 		globalRoles := globalrole.NewValidator(clients.DefaultResolver, grbResolver)
 		globalRoleBindings := globalrolebinding.NewValidator(clients.DefaultResolver, grbResolver)
-		prtbs := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver)
+		prtbs := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver, clients.Management.Cluster().Cache(), clients.Management.Project().Cache())
 		crtbs := clusterroletemplatebinding.NewValidator(crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver, clients.Management.GlobalRoleBinding().Cache())
 		roleTemplates := roletemplate.NewValidator(clients.DefaultResolver, clients.RoleTemplateResolver, clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.Management.GlobalRole().Cache())
 		secrets := secret.NewValidator(clients.RBAC.Role().Cache(), clients.RBAC.RoleBinding().Cache())
