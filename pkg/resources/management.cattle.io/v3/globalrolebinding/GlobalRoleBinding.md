@@ -6,6 +6,8 @@ Note: all checks are bypassed if the GlobalRoleBinding is being deleted, or if o
 
 Users can only create/update GlobalRoleBindings with rights less than or equal to those they currently possess. This is to prevent privilege escalation. 
 
+This escalation checking currently prevents service accounts from modifying GlobalRoleBindings which give access to GlobalRoles which include permissions on downstream clusters (such as Admin, Restricted Admin, or GlobalRoles which use the `inheritedClusterRoles` field).
+
 ### Valid Global Role Reference
 
 GlobalRoleBindings must refer to a valid global role (i.e. an existing `GlobalRole` object in the `management.cattle.io/v3` apiGroup).

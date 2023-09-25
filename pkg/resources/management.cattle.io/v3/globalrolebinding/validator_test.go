@@ -546,7 +546,7 @@ func TestAdmit(t *testing.T) {
 				test.args.stateSetup(state)
 			}
 			grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCacheMock, nil), state.grCacheMock)
-			grbResolver := resolvers.NewGRBClusterRuleResolver(state.grbCacheMock, grResolver)
+			grbResolver := resolvers.NewGRBClusterRuleResolver(state.grbCacheMock, grResolver, nil)
 			admitters := globalrolebinding.NewValidator(state.resolver, grbResolver).Admitters()
 			require.Len(t, admitters, 1)
 
@@ -567,7 +567,7 @@ func Test_UnexpectedErrors(t *testing.T) {
 	t.Parallel()
 	state := newDefaultState(t)
 	grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCacheMock, nil), state.grCacheMock)
-	grbResolver := resolvers.NewGRBClusterRuleResolver(state.grbCacheMock, grResolver)
+	grbResolver := resolvers.NewGRBClusterRuleResolver(state.grbCacheMock, grResolver, nil)
 	validator := globalrolebinding.NewValidator(state.resolver, grbResolver)
 	admitters := validator.Admitters()
 	require.Len(t, admitters, 1, "wanted only one admitter")
