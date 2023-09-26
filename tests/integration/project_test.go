@@ -110,6 +110,9 @@ func (m *IntegrationSuite) TestMutateProject() {
 			Name:      randomName(),
 			Namespace: clusterName,
 		},
+		Spec: v3.ProjectSpec{
+			ClusterName: clusterName,
+		},
 	}
 	result := &v3.Project{}
 	err = projectClient.Create(ctx, validCreateObj.Namespace, validCreateObj, result, metav1.CreateOptions{})

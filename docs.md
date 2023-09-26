@@ -60,6 +60,7 @@ Users cannot create ClusterRoleTemplateBindings which violate the following cons
 - `ClusterName` must:
   - Be provided as a non-empty value
   - Match the namespace of the ClusterRoleTemplateBinding
+  - Refer to an existing cluster
 - The roleTemplate indicated in `RoleTemplateName` must be:
   - Provided as a non-empty value
   - Valid (i.e. is an existing `roleTemplate` object of given name in the `management.cattle.io/v3` API group)
@@ -172,6 +173,10 @@ This admission webhook prevents the disabling or deletion of a NodeDriver if the
 
 ### Validation Checks
 
+#### ClusterName validation
+
+ClusterName must be equal to the namespace, and must refer to an existing management.cattle.io/v3.Cluster object.
+
 #### Protects system project
 
 The system project cannot be deleted.
@@ -201,8 +206,9 @@ Users cannot create ProjectRoleTemplateBindings that violate the following const
 
 - The `ProjectName` field must be:
     - Provided as a non-empty value
-    - Specified using the format of `cluster-id:project-id`
-    - `project-id`, in particular, must match the namespace of the ProjectRoleTemplateBinding
+    - Specified using the format of `clusterName:projectName`; `clusterName` is the `metadata.name` of a cluster, and `projectName` is the `metadata.name` of a project
+    - The `projectName` part of the field must match the namespace of the ProjectRoleTemplateBinding
+    - Refer to a valid project and cluster (both must exist and project.Spec.ClusterName must equal the cluster)
 - Either a user subject (through `UserName` or `UserPrincipalName`), or a group subject (through `GroupName`
   or `GroupPrincipalName`), or a service account subject (through `ServiceAccount`) must be specified. Exactly one
   subject type of the three must be provided.
