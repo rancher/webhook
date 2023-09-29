@@ -426,13 +426,6 @@ func TestProjectValidation(t *testing.T) {
 					ClusterName: "testcluster",
 				},
 			},
-			stateSetup: func(state *testState) {
-				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "testcluster",
-					},
-				}, nil)
-			},
 			wantAllowed: true,
 		},
 		{
@@ -468,13 +461,6 @@ func TestProjectValidation(t *testing.T) {
 					NamespaceDefaultResourceQuota: nil,
 				},
 			},
-			stateSetup: func(state *testState) {
-				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "testcluster",
-					},
-				}, nil)
-			},
 			wantAllowed: true,
 		},
 		{
@@ -508,13 +494,6 @@ func TestProjectValidation(t *testing.T) {
 					},
 				},
 			},
-			stateSetup: func(state *testState) {
-				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "testcluster",
-					},
-				}, nil)
-			},
 			wantAllowed: true,
 		},
 		{
@@ -543,13 +522,6 @@ func TestProjectValidation(t *testing.T) {
 					},
 				},
 			},
-			stateSetup: func(state *testState) {
-				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "testcluster",
-					},
-				}, nil)
-			},
 			wantAllowed: false,
 		},
 		{
@@ -577,13 +549,6 @@ func TestProjectValidation(t *testing.T) {
 						},
 					},
 				},
-			},
-			stateSetup: func(state *testState) {
-				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "testcluster",
-					},
-				}, nil)
 			},
 			wantAllowed: false,
 		},
@@ -619,13 +584,6 @@ func TestProjectValidation(t *testing.T) {
 					},
 				},
 			},
-			stateSetup: func(state *testState) {
-				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "testcluster",
-					},
-				}, nil)
-			},
 			wantAllowed: false,
 		},
 		{
@@ -659,13 +617,6 @@ func TestProjectValidation(t *testing.T) {
 						},
 					},
 				},
-			},
-			stateSetup: func(state *testState) {
-				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "testcluster",
-					},
-				}, nil)
 			},
 			wantAllowed: false,
 		},
@@ -702,13 +653,6 @@ func TestProjectValidation(t *testing.T) {
 					},
 				},
 			},
-			stateSetup: func(state *testState) {
-				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "testcluster",
-					},
-				}, nil)
-			},
 			wantAllowed: false,
 		},
 		{
@@ -741,13 +685,6 @@ func TestProjectValidation(t *testing.T) {
 						},
 					},
 				},
-			},
-			stateSetup: func(state *testState) {
-				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "testcluster",
-					},
-				}, nil)
 			},
 			wantAllowed: false,
 		},
@@ -798,13 +735,6 @@ func TestProjectValidation(t *testing.T) {
 					},
 				},
 			},
-			stateSetup: func(state *testState) {
-				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "testcluster",
-					},
-				}, nil)
-			},
 			wantAllowed: false,
 		},
 		{
@@ -853,13 +783,6 @@ func TestProjectValidation(t *testing.T) {
 						},
 					},
 				},
-			},
-			stateSetup: func(state *testState) {
-				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "testcluster",
-					},
-				}, nil)
 			},
 			wantAllowed: true,
 		},
@@ -929,14 +852,54 @@ func TestProjectValidation(t *testing.T) {
 					},
 				},
 			},
-			stateSetup: func(state *testState) {
-				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "testcluster",
-					},
-				}, nil)
+			wantAllowed: false,
+		},
+		{
+			name:      "update changing clusterName",
+			operation: admissionv1.Update,
+			oldProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testothercluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testothercluster",
+				},
 			},
 			wantAllowed: false,
+		},
+		{
+			name:      "invalid operation",
+			operation: admissionv1.Connect,
+			oldProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			wantAllowed: false,
+			wantErr:     true,
 		},
 	}
 	for _, test := range tests {

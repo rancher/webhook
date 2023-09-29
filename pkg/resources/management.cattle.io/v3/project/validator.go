@@ -81,10 +81,16 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, fmt.Errorf("failed to get old and new projects from request: %w", err)
 	}
 
-	if request.Operation == admissionv1.Delete {
+	switch request.Operation {
+	case admissionv1.Create:
+		return a.admitCreate(newProject)
+	case admissionv1.Update:
+		return a.admitUpdate(oldProject, newProject)
+	case admissionv1.Delete:
 		return a.admitDelete(oldProject)
+	default:
+		return nil, admission.ErrUnsupportedOperation
 	}
-	return a.admitCreateOrUpdate(oldProject, newProject)
 }
 
 func (a *admitter) admitDelete(project *v3.Project) (*admissionv1.AdmissionResponse, error) {
@@ -94,22 +100,35 @@ func (a *admitter) admitDelete(project *v3.Project) (*admissionv1.AdmissionRespo
 	return admission.ResponseAllowed(), nil
 }
 
-func (a *admitter) admitCreateOrUpdate(oldProject, newProject *v3.Project) (*admissionv1.AdmissionResponse, error) {
-	fieldErr, err := a.checkClusterName(newProject)
+func (a *admitter) admitCreate(project *v3.Project) (*admissionv1.AdmissionResponse, error) {
+	fieldErr, err := a.checkClusterExists(project)
 	if err != nil {
 		return nil, fmt.Errorf("error checking cluster name: %w", err)
 	}
 	if fieldErr != nil {
 		return admission.ResponseBadRequest(fieldErr.Error()), nil
 	}
+	return a.admitCommonCreateUpdate(nil, project)
+}
+
+func (a *admitter) admitUpdate(oldProject, newProject *v3.Project) (*admissionv1.AdmissionResponse, error) {
+	if oldProject.Spec.ClusterName != newProject.Spec.ClusterName {
+		fieldErr := field.Invalid(projectSpecFieldPath.Child(clusterNameField), newProject.Spec.ClusterName, "field is immutable")
+		return admission.ResponseBadRequest(fieldErr.Error()), nil
+	}
+	return a.admitCommonCreateUpdate(oldProject, newProject)
+
+}
+
+func (a *admitter) admitCommonCreateUpdate(oldProject, newProject *v3.Project) (*admissionv1.AdmissionResponse, error) {
 	projectQuota := newProject.Spec.ResourceQuota
 	nsQuota := newProject.Spec.NamespaceDefaultResourceQuota
 	if projectQuota == nil && nsQuota == nil {
 		return admission.ResponseAllowed(), nil
 	}
-	fieldErr, err = checkQuotaFields(projectQuota, nsQuota)
+	fieldErr, err := checkQuotaFields(projectQuota, nsQuota)
 	if err != nil {
-		return nil, fmt.Errorf("error checking project fields: %w", err)
+		return nil, fmt.Errorf("error checking project quota fields: %w", err)
 	}
 	if fieldErr != nil {
 		return admission.ResponseBadRequest(fieldErr.Error()), nil
@@ -124,7 +143,7 @@ func (a *admitter) admitCreateOrUpdate(oldProject, newProject *v3.Project) (*adm
 	return admission.ResponseAllowed(), nil
 }
 
-func (a *admitter) checkClusterName(project *v3.Project) (*field.Error, error) {
+func (a *admitter) checkClusterExists(project *v3.Project) (*field.Error, error) {
 	if project.Spec.ClusterName == "" {
 		return field.Required(projectSpecFieldPath.Child(clusterNameField), "clusterName is required"), nil
 	}
