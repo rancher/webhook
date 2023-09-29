@@ -1,13 +1,19 @@
 package resolvers
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/auth"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
+	v1 "k8s.io/api/authorization/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apiserver/pkg/authentication/serviceaccount"
 	"k8s.io/apiserver/pkg/authentication/user"
+	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 )
 
 const (
@@ -15,20 +21,37 @@ const (
 	localCluster    = "local"
 )
 
+var (
+	exceptionServiceAccounts = []string{"rancher-backup", "fleet-agent"}
+	adminRules               = []rbacv1.PolicyRule{
+		{
+			APIGroups: []string{rbacv1.APIGroupAll},
+			Resources: []string{rbacv1.ResourceAll},
+			Verbs:     []string{rbacv1.VerbAll},
+		},
+		{
+			NonResourceURLs: []string{rbacv1.NonResourceAll},
+			Verbs:           []string{rbacv1.VerbAll},
+		},
+	}
+)
+
 // GRBClusterRuleResolver implements the rbacv1.AuthorizationRuleResolver interface. Provides rule resolution
 // for the permissions a GRB gives that apply in a given cluster (or all clusters).
 type GRBClusterRuleResolver struct {
 	GlobalRoleBindings v3.GlobalRoleBindingCache
 	GlobalRoleResolver *auth.GlobalRoleResolver
+	sar                authorizationv1.SubjectAccessReviewInterface
 }
 
 // New NewGRBClusterRuleResolver returns a new resolver for resolving rules given through GlobalRoleBindings
 // which apply to cluster(s). This function can only be called once for each unique instance of grbCache.
-func NewGRBClusterRuleResolver(grbCache v3.GlobalRoleBindingCache, grResolver *auth.GlobalRoleResolver) *GRBClusterRuleResolver {
+func NewGRBClusterRuleResolver(grbCache v3.GlobalRoleBindingCache, grResolver *auth.GlobalRoleResolver, sar authorizationv1.SubjectAccessReviewInterface) *GRBClusterRuleResolver {
 	grbCache.AddIndexer(grbSubjectIndex, grbBySubject)
 	return &GRBClusterRuleResolver{
 		GlobalRoleBindings: grbCache,
 		GlobalRoleResolver: grResolver,
+		sar:                sar,
 	}
 }
 
@@ -86,6 +109,77 @@ func (g *GRBClusterRuleResolver) VisitRulesFor(user user.Info, namespace string,
 			return
 		}
 	}
+	// if we aren't an exception service account, no need to check sa-specific permissions
+	if !isExceptionServiceAccount(user) {
+		return
+	}
+	isAdmin, err := g.hasAdminPermissions(user)
+	if err != nil {
+		visitor(nil, nil, err)
+		return
+	}
+	if isAdmin {
+		// exception service accounts are considered to have full permissions for the purposes of the clusterRules
+		if !visitRules(nil, adminRules, nil, visitor) {
+			return
+		}
+	}
+}
+
+// hasAdminPermissions checks if a given user is an admin
+func (g *GRBClusterRuleResolver) hasAdminPermissions(user user.Info) (bool, error) {
+	extras := map[string]v1.ExtraValue{}
+	for extraKey, extraValue := range user.GetExtra() {
+		extras[extraKey] = v1.ExtraValue(extraValue)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+	resourceResponse, err := g.sar.Create(ctx, &v1.SubjectAccessReview{
+		Spec: v1.SubjectAccessReviewSpec{
+			ResourceAttributes: &v1.ResourceAttributes{
+				Verb:     rbacv1.VerbAll,
+				Group:    rbacv1.APIGroupAll,
+				Version:  rbacv1.APIGroupAll,
+				Resource: rbacv1.ResourceAll,
+			},
+			User:   user.GetName(),
+			Groups: user.GetGroups(),
+			UID:    user.GetUID(),
+			Extra:  extras,
+		}}, metav1.CreateOptions{})
+	if err != nil {
+		return false, fmt.Errorf("unable to create sar for user %s: %w", user.GetName(), err)
+	}
+	if resourceResponse == nil {
+		return false, fmt.Errorf("no sar returned from create request for user %s", user.GetName())
+	}
+	return resourceResponse.Status.Allowed, nil
+}
+
+// isExceptionServiceAccount checks if the specified user is one of the rancher service accounts which need to interact
+// with globalRoles but don't themselves have grb permissions
+func isExceptionServiceAccount(user user.Info) bool {
+	isExceptionUser := false
+	_, saName, err := serviceaccount.SplitUsername(user.GetName())
+	if err != nil {
+		// an error indicates that this wasn't a service account, so we can return early
+		return false
+	}
+	for _, exceptionUsername := range exceptionServiceAccounts {
+		if saName == exceptionUsername {
+			isExceptionUser = true
+			break
+		}
+	}
+	if !isExceptionUser {
+		return false
+	}
+	for _, group := range user.GetGroups() {
+		if group == serviceaccount.AllServiceAccountsGroup {
+			return true
+		}
+	}
+	return false
 }
 
 // grbBySubject indexes a GRB using the subject as the key.
