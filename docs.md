@@ -175,7 +175,7 @@ This admission webhook prevents the disabling or deletion of a NodeDriver if the
 
 #### ClusterName validation
 
-ClusterName must be equal to the namespace, and must refer to an existing management.cattle.io/v3.Cluster object.
+ClusterName must be equal to the namespace, and must refer to an existing management.cattle.io/v3.Cluster object. In addition, users cannot update the field after creation. 
 
 #### Protects system project
 
