@@ -54,9 +54,6 @@ func NewUserInfo(username string, groups ...string) *user.DefaultInfo {
 	return &user.DefaultInfo{
 		Name:   username,
 		Groups: groups,
-		Extra: map[string][]string{
-			"test": {"test"},
-		},
 	}
 }
 

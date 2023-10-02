@@ -122,8 +122,6 @@ On create or update, the following checks take place:
 
 Users can only change GlobalRoles with rights less than or equal to those they currently possess. This is to prevent privilege escalation. This includes the rules in the RoleTemplates referred to in `inheritedClusterRoles`. 
 
-This escalation checking currently prevents service accounts from modifying GlobalRoles which include permissions on downstream clusters (such as Admin, Restricted Admin, or GlobalRoles which use the `inheritedClusterRoles` field).
-
 #### Builtin Validation
 
 The `globalroles.builtin` field is immutable, and new builtIn GlobalRoles cannot be created.
@@ -139,8 +137,6 @@ Note: all checks are bypassed if the GlobalRoleBinding is being deleted, or if o
 #### Escalation Prevention
 
 Users can only create/update GlobalRoleBindings with rights less than or equal to those they currently possess. This is to prevent privilege escalation. 
-
-This escalation checking currently prevents service accounts from modifying GlobalRoleBindings which give access to GlobalRoles which include permissions on downstream clusters (such as Admin, Restricted Admin, or GlobalRoles which use the `inheritedClusterRoles` field).
 
 #### Valid Global Role Reference
 
