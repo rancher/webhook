@@ -1,6 +1,7 @@
 package globalrole_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -9,11 +10,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	admissionv1 "k8s.io/api/admission/v1"
+	authorizationv1 "k8s.io/api/authorization/v1"
 	v1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	k8fake "k8s.io/client-go/kubernetes/typed/authorization/v1/fake"
+	k8testing "k8s.io/client-go/testing"
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
 
@@ -164,45 +168,6 @@ func TestAdmit(t *testing.T) {
 			allowed: true,
 		},
 		{
-			name: "escalation in global + cluster rules, and invalid RT, but only meta changed",
-			args: args{
-				newGR: func() *v3.GlobalRole {
-					gr := newDefaultGR()
-					gr.Labels = map[string]string{
-						"new-label": "just-added",
-					}
-					gr.Rules = []v1.PolicyRule{ruleAdmin}
-					return gr
-				},
-				oldGR: func() *v3.GlobalRole {
-					gr := newDefaultGR()
-					gr.Rules = []v1.PolicyRule{ruleAdmin}
-					return gr
-				},
-			},
-			allowed: true,
-		},
-		{
-			name: "escalation in global + cluster rules, and invalid RT, but metadata and field changed",
-			args: args{
-				newGR: func() *v3.GlobalRole {
-					gr := newDefaultGR()
-					gr.Labels = map[string]string{
-						"new-label": "just-added",
-					}
-					gr.Description = "new desc"
-					gr.Rules = []v1.PolicyRule{ruleAdmin}
-					return gr
-				},
-				oldGR: func() *v3.GlobalRole {
-					gr := newDefaultGR()
-					gr.Rules = []v1.PolicyRule{ruleAdmin}
-					return gr
-				},
-			},
-			allowed: false,
-		},
-		{
 			name: "creating with equal privilege level", // User attempts to create a globalrole with rules equal to one they hold.
 			args: args{
 				username: testUser,
@@ -223,6 +188,39 @@ func TestAdmit(t *testing.T) {
 					baseGR.Rules = adminCR.Rules
 					return baseGR
 				},
+				stateSetup: func(state testState) {
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "creation with privilege escalation, escalate allowed",
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = adminCR.Rules
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					setSarResponse(true, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "creation with privilege escalation, escalate check failed",
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = adminCR.Rules
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					setSarResponse(false, fmt.Errorf("server not available"), testUser, newDefaultGR().Name, state.sarMock)
+				},
 			},
 			allowed: false,
 		},
@@ -240,8 +238,31 @@ func TestAdmit(t *testing.T) {
 					baseGR.Rules = append(baseGR.Rules, ruleReadPods, ruleWriteNodes)
 					return baseGR
 				},
+				stateSetup: func(state testState) {
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
 			},
 			allowed: false,
+		},
+		{
+			name: "update with privilege escalation, escalate allowed",
+			args: args{
+				username: testUser,
+				oldGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = readPodsCR.Rules
+					return baseGR
+				},
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = append(baseGR.Rules, ruleReadPods, ruleWriteNodes)
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					setSarResponse(true, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+			allowed: true,
 		},
 		{
 			name: "escalation in Cluster Rules", // User attempts to create a global with a cluster rules it does not currently have
@@ -254,6 +275,39 @@ func TestAdmit(t *testing.T) {
 				},
 				stateSetup: func(state testState) {
 					state.rtCacheMock.EXPECT().Get(roleTemplate.Name).Return(&roleTemplate, nil).AnyTimes()
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "escalation in Cluster Rules, escalate allowed",
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					gr := newDefaultGR()
+					gr.InheritedClusterRoles = []string{roleTemplate.Name}
+					return gr
+				},
+				stateSetup: func(state testState) {
+					state.rtCacheMock.EXPECT().Get(roleTemplate.Name).Return(&roleTemplate, nil).AnyTimes()
+					setSarResponse(true, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "escalation in Cluster Rules, escalate check failed",
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					gr := newDefaultGR()
+					gr.InheritedClusterRoles = []string{roleTemplate.Name}
+					return gr
+				},
+				stateSetup: func(state testState) {
+					state.rtCacheMock.EXPECT().Get(roleTemplate.Name).Return(&roleTemplate, nil).AnyTimes()
+					setSarResponse(false, fmt.Errorf("server not available"), testUser, newDefaultGR().Name, state.sarMock)
 				},
 			},
 			allowed: false,
@@ -282,6 +336,7 @@ func TestAdmit(t *testing.T) {
 						Context: "cluster",
 					}, nil)
 					state.rtCacheMock.EXPECT().Get("error").Return(nil, errServer)
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
 				},
 			},
 			wantErr: true,
@@ -501,7 +556,7 @@ func TestAdmit(t *testing.T) {
 				test.args.stateSetup(state)
 			}
 			grbResolver := state.createBaseGRBResolver()
-			admitters := globalrole.NewValidator(state.resolver, grbResolver).Admitters()
+			admitters := globalrole.NewValidator(state.resolver, grbResolver, state.sarMock).Admitters()
 			assert.Len(t, admitters, 1)
 
 			req := createGRRequest(t, test)
@@ -519,7 +574,7 @@ func TestAdmit(t *testing.T) {
 func Test_UnexpectedErrors(t *testing.T) {
 	t.Parallel()
 	resolver, _ := validation.NewTestRuleResolver(nil, nil, nil, nil)
-	validator := globalrole.NewValidator(resolver, nil)
+	validator := globalrole.NewValidator(resolver, nil, nil)
 	admitters := validator.Admitters()
 	require.Len(t, admitters, 1, "wanted only one admitter")
 	test := testCase{
@@ -537,4 +592,21 @@ func Test_UnexpectedErrors(t *testing.T) {
 	req.Operation = admissionv1.Connect
 	_, err = admitters[0].Admit(req)
 	require.Error(t, err, "Admit should fail on unhandled operations")
+}
+
+func setSarResponse(allowed bool, testErr error, targetUser string, targetGrName string, sarMock *k8fake.FakeSubjectAccessReviews) {
+	sarMock.Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (handled bool, ret runtime.Object, err error) {
+		createAction := action.(k8testing.CreateActionImpl)
+		review := createAction.GetObject().(*authorizationv1.SubjectAccessReview)
+		spec := review.Spec
+
+		isForGRGVR := spec.ResourceAttributes.Group == "management.cattle.io" && spec.ResourceAttributes.Version == "v3" &&
+			spec.ResourceAttributes.Resource == "globalroles"
+		if spec.User == targetUser && spec.ResourceAttributes.Verb == "escalate" &&
+			spec.ResourceAttributes.Namespace == "" && spec.ResourceAttributes.Name == targetGrName && isForGRGVR {
+			review.Status.Allowed = allowed
+			return true, review, testErr
+		}
+		return false, nil, nil
+	})
 }

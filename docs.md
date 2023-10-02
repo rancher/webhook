@@ -122,6 +122,8 @@ On create or update, the following checks take place:
 
 Users can only change GlobalRoles with rights less than or equal to those they currently possess. This is to prevent privilege escalation. This includes the rules in the RoleTemplates referred to in `inheritedClusterRoles`. 
 
+This escalation check is bypassed if a user has the `escalate` verb on the GlobalRole that they are attempting to update. This can also be given through a wildcard permission (i.e. the `*` verb also gives `escalate`).
+
 #### Builtin Validation
 
 The `globalroles.builtin` field is immutable, and new builtIn GlobalRoles cannot be created.
