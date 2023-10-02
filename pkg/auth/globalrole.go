@@ -16,7 +16,7 @@ type GlobalRoleResolver struct {
 
 const ownerRT = "cluster-owner"
 
-var adminRoles = []string{"admin", "restricted-admin"}
+var adminRoles = []string{"restricted-admin"}
 
 // NewRoleTemplateResolver creates a newly allocated RoleTemplateResolver from the provided caches
 func NewGlobalRoleResolver(roleTemplateResolver *RoleTemplateResolver, grCache controllerv3.GlobalRoleCache) *GlobalRoleResolver {
@@ -46,8 +46,8 @@ func (g *GlobalRoleResolver) ClusterRulesFromRole(gr *v3.GlobalRole) ([]rbacv1.P
 	if gr == nil {
 		return nil, nil
 	}
-	// admin and restricted admin are treated like they are owners of all downstream clusters
-	// but they don't get the same field because this would duplicate legacy logic
+	// restricted admin is treated like it is owner of all downstream clusters
+	// but it doesn't get the same field because this would duplicate legacy logic
 	for _, name := range adminRoles {
 		if gr.Name == name {
 			templateRules, err := g.roleTemplateResolver.RulesFromTemplateName(ownerRT)
