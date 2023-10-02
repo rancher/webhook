@@ -28,6 +28,7 @@ const (
 	emptyContext     = ""
 	rtRefIndex       = "management.cattle.io/rt-by-reference"
 	rtGlobalRefIndex = "management.cattle.io/rt-by-ref-grb"
+	escalateVerb     = "escalate"
 )
 
 var gvr = schema.GroupVersionResource{
@@ -136,7 +137,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return admission.ResponseBadRequest(err.Error()), nil
 	}
 
-	allowed, err := auth.EscalationAuthorized(request, gvr, a.sar, "")
+	allowed, err := auth.RequestUserHasVerb(request, gvr, a.sar, escalateVerb, "", "")
 	if err != nil {
 		logrus.Warnf("Failed to check for the 'escalate' verb on RoleTemplates: %v", err)
 	} else if allowed {

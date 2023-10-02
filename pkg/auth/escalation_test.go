@@ -166,7 +166,7 @@ func (e *EscalationSuite) TestConfirmNoEscalation() {
 	}
 }
 
-func (e *EscalationSuite) TestEscalationAuthorized() {
+func (e *EscalationSuite) TestRequestUserHasVerb() {
 	gvr := schema.GroupVersionResource{
 		Group:    "management.cattle.io",
 		Version:  "v3",
@@ -194,7 +194,8 @@ func (e *EscalationSuite) TestEscalationAuthorized() {
 			spec.ResourceAttributes.Group == gvr.Group &&
 			spec.ResourceAttributes.Resource == gvr.Resource &&
 			spec.ResourceAttributes.Namespace == namespace &&
-			spec.ResourceAttributes.Verb == "escalate"
+			spec.ResourceAttributes.Verb == "escalate" &&
+			spec.ResourceAttributes.Name == "test-resource"
 		return true, review, nil
 	})
 	tests := []struct {
@@ -225,7 +226,7 @@ func (e *EscalationSuite) TestEscalationAuthorized() {
 	for i := range tests {
 		test := tests[i]
 		e.Run(test.name, func() {
-			got, err := auth.EscalationAuthorized(test.request, gvr, fakeSAR, namespace)
+			got, err := auth.RequestUserHasVerb(test.request, gvr, fakeSAR, "escalate", "test-resource", namespace)
 			if test.wantErr {
 				e.Error(err, "expected tests to have error.")
 			} else {

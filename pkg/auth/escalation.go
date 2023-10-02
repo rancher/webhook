@@ -24,8 +24,8 @@ const (
 	CreatorIDAnn = "field.cattle.io/creatorId"
 )
 
-// EscalationAuthorized checks if the user associated with the context is explicitly authorized to escalate the given GVR.
-func EscalationAuthorized(request *admission.Request, gvr schema.GroupVersionResource, sar authorizationv1.SubjectAccessReviewInterface, namespace string) (bool, error) {
+// RequestUserHasVerb checks if the user associated with the context has a given verb on a given gvr for a specified name/namespace
+func RequestUserHasVerb(request *admission.Request, gvr schema.GroupVersionResource, sar authorizationv1.SubjectAccessReviewInterface, verb, name, namespace string) (bool, error) {
 	extras := map[string]v1.ExtraValue{}
 	for k, v := range request.UserInfo.Extra {
 		extras[k] = v1.ExtraValue(v)
@@ -34,11 +34,12 @@ func EscalationAuthorized(request *admission.Request, gvr schema.GroupVersionRes
 	resp, err := sar.Create(request.Context, &v1.SubjectAccessReview{
 		Spec: v1.SubjectAccessReviewSpec{
 			ResourceAttributes: &v1.ResourceAttributes{
-				Verb:      "escalate",
+				Verb:      verb,
 				Namespace: namespace,
 				Version:   gvr.Version,
 				Resource:  gvr.Resource,
 				Group:     gvr.Group,
+				Name:      name,
 			},
 			User:   request.UserInfo.Username,
 			Groups: request.UserInfo.Groups,
