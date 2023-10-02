@@ -1,6 +1,7 @@
 package globalrolebinding_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -11,10 +12,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/admission/v1"
+	authorizationv1 "k8s.io/api/authorization/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	k8fake "k8s.io/client-go/kubernetes/typed/authorization/v1/fake"
+	k8testing "k8s.io/client-go/testing"
 )
 
 func TestAdmit(t *testing.T) {
@@ -170,23 +174,6 @@ func TestAdmit(t *testing.T) {
 			},
 			allowed: true,
 		},
-		{
-			name: "update meta-only changed",
-			args: args{
-				newGRB: func() *v3.GlobalRoleBinding {
-					gr := newDefaultGRB()
-					gr.Labels = map[string]string{"updated": "yes"}
-					gr.GlobalRoleName = errName
-					return gr
-				},
-				oldGRB: func() *v3.GlobalRoleBinding {
-					gr := newDefaultGRB()
-					gr.GlobalRoleName = errName
-					return gr
-				},
-			},
-			allowed: true,
-		},
 		// Start privilege test
 		{
 			name: "base test valid privileges",
@@ -199,6 +186,9 @@ func TestAdmit(t *testing.T) {
 					return baseGRB
 				},
 				oldGRB: func() *v3.GlobalRoleBinding { return nil },
+				stateSetup: func(ts testState) {
+					setSarResponse(false, nil, adminUser, adminGR.Name, ts.sarMock)
+				},
 			},
 			allowed: true,
 		},
@@ -213,6 +203,9 @@ func TestAdmit(t *testing.T) {
 					return baseGRB
 				},
 				oldGRB: func() *v3.GlobalRoleBinding { return nil },
+				stateSetup: func(ts testState) {
+					setSarResponse(false, nil, noPrivUser, baseGR.Name, ts.sarMock)
+				},
 			},
 			allowed: true,
 		},
@@ -227,8 +220,28 @@ func TestAdmit(t *testing.T) {
 					return baseGRB
 				},
 				oldGRB: func() *v3.GlobalRoleBinding { return nil },
+				stateSetup: func(ts testState) {
+					setSarResponse(false, nil, testUser, adminGR.Name, ts.sarMock)
+				},
 			},
 			allowed: false,
+		},
+		{
+			name: "privilege escalation other user, bind allowed",
+			args: args{
+				username: testUser,
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.UserName = noPrivUser
+					baseGRB.GlobalRoleName = adminGR.Name
+					return baseGRB
+				},
+				oldGRB: func() *v3.GlobalRoleBinding { return nil },
+				stateSetup: func(ts testState) {
+					setSarResponse(true, nil, testUser, adminGR.Name, ts.sarMock)
+				},
+			},
+			allowed: true,
 		},
 		{
 			name: "privilege escalation self",
@@ -241,11 +254,31 @@ func TestAdmit(t *testing.T) {
 					return baseGRB
 				},
 				oldGRB: func() *v3.GlobalRoleBinding { return nil },
+				stateSetup: func(ts testState) {
+					setSarResponse(false, nil, testUser, adminGR.Name, ts.sarMock)
+				},
 			},
 			allowed: false,
 		},
 		{
-			name: "correct user privileges are evaluated.", // test that the privileges evaluated are those of the user in the request not the user being bound.
+			name: "privilege escalation self, bind allowed",
+			args: args{
+				username: testUser,
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.UserName = testUser
+					baseGRB.GlobalRoleName = adminGR.Name
+					return baseGRB
+				},
+				oldGRB: func() *v3.GlobalRoleBinding { return nil },
+				stateSetup: func(ts testState) {
+					setSarResponse(true, nil, testUser, adminGR.Name, ts.sarMock)
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "correct user privileges are evaluated", // test that the privileges evaluated are those of the user in the request not the user being bound.
 			args: args{
 				username: testUser,
 				newGRB: func() *v3.GlobalRoleBinding {
@@ -255,6 +288,43 @@ func TestAdmit(t *testing.T) {
 					return baseGRB
 				},
 				oldGRB: func() *v3.GlobalRoleBinding { return nil },
+				stateSetup: func(ts testState) {
+					setSarResponse(false, nil, testUser, adminGR.Name, ts.sarMock)
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "correct user privileges are evaluated, bind allowed",
+			args: args{
+				username: testUser,
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.UserName = adminUser
+					baseGRB.GlobalRoleName = adminGR.Name
+					return baseGRB
+				},
+				oldGRB: func() *v3.GlobalRoleBinding { return nil },
+				stateSetup: func(ts testState) {
+					setSarResponse(true, nil, testUser, adminGR.Name, ts.sarMock)
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "correct user privileges are evaluated, bind error",
+			args: args{
+				username: testUser,
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.UserName = adminUser
+					baseGRB.GlobalRoleName = adminGR.Name
+					return baseGRB
+				},
+				oldGRB: func() *v3.GlobalRoleBinding { return nil },
+				stateSetup: func(ts testState) {
+					setSarResponse(false, fmt.Errorf("server not available"), testUser, adminGR.Name, ts.sarMock)
+				},
 			},
 			allowed: false,
 		},
@@ -273,6 +343,47 @@ func TestAdmit(t *testing.T) {
 				stateSetup: func(ts testState) {
 					ts.grCacheMock.EXPECT().Get(adminClusterGR.Name).Return(&adminClusterGR, nil)
 					ts.rtCacheMock.EXPECT().Get(adminRT.Name).Return(&adminRT, nil).AnyTimes()
+					setSarResponse(false, nil, testUser, adminClusterGR.Name, ts.sarMock)
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "escalation in GR Cluster Roles, bind allowed",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					return &v3.GlobalRoleBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-grb",
+						},
+						UserName:       testUser,
+						GlobalRoleName: adminClusterGR.Name,
+					}
+				},
+				stateSetup: func(ts testState) {
+					ts.grCacheMock.EXPECT().Get(adminClusterGR.Name).Return(&adminClusterGR, nil)
+					ts.rtCacheMock.EXPECT().Get(adminRT.Name).Return(&adminRT, nil).AnyTimes()
+					setSarResponse(true, nil, testUser, adminClusterGR.Name, ts.sarMock)
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "escalation in GR Cluster Roles, bind error",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					return &v3.GlobalRoleBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-grb",
+						},
+						UserName:       testUser,
+						GlobalRoleName: adminClusterGR.Name,
+					}
+				},
+				stateSetup: func(ts testState) {
+					ts.grCacheMock.EXPECT().Get(adminClusterGR.Name).Return(&adminClusterGR, nil)
+					ts.rtCacheMock.EXPECT().Get(adminRT.Name).Return(&adminRT, nil).AnyTimes()
+					setSarResponse(false, fmt.Errorf("server not available"), testUser, adminClusterGR.Name, ts.sarMock)
 				},
 			},
 			allowed: false,
@@ -296,6 +407,7 @@ func TestAdmit(t *testing.T) {
 					}, notFoundName)
 					ts.grCacheMock.EXPECT().Get(notFoundRoleGR.Name).Return(&notFoundRoleGR, nil)
 					ts.rtCacheMock.EXPECT().Get(notFoundName).Return(nil, notFoundError)
+					setSarResponse(false, nil, testUser, notFoundRoleGR.Name, ts.sarMock)
 				},
 			},
 			allowed: false,
@@ -314,6 +426,7 @@ func TestAdmit(t *testing.T) {
 				},
 				stateSetup: func(ts testState) {
 					ts.grCacheMock.EXPECT().Get(errName).Return(nil, errServer)
+					setSarResponse(false, nil, testUser, errName, ts.sarMock)
 				},
 			},
 			wantError: true,
@@ -547,7 +660,7 @@ func TestAdmit(t *testing.T) {
 			}
 			grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCacheMock, nil), state.grCacheMock)
 			grbResolver := resolvers.NewGRBClusterRuleResolver(state.grbCacheMock, grResolver)
-			admitters := globalrolebinding.NewValidator(state.resolver, grbResolver).Admitters()
+			admitters := globalrolebinding.NewValidator(state.resolver, grbResolver, state.sarMock).Admitters()
 			require.Len(t, admitters, 1)
 
 			req := createGRBRequest(t, test)
@@ -568,7 +681,7 @@ func Test_UnexpectedErrors(t *testing.T) {
 	state := newDefaultState(t)
 	grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCacheMock, nil), state.grCacheMock)
 	grbResolver := resolvers.NewGRBClusterRuleResolver(state.grbCacheMock, grResolver)
-	validator := globalrolebinding.NewValidator(state.resolver, grbResolver)
+	validator := globalrolebinding.NewValidator(state.resolver, grbResolver, state.sarMock)
 	admitters := validator.Admitters()
 	require.Len(t, admitters, 1, "wanted only one admitter")
 	admitter := admitters[0]
@@ -588,4 +701,21 @@ func Test_UnexpectedErrors(t *testing.T) {
 	req.Object = runtime.RawExtension{}
 	_, err = admitter.Admit(req)
 	require.Error(t, err, "Admit should fail on bad request object")
+}
+
+func setSarResponse(allowed bool, testErr error, targetUser string, targetGrName string, sarMock *k8fake.FakeSubjectAccessReviews) {
+	sarMock.Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (handled bool, ret runtime.Object, err error) {
+		createAction := action.(k8testing.CreateActionImpl)
+		review := createAction.GetObject().(*authorizationv1.SubjectAccessReview)
+		spec := review.Spec
+
+		isForGRGVR := spec.ResourceAttributes.Group == "management.cattle.io" && spec.ResourceAttributes.Version == "v3" &&
+			spec.ResourceAttributes.Resource == "globalroles"
+		if spec.User == targetUser && spec.ResourceAttributes.Verb == "bind" &&
+			spec.ResourceAttributes.Namespace == "" && spec.ResourceAttributes.Name == targetGrName && isForGRGVR {
+			review.Status.Allowed = allowed
+			return true, review, testErr
+		}
+		return false, nil, nil
+	})
 }

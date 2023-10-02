@@ -10,6 +10,8 @@ Users can only create/update GlobalRoleBindings with rights less than or equal t
 
 GlobalRoleBindings must refer to a valid global role (i.e. an existing `GlobalRole` object in the `management.cattle.io/v3` apiGroup).
 
+This escalation check is bypassed if a user has the `bind` verb on the GlobalRole that they are trying to bind to (through creating or updating a GlobalRoleBinding to that GlobalRole). This can also be given through a wildcard permission (i.e. the `*` verb also gives `bind`).
+
 ### Invalid Fields - Update
 Users cannot update the following fields after creation:
 - `userName`
