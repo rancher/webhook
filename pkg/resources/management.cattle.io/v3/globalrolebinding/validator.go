@@ -4,7 +4,6 @@ package globalrolebinding
 import (
 	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -12,28 +11,41 @@ import (
 	"github.com/rancher/webhook/pkg/auth"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/resolvers"
+	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	rbacvalidation "k8s.io/kubernetes/pkg/registry/rbac/validation"
 	"k8s.io/utils/trace"
 )
 
-var gvr = schema.GroupVersionResource{
-	Group:    "management.cattle.io",
-	Version:  "v3",
-	Resource: "globalrolebindings",
-}
+var (
+	gvr = schema.GroupVersionResource{
+		Group:    "management.cattle.io",
+		Version:  "v3",
+		Resource: "globalrolebindings",
+	}
+	globalRoleGvr = schema.GroupVersionResource{
+		Group:    "management.cattle.io",
+		Version:  "v3",
+		Resource: "globalroles",
+	}
+)
+
+const bindVerb = "bind"
 
 // NewValidator returns a new validator for GlobalRoleBindings.
-func NewValidator(resolver rbacvalidation.AuthorizationRuleResolver, grbResolver *resolvers.GRBClusterRuleResolver) *Validator {
+func NewValidator(resolver rbacvalidation.AuthorizationRuleResolver, grbResolver *resolvers.GRBClusterRuleResolver,
+	sar authorizationv1.SubjectAccessReviewInterface) *Validator {
 	return &Validator{
 		admitter: admitter{
 			resolver:    resolver,
 			grbResolver: grbResolver,
+			sar:         sar,
 		},
 	}
 }
@@ -66,6 +78,7 @@ func (v *Validator) Admitters() []admission.Admitter {
 type admitter struct {
 	resolver    rbacvalidation.AuthorizationRuleResolver
 	grbResolver *resolvers.GRBClusterRuleResolver
+	sar         authorizationv1.SubjectAccessReviewInterface
 }
 
 // Admit handles the webhook admission request sent to this webhook.
@@ -78,7 +91,8 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, fmt.Errorf("failed to get %s from request: %w", gvr.Resource, err)
 	}
 
-	if canSkipValidation(request.Operation, oldGRB, newGRB) {
+	// if the grb is being deleted don't enforce integrity checks
+	if request.Operation == admissionv1.Update && newGRB.DeletionTimestamp != nil {
 		return admission.ResponseAllowed(), nil
 	}
 
@@ -117,17 +131,42 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		}
 		return nil, fmt.Errorf("unable to get global rules from role %s: %w", globalRole.Name, err)
 	}
-	err = auth.ConfirmNoEscalation(request, clusterRules, "", a.grbResolver)
+	hasBind, err := a.isRulesAllowed(request, clusterRules, globalRole.Name, a.grbResolver)
 	if err != nil {
 		return admission.ResponseFailedEscalation(err.Error()), nil
 	}
+	if hasBind {
+		// user has the bind verb, no need to check global permissions
+		return admission.ResponseAllowed(), nil
+	}
 
 	rules := a.grbResolver.GlobalRoleResolver.GlobalRulesFromRole(globalRole)
-	err = auth.ConfirmNoEscalation(request, rules, "", a.resolver)
+	_, err = a.isRulesAllowed(request, rules, globalRole.Name, a.resolver)
+	// don't need to check if this request was allowed due to the bind verb since this is the last permission check
+	// if others are added in the future a short-circuit here will be needed like for the clusterRules
 	if err != nil {
 		return admission.ResponseFailedEscalation(err.Error()), nil
 	}
 	return admission.ResponseAllowed(), nil
+}
+
+// isRulesAllowed checks if the use of requested rules are allowed by the givenResolver for a given request/user
+// returns an error if the user failed an escalation check, and nil if the request was allowed. Also returns a bool
+// indicating if the allow was due to the user having the bind verb
+func (a *admitter) isRulesAllowed(request *admission.Request, rules []rbacv1.PolicyRule, grName string, resolver rbacvalidation.AuthorizationRuleResolver) (bool, error) {
+	err := auth.ConfirmNoEscalation(request, rules, "", resolver)
+	if err != nil {
+		hasBind, bindErr := auth.RequestUserHasVerb(request, globalRoleGvr, a.sar, bindVerb, grName, "")
+		if bindErr != nil {
+			logrus.Warnf("Failed to check for the 'bind' verb on GlobalRoles: %v", bindErr)
+			return false, err
+		}
+		if hasBind {
+			return true, nil
+		}
+		return false, err
+	}
+	return false, nil
 }
 
 // validUpdateFields checks if the fields being changed are valid update fields.
@@ -180,32 +219,4 @@ func (a *admitter) validateGlobalRole(globalRole *v3.GlobalRole, fieldPath *fiel
 		return field.Invalid(fieldPath.Child("globalRoleName"), globalRole.Name, reason)
 	}
 	return nil
-}
-
-// canSkipValidation checks if validation matches one of two scenarios which allow us to skip validation.
-// 1. Object is scheduled for deletion (deletion timestamp set)
-// 2. Object is a metadata only change. (this allows users with the appropriate permissions to manage labels/annotations/finalizers)
-// deletionIsScheduled returns true if the GlobalRoleBinding is being deleted.
-func canSkipValidation(op admissionv1.Operation, oldGRB, newGRB *v3.GlobalRoleBinding) bool {
-	return op == admissionv1.Update && (newGRB.DeletionTimestamp != nil || isMetaOnlyChange(oldGRB, newGRB))
-}
-
-// isMetaOnlyChange checks if old and new are deep equal in all fields except metadata. Will return false on a
-// non-effectual change.
-func isMetaOnlyChange(oldGRB *v3.GlobalRoleBinding, newGRB *v3.GlobalRoleBinding) bool {
-	oldMeta := oldGRB.ObjectMeta
-	newMeta := newGRB.ObjectMeta
-
-	// if the metadata between old/new hasn't changed, then this isn't a metadata only change
-	if reflect.DeepEqual(oldMeta, newMeta) {
-		// checking equality of global role bindings with reflect.DeepEqual() can be very expensive from a cpu perspective
-		return false
-	}
-
-	oldGRB.ObjectMeta = metav1.ObjectMeta{}
-	newGRB.ObjectMeta = metav1.ObjectMeta{}
-	result := reflect.DeepEqual(oldGRB, newGRB)
-	oldGRB.ObjectMeta = oldMeta
-	newGRB.ObjectMeta = newMeta
-	return result
 }

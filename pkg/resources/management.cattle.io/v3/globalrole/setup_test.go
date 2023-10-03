@@ -18,6 +18,8 @@ import (
 	v1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	k8fake "k8s.io/client-go/kubernetes/typed/authorization/v1/fake"
+	k8testing "k8s.io/client-go/testing"
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
 
@@ -170,6 +172,7 @@ type testState struct {
 	rtCacheMock  *fake.MockNonNamespacedCacheInterface[*v3.RoleTemplate]
 	grCacheMock  *fake.MockNonNamespacedCacheInterface[*v3.GlobalRole]
 	grbCacheMock *fake.MockNonNamespacedCacheInterface[*v3.GlobalRoleBinding]
+	sarMock      *k8fake.FakeSubjectAccessReviews
 	resolver     validation.AuthorizationRuleResolver
 }
 
@@ -194,7 +197,7 @@ func createGRRequest(t *testing.T, test testCase) *admission.Request {
 			RequestKind:     &gvk,
 			RequestResource: &gvr,
 			Operation:       admissionv1.Create,
-			UserInfo:        v1authentication.UserInfo{Username: username, UID: ""},
+			UserInfo:        v1authentication.UserInfo{Username: username, UID: "", Extra: map[string]v1authentication.ExtraValue{"test": []string{"test"}}},
 			Object:          runtime.RawExtension{},
 			OldObject:       runtime.RawExtension{},
 		},
@@ -262,17 +265,20 @@ func newDefaultState(t *testing.T) testState {
 	grbCacheMock.EXPECT().AddIndexer(gomock.Any(), gomock.Any()).AnyTimes()
 	grCacheMock.EXPECT().Get(baseGR.Name).Return(&baseGR, nil).AnyTimes()
 	rtCacheMock.EXPECT().Get(baseRT.Name).Return(&baseRT, nil).AnyTimes()
+	k8Fake := &k8testing.Fake{}
+	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
 
 	resolver, _ := validation.NewTestRuleResolver(nil, nil, clusterRoles, clusterRoleBindings)
 	return testState{
 		rtCacheMock:  rtCacheMock,
 		grCacheMock:  grCacheMock,
 		grbCacheMock: grbCacheMock,
+		sarMock:      fakeSAR,
 		resolver:     resolver,
 	}
 }
 
 func (m *testState) createBaseGRBResolver() *resolvers.GRBClusterRuleResolver {
 	grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(m.rtCacheMock, nil), m.grCacheMock)
-	return resolvers.NewGRBClusterRuleResolver(m.grbCacheMock, grResolver, nil)
+	return resolvers.NewGRBClusterRuleResolver(m.grbCacheMock, grResolver)
 }
