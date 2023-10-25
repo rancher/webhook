@@ -12,7 +12,7 @@ API server and perform validation or mutation of resources prior to their persis
 the cluster database.
 The validation and mutation are performed by custom code whose logic is defined by the instance of an admission controller.
 Cluster administrators may create many such controllers that perform custom validation or mutation in series.
-The Rancher Webhook is one such controller that runs both in local cluster and all downstream clusters automatically.
+The Rancher Webhook is one such controller that runs both in the local cluster and all downstream clusters automatically.
 
 A typical admission controller, such as Rancher's webhook, works as a web-server that receives requests forwarded
 by the main API server. If the Webhook runs its custom validation logic for the resource in question
