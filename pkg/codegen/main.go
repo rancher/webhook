@@ -9,6 +9,7 @@ import (
 	"strings"
 	"text/template"
 
+	catalogv1 "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	controllergen "github.com/rancher/wrangler/v3/pkg/controller-gen"
@@ -53,11 +54,21 @@ func main() {
 					&v1.Cluster{},
 				},
 			},
+			"catalog.cattle.io": {
+				Types: []interface{}{
+					&catalogv1.ClusterRepo{},
+				},
+			},
 		},
 	})
 
 	// Generate the <TYPE>FromRequest and <TYPE>OldAndNewFromRequest functions to get the new and old objects from the webhook request.
 	if err := generateObjectsFromRequest("pkg/generated/objects", map[string]args.Group{
+		"catalog.cattle.io": {
+			Types: []interface{}{
+				&catalogv1.ClusterRepo{},
+			},
+		},
 		"management.cattle.io": {
 			Types: []interface{}{
 				&v3.Cluster{},
