@@ -19,6 +19,7 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	authv1 "k8s.io/api/authorization/v1"
+	k8sv1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -27,9 +28,12 @@ import (
 )
 
 const globalNamespace = "cattle-global-data"
+const failureStatus = "Failure"
 
 var mgmtNameRegex = regexp.MustCompile("^c-[a-z0-9]{5}$")
 var fleetNameRegex = regexp.MustCompile("^[^-][-a-z0-9]+$")
+var affinityAndTolerationRegexString = "([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]"
+var affinityAndTolerationRegex = regexp.MustCompile("^" + affinityAndTolerationRegexString + "$")
 
 // NewProvisioningClusterValidator returns a new validator for provisioning clusters
 func NewProvisioningClusterValidator(client *clients.Clients) *ProvisioningClusterValidator {
@@ -100,6 +104,11 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 			return response, nil
 		}
 
+		if response.Result = validateClusterAgentDeploymentCustomization(cluster); response.Result != nil {
+			return response, nil
+		}
+		// TODO - Implement validate to FleetAgentDeploymentCustomization
+
 		if err := p.validateCloudCredentialAccess(request, response, oldCluster, cluster); err != nil || response.Result != nil {
 			return response, err
 		}
@@ -146,7 +155,7 @@ func (p *provisioningAdmitter) validateCloudCredentialAccess(request *admission.
 	}
 
 	response.Result = &metav1.Status{
-		Status:  "Failure",
+		Status:  failureStatus,
 		Message: resp.Status.Reason,
 		Reason:  metav1.StatusReasonUnauthorized,
 		Code:    http.StatusUnauthorized,
@@ -178,7 +187,7 @@ func (p *provisioningAdmitter) validateClusterName(request *admission.Request, r
 	}
 	if !isValidName(cluster.Name, cluster.Namespace, err == nil) {
 		response.Result = &metav1.Status{
-			Status:  "Failure",
+			Status:  failureStatus,
 			Message: "cluster name must be 63 characters or fewer, must not begin with a hyphen, cannot be \"local\" nor of the form \"c-xxxxx\", and can only contain lowercase alphanumeric characters or ' - '",
 			Reason:  metav1.StatusReasonInvalid,
 			Code:    http.StatusUnprocessableEntity,
@@ -200,7 +209,7 @@ func (p *provisioningAdmitter) validateMachinePoolNames(request *admission.Reque
 	for _, pool := range cluster.Spec.RKEConfig.MachinePools {
 		if len(pool.Name) > 63 {
 			response.Result = &metav1.Status{
-				Status:  "Failure",
+				Status:  failureStatus,
 				Message: "pool name must be 63 characters or fewer",
 				Reason:  metav1.StatusReasonInvalid,
 				Code:    http.StatusUnprocessableEntity,
@@ -261,7 +270,7 @@ func (p *provisioningAdmitter) validatePSACT(request *admission.Request, respons
 			}
 			if parsedRangeLessThan123(parsedVersion) {
 				response.Result = &metav1.Status{
-					Status:  "Failure",
+					Status:  failureStatus,
 					Message: "PodSecurityAdmissionConfigurationTemplate(PSACT) is only supported in k8s version 1.23 and above",
 					Reason:  metav1.StatusReasonBadRequest,
 					Code:    http.StatusBadRequest,
@@ -273,7 +282,7 @@ func (p *provisioningAdmitter) validatePSACT(request *admission.Request, respons
 			if _, err := p.psactCache.Get(templateName); err != nil {
 				if apierrors.IsNotFound(err) {
 					response.Result = &metav1.Status{
-						Status:  "Failure",
+						Status:  failureStatus,
 						Message: err.Error(),
 						Reason:  metav1.StatusReasonBadRequest,
 						Code:    http.StatusBadRequest,
@@ -302,10 +311,117 @@ func (p *provisioningAdmitter) validatePSACT(request *admission.Request, respons
 	return nil
 }
 
+func validateClusterAgentDeploymentCustomization(cluster *v1.Cluster) *metav1.Status {
+	if cluster.Spec.ClusterAgentDeploymentCustomization != nil {
+		path := "spec.clusterAgentDeploymentCustomization"
+		if status := validateAppendToleration(path, cluster.Spec.ClusterAgentDeploymentCustomization.AppendTolerations); status != nil {
+			return status
+		}
+
+		if status := validateOverrideAffinity(path, cluster.Spec.ClusterAgentDeploymentCustomization.OverrideAffinity); status != nil {
+			return status
+		}
+	}
+
+	return nil
+}
+func validateOverrideAffinity(fullPath string, overrideAffinity *k8sv1.Affinity) *metav1.Status {
+	if overrideAffinity == nil {
+		return nil
+	}
+	if status := validateNodeAffinity(fmt.Sprintf("%s.overrideAffinity.nodeAffinity", fullPath),
+		overrideAffinity.NodeAffinity); status != nil {
+		return status
+	}
+	// TODO IMPLENT THE OTHER ONES podAntiAffinity and podAffinity
+	return nil
+}
+
+func validateNodeAffinity(fullPath string, affinity *k8sv1.NodeAffinity) *metav1.Status {
+	if affinity == nil {
+		return nil
+	}
+	if status := validateNodePreferredDuringSchedulingIgnoredDuringExecution(fmt.Sprintf("%s.preferredDuringSchedulingIgnoredDuringExecution", fullPath),
+		affinity.PreferredDuringSchedulingIgnoredDuringExecution); status != nil {
+		return status
+	}
+
+	if status := validateNodeRequiredDuringSchedulingIgnoredDuringExecution(fmt.Sprintf("%s.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution", fullPath),
+		affinity.RequiredDuringSchedulingIgnoredDuringExecution); status != nil {
+		return status
+	}
+	return nil
+}
+
+func validateNodePreferredDuringSchedulingIgnoredDuringExecution(fullPath string, schedulingTerms []k8sv1.PreferredSchedulingTerm) *metav1.Status {
+	for k, v := range schedulingTerms {
+		if status := validateNodeSelectorRequirement(fmt.Sprintf("%s[%d].preferences", fullPath, k), v.Preference.MatchFields); status != nil {
+			return status
+		}
+	}
+	return nil
+}
+
+func validateNodeRequiredDuringSchedulingIgnoredDuringExecution(fullPath string, nodeSelector *k8sv1.NodeSelector) *metav1.Status {
+	if nodeSelector == nil {
+		return nil
+	}
+	for k, v := range nodeSelector.NodeSelectorTerms {
+		if status := validateNodeSelectorTerm(fmt.Sprintf("%s.nodeSelectorTerms[%d]", fullPath, k), v); status != nil {
+			return status
+		}
+	}
+	return nil
+}
+
+func validateNodeSelectorTerm(fullPath string, selectorTerms k8sv1.NodeSelectorTerm) *metav1.Status {
+	if status := validateNodeSelectorRequirement(fmt.Sprintf("%s.matchFields", fullPath),
+		selectorTerms.MatchFields); status != nil {
+		return status
+	}
+	if status := validateNodeSelectorRequirement(fmt.Sprintf("%s.matchExpressions", fullPath),
+		selectorTerms.MatchExpressions); status != nil {
+		return status
+	}
+	return nil
+}
+
+// validateNodeSelectorRequirement Validates the NodeSelectors (array of key, operator and values)
+func validateNodeSelectorRequirement(fullPath string, selector []k8sv1.NodeSelectorRequirement) *metav1.Status {
+	for k, s := range selector {
+		if !affinityAndTolerationRegex.MatchString(s.Key) {
+			return &metav1.Status{
+				Status: failureStatus,
+				Message: fmt.Sprintf("%s[%d].key: Invalid Value: %s validation regex: %s",
+					fullPath, k, s.Key, affinityAndTolerationRegexString),
+				Reason: metav1.StatusReasonInvalid,
+				Code:   http.StatusUnprocessableEntity,
+			}
+		}
+	}
+	return nil
+}
+
+// validateAppendToleration validate if tolerations follows the k8s standards.
+func validateAppendToleration(fullPath string, toleration []k8sv1.Toleration) *metav1.Status {
+	for k, t := range toleration {
+		if !affinityAndTolerationRegex.MatchString(t.Key) {
+			return &metav1.Status{
+				Status: failureStatus,
+				Message: fmt.Sprintf("%s.appendTolerations[%d].key: Invalid Value: %s validation regex: %s",
+					fullPath, k, t.Key, affinityAndTolerationRegexString),
+				Reason: metav1.StatusReasonInvalid,
+				Code:   http.StatusUnprocessableEntity,
+			}
+		}
+	}
+	return nil
+}
+
 func validateACEConfig(cluster *v1.Cluster) *metav1.Status {
 	if cluster.Spec.RKEConfig != nil && cluster.Spec.LocalClusterAuthEndpoint.Enabled && cluster.Spec.LocalClusterAuthEndpoint.CACerts != "" && cluster.Spec.LocalClusterAuthEndpoint.FQDN == "" {
 		return &metav1.Status{
-			Status:  "Failure",
+			Status:  failureStatus,
 			Message: "CACerts defined but FQDN is not defined",
 			Reason:  metav1.StatusReasonInvalid,
 			Code:    http.StatusUnprocessableEntity,
