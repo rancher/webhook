@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strings"
 
 	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/webhook/pkg/admission"
@@ -22,7 +23,9 @@ import (
 	k8sv1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/validation"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/utils/trace"
 )
@@ -32,8 +35,6 @@ const failureStatus = "Failure"
 
 var mgmtNameRegex = regexp.MustCompile("^c-[a-z0-9]{5}$")
 var fleetNameRegex = regexp.MustCompile("^[^-][-a-z0-9]+$")
-var affinityAndTolerationRegexString = "([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]"
-var affinityAndTolerationRegex = regexp.MustCompile("^" + affinityAndTolerationRegexString + "$")
 
 // NewProvisioningClusterValidator returns a new validator for provisioning clusters
 func NewProvisioningClusterValidator(client *clients.Clients) *ProvisioningClusterValidator {
@@ -104,10 +105,15 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 			return response, nil
 		}
 
-		if response.Result = validateClusterAgentDeploymentCustomization(cluster); response.Result != nil {
+		if response.Result = ErrToStatus(validateAgentDeploymentCustomization(cluster.Spec.ClusterAgentDeploymentCustomization,
+			field.NewPath("spec", "clusterAgentDeploymentCustomization"))); response.Result != nil {
 			return response, nil
 		}
-		// TODO - Implement validate to FleetAgentDeploymentCustomization
+
+		if response.Result = ErrToStatus(validateAgentDeploymentCustomization(cluster.Spec.FleetAgentDeploymentCustomization,
+			field.NewPath("spec", "fleetAgentDeploymentCustomization"))); response.Result != nil {
+			return response, nil
+		}
 
 		if err := p.validateCloudCredentialAccess(request, response, oldCluster, cluster); err != nil || response.Result != nil {
 			return response, err
@@ -311,108 +317,145 @@ func (p *provisioningAdmitter) validatePSACT(request *admission.Request, respons
 	return nil
 }
 
-func validateClusterAgentDeploymentCustomization(cluster *v1.Cluster) *metav1.Status {
-	if cluster.Spec.ClusterAgentDeploymentCustomization != nil {
-		path := "spec.clusterAgentDeploymentCustomization"
-		if status := validateAppendToleration(path, cluster.Spec.ClusterAgentDeploymentCustomization.AppendTolerations); status != nil {
-			return status
-		}
-
-		if status := validateOverrideAffinity(path, cluster.Spec.ClusterAgentDeploymentCustomization.OverrideAffinity); status != nil {
-			return status
-		}
+func validateAgentDeploymentCustomization(customization *v1.AgentDeploymentCustomization, path *field.Path) field.ErrorList {
+	if customization == nil {
+		return nil
 	}
+	var errList field.ErrorList
 
-	return nil
+	errList = append(errList, validateAppendToleration(customization.AppendTolerations, path.Child("appendTolerations"))...)
+	errList = append(errList, validateOverrideAffinity(customization.OverrideAffinity, path.Child("overrideAffinity"))...)
+
+	return errList
 }
-func validateOverrideAffinity(fullPath string, overrideAffinity *k8sv1.Affinity) *metav1.Status {
+func validateOverrideAffinity(overrideAffinity *k8sv1.Affinity, path *field.Path) field.ErrorList {
 	if overrideAffinity == nil {
 		return nil
 	}
-	if status := validateNodeAffinity(fmt.Sprintf("%s.overrideAffinity.nodeAffinity", fullPath),
-		overrideAffinity.NodeAffinity); status != nil {
-		return status
+	var errList field.ErrorList
+
+	if affinity := overrideAffinity.NodeAffinity; affinity != nil {
+		errList = append(errList,
+			validateNodePreferredDuringSchedulingIgnoredDuringExecution(affinity.PreferredDuringSchedulingIgnoredDuringExecution,
+				path.Child("nodeAffinity").Child("preferredDuringSchedulingIgnoredDuringExecution"))...,
+		)
+		errList = append(errList,
+			validateNodeRequiredDuringSchedulingIgnoredDuringExecution(affinity.RequiredDuringSchedulingIgnoredDuringExecution,
+				path.Child("nodeAffinity").Child("requiredDuringSchedulingIgnoredDuringExecution"))...,
+		)
 	}
-	// TODO IMPLENT THE OTHER ONES podAntiAffinity and podAffinity
-	return nil
+
+	if podAffinity := overrideAffinity.PodAffinity; podAffinity != nil {
+		errList = append(errList, validateRequiredDuringSchedulingIgnoredDuringExecution(podAffinity.RequiredDuringSchedulingIgnoredDuringExecution,
+			path.Child("podAffinity").Child("requiredDuringSchedulingIgnoredDuringExecution"))...)
+
+		errList = append(errList, validatePreferredDuringSchedulingIgnoredDuringExecution(podAffinity.PreferredDuringSchedulingIgnoredDuringExecution,
+			path.Child("podAffinity").Child("preferredDuringSchedulingIgnoredDuringExecution"))...)
+	}
+
+	if podAntiAffinity := overrideAffinity.PodAntiAffinity; podAntiAffinity != nil {
+		errList = append(errList, validateRequiredDuringSchedulingIgnoredDuringExecution(podAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution,
+			path.Child("podAntiAffinity").Child("requiredDuringSchedulingIgnoredDuringExecution"))...)
+
+		errList = append(errList, validatePreferredDuringSchedulingIgnoredDuringExecution(podAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution,
+			path.Child("podAntiAffinity").Child("preferredDuringSchedulingIgnoredDuringExecution"))...)
+
+	}
+	return errList
 }
 
-func validateNodeAffinity(fullPath string, affinity *k8sv1.NodeAffinity) *metav1.Status {
-	if affinity == nil {
-		return nil
-	}
-	if status := validateNodePreferredDuringSchedulingIgnoredDuringExecution(fmt.Sprintf("%s.preferredDuringSchedulingIgnoredDuringExecution", fullPath),
-		affinity.PreferredDuringSchedulingIgnoredDuringExecution); status != nil {
-		return status
-	}
+func validateRequiredDuringSchedulingIgnoredDuringExecution(terms []k8sv1.PodAffinityTerm, path *field.Path) field.ErrorList {
+	var errList field.ErrorList
 
-	if status := validateNodeRequiredDuringSchedulingIgnoredDuringExecution(fmt.Sprintf("%s.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution", fullPath),
-		affinity.RequiredDuringSchedulingIgnoredDuringExecution); status != nil {
-		return status
+	for k, v := range terms {
+		errList = append(errList, validatePodAffinityTerm(v, path.Index(k))...)
 	}
-	return nil
+	return errList
 }
 
-func validateNodePreferredDuringSchedulingIgnoredDuringExecution(fullPath string, schedulingTerms []k8sv1.PreferredSchedulingTerm) *metav1.Status {
+func validatePreferredDuringSchedulingIgnoredDuringExecution(weightedPodAffinityTerm []k8sv1.WeightedPodAffinityTerm, path *field.Path) field.ErrorList {
+	var errList field.ErrorList
+	for k, v := range weightedPodAffinityTerm {
+		errList = append(errList, validatePodAffinityTerm(v.PodAffinityTerm, path.Index(k).Child("podAffinityTerm"))...)
+	}
+	return errList
+}
+
+func validatePodAffinityTerm(podAffinityTerm k8sv1.PodAffinityTerm, path *field.Path) field.ErrorList {
+	var errList field.ErrorList
+	errList = append(errList, validateLabelSelector(podAffinityTerm.LabelSelector, path.Child("labelSelector"))...)
+	errList = append(errList, validateLabelSelector(podAffinityTerm.NamespaceSelector, path.Child("namespaceSelector"))...)
+	return errList
+}
+
+func validateLabelSelector(labelSelector *metav1.LabelSelector, path *field.Path) field.ErrorList {
+	return validation.ValidateLabelSelector(labelSelector, validation.LabelSelectorValidationOptions{}, path)
+
+}
+
+func validateNodePreferredDuringSchedulingIgnoredDuringExecution(schedulingTerms []k8sv1.PreferredSchedulingTerm, path *field.Path) field.ErrorList {
+	var errList field.ErrorList
+
 	for k, v := range schedulingTerms {
-		if status := validateNodeSelectorRequirement(fmt.Sprintf("%s[%d].preferences", fullPath, k), v.Preference.MatchFields); status != nil {
-			return status
-		}
+		errList = append(errList, validateNodeSelectorTerm(v.Preference, path.Index(k).Child("preferences"))...)
 	}
-	return nil
+	return errList
 }
 
-func validateNodeRequiredDuringSchedulingIgnoredDuringExecution(fullPath string, nodeSelector *k8sv1.NodeSelector) *metav1.Status {
+func validateNodeRequiredDuringSchedulingIgnoredDuringExecution(nodeSelector *k8sv1.NodeSelector, path *field.Path) field.ErrorList {
 	if nodeSelector == nil {
 		return nil
 	}
+	var errList field.ErrorList
+	nodeSelectorPath := path.Child("nodeSelectorTerms")
 	for k, v := range nodeSelector.NodeSelectorTerms {
-		if status := validateNodeSelectorTerm(fmt.Sprintf("%s.nodeSelectorTerms[%d]", fullPath, k), v); status != nil {
-			return status
-		}
+		errList = append(errList, validateNodeSelectorTerm(v, nodeSelectorPath.Index(k))...)
 	}
-	return nil
+	return errList
 }
 
-func validateNodeSelectorTerm(fullPath string, selectorTerms k8sv1.NodeSelectorTerm) *metav1.Status {
-	if status := validateNodeSelectorRequirement(fmt.Sprintf("%s.matchFields", fullPath),
-		selectorTerms.MatchFields); status != nil {
-		return status
-	}
-	if status := validateNodeSelectorRequirement(fmt.Sprintf("%s.matchExpressions", fullPath),
-		selectorTerms.MatchExpressions); status != nil {
-		return status
-	}
-	return nil
+func validateNodeSelectorTerm(selectorTerms k8sv1.NodeSelectorTerm, path *field.Path) field.ErrorList {
+	var errList field.ErrorList
+	errList = append(errList, validateNodeSelectorRequirement(selectorTerms.MatchFields, path.Child("matchFields"))...)
+	errList = append(errList, validateNodeSelectorRequirement(selectorTerms.MatchExpressions, path.Child("matchExpressions"))...)
+	return errList
 }
 
 // validateNodeSelectorRequirement Validates the NodeSelectors (array of key, operator and values)
-func validateNodeSelectorRequirement(fullPath string, selector []k8sv1.NodeSelectorRequirement) *metav1.Status {
+func validateNodeSelectorRequirement(selector []k8sv1.NodeSelectorRequirement, path *field.Path) field.ErrorList {
+	var errList field.ErrorList
 	for k, s := range selector {
-		if !affinityAndTolerationRegex.MatchString(s.Key) {
-			return &metav1.Status{
-				Status: failureStatus,
-				Message: fmt.Sprintf("%s[%d].key: Invalid Value: %s validation regex: %s",
-					fullPath, k, s.Key, affinityAndTolerationRegexString),
-				Reason: metav1.StatusReasonInvalid,
-				Code:   http.StatusUnprocessableEntity,
-			}
-		}
+		errList = append(errList, validation.ValidateLabelName(s.Key, path.Index(k).Child("key"))...)
 	}
-	return nil
+	return errList
 }
 
 // validateAppendToleration validate if tolerations follows the k8s standards.
-func validateAppendToleration(fullPath string, toleration []k8sv1.Toleration) *metav1.Status {
-	for k, t := range toleration {
-		if !affinityAndTolerationRegex.MatchString(t.Key) {
-			return &metav1.Status{
-				Status: failureStatus,
-				Message: fmt.Sprintf("%s.appendTolerations[%d].key: Invalid Value: %s validation regex: %s",
-					fullPath, k, t.Key, affinityAndTolerationRegexString),
-				Reason: metav1.StatusReasonInvalid,
-				Code:   http.StatusUnprocessableEntity,
-			}
+func validateAppendToleration(toleration []k8sv1.Toleration, path *field.Path) field.ErrorList {
+	var errList field.ErrorList
+	for k, s := range toleration {
+		errList = append(errList, validation.ValidateLabelName(s.Key, path.Index(k))...)
+	}
+	return errList
+}
+
+func ErrToStatus(errList field.ErrorList) *metav1.Status {
+	if l := len(errList); l > 0 {
+		return &metav1.Status{
+			Status: failureStatus,
+			Message: func() string {
+				b := strings.Builder{}
+				b.WriteString("* ")
+				for i := 0; i < l; i++ {
+					b.WriteString(errList[i].Error())
+					if i != l-1 {
+						b.WriteString("\n* ")
+					}
+				}
+				return b.String()
+			}(),
+			Reason: metav1.StatusReasonInvalid,
+			Code:   http.StatusUnprocessableEntity,
 		}
 	}
 	return nil
