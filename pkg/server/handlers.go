@@ -42,10 +42,11 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		crtbs := clusterroletemplatebinding.NewValidator(crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver, clients.Management.GlobalRoleBinding().Cache(), clients.Management.Cluster().Cache())
 		roleTemplates := roletemplate.NewValidator(clients.DefaultResolver, clients.RoleTemplateResolver, clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.Management.GlobalRole().Cache())
 		secrets := secret.NewValidator(clients.RBAC.Role().Cache(), clients.RBAC.RoleBinding().Cache())
+		projectScopedSecrets := secret.NewProjectScopedValidator()
 		nodeDriver := nodedriver.NewValidator(clients.Management.Node().Cache(), clients.Dynamic)
 		projects := project.NewValidator(clients.Management.Cluster().Cache())
 
-		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, nodeDriver, projects)
+		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, projectScopedSecrets, nodeDriver, projects)
 	}
 	return handlers, nil
 }
