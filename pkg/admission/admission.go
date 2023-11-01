@@ -85,6 +85,12 @@ type MutatingAdmissionHandler interface {
 	MutatingWebhook(clientConfig v1.WebhookClientConfig) []v1.MutatingWebhook
 }
 
+// Pather is an interface that provides an alternative path for routing.
+// The output of Path will be appended to the webhook's basePath.
+type Pather interface {
+	Path() string
+}
+
 // Request is a simple wrapper for an AdmissionRequest that includes the context from the original http.Request.
 type Request struct {
 	admissionv1.AdmissionRequest
@@ -164,10 +170,16 @@ func defaultWebhookInfo(handler WebhookHandler, clientConfig v1.WebhookClientCon
 
 // Path returns the path of the webhook joined with the given basePath.
 func Path(basePath string, handler WebhookHandler) string {
-	gvr := handler.GVR()
-	newPath, err := url.JoinPath(basePath, SubPath(gvr))
+	var subPath string
+	pather, ok := handler.(Pather)
+	if ok {
+		subPath = pather.Path()
+	} else {
+		subPath = SubPath(handler.GVR())
+	}
+	newPath, err := url.JoinPath(basePath, subPath)
 	if err != nil {
-		return path.Join(basePath, SubPath(gvr))
+		return path.Join(basePath, subPath)
 	}
 	return newPath
 }

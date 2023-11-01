@@ -9,6 +9,7 @@ import (
 
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	admissionv1 "k8s.io/api/admission/v1"
 	v1 "k8s.io/api/admissionregistration/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
@@ -563,4 +564,61 @@ type fakeAdmitter struct {
 
 func (f *fakeAdmitter) Admit(_ *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	return &f.response, f.err
+}
+
+type handlerWithoutPather struct {
+}
+
+func (h handlerWithoutPather) GVR() schema.GroupVersionResource {
+	return schema.GroupVersionResource{
+		Group:    "group",
+		Version:  "version",
+		Resource: "resource",
+	}
+}
+
+func (h handlerWithoutPather) Operations() []v1.OperationType {
+	return nil
+}
+
+type handlerWithPather struct {
+	handlerWithoutPather
+}
+
+func (h handlerWithPather) Path() string {
+	return "custom-path"
+}
+
+func TestPath(t *testing.T) {
+	t.Parallel()
+	const basePath = "v1/webhook/"
+	withoutPather := handlerWithoutPather{}
+	withPather := handlerWithPather{}
+	tests := []struct {
+		name         string
+		handler      admission.WebhookHandler
+		basePath     string
+		expectedPath string
+	}{
+		{
+			name:         "default path",
+			handler:      withoutPather,
+			expectedPath: basePath + admission.SubPath(withoutPather.GVR()),
+			basePath:     basePath,
+		},
+		{
+			name:         "override path",
+			handler:      withPather,
+			expectedPath: basePath + withPather.Path(),
+			basePath:     basePath,
+		},
+	}
+	for _, test := range tests {
+		tt := test
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			path := admission.Path(tt.basePath, tt.handler)
+			require.Equal(t, tt.expectedPath, path)
+		})
+	}
 }
