@@ -105,12 +105,12 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 			return response, nil
 		}
 
-		if response.Result = ErrToStatus(validateAgentDeploymentCustomization(cluster.Spec.ClusterAgentDeploymentCustomization,
+		if response.Result = errorListToStatus(validateAgentDeploymentCustomization(cluster.Spec.ClusterAgentDeploymentCustomization,
 			field.NewPath("spec", "clusterAgentDeploymentCustomization"))); response.Result != nil {
 			return response, nil
 		}
 
-		if response.Result = ErrToStatus(validateAgentDeploymentCustomization(cluster.Spec.FleetAgentDeploymentCustomization,
+		if response.Result = errorListToStatus(validateAgentDeploymentCustomization(cluster.Spec.FleetAgentDeploymentCustomization,
 			field.NewPath("spec", "fleetAgentDeploymentCustomization"))); response.Result != nil {
 			return response, nil
 		}
@@ -324,11 +324,11 @@ func validateAgentDeploymentCustomization(customization *v1.AgentDeploymentCusto
 	var errList field.ErrorList
 
 	errList = append(errList, validateAppendToleration(customization.AppendTolerations, path.Child("appendTolerations"))...)
-	errList = append(errList, validateOverrideAffinity(customization.OverrideAffinity, path.Child("overrideAffinity"))...)
+	errList = append(errList, validateAffinity(customization.OverrideAffinity, path.Child("overrideAffinity"))...)
 
 	return errList
 }
-func validateOverrideAffinity(overrideAffinity *k8sv1.Affinity, path *field.Path) field.ErrorList {
+func validateAffinity(overrideAffinity *k8sv1.Affinity, path *field.Path) field.ErrorList {
 	if overrideAffinity == nil {
 		return nil
 	}
@@ -336,35 +336,35 @@ func validateOverrideAffinity(overrideAffinity *k8sv1.Affinity, path *field.Path
 
 	if affinity := overrideAffinity.NodeAffinity; affinity != nil {
 		errList = append(errList,
-			validateNodePreferredDuringSchedulingIgnoredDuringExecution(affinity.PreferredDuringSchedulingIgnoredDuringExecution,
+			validatePreferredSchedulingTerms(affinity.PreferredDuringSchedulingIgnoredDuringExecution,
 				path.Child("nodeAffinity").Child("preferredDuringSchedulingIgnoredDuringExecution"))...,
 		)
 		errList = append(errList,
-			validateNodeRequiredDuringSchedulingIgnoredDuringExecution(affinity.RequiredDuringSchedulingIgnoredDuringExecution,
+			validateNodeSelector(affinity.RequiredDuringSchedulingIgnoredDuringExecution,
 				path.Child("nodeAffinity").Child("requiredDuringSchedulingIgnoredDuringExecution"))...,
 		)
 	}
 
 	if podAffinity := overrideAffinity.PodAffinity; podAffinity != nil {
-		errList = append(errList, validateRequiredDuringSchedulingIgnoredDuringExecution(podAffinity.RequiredDuringSchedulingIgnoredDuringExecution,
+		errList = append(errList, validatePodAffinityTerms(podAffinity.RequiredDuringSchedulingIgnoredDuringExecution,
 			path.Child("podAffinity").Child("requiredDuringSchedulingIgnoredDuringExecution"))...)
 
-		errList = append(errList, validatePreferredDuringSchedulingIgnoredDuringExecution(podAffinity.PreferredDuringSchedulingIgnoredDuringExecution,
+		errList = append(errList, validateWeightedPodAffinityTerms(podAffinity.PreferredDuringSchedulingIgnoredDuringExecution,
 			path.Child("podAffinity").Child("preferredDuringSchedulingIgnoredDuringExecution"))...)
 	}
 
 	if podAntiAffinity := overrideAffinity.PodAntiAffinity; podAntiAffinity != nil {
-		errList = append(errList, validateRequiredDuringSchedulingIgnoredDuringExecution(podAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution,
+		errList = append(errList, validatePodAffinityTerms(podAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution,
 			path.Child("podAntiAffinity").Child("requiredDuringSchedulingIgnoredDuringExecution"))...)
 
-		errList = append(errList, validatePreferredDuringSchedulingIgnoredDuringExecution(podAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution,
+		errList = append(errList, validateWeightedPodAffinityTerms(podAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution,
 			path.Child("podAntiAffinity").Child("preferredDuringSchedulingIgnoredDuringExecution"))...)
 
 	}
 	return errList
 }
 
-func validateRequiredDuringSchedulingIgnoredDuringExecution(terms []k8sv1.PodAffinityTerm, path *field.Path) field.ErrorList {
+func validatePodAffinityTerms(terms []k8sv1.PodAffinityTerm, path *field.Path) field.ErrorList {
 	var errList field.ErrorList
 
 	for k, v := range terms {
@@ -373,7 +373,7 @@ func validateRequiredDuringSchedulingIgnoredDuringExecution(terms []k8sv1.PodAff
 	return errList
 }
 
-func validatePreferredDuringSchedulingIgnoredDuringExecution(weightedPodAffinityTerm []k8sv1.WeightedPodAffinityTerm, path *field.Path) field.ErrorList {
+func validateWeightedPodAffinityTerms(weightedPodAffinityTerm []k8sv1.WeightedPodAffinityTerm, path *field.Path) field.ErrorList {
 	var errList field.ErrorList
 	for k, v := range weightedPodAffinityTerm {
 		errList = append(errList, validatePodAffinityTerm(v.PodAffinityTerm, path.Index(k).Child("podAffinityTerm"))...)
@@ -393,7 +393,7 @@ func validateLabelSelector(labelSelector *metav1.LabelSelector, path *field.Path
 
 }
 
-func validateNodePreferredDuringSchedulingIgnoredDuringExecution(schedulingTerms []k8sv1.PreferredSchedulingTerm, path *field.Path) field.ErrorList {
+func validatePreferredSchedulingTerms(schedulingTerms []k8sv1.PreferredSchedulingTerm, path *field.Path) field.ErrorList {
 	var errList field.ErrorList
 
 	for k, v := range schedulingTerms {
@@ -402,7 +402,7 @@ func validateNodePreferredDuringSchedulingIgnoredDuringExecution(schedulingTerms
 	return errList
 }
 
-func validateNodeRequiredDuringSchedulingIgnoredDuringExecution(nodeSelector *k8sv1.NodeSelector, path *field.Path) field.ErrorList {
+func validateNodeSelector(nodeSelector *k8sv1.NodeSelector, path *field.Path) field.ErrorList {
 	if nodeSelector == nil {
 		return nil
 	}
@@ -414,15 +414,16 @@ func validateNodeRequiredDuringSchedulingIgnoredDuringExecution(nodeSelector *k8
 	return errList
 }
 
-func validateNodeSelectorTerm(selectorTerms k8sv1.NodeSelectorTerm, path *field.Path) field.ErrorList {
+func validateNodeSelectorTerm(term k8sv1.NodeSelectorTerm, path *field.Path) field.ErrorList {
 	var errList field.ErrorList
-	errList = append(errList, validateNodeSelectorRequirement(selectorTerms.MatchFields, path.Child("matchFields"))...)
-	errList = append(errList, validateNodeSelectorRequirement(selectorTerms.MatchExpressions, path.Child("matchExpressions"))...)
+	errList = append(errList, validateNodeSelectorRequirements(term.MatchFields, path.Child("matchFields"))...)
+	errList = append(errList, validateNodeSelectorRequirements(term.MatchExpressions, path.Child("matchExpressions"))...)
 	return errList
 }
 
-// validateNodeSelectorRequirement Validates the NodeSelectors (array of key, operator and values)
-func validateNodeSelectorRequirement(selector []k8sv1.NodeSelectorRequirement, path *field.Path) field.ErrorList {
+// validateNodeSelectorRequirements Validates the NodeSelectors
+// at the moment it only validates the key by calling validation.ValidateLabelName.
+func validateNodeSelectorRequirements(selector []k8sv1.NodeSelectorRequirement, path *field.Path) field.ErrorList {
 	var errList field.ErrorList
 	for k, s := range selector {
 		errList = append(errList, validation.ValidateLabelName(s.Key, path.Index(k).Child("key"))...)
@@ -430,7 +431,8 @@ func validateNodeSelectorRequirement(selector []k8sv1.NodeSelectorRequirement, p
 	return errList
 }
 
-// validateAppendToleration validate if tolerations follows the k8s standards.
+// validateAppendToleration validate if tolerations follows the k8s standards
+// at the moment it only validates the key by calling validation.ValidateLabelName.
 func validateAppendToleration(toleration []k8sv1.Toleration, path *field.Path) field.ErrorList {
 	var errList field.ErrorList
 	for k, s := range toleration {
@@ -439,7 +441,8 @@ func validateAppendToleration(toleration []k8sv1.Toleration, path *field.Path) f
 	return errList
 }
 
-func ErrToStatus(errList field.ErrorList) *metav1.Status {
+// errorListToStatus convert an errorList to failure status, it breaks a line for each entry and adds a * in front
+func errorListToStatus(errList field.ErrorList) *metav1.Status {
 	if l := len(errList); l > 0 {
 		return &metav1.Status{
 			Status: failureStatus,
