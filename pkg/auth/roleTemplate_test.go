@@ -54,12 +54,12 @@ func (r Rules) Equal(r2 Rules) bool {
 
 type RoleTemplateResolverSuite struct {
 	suite.Suite
-	adminRT           *apisv3.RoleTemplate
-	readNodesRT       *apisv3.RoleTemplate
-	writeNodesRT      *apisv3.RoleTemplate
-	inheritedRT       *apisv3.RoleTemplate
-	externalRT        *apisv3.RoleTemplate
-	invalidInhertedRT *apisv3.RoleTemplate
+	adminRT            *apisv3.RoleTemplate
+	readNodesRT        *apisv3.RoleTemplate
+	writeNodesRT       *apisv3.RoleTemplate
+	inheritedRT        *apisv3.RoleTemplate
+	externalRT         *apisv3.RoleTemplate
+	invalidInheritedRT *apisv3.RoleTemplate
 
 	readServiceCR *rbacv1.ClusterRole
 }
@@ -139,7 +139,7 @@ func (r *RoleTemplateResolverSuite) SetupSuite() {
 		Context:           "cluster",
 		RoleTemplateNames: []string{r.writeNodesRT.Name},
 	}
-	r.invalidInhertedRT = &apisv3.RoleTemplate{
+	r.invalidInheritedRT = &apisv3.RoleTemplate{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "invalid-inherited-role",
 		},
@@ -230,17 +230,17 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 		},
 		// get unknown inherited role
 		{
-			name: "Test invalid inherted template name",
+			name: "Test invalid inherited template name",
 			args: args{
 				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
 					ctrl := gomock.NewController(r.T())
 					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
-					roleTemplateCache.EXPECT().Get(r.invalidInhertedRT.Name).Return(r.invalidInhertedRT, nil)
+					roleTemplateCache.EXPECT().Get(r.invalidInheritedRT.Name).Return(r.invalidInheritedRT, nil)
 					roleTemplateCache.EXPECT().Get(invalidName).Return(nil, errExpected)
 					clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 					return roleTemplateCache, clusterRoleCache
 				},
-				name: r.invalidInhertedRT.Name,
+				name: r.invalidInheritedRT.Name,
 			},
 			want:    nil,
 			wantErr: true,
