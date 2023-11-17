@@ -15,6 +15,7 @@ import (
 	"github.com/rancher/wrangler/pkg/controller-gen/args"
 	"golang.org/x/tools/imports"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -80,6 +81,12 @@ func main() {
 				&unstructured.Unstructured{},
 				&corev1.Secret{},
 				&corev1.Namespace{},
+			},
+		},
+		"rbac.authorization.k8s.io": {
+			Types: []interface{}{
+				&rbacv1.Role{},
+				&rbacv1.RoleBinding{},
 			},
 		}}); err != nil {
 		fmt.Printf("ERROR: %v\n", err)

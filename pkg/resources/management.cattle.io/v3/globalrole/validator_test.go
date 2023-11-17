@@ -545,6 +545,178 @@ func TestAdmit(t *testing.T) {
 			},
 			allowed: false,
 		},
+		{
+			name: "creating with escalation in NamespacedRules",
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.NamespacedRules = map[string][]v1.PolicyRule{
+						"ns1": {ruleAdmin},
+						"ns2": {ruleReadPods},
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					setSarResponse(false, nil, adminUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "creating with escalation in NamespacedRules, escalate allowed",
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.NamespacedRules = map[string][]v1.PolicyRule{
+						"ns1": {ruleAdmin},
+						"ns2": {ruleReadPods},
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					setSarResponse(true, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "creating with allowed NamespacedRules",
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.NamespacedRules = map[string][]v1.PolicyRule{
+						"ns1": {ruleReadPods},
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+
+			allowed: true,
+		},
+		{
+			name: "creating with multiple allowed NamespacedRules, multiple namespaces",
+			args: args{
+				username: adminUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.NamespacedRules = map[string][]v1.PolicyRule{
+						"ns1": {ruleReadPods},
+						"ns2": {ruleWriteNodes, ruleReadPods},
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					setSarResponse(false, nil, adminUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "creating with NamespacedRules that has no rule",
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.NamespacedRules = map[string][]v1.PolicyRule{
+						"ns1": {},
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "update in NamespacedRules with privilege escalation",
+			args: args{
+				username: testUser,
+				oldGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.NamespacedRules = map[string][]v1.PolicyRule{
+						"ns1": {ruleReadPods},
+					}
+					return baseGR
+				},
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.NamespacedRules = map[string][]v1.PolicyRule{
+						"ns1": {ruleAdmin},
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "update in NamespacedRules with privilege escalation, escalate allowed",
+			args: args{
+				username: testUser,
+				oldGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.NamespacedRules = map[string][]v1.PolicyRule{
+						"ns1": {ruleReadPods},
+					}
+					return baseGR
+				},
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.NamespacedRules = map[string][]v1.PolicyRule{
+						"ns1": {ruleAdmin},
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					setSarResponse(true, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "rules contains PolicyRule that is invalid",
+			args: args{
+				username: adminUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.Rules = []v1.PolicyRule{
+						{
+							APIGroups: []string{""},
+							Resources: []string{"pods"},
+							Verbs:     []string{},
+						}}
+					return baseGR
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "namespacedrules contains PolicyRule that is invalid",
+			args: args{
+				username: adminUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.NamespacedRules = map[string][]v1.PolicyRule{
+						"ns1": {{
+							APIGroups: []string{""},
+							Resources: []string{"pods"},
+							Verbs:     []string{},
+						}},
+					}
+					return baseGR
+				},
+			},
+			allowed: false,
+		},
 	}
 
 	for _, test := range tests {

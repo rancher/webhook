@@ -8,18 +8,18 @@ import (
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
-	"github.com/rancher/webhook/pkg/auth"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/resolvers"
 	"github.com/rancher/webhook/pkg/resources/common"
-	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
+	v1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
+	"k8s.io/kubernetes/pkg/apis/rbac"
+	rbacValidation "k8s.io/kubernetes/pkg/apis/rbac/validation"
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 	"k8s.io/utils/trace"
 )
@@ -121,49 +121,43 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, err
 	}
 
-	// check for escalation separately between cluster permissions and global permissions to prevent crossover
+	// Validate the global and namespaced rules of the new GR
+	globalRules := a.grbResolver.GlobalRoleResolver.GlobalRulesFromRole(newGR)
+	returnError := validateRules(globalRules, false, fldPath)
+	for _, rules := range newGR.NamespacedRules {
+		returnError = errors.Join(returnError, validateRules(rules, true, fldPath))
+	}
+	if returnError != nil {
+		return admission.ResponseBadRequest(returnError.Error()), nil
+	}
+
+	// Check for escalations in the rules
 	clusterRules, err := a.grbResolver.GlobalRoleResolver.ClusterRulesFromRole(newGR)
 	if err != nil {
 		return nil, fmt.Errorf("unable to resolve rules for new global role: %w", err)
 	}
 
-	hasEscalate, err := a.isRulesAllowed(request, clusterRules, newGR.Name, a.grbResolver)
-	if err != nil {
-		return admission.ResponseFailedEscalation(err.Error()), nil
-	}
-	if hasEscalate {
-		// if we have the escalate verb, no need to check global permissions
+	escalateChecker := common.NewCachedVerbChecker(request, newGR.Name, a.sar, gvr, escalateVerb)
+
+	returnError = escalateChecker.IsRulesAllowed(clusterRules, a.grbResolver, "")
+	if escalateChecker.HasVerb() {
 		return admission.ResponseAllowed(), nil
 	}
-
-	rules := a.grbResolver.GlobalRoleResolver.GlobalRulesFromRole(newGR)
-	// don't need to check if this request was allowed due to escalation since this is the last permission check
-	// if others are added in the future a short-circuit here will be needed like for the clusterRules
-	_, err = a.isRulesAllowed(request, rules, newGR.Name, a.resolver)
-	if err != nil {
-		return admission.ResponseFailedEscalation(err.Error()), nil
+	returnError = errors.Join(returnError, escalateChecker.IsRulesAllowed(globalRules, a.resolver, ""))
+	if escalateChecker.HasVerb() {
+		return admission.ResponseAllowed(), nil
+	}
+	for namespace, rules := range newGR.NamespacedRules {
+		returnError = errors.Join(returnError, escalateChecker.IsRulesAllowed(rules, a.resolver, namespace))
+		if escalateChecker.HasVerb() {
+			return admission.ResponseAllowed(), nil
+		}
+	}
+	if returnError != nil {
+		return admission.ResponseFailedEscalation(fmt.Sprintf("errors due to escalation: %v", returnError)), nil
 	}
 
 	return admission.ResponseAllowed(), nil
-}
-
-// isRulesAllowed checks if the use of requested rules are allowed by the givenResolver for a given request/user
-// returns an error if the user failed an escalation check, and nil if the request was allowed. Also returns a bool
-// indicating if the allow was due to the user having the escalate verb
-func (a *admitter) isRulesAllowed(request *admission.Request, rules []rbacv1.PolicyRule, grName string, resolver validation.AuthorizationRuleResolver) (bool, error) {
-	err := auth.ConfirmNoEscalation(request, rules, "", resolver)
-	if err != nil {
-		hasEscalate, escErr := auth.RequestUserHasVerb(request, gvr, a.sar, escalateVerb, grName, "")
-		if escErr != nil {
-			logrus.Warnf("Failed to check for the 'escalate' verb on GlobalRoles: %v", escErr)
-			return false, err
-		}
-		if hasEscalate {
-			return true, nil
-		}
-		return false, err
-	}
-	return false, nil
 }
 
 // validateDelete checks if a global role can be deleted and returns the appropriate response.
@@ -263,4 +257,15 @@ func (a *admitter) validateUpdateFields(oldRole, newRole *v3.GlobalRole, fldPath
 		return field.Forbidden(fldPath, "updates to builtIn GlobalRoles for fields other than 'newUserDefault' are forbidden")
 	}
 	return nil
+}
+
+func validateRules(rules []v1.PolicyRule, isNamespaced bool, fldPath *field.Path) error {
+	var returnErr error
+	for _, r := range rules {
+		fieldErrs := rbacValidation.ValidatePolicyRule(rbac.PolicyRule(r), isNamespaced, fldPath)
+		if len(fieldErrs) != 0 {
+			returnErr = errors.Join(returnErr, fieldErrs.ToAggregate())
+		}
+	}
+	return returnErr
 }

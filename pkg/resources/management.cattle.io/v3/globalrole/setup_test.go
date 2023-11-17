@@ -188,7 +188,7 @@ func createGRRequest(t *testing.T, test testCase) *admission.Request {
 		username = testUser
 	}
 	gvk := metav1.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "GlobalRole"}
-	gvr := metav1.GroupVersionResource{Group: "management.cattle.io", Version: "v3", Resource: "globalrolebindings"}
+	gvr := metav1.GroupVersionResource{Group: "management.cattle.io", Version: "v3", Resource: "globalroles"}
 	req := &admission.Request{
 		AdmissionRequest: admissionv1.AdmissionRequest{
 			UID:             "1",
