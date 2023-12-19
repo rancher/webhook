@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"cmp"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -132,23 +133,12 @@ func getDocFiles(baseDir string) ([]docFile, error) {
 	slices.SortFunc(docFiles, func(a, b docFile) int {
 		if a.group == b.group {
 			if a.resource == b.resource {
-				return stringCompare(a.version, b.version)
+				return cmp.Compare(a.version, b.version)
 			}
-			return stringCompare(a.resource, b.resource)
+			return cmp.Compare(a.resource, b.resource)
 		}
-		return stringCompare(a.group, b.group)
+		return cmp.Compare(a.group, b.group)
 	})
 
 	return docFiles, nil
-}
-
-// until we can use cmp.Compare from Go 1.21
-func stringCompare(a, b string) int {
-	if a < b {
-		return -1
-	} else if a > b {
-		return 1
-	} else {
-		return 0
-	}
 }

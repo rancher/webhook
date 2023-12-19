@@ -1,6 +1,6 @@
 module github.com/rancher/webhook
 
-go 1.20
+go 1.21
 
 // on release remove this wrangler replace and use the latest tag
 replace github.com/rancher/wrangler v1.1.1 => github.com/rancher/wrangler v1.1.1-0.20230831050635-df1bd5aae9df
