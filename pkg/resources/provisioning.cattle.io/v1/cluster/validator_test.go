@@ -1,12 +1,17 @@
 package cluster
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/webhook/pkg/admission"
+	"github.com/stretchr/testify/assert"
 	admissionv1 "k8s.io/api/admission/v1"
+	k8sv1 "k8s.io/api/core/v1"
+	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
 func Test_isValidName(t *testing.T) {
@@ -197,6 +202,376 @@ func TestValidateMachinePoolName(t *testing.T) {
 					t.Error("got result on response when none was expected")
 				}
 			}
+		})
+	}
+}
+
+func Test_validateAgentDeploymentCustomization(t *testing.T) {
+	type args struct {
+		customization *v1.AgentDeploymentCustomization
+		path          *field.Path
+	}
+	type validation func(t *testing.T, err field.ErrorList)
+
+	validateFailedPaths := func(s []string) validation {
+		return func(t *testing.T, err field.ErrorList) {
+			errPaths := make([]string, len(err), len(err))
+			for i := 0; i < len(err); i++ {
+				errPaths[i] = err[i].Field
+			}
+
+			if !assert.ElementsMatch(t, s, errPaths) {
+				b := strings.Builder{}
+				b.WriteString("Failed Fields and reasons: ")
+				for _, v := range err {
+					b.WriteString("\n* ")
+					b.WriteString(v.Error())
+				}
+				fmt.Println(b.String())
+			}
+		}
+	}
+
+	tests := []struct {
+		name         string
+		args         args
+		validateFunc validation
+	}{
+		{
+			name: "empty",
+			args: args{
+				customization: nil,
+				path:          field.NewPath("test"),
+			},
+			validateFunc: validateFailedPaths([]string{}),
+		},
+		{
+			name: "Ok",
+			args: args{
+				customization: &v1.AgentDeploymentCustomization{
+					AppendTolerations: []k8sv1.Toleration{
+						{
+							Key: "validkey",
+						},
+						{
+							Key: "validkey.dot/dash",
+						},
+					},
+					OverrideAffinity: &k8sv1.Affinity{
+						NodeAffinity: &k8sv1.NodeAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: &k8sv1.NodeSelector{
+								NodeSelectorTerms: []k8sv1.NodeSelectorTerm{
+									{
+										MatchExpressions: []k8sv1.NodeSelectorRequirement{
+											{
+												Key:      "validkey.dot",
+												Operator: "equal",
+											},
+											{
+												Key:      "validkey.dot/dash",
+												Operator: "In",
+											},
+										},
+										MatchFields: []k8sv1.NodeSelectorRequirement{
+											{
+												Key: "validkey.dot",
+											},
+											{
+												Key: "validkey.dot/dash",
+											},
+										},
+									},
+								},
+							},
+							PreferredDuringSchedulingIgnoredDuringExecution: []k8sv1.PreferredSchedulingTerm{
+								{
+									Weight: 1,
+									Preference: k8sv1.NodeSelectorTerm{
+										MatchExpressions: []k8sv1.NodeSelectorRequirement{
+											{
+												Key:      "validkey.dot",
+												Operator: "in",
+											},
+											{
+												Key:      "validkey.dot/dash",
+												Operator: "in",
+											},
+										},
+										MatchFields: []k8sv1.NodeSelectorRequirement{
+											{
+												Key:      "validkey.dot",
+												Operator: "in",
+											},
+											{
+												Key:      "validkey.dot/dash",
+												Operator: "in",
+											},
+										},
+									},
+								},
+							},
+						},
+						PodAffinity: &k8sv1.PodAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: []k8sv1.PodAffinityTerm{
+								{
+									LabelSelector: &v12.LabelSelector{
+										MatchLabels: map[string]string{
+											"key": "validValue",
+										},
+										MatchExpressions: []v12.LabelSelectorRequirement{
+											{
+												Key:      "validKey",
+												Operator: "In",
+												Values:   []string{""},
+											},
+										},
+									},
+								},
+							},
+							PreferredDuringSchedulingIgnoredDuringExecution: []k8sv1.WeightedPodAffinityTerm{
+								{
+									Weight: 1,
+									PodAffinityTerm: k8sv1.PodAffinityTerm{
+										NamespaceSelector: &v12.LabelSelector{
+											MatchLabels: nil,
+											MatchExpressions: []v12.LabelSelectorRequirement{
+												{
+													Key:      "validKey",
+													Operator: "In",
+													Values:   []string{""},
+												},
+												{
+													Key:      "validKey2",
+													Operator: "In",
+													Values:   []string{""},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						PodAntiAffinity: &k8sv1.PodAntiAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: []k8sv1.PodAffinityTerm{
+								{
+									LabelSelector: &v12.LabelSelector{
+										MatchLabels: map[string]string{
+											"key": "validValue",
+										},
+										MatchExpressions: []v12.LabelSelectorRequirement{
+											{
+												Key:      "validKey",
+												Operator: "In",
+												Values:   []string{""},
+											},
+										},
+									},
+								},
+							},
+							PreferredDuringSchedulingIgnoredDuringExecution: []k8sv1.WeightedPodAffinityTerm{
+								{
+									Weight: 1,
+									PodAffinityTerm: k8sv1.PodAffinityTerm{
+										NamespaceSelector: &v12.LabelSelector{
+											MatchLabels: nil,
+											MatchExpressions: []v12.LabelSelectorRequirement{
+												{
+													Key:      "validKey",
+													Operator: "In",
+													Values:   []string{""},
+												},
+												{
+													Key:      "validKey2",
+													Operator: "In",
+													Values:   []string{""},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				path: field.NewPath("test"),
+			},
+			validateFunc: validateFailedPaths([]string{}),
+		},
+		{
+			name: "invalid-args",
+			args: args{
+				customization: &v1.AgentDeploymentCustomization{
+					AppendTolerations: []k8sv1.Toleration{
+						{
+							Key: "`{}invalidKey",
+						},
+						{
+							Key: "`{}invalidKey.dot/dash",
+						},
+					},
+					OverrideAffinity: &k8sv1.Affinity{
+						NodeAffinity: &k8sv1.NodeAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: &k8sv1.NodeSelector{
+								NodeSelectorTerms: []k8sv1.NodeSelectorTerm{
+									{
+										MatchExpressions: []k8sv1.NodeSelectorRequirement{
+											{
+												Key:      "`{}invalidKey.dot",
+												Operator: "equal",
+											},
+											{
+												Key:      "`{}invalidKey.dot/dash",
+												Operator: "In",
+											},
+										},
+										MatchFields: []k8sv1.NodeSelectorRequirement{
+											{
+												Key: "`{}invalidKey.dot",
+											},
+											{
+												Key: "`{}invalidKey.dot/dash",
+											},
+										},
+									},
+								},
+							},
+							PreferredDuringSchedulingIgnoredDuringExecution: []k8sv1.PreferredSchedulingTerm{
+								{
+									Weight: 1,
+									Preference: k8sv1.NodeSelectorTerm{
+										MatchExpressions: []k8sv1.NodeSelectorRequirement{
+											{
+												Key:      "`{}invalidKey.dot",
+												Operator: "in",
+											},
+											{
+												Key:      "`{}invalidKey.dot/dash",
+												Operator: "in",
+											},
+										},
+										MatchFields: []k8sv1.NodeSelectorRequirement{
+											{
+												Key:      "`{}invalidKey.dot",
+												Operator: "in",
+											},
+											{
+												Key:      "`{}invalidKey.dot/dash",
+												Operator: "in",
+											},
+										},
+									},
+								},
+							},
+						},
+						PodAffinity: &k8sv1.PodAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: []k8sv1.PodAffinityTerm{
+								{
+									LabelSelector: &v12.LabelSelector{
+										MatchLabels: map[string]string{
+											"key": "`{}invalidKey",
+										},
+										MatchExpressions: []v12.LabelSelectorRequirement{
+											{
+												Key:      "`{}invalidKey",
+												Operator: "In",
+												Values:   []string{""},
+											},
+										},
+									},
+								},
+							},
+							PreferredDuringSchedulingIgnoredDuringExecution: []k8sv1.WeightedPodAffinityTerm{
+								{
+									Weight: 1,
+									PodAffinityTerm: k8sv1.PodAffinityTerm{
+										NamespaceSelector: &v12.LabelSelector{
+											MatchLabels: nil,
+											MatchExpressions: []v12.LabelSelectorRequirement{
+												{
+													Key:      "`{}invalidKey",
+													Operator: "In",
+													Values:   []string{""},
+												},
+												{
+													Key:      "`{}invalidKey2",
+													Operator: "In",
+													Values:   []string{""},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						PodAntiAffinity: &k8sv1.PodAntiAffinity{
+							RequiredDuringSchedulingIgnoredDuringExecution: []k8sv1.PodAffinityTerm{
+								{
+									LabelSelector: &v12.LabelSelector{
+										MatchLabels: map[string]string{
+											"key": "validValue",
+										},
+										MatchExpressions: []v12.LabelSelectorRequirement{
+											{
+												Key:      "`{}invalidKey",
+												Operator: "In",
+												Values:   []string{""},
+											},
+										},
+									},
+								},
+							},
+							PreferredDuringSchedulingIgnoredDuringExecution: []k8sv1.WeightedPodAffinityTerm{
+								{
+									Weight: 1,
+									PodAffinityTerm: k8sv1.PodAffinityTerm{
+										NamespaceSelector: &v12.LabelSelector{
+											MatchLabels: nil,
+											MatchExpressions: []v12.LabelSelectorRequirement{
+												{
+													Key:      "`{}invalidKey",
+													Operator: "In",
+													Values:   []string{""},
+												},
+												{
+													Key:      "`{}invalidKey2",
+													Operator: "In",
+													Values:   []string{""},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				path: field.NewPath("test"),
+			},
+			validateFunc: validateFailedPaths([]string{
+				"test.appendTolerations[0]",
+				"test.appendTolerations[1]",
+				"test.overrideAffinity.nodeAffinity.preferredDuringSchedulingIgnoredDuringExecution[0].preferences.matchFields[0].key",
+				"test.overrideAffinity.nodeAffinity.preferredDuringSchedulingIgnoredDuringExecution[0].preferences.matchFields[1].key",
+				"test.overrideAffinity.nodeAffinity.preferredDuringSchedulingIgnoredDuringExecution[0].preferences.matchExpressions[0].key",
+				"test.overrideAffinity.nodeAffinity.preferredDuringSchedulingIgnoredDuringExecution[0].preferences.matchExpressions[1].key",
+				"test.overrideAffinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchFields[0].key",
+				"test.overrideAffinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchFields[1].key",
+				"test.overrideAffinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key",
+				"test.overrideAffinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[1].key",
+				"test.overrideAffinity.podAffinity.requiredDuringSchedulingIgnoredDuringExecution[0].labelSelector.matchLabels", // This one is from upstream.
+				"test.overrideAffinity.podAffinity.requiredDuringSchedulingIgnoredDuringExecution[0].labelSelector.matchExpressions[0].key",
+				"test.overrideAffinity.podAffinity.preferredDuringSchedulingIgnoredDuringExecution[0].podAffinityTerm.namespaceSelector.matchExpressions[0].key",
+				"test.overrideAffinity.podAffinity.preferredDuringSchedulingIgnoredDuringExecution[0].podAffinityTerm.namespaceSelector.matchExpressions[1].key",
+				"test.overrideAffinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[0].labelSelector.matchExpressions[0].key",
+				"test.overrideAffinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution[0].podAffinityTerm.namespaceSelector.matchExpressions[0].key",
+				"test.overrideAffinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution[0].podAffinityTerm.namespaceSelector.matchExpressions[1].key",
+			}),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := validateAgentDeploymentCustomization(tt.args.customization, tt.args.path)
+			tt.validateFunc(t, got)
 		})
 	}
 }
