@@ -132,11 +132,11 @@ type testRuleResolver struct {
 	returnRules []v1.PolicyRule
 }
 
-func (t testRuleResolver) GetRoleReferenceRules(roleRef v1.RoleRef, namespace string) ([]v1.PolicyRule, error) {
+func (t testRuleResolver) GetRoleReferenceRules(v1.RoleRef, string) ([]v1.PolicyRule, error) {
 	return nil, nil
 }
 
-func (t testRuleResolver) RulesFor(user user.Info, namespace string) ([]v1.PolicyRule, error) {
+func (t testRuleResolver) RulesFor(user.Info, string) ([]v1.PolicyRule, error) {
 	return t.returnRules, nil
 }
 

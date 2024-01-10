@@ -94,9 +94,8 @@ func (c *CachedVerbChecker) IsRulesAllowed(rules []v1.PolicyRule, resolver valid
 func (c *CachedVerbChecker) HasVerb() bool {
 	if c.hasVerbBeenChecked {
 		return c.hasVerb
-	} else {
-		c.hasVerb, _ = auth.RequestUserHasVerb(c.request, c.gvr, c.sar, c.overrideVerb, c.name, "")
-		c.hasVerbBeenChecked = true
-		return c.hasVerb
 	}
+	c.hasVerb, _ = auth.RequestUserHasVerb(c.request, c.gvr, c.sar, c.overrideVerb, c.name, "")
+	c.hasVerbBeenChecked = true
+	return c.hasVerb
 }
