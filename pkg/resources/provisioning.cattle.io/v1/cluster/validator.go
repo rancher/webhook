@@ -443,25 +443,23 @@ func validateAppendToleration(toleration []k8sv1.Toleration, path *field.Path) f
 
 // errorListToStatus convert an errorList to failure status, it breaks a line for each entry and adds a * in front
 func errorListToStatus(errList field.ErrorList) *metav1.Status {
-	if l := len(errList); l > 0 {
-		return &metav1.Status{
-			Status: failureStatus,
-			Message: func() string {
-				b := strings.Builder{}
-				b.WriteString("* ")
-				for i := 0; i < l; i++ {
-					b.WriteString(errList[i].Error())
-					if i != l-1 {
-						b.WriteString("\n* ")
-					}
-				}
-				return b.String()
-			}(),
-			Reason: metav1.StatusReasonInvalid,
-			Code:   http.StatusUnprocessableEntity,
+	if len(errList) == 0 {
+		return nil
+	}
+	var builder strings.Builder
+	builder.WriteString("* ")
+	for i, fieldErr := range errList {
+		builder.WriteString(fieldErr.Error())
+		if i != len(errList)-1 {
+			builder.WriteString("\n* ")
 		}
 	}
-	return nil
+	return &metav1.Status{
+		Status:  failureStatus,
+		Message: builder.String(),
+		Reason:  metav1.StatusReasonInvalid,
+		Code:    http.StatusUnprocessableEntity,
+	}
 }
 
 func validateACEConfig(cluster *v1.Cluster) *metav1.Status {

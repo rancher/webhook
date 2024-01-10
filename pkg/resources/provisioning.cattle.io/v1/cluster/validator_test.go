@@ -206,36 +206,36 @@ func TestValidateMachinePoolName(t *testing.T) {
 	}
 }
 
+func validateFailedPaths(s []string) func(t *testing.T, err field.ErrorList) {
+	return func(t *testing.T, err field.ErrorList) {
+		t.Helper()
+		errPaths := make([]string, len(err))
+		for i := 0; i < len(err); i++ {
+			errPaths[i] = err[i].Field
+		}
+
+		if !assert.ElementsMatch(t, s, errPaths) {
+			b := strings.Builder{}
+			b.WriteString("Failed Fields and reasons: ")
+			for _, v := range err {
+				b.WriteString("\n* ")
+				b.WriteString(v.Error())
+			}
+			fmt.Println(b.String())
+		}
+	}
+}
+
 func Test_validateAgentDeploymentCustomization(t *testing.T) {
 	type args struct {
 		customization *v1.AgentDeploymentCustomization
 		path          *field.Path
 	}
-	type validation func(t *testing.T, err field.ErrorList)
-
-	validateFailedPaths := func(s []string) validation {
-		return func(t *testing.T, err field.ErrorList) {
-			errPaths := make([]string, len(err), len(err))
-			for i := 0; i < len(err); i++ {
-				errPaths[i] = err[i].Field
-			}
-
-			if !assert.ElementsMatch(t, s, errPaths) {
-				b := strings.Builder{}
-				b.WriteString("Failed Fields and reasons: ")
-				for _, v := range err {
-					b.WriteString("\n* ")
-					b.WriteString(v.Error())
-				}
-				fmt.Println(b.String())
-			}
-		}
-	}
 
 	tests := []struct {
 		name         string
 		args         args
-		validateFunc validation
+		validateFunc func(t *testing.T, err field.ErrorList)
 	}{
 		{
 			name: "empty",
