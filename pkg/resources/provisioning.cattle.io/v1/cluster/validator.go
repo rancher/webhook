@@ -29,7 +29,7 @@ import (
 const globalNamespace = "cattle-global-data"
 
 var mgmtNameRegex = regexp.MustCompile("^c-[a-z0-9]{5}$")
-var fleetNameRegex = regexp.MustCompile("^[a-z0-9]+(?:-[a-z0-9]+)*$")
+var fleetNameRegex = regexp.MustCompile("^[^-][-a-z0-9]*$")
 
 // NewProvisioningClusterValidator returns a new validator for provisioning clusters
 func NewProvisioningClusterValidator(client *clients.Clients) *ProvisioningClusterValidator {

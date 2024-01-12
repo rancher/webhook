@@ -121,13 +121,6 @@ func Test_isValidName(t *testing.T) {
 			want:             false,
 		},
 		{
-			name:             "name cannot end with hyphen",
-			clusterName:      "cluster-name-",
-			clusterNamespace: "fleet-default",
-			clusterExists:    true,
-			want:             false,
-		},
-		{
 			name:             "name cannot only be hyphens",
 			clusterName:      "---------------------------",
 			clusterNamespace: "fleet-default",
