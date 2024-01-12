@@ -3,6 +3,7 @@ package common
 import (
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
+	"github.com/sirupsen/logrus"
 	authnv1 "k8s.io/api/authentication/v1"
 	authzv1 "k8s.io/api/authorization/v1"
 	v1 "k8s.io/api/rbac/v1"
@@ -92,10 +93,15 @@ func (c *CachedVerbChecker) IsRulesAllowed(rules []v1.PolicyRule, resolver valid
 
 // HasVerb returns if the request has the overrideVerb. Only checks the request the first time called, after that it returns the cached value.
 func (c *CachedVerbChecker) HasVerb() bool {
+	var err error
 	if c.hasVerbBeenChecked {
 		return c.hasVerb
 	}
-	c.hasVerb, _ = auth.RequestUserHasVerb(c.request, c.gvr, c.sar, c.overrideVerb, c.name, "")
+	c.hasVerb, err = auth.RequestUserHasVerb(c.request, c.gvr, c.sar, c.overrideVerb, c.name, "")
+	if err != nil {
+		logrus.Errorf("Failed to check for the verb %s on %s: %v", c.overrideVerb, c.gvr.Resource, err)
+		return false
+	}
 	c.hasVerbBeenChecked = true
 	return c.hasVerb
 }

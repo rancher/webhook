@@ -228,6 +228,27 @@ func TestIsRulesAllowed(t *testing.T) {
 			},
 		},
 		{
+			name: "checking verb give an error",
+
+			rules: []v1.PolicyRule{adminRule},
+			states: []stateSnapshot{
+				{
+					sar: func() *k8fake.FakeSubjectAccessReviews {
+						k8Fake := &k8testing.Fake{}
+						fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
+						fakeSAR.Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (handled bool, ret runtime.Object, err error) {
+							return true, nil, fmt.Errorf("error")
+						})
+						return fakeSAR
+					},
+					resolver:           testRuleResolver{},
+					wantError:          true,
+					hasVerb:            false,
+					hasVerbBeenChecked: false,
+				},
+			},
+		},
+		{
 			name:  "no escalation first call, escalation second call",
 			rules: []v1.PolicyRule{adminRule},
 			states: []stateSnapshot{
