@@ -127,6 +127,13 @@ func Test_isValidName(t *testing.T) {
 			clusterExists:    false,
 			want:             false,
 		},
+		{
+			name: "name length is 1 character",
+			clusterName: "a",
+			clusterNamespace: "fleet-default",
+			clusterExists: false,
+			want: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
