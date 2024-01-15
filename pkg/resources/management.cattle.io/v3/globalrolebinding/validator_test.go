@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/admission/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -387,6 +388,87 @@ func TestAdmit(t *testing.T) {
 				},
 			},
 			allowed: false,
+		},
+		{
+			name: "create rules in GR NamespacedRules allowed",
+			args: args{
+				username: adminUser,
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.UserName = adminUser
+					baseGRB.GlobalRoleName = namespacedRulesGR.Name
+					return baseGRB
+				},
+				stateSetup: func(ts testState) {
+					ts.grCacheMock.EXPECT().Get(namespacedRulesGR.Name).Return(&namespacedRulesGR, nil)
+					setSarResponse(false, nil, adminUser, namespacedRulesGR.Name, ts.sarMock)
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "create rules in GR NamespacedRules allowed, multiple namespaces",
+			args: args{
+				// adminUser has global rules that apply across all namespaces
+				username: adminUser,
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.UserName = adminUser
+					baseGRB.GlobalRoleName = namespacedRulesGR.Name
+					return baseGRB
+				},
+				stateSetup: func(ts testState) {
+					gr := namespacedRulesGR.DeepCopy()
+					gr.NamespacedRules["ns2"] = []rbacv1.PolicyRule{
+						{
+							APIGroups: []string{""},
+							Resources: []string{"pods"},
+							Verbs:     []string{"*"},
+						},
+					}
+					ts.grCacheMock.EXPECT().Get(namespacedRulesGR.Name).Return(gr, nil)
+					setSarResponse(false, nil, adminUser, namespacedRulesGR.Name, ts.sarMock)
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "create escalation in GR NamespacedRules",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					return &v3.GlobalRoleBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-grb",
+						},
+						UserName:       testUser,
+						GlobalRoleName: namespacedRulesGR.Name,
+					}
+				},
+				stateSetup: func(ts testState) {
+					ts.grCacheMock.EXPECT().Get(namespacedRulesGR.Name).Return(&namespacedRulesGR, nil)
+					setSarResponse(false, nil, testUser, namespacedRulesGR.Name, ts.sarMock)
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "create escalation in GR NamespacedRules, bind allowed",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					return &v3.GlobalRoleBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-grb",
+						},
+						UserName:       testUser,
+						GlobalRoleName: namespacedRulesGR.Name,
+					}
+				},
+				stateSetup: func(ts testState) {
+					ts.grCacheMock.EXPECT().Get(namespacedRulesGR.Name).Return(&namespacedRulesGR, nil)
+					setSarResponse(true, nil, testUser, namespacedRulesGR.Name, ts.sarMock)
+				},
+			},
+			allowed: true,
 		},
 		{
 			name: "not found error resolving rules",

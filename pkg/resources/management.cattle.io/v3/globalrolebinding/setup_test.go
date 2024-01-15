@@ -236,6 +236,20 @@ var (
 			errName,
 		},
 	}
+	namespacedRulesGR = v3.GlobalRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "namespacedRules-gr",
+		},
+		NamespacedRules: map[string][]rbacv1.PolicyRule{
+			"ns1": {
+				{
+					APIGroups: []string{""},
+					Resources: []string{"configmaps"},
+					Verbs:     []string{"*"},
+				},
+			},
+		},
+	}
 )
 
 // createGRBRequest will return a new webhookRequest using the given GRBs

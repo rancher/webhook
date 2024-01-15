@@ -8,13 +8,11 @@ import (
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
-	"github.com/rancher/webhook/pkg/auth"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/resolvers"
-	"github.com/sirupsen/logrus"
+	"github.com/rancher/webhook/pkg/resources/common"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -123,6 +121,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, err
 	}
 
+	globalRules := a.grbResolver.GlobalRoleResolver.GlobalRulesFromRole(globalRole)
 	clusterRules, err := a.grbResolver.GlobalRoleResolver.ClusterRulesFromRole(globalRole)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -131,42 +130,30 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		}
 		return nil, fmt.Errorf("unable to get global rules from role %s: %w", globalRole.Name, err)
 	}
-	hasBind, err := a.isRulesAllowed(request, clusterRules, globalRole.Name, a.grbResolver)
-	if err != nil {
-		return admission.ResponseFailedEscalation(err.Error()), nil
-	}
-	if hasBind {
-		// user has the bind verb, no need to check global permissions
+
+	// Collect all escalations to return to user
+	var returnError error
+	bindChecker := common.NewCachedVerbChecker(request, globalRole.Name, a.sar, globalRoleGvr, bindVerb)
+
+	returnError = bindChecker.IsRulesAllowed(clusterRules, a.grbResolver, "")
+	if bindChecker.HasVerb() {
 		return admission.ResponseAllowed(), nil
 	}
-
-	rules := a.grbResolver.GlobalRoleResolver.GlobalRulesFromRole(globalRole)
-	_, err = a.isRulesAllowed(request, rules, globalRole.Name, a.resolver)
-	// don't need to check if this request was allowed due to the bind verb since this is the last permission check
-	// if others are added in the future a short-circuit here will be needed like for the clusterRules
-	if err != nil {
-		return admission.ResponseFailedEscalation(err.Error()), nil
+	returnError = errors.Join(returnError, bindChecker.IsRulesAllowed(globalRules, a.resolver, ""))
+	if bindChecker.HasVerb() {
+		return admission.ResponseAllowed(), nil
 	}
+	for namespace, rules := range globalRole.NamespacedRules {
+		returnError = errors.Join(returnError, bindChecker.IsRulesAllowed(rules, a.resolver, namespace))
+		if bindChecker.HasVerb() {
+			return admission.ResponseAllowed(), nil
+		}
+	}
+	if returnError != nil {
+		return admission.ResponseFailedEscalation(fmt.Sprintf("errors due to escalation: %v", returnError)), nil
+	}
+
 	return admission.ResponseAllowed(), nil
-}
-
-// isRulesAllowed checks if the use of requested rules are allowed by the givenResolver for a given request/user
-// returns an error if the user failed an escalation check, and nil if the request was allowed. Also returns a bool
-// indicating if the allow was due to the user having the bind verb
-func (a *admitter) isRulesAllowed(request *admission.Request, rules []rbacv1.PolicyRule, grName string, resolver rbacvalidation.AuthorizationRuleResolver) (bool, error) {
-	err := auth.ConfirmNoEscalation(request, rules, "", resolver)
-	if err != nil {
-		hasBind, bindErr := auth.RequestUserHasVerb(request, globalRoleGvr, a.sar, bindVerb, grName, "")
-		if bindErr != nil {
-			logrus.Warnf("Failed to check for the 'bind' verb on GlobalRoles: %v", bindErr)
-			return false, err
-		}
-		if hasBind {
-			return true, nil
-		}
-		return false, err
-	}
-	return false, nil
 }
 
 // validUpdateFields checks if the fields being changed are valid update fields.
