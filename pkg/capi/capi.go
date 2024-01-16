@@ -71,11 +71,11 @@ func Register(clients *clients.Clients, tlsOpts ...func(*tls.Config)) (func(ctx 
 			&corev1.ConfigMap{},
 			&corev1.Secret{},
 		},
-		WebhookServer: &webhook.Server{
+		WebhookServer: webhook.NewServer(webhook.Options{
 			Port:          capiPort,
 			TLSMinVersion: "1.2",
 			TLSOpts:       tlsOpts,
-		},
+		}),
 	})
 
 	if err != nil {
