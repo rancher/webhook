@@ -1,6 +1,7 @@
 package project
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -14,8 +15,10 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	quota "k8s.io/apiserver/pkg/quota/v1"
 	"k8s.io/utils/trace"
 )
 
@@ -24,6 +27,7 @@ const (
 	projectQuotaField   = "resourceQuota"
 	clusterNameField    = "clusterName"
 	namespaceQuotaField = "namespaceDefaultResourceQuota"
+	containerLimitField = "namespaceDefaultResourceQuota"
 )
 
 var projectSpecFieldPath = field.NewPath("project").Child("spec")
@@ -123,6 +127,10 @@ func (a *admitter) admitUpdate(oldProject, newProject *v3.Project) (*admissionv1
 func (a *admitter) admitCommonCreateUpdate(oldProject, newProject *v3.Project) (*admissionv1.AdmissionResponse, error) {
 	projectQuota := newProject.Spec.ResourceQuota
 	nsQuota := newProject.Spec.NamespaceDefaultResourceQuota
+	containerLimit := newProject.Spec.ContainerDefaultResourceLimit
+	if fieldErr := a.validateContainerDefaultResourceLimit(containerLimit); fieldErr != nil {
+		return admission.ResponseBadRequest(fieldErr.Error()), nil
+	}
 	if projectQuota == nil && nsQuota == nil {
 		return admission.ResponseAllowed(), nil
 	}
@@ -141,6 +149,48 @@ func (a *admitter) admitCommonCreateUpdate(oldProject, newProject *v3.Project) (
 		return admission.ResponseBadRequest(fieldErr.Error()), nil
 	}
 	return admission.ResponseAllowed(), nil
+}
+
+func (a *admitter) validateContainerDefaultResourceLimit(limit *v3.ContainerResourceLimit) error {
+	if limit == nil {
+		return nil
+	}
+	fieldPath := projectSpecFieldPath.Child(containerLimitField)
+	requestsCPU, err := resource.ParseQuantity(limit.RequestsCPU)
+	if err != nil {
+		return field.Invalid(fieldPath, limit.RequestsCPU, "failed to parse container default requested CPU")
+	}
+	limitCPU, err := resource.ParseQuantity(limit.LimitsCPU)
+	if err != nil {
+		return field.Invalid(fieldPath, limit.LimitsCPU, "failed to parse container default CPU limit")
+	}
+	requestsMemory, err := resource.ParseQuantity(limit.RequestsMemory)
+	if err != nil {
+		return field.Invalid(fieldPath, limit.RequestsMemory, "failed to parse container default requested memory")
+	}
+	limitMemory, err := resource.ParseQuantity(limit.LimitsMemory)
+	if err != nil {
+		return field.Invalid(fieldPath, limit.LimitsMemory, "failed to parse container default memory limit")
+	}
+	resourceList := v1.ResourceList{
+		v1.ResourceRequestsCPU:    requestsCPU,
+		v1.ResourceLimitsCPU:      limitCPU,
+		v1.ResourceRequestsMemory: requestsMemory,
+		v1.ResourceLimitsMemory:   limitMemory,
+	}
+	if negativeResources := quota.IsNegative(resourceList); len(negativeResources) > 0 {
+		return field.Invalid(fieldPath, limit,
+			fmt.Sprintf("resource requests and limits can't have negative values, adjust the request/limit configurations for the following resources: %v", negativeResources))
+	}
+	if requestsCPU.Cmp(limitCPU) > 0 {
+		fieldErr := field.Invalid(fieldPath, limit, fmt.Sprintf("requested CPU %s is greater than limit %s", limit.RequestsCPU, limit.LimitsCPU))
+		err = errors.Join(err, fieldErr)
+	}
+	if requestsMemory.Cmp(limitMemory) > 0 {
+		fieldErr := field.Invalid(fieldPath, limit, fmt.Sprintf("requested memory %s is greater than limit %s", limit.RequestsMemory, limit.LimitsMemory))
+		err = errors.Join(err, fieldErr)
+	}
+	return err
 }
 
 func (a *admitter) checkClusterExists(project *v3.Project) (*field.Error, error) {

@@ -12,6 +12,11 @@ The system project cannot be deleted.
 
 Project quotas and default limits must be consistent with one another and must be sufficient for the requirements of active namespaces.
 
+### Container default resource limit validation
+
+Container default resource limit configuration must have no negative values for any requests and limits.
+Requests cannot exceed limits for any resource.
+
 ## Mutations
 
 ### On create
