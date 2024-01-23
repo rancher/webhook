@@ -58,7 +58,9 @@ func (r *RoleTemplateResolver) RulesFromTemplate(roleTemplate *rancherv3.RoleTem
 func (r *RoleTemplateResolver) gatherRules(roleTemplate *rancherv3.RoleTemplate, rules []rbacv1.PolicyRule, seen map[string]bool) ([]rbacv1.PolicyRule, error) {
 	seen[roleTemplate.Name] = true
 
-	if roleTemplate.External && roleTemplate.Context == "cluster" {
+	// Rules from external RoleTemplate are granted by Rancher no matter what
+	// is the value of .context
+	if roleTemplate.External {
 		cr, err := r.clusterRoles.Get(roleTemplate.Name)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get clusterRoles '%s': %w", roleTemplate.Name, err)
