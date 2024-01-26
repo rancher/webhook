@@ -32,6 +32,7 @@ func init() {
 
 type Interface interface {
 	Cluster() ClusterController
+	ClusterProxyConfig() ClusterProxyConfigController
 	ClusterRoleTemplateBinding() ClusterRoleTemplateBindingController
 	GlobalRole() GlobalRoleController
 	GlobalRoleBinding() GlobalRoleBindingController
@@ -54,6 +55,10 @@ type version struct {
 
 func (v *version) Cluster() ClusterController {
 	return generic.NewNonNamespacedController[*v3.Cluster, *v3.ClusterList](schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Cluster"}, "clusters", v.controllerFactory)
+}
+
+func (v *version) ClusterProxyConfig() ClusterProxyConfigController {
+	return generic.NewController[*v3.ClusterProxyConfig, *v3.ClusterProxyConfigList](schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "ClusterProxyConfig"}, "clusterproxyconfigs", true, v.controllerFactory)
 }
 
 func (v *version) ClusterRoleTemplateBinding() ClusterRoleTemplateBindingController {
