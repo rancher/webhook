@@ -50,6 +50,7 @@ func CheckCreatorID(request *admission.Request, oldObj, newObj metav1.Object) *m
 
 // CheckForVerbs checks that all the rules in the given list have a verb set.
 // This is currently used in the validation of globalroles and roletemplates.
+// BEWARE This function may not be required anymore because both places also use ValidateRules, see below.
 func CheckForVerbs(rules []rbacv1.PolicyRule) error {
 	for i := range rules {
 		rule := rules[i]
