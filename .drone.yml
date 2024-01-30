@@ -17,7 +17,7 @@ steps:
         path: /var/run/docker.sock
 
   - name: integration-test
-    image: rancher/rancher:v2.8-head
+    image: rancher/rancher:v2.9-head
     pull: always
     privileged: true
     commands:
@@ -87,7 +87,7 @@ steps:
         path: /var/run/docker.sock
 
   - name: integration-test
-    image: rancher/rancher:v2.8-head
+    image: rancher/rancher:v2.9-head
     pull: always
     privileged: true
     commands:
