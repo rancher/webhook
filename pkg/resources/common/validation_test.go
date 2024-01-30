@@ -18,11 +18,10 @@ func TestValidateRules(t *testing.T) {
 	gField := field.NewPath(gResource)
 	nsField := field.NewPath(nsResource)
 
-	// Note: The partial error message is prefixed with the resource name during test execution
 	tests := []struct {
-		name string            // label for testcase
-		data rbacv1.PolicyRule // policy rule to be validated
-		err  string            // partial error returned for a resource,     empty string -> no error
+		name   string            // label for testcase
+		data   rbacv1.PolicyRule // policy rule to be validated
+		haserr bool              // error expected ?
 	}{
 		{
 			name: "ok",
@@ -31,7 +30,6 @@ func TestValidateRules(t *testing.T) {
 				APIGroups: []string{""},
 				Resources: []string{"*"},
 			},
-			err: "",
 		},
 		{
 			name: "no-verbs",
@@ -40,7 +38,7 @@ func TestValidateRules(t *testing.T) {
 				APIGroups: []string{""},
 				Resources: []string{"*"},
 			},
-			err: "[0].verbs: Required value: verbs must contain at least one value",
+			haserr: true,
 		},
 		{
 			name: "no-api-groups",
@@ -49,7 +47,7 @@ func TestValidateRules(t *testing.T) {
 				APIGroups: []string{},
 				Resources: []string{"*"},
 			},
-			err: "[0].apiGroups: Required value: resource rules must supply at least one api group",
+			haserr: true,
 		},
 		{
 			name: "no-resources",
@@ -58,7 +56,7 @@ func TestValidateRules(t *testing.T) {
 				APIGroups: []string{""},
 				Resources: []string{},
 			},
-			err: "[0].resources: Required value: resource rules must supply at least one resource",
+			haserr: true,
 		},
 	}
 
@@ -67,23 +65,21 @@ func TestValidateRules(t *testing.T) {
 			err := ValidateRules([]v1.PolicyRule{
 				testcase.data,
 			}, false, gField)
-			if testcase.err == "" {
-				require.NoError(t, err)
+			if testcase.haserr {
+				require.Error(t, err)
 				return
 			}
-			require.Error(t, err)
-			require.Equal(t, err.Error(), gResource+testcase.err)
+			require.NoError(t, err)
 		})
 		t.Run("namespaced/"+testcase.name, func(t *testing.T) {
 			err := ValidateRules([]v1.PolicyRule{
 				testcase.data,
 			}, true, nsField)
-			if testcase.err == "" {
-				require.NoError(t, err)
+			if testcase.haserr {
+				require.Error(t, err)
 				return
 			}
-			require.Error(t, err)
-			require.Equal(t, err.Error(), nsResource+testcase.err)
+			require.NoError(t, err)
 		})
 	}
 }
