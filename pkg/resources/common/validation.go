@@ -68,9 +68,7 @@ func ValidateRules(rules []rbacv1.PolicyRule, isNamespaced bool, fldPath *field.
 	for index, r := range rules {
 		fieldErrs := rbacValidation.ValidatePolicyRule(rbac.PolicyRule(r), isNamespaced,
 			fldPath.Index(index))
-		if len(fieldErrs) != 0 {
-			returnErr = errors.Join(returnErr, fieldErrs.ToAggregate())
-		}
+		returnErr = errors.Join(returnErr, fieldErrs.ToAggregate())
 	}
 	return returnErr
 }
