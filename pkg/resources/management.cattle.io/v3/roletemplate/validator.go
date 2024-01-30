@@ -137,11 +137,6 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return admission.ResponseBadRequest(err.Error()), nil
 	}
 
-	// verify inherited rules have verbs
-	if err := common.CheckForVerbs(rules); err != nil {
-		return admission.ResponseBadRequest(err.Error()), nil
-	}
-
 	allowed, err := auth.RequestUserHasVerb(request, gvr, a.sar, escalateVerb, "", "")
 	if err != nil {
 		logrus.Warnf("Failed to check for the 'escalate' verb on RoleTemplates: %v", err)

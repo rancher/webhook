@@ -2,7 +2,6 @@ package common
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/rancher/webhook/pkg/admission"
@@ -45,19 +44,6 @@ func CheckCreatorID(request *admission.Request, oldObj, newObj metav1.Object) *m
 		return status
 	}
 
-	return nil
-}
-
-// CheckForVerbs checks that all the rules in the given list have a verb set.
-// This is currently used in the validation of globalroles and roletemplates.
-// BEWARE This function may not be required anymore because both places also use ValidateRules, see below.
-func CheckForVerbs(rules []rbacv1.PolicyRule) error {
-	for i := range rules {
-		rule := rules[i]
-		if len(rule.Verbs) == 0 {
-			return fmt.Errorf("policyRules must have at least one verb: %s", rule.String())
-		}
-	}
 	return nil
 }
 
