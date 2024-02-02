@@ -60,6 +60,7 @@ func Mutation(clients *clients.Clients) ([]admission.MutatingAdmissionHandler, e
 		provisioningCluster.NewProvisioningClusterMutator(clients.Core.Secret(), clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache()),
 		managementCluster.NewManagementClusterMutator(clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache()),
 		fleetworkspace.NewMutator(clients),
+		roletemplate.NewMutator(),
 		&machineconfig.Mutator{},
 	}
 

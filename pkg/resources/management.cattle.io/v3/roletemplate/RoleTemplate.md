@@ -32,3 +32,10 @@ If `roletemplates.builtin` is true then all fields are immutable except:
  ### Deletion check
 
 RoleTemplate can not be deleted if they are referenced by other RoleTemplates via `roletemplates.roleTemplateNames` or by GlobalRoles via `globalRoles.inheritedClusterRoles`
+
+## Mutation Checks
+
+### Ensure Rules are encoded
+
+The fields of `PolicyRule` have the `omitempty` JSON tag, indicating that they will be excluded if they are empty when encoded to JSON.
+Ensure that the `Rules` of the `RoleTemplate` are encoded when there is a difference between the encoded `Rules` and the non-encoded `Rules`.
