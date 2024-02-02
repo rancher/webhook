@@ -1,7 +1,7 @@
 package common
 
 import (
-	"fmt"
+	"errors"
 	"net/http"
 
 	"github.com/rancher/webhook/pkg/admission"
@@ -9,6 +9,9 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/kubernetes/pkg/apis/rbac"
+	rbacValidation "k8s.io/kubernetes/pkg/apis/rbac/validation"
 )
 
 func CheckCreatorID(request *admission.Request, oldObj, newObj metav1.Object) *metav1.Status {
@@ -44,13 +47,14 @@ func CheckCreatorID(request *admission.Request, oldObj, newObj metav1.Object) *m
 	return nil
 }
 
-// CheckForVerbs checks that all the rules in the given list have a verb set
-func CheckForVerbs(rules []rbacv1.PolicyRule) error {
-	for i := range rules {
-		rule := rules[i]
-		if len(rule.Verbs) == 0 {
-			return fmt.Errorf("policyRules must have at least one verb: %s", rule.String())
-		}
+// ValidateRules calls on standard kubernetes RBAC functionality for the validation of policy rules
+// to validate Rancher rules. This is currently used in the validation of globalroles and roletemplates.
+func ValidateRules(rules []rbacv1.PolicyRule, isNamespaced bool, fldPath *field.Path) error {
+	var returnErr error
+	for index, r := range rules {
+		fieldErrs := rbacValidation.ValidatePolicyRule(rbac.PolicyRule(r), isNamespaced,
+			fldPath.Index(index))
+		returnErr = errors.Join(returnErr, fieldErrs.ToAggregate())
 	}
-	return nil
+	return returnErr
 }

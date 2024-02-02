@@ -13,13 +13,10 @@ import (
 	"github.com/rancher/webhook/pkg/resources/common"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
-	v1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
-	"k8s.io/kubernetes/pkg/apis/rbac"
-	rbacValidation "k8s.io/kubernetes/pkg/apis/rbac/validation"
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 	"k8s.io/utils/trace"
 )
@@ -113,7 +110,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, fmt.Errorf("%s operation %v: %w", gvr.Resource, request.Operation, admission.ErrUnsupportedOperation)
 	}
 
-	err = a.validateFields(oldGR, newGR, fldPath)
+	err = a.validateInheritedClusterRoles(oldGR, newGR, fldPath.Child("inheritedClusterRoles"))
 	if err != nil {
 		if errors.As(err, admission.Ptr(new(field.Error))) {
 			return admission.ResponseBadRequest(err.Error()), nil
@@ -123,10 +120,14 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 
 	// Validate the global and namespaced rules of the new GR
 	globalRules := a.grbResolver.GlobalRoleResolver.GlobalRulesFromRole(newGR)
-	returnError := validateRules(globalRules, false, fldPath)
-	for _, rules := range newGR.NamespacedRules {
-		returnError = errors.Join(returnError, validateRules(rules, true, fldPath))
+	returnError := common.ValidateRules(globalRules, false, fldPath.Child("rules"))
+
+	nsrPath := fldPath.Child("namespacedRules")
+	for index, rules := range newGR.NamespacedRules {
+		returnError = errors.Join(returnError, common.ValidateRules(rules, true,
+			nsrPath.Child(index)))
 	}
+
 	if returnError != nil {
 		return admission.ResponseBadRequest(returnError.Error()), nil
 	}
@@ -174,14 +175,6 @@ func validateCreateFields(oldRole *v3.GlobalRole, fldPath *field.Path) *field.Er
 		return field.Forbidden(fldPath, "cannot create builtin GlobalRoles")
 	}
 	return nil
-}
-
-// validateFields validates fields validates that the defined rules all have verbs and check the inheritedClusterRoles.
-func (a *admitter) validateFields(oldRole, newRole *v3.GlobalRole, fldPath *field.Path) error {
-	if err := common.CheckForVerbs(newRole.Rules); err != nil {
-		return field.Required(fldPath.Child("rules"), err.Error())
-	}
-	return a.validateInheritedClusterRoles(oldRole, newRole, fldPath.Child("inheritedClusterRoles"))
 }
 
 // validateInheritedClusterRoles validates that new RoleTemplates specified by InheritedClusterRoles have a context of
@@ -257,15 +250,4 @@ func (a *admitter) validateUpdateFields(oldRole, newRole *v3.GlobalRole, fldPath
 		return field.Forbidden(fldPath, "updates to builtIn GlobalRoles for fields other than 'newUserDefault' are forbidden")
 	}
 	return nil
-}
-
-func validateRules(rules []v1.PolicyRule, isNamespaced bool, fldPath *field.Path) error {
-	var returnErr error
-	for _, r := range rules {
-		fieldErrs := rbacValidation.ValidatePolicyRule(rbac.PolicyRule(r), isNamespaced, fldPath)
-		if len(fieldErrs) != 0 {
-			returnErr = errors.Join(returnErr, fieldErrs.ToAggregate())
-		}
-	}
-	return returnErr
 }

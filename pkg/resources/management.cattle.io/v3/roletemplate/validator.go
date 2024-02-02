@@ -132,8 +132,8 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, fmt.Errorf("failed to get all rules for '%s': %w", newRT.Name, err)
 	}
 
-	// verify inherited rules have verbs
-	if err := common.CheckForVerbs(rules); err != nil {
+	// Verify template rules as per kubernetes rbac rules
+	if err := common.ValidateRules(rules, true, fldPath.Child("rules")); err != nil {
 		return admission.ResponseBadRequest(err.Error()), nil
 	}
 
