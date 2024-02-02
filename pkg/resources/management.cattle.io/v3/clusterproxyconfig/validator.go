@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/rancher/webhook/pkg/admission"
+	webhookadmission "github.com/rancher/webhook/pkg/admission"
 	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
@@ -82,7 +83,5 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		}, nil
 	}
 
-	return &admissionv1.AdmissionResponse{
-		Allowed: true,
-	}, nil
+	return webhookadmission.ResponseAllowed(), nil
 }
