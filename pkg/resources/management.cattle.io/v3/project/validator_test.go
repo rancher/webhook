@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -926,6 +927,206 @@ func TestProjectValidation(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, test.wantAllowed, response.Allowed)
 		})
+	}
+}
+
+func TestProjectContainerDefaultLimitsValidation(t *testing.T) {
+	t.Parallel()
+	type testState struct {
+		clusterCache *fake.MockNonNamespacedCacheInterface[*v3.Cluster]
+	}
+	tests := []struct {
+		name        string
+		operation   v1.Operation
+		limit       *v3.ContainerResourceLimit
+		wantAllowed bool
+	}{
+		{
+			name:        "nil requests and limits",
+			wantAllowed: true,
+		},
+		{
+			name:        "empty requests and limits",
+			limit:       &v3.ContainerResourceLimit{},
+			wantAllowed: true,
+		},
+		{
+			name: "cpu and memory request and limits",
+			limit: &v3.ContainerResourceLimit{
+				RequestsCPU:    "1m",
+				LimitsCPU:      "20m",
+				RequestsMemory: "1Mi",
+				LimitsMemory:   "20Mi",
+			},
+			wantAllowed: true,
+		},
+		{
+			name: "only cpu request and limit",
+			limit: &v3.ContainerResourceLimit{
+				RequestsCPU: "1m",
+				LimitsCPU:   "20m",
+			},
+			wantAllowed: true,
+		},
+		{
+			name: "only memory request and limit",
+			limit: &v3.ContainerResourceLimit{
+				RequestsMemory: "1Mi",
+				LimitsMemory:   "20Mi",
+			},
+			wantAllowed: true,
+		},
+		{
+			name: "only cpu request",
+			limit: &v3.ContainerResourceLimit{
+				RequestsCPU: "1m",
+			},
+			wantAllowed: true,
+		},
+		{
+			name: "only cpu limit",
+			limit: &v3.ContainerResourceLimit{
+				LimitsCPU: "20m",
+			},
+			wantAllowed: true,
+		},
+		{
+			name: "only memory request",
+			limit: &v3.ContainerResourceLimit{
+				RequestsMemory: "1Mi",
+			},
+			wantAllowed: true,
+		},
+		{
+			name: "only memory limit",
+			limit: &v3.ContainerResourceLimit{
+				LimitsMemory: "20Mi",
+			},
+			wantAllowed: true,
+		},
+		{
+			name: "cpu and memory requests equal to limits",
+			limit: &v3.ContainerResourceLimit{
+				RequestsCPU:    "20m",
+				LimitsCPU:      "20m",
+				RequestsMemory: "30Mi",
+				LimitsMemory:   "30Mi",
+			},
+			wantAllowed: true,
+		},
+		{
+			name: "cpu request over limit",
+			limit: &v3.ContainerResourceLimit{
+				RequestsCPU: "30m",
+				LimitsCPU:   "20m",
+			},
+		},
+		{
+			name: "positive memory request over negative limit",
+			limit: &v3.ContainerResourceLimit{
+				RequestsMemory: "500Mi",
+				LimitsMemory:   "-20Mi",
+			},
+		},
+		{
+			name: "cpu and memory requests both over limits",
+			limit: &v3.ContainerResourceLimit{
+				RequestsCPU:    "30m",
+				LimitsCPU:      "20m",
+				RequestsMemory: "30Mi",
+				LimitsMemory:   "20Mi",
+			},
+		},
+		{
+			name: "cpu limit is zero while request is positive",
+			limit: &v3.ContainerResourceLimit{
+				RequestsCPU: "20m",
+				LimitsCPU:   "0m",
+			},
+		},
+		{
+			name: "memory limit is zero while request is positive",
+			limit: &v3.ContainerResourceLimit{
+				RequestsMemory: "20Mi",
+				LimitsMemory:   "0Mi",
+			},
+		},
+		{
+			name: "invalid value on cpu request causes an error",
+			limit: &v3.ContainerResourceLimit{
+				RequestsCPU:    "apple",
+				LimitsCPU:      "20m",
+				RequestsMemory: "1Mi",
+				LimitsMemory:   "20Mi",
+			},
+		},
+		{
+			name: "invalid value on cpu limit causes an error",
+			limit: &v3.ContainerResourceLimit{
+				RequestsCPU:    "1m",
+				LimitsCPU:      "apple",
+				RequestsMemory: "1Mi",
+				LimitsMemory:   "20Mi",
+			},
+		},
+		{
+			name: "invalid value on memory request causes an error",
+			limit: &v3.ContainerResourceLimit{
+				RequestsCPU:    "1m",
+				LimitsCPU:      "20m",
+				RequestsMemory: "apple",
+				LimitsMemory:   "20Mi",
+			},
+		},
+		{
+			name: "invalid value on memory limit causes an error",
+			limit: &v3.ContainerResourceLimit{
+				RequestsCPU:    "1m",
+				LimitsCPU:      "20m",
+				RequestsMemory: "1Mi",
+				LimitsMemory:   "apple",
+			},
+		},
+	}
+
+	for _, test := range tests {
+		for _, operation := range []admissionv1.Operation{admissionv1.Create, admissionv1.Update} {
+			test.operation = operation
+			name := fmt.Sprintf("%s on %s", test.name, strings.ToLower(string(test.operation)))
+			t.Run(name, func(t *testing.T) {
+				oldProject := &v3.Project{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test",
+						Namespace: "testcluster",
+					},
+					Spec: v3.ProjectSpec{
+						ClusterName:                   "testcluster",
+						ContainerDefaultResourceLimit: test.limit,
+					},
+				}
+				newProject := oldProject
+				ctrl := gomock.NewController(t)
+				state := testState{
+					clusterCache: fake.NewMockNonNamespacedCacheInterface[*v3.Cluster](ctrl),
+				}
+				if test.operation == admissionv1.Create {
+					oldProject = nil
+					state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "testcluster",
+						},
+					}, nil)
+				}
+				req, err := createProjectRequest(oldProject, newProject, test.operation, false)
+				assert.NoError(t, err)
+				validator := NewValidator(state.clusterCache)
+				admitters := validator.Admitters()
+				assert.Len(t, admitters, 1)
+				response, err := admitters[0].Admit(req)
+				assert.NoError(t, err)
+				assert.Equal(t, test.wantAllowed, response.Allowed)
+			})
+		}
 	}
 }
 

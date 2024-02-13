@@ -196,6 +196,13 @@ The system project cannot be deleted.
 
 Project quotas and default limits must be consistent with one another and must be sufficient for the requirements of active namespaces.
 
+#### Container default resource limit validation
+
+Validation mimics the upstream behavior of the Kubernetes API server when it validates LimitRanges.
+The container default resource configuration must have properly formatted quantities for all requests and limits.
+
+Limits for any resource must not be less than requests.
+
 ### Mutations
 
 #### On create
