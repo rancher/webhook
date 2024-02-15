@@ -580,6 +580,28 @@ func (r *RoleTemplateSuite) Test_Create() {
 			},
 			allowed: false,
 		},
+		{
+			// Ensure we're not blocking the creation of RTs with
+			// NonResourceURLs included such as cluster-owner.
+			name: "ensure accept non resource urls",
+			args: args{
+				username: adminUser,
+				oldRT: func() *v3.RoleTemplate {
+					return nil
+				},
+				newRT: func() *v3.RoleTemplate {
+					baseRT := newDefaultRT()
+					baseRT.Rules = []rbacv1.PolicyRule{
+						{
+							Verbs:           []string{"*"},
+							NonResourceURLs: []string{"*"},
+						},
+					}
+					return baseRT
+				},
+			},
+			allowed: true,
+		},
 	}
 
 	for i := range tests {
