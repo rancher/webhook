@@ -65,6 +65,10 @@ func (c *RoleTemplateSuite) SetupSuite() {
 		APIGroups: []string{"*"},
 		Resources: []string{"*"},
 	}
+	ruleAdminNonResource := rbacv1.PolicyRule{
+		Verbs:           []string{"*"},
+		NonResourceURLs: []string{"*"},
+	}
 	c.ruleEmptyVerbs = rbacv1.PolicyRule{
 		Verbs:     nil,
 		APIGroups: []string{"v1"},
@@ -83,7 +87,7 @@ func (c *RoleTemplateSuite) SetupSuite() {
 			Name: "admin-role",
 		},
 		DisplayName:    "Admin Role",
-		Rules:          []rbacv1.PolicyRule{ruleAdmin},
+		Rules:          []rbacv1.PolicyRule{ruleAdmin, ruleAdminNonResource},
 		Builtin:        true,
 		Administrative: true,
 		Context:        "cluster",
@@ -101,7 +105,7 @@ func (c *RoleTemplateSuite) SetupSuite() {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "admin-role",
 		},
-		Rules: []rbacv1.PolicyRule{ruleAdmin},
+		Rules: []rbacv1.PolicyRule{ruleAdmin, ruleAdminNonResource},
 	}
 	c.manageNodeRole = &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{Name: "manage-nodes"},
