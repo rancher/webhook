@@ -83,7 +83,7 @@ done
 
 # Install the webhook chart with new ports.
 helm upgrade rancher-webhook ./dist/artifacts/rancher-webhook-${HELM_VERSION}.tgz -n cattle-system \
-    --wait --reuse-values --set port=443 --set capi.port=2319
+    --wait --reuse-values --set port=443
 
 # Test that the ports are set as expected and run a single integration test to verify the webhook is still accessible.
 ./bin/rancher-webhook-integration.test -test.v -test.run PortTest

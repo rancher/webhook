@@ -8,10 +8,6 @@ global:
     systemDefaultRegistry: ""
   hostNetwork: false
 
-capi:
-  enabled: false
-  port: 8777
-
 mcm:
   enabled: true
 

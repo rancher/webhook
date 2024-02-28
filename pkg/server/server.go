@@ -18,7 +18,6 @@ import (
 	"github.com/rancher/dynamiclistener"
 	"github.com/rancher/dynamiclistener/server"
 	"github.com/rancher/webhook/pkg/admission"
-	"github.com/rancher/webhook/pkg/capi"
 	"github.com/rancher/webhook/pkg/clients"
 	"github.com/rancher/webhook/pkg/health"
 	admissionregistration "github.com/rancher/wrangler/pkg/generated/controllers/admissionregistration.k8s.io/v1"
@@ -63,7 +62,7 @@ var tlsOpt = func(config *tls.Config) {
 }
 
 // ListenAndServe starts the webhook server.
-func ListenAndServe(ctx context.Context, cfg *rest.Config, capiEnabled, mcmEnabled bool) error {
+func ListenAndServe(ctx context.Context, cfg *rest.Config, mcmEnabled bool) error {
 	clients, err := clients.New(ctx, cfg, mcmEnabled)
 	if err != nil {
 		return fmt.Errorf("failed to create a new client: %w", err)
@@ -86,27 +85,12 @@ func ListenAndServe(ctx context.Context, cfg *rest.Config, capiEnabled, mcmEnabl
 		return err
 	}
 
-	var capiStart func(context.Context) error
-
-	if capiEnabled {
-		capiStart, err = capi.Register(clients, tlsOpt)
-		if err != nil {
-			return fmt.Errorf("failed to register capi: %w", err)
-		}
-	}
-
 	if err = listenAndServe(ctx, clients, validators, mutators); err != nil {
 		return err
 	}
 
 	if err = clients.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start client: %w", err)
-	}
-
-	if capiStart != nil {
-		if err = capiStart(ctx); err != nil {
-			return fmt.Errorf("failed to start capi: %w", err)
-		}
 	}
 
 	return nil
