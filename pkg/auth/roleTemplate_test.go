@@ -10,8 +10,8 @@ import (
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/auth"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
-	wranglerv1 "github.com/rancher/wrangler/pkg/generated/controllers/rbac/v1"
-	"github.com/rancher/wrangler/pkg/generic/fake"
+	wrbacv1 "github.com/rancher/wrangler/v2/pkg/generated/controllers/rbac/v1"
+	"github.com/rancher/wrangler/v2/pkg/generic/fake"
 	"github.com/stretchr/testify/suite"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -153,7 +153,7 @@ func (r *RoleTemplateResolverSuite) SetupSuite() {
 func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 	type args struct {
 		name   string
-		caches func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache)
+		caches func() (v3.RoleTemplateCache, wrbacv1.ClusterRoleCache)
 	}
 	tests := []struct {
 		name    string
@@ -165,7 +165,7 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 		{
 			name: "Test simple Role Template",
 			args: args{
-				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
+				caches: func() (v3.RoleTemplateCache, wrbacv1.ClusterRoleCache) {
 					ctrl := gomock.NewController(r.T())
 					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 					roleTemplateCache.EXPECT().Get(r.adminRT.Name).Return(r.adminRT, nil).AnyTimes()
@@ -181,7 +181,7 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 		{
 			name: "Test inherited Role Templates",
 			args: args{
-				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
+				caches: func() (v3.RoleTemplateCache, wrbacv1.ClusterRoleCache) {
 					ctrl := gomock.NewController(r.T())
 					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 					roleTemplateCache.EXPECT().Get(r.inheritedRT.Name).Return(r.inheritedRT, nil)
@@ -199,7 +199,7 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 		{
 			name: "Test external cluster role",
 			args: args{
-				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
+				caches: func() (v3.RoleTemplateCache, wrbacv1.ClusterRoleCache) {
 					ctrl := gomock.NewController(r.T())
 					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 					roleTemplateCache.EXPECT().Get(r.externalRT.Name).Return(r.externalRT, nil)
@@ -216,7 +216,7 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 		{
 			name: "Test invalid template name",
 			args: args{
-				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
+				caches: func() (v3.RoleTemplateCache, wrbacv1.ClusterRoleCache) {
 					ctrl := gomock.NewController(r.T())
 					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 					roleTemplateCache.EXPECT().Get(invalidName).Return(nil, errExpected)
@@ -232,7 +232,7 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 		{
 			name: "Test invalid inherted template name",
 			args: args{
-				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
+				caches: func() (v3.RoleTemplateCache, wrbacv1.ClusterRoleCache) {
 					ctrl := gomock.NewController(r.T())
 					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 					roleTemplateCache.EXPECT().Get(r.invalidInhertedRT.Name).Return(r.invalidInhertedRT, nil)
