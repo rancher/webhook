@@ -162,12 +162,21 @@ func defaultWebhookInfo(handler WebhookHandler, clientConfig v1.WebhookClientCon
 	}
 }
 
+type Pather interface {
+	Path() string
+}
+
 // Path returns the path of the webhook joined with the given basePath.
 func Path(basePath string, handler WebhookHandler) string {
-	gvr := handler.GVR()
-	newPath, err := url.JoinPath(basePath, SubPath(gvr))
+	var resource string
+	if pather, ok := handler.(Pather); ok {
+		resource = pather.Path()
+	} else {
+		resource = SubPath(handler.GVR())
+	}
+	newPath, err := url.JoinPath(basePath, resource)
 	if err != nil {
-		return path.Join(basePath, SubPath(gvr))
+		return path.Join(basePath, resource)
 	}
 	return newPath
 }
