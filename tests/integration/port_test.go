@@ -17,7 +17,6 @@ import (
 
 const (
 	testWebhookPort = 443
-	testCapiPort    = 2319
 )
 
 type PortSuite struct {
@@ -69,13 +68,9 @@ func (m *PortSuite) TestWebhookPortChanged() {
 	}
 	m.Require().Equal(corev1.PodRunning, webhookPod.Status.Phase, "Rancher-webhook pod is not running Phase=%s", webhookPod.Status.Phase)
 	m.Require().Len(webhookPod.Spec.Containers, 1, "Rancher-webhook pod has the incorrect number of containers")
-	m.Require().Len(webhookPod.Spec.Containers[0].Ports, 2, "Rancher-webhook container has the incorrect number of ports")
-	havePort1 := webhookPod.Spec.Containers[0].Ports[0].ContainerPort
-	havePort2 := webhookPod.Spec.Containers[0].Ports[1].ContainerPort
-	if havePort1 != testWebhookPort && havePort2 != testWebhookPort {
-		m.Require().FailNowf("expected webhook port not found", "wanted '%d' was not found instead have '%d' and '%d'", testWebhookPort, havePort1, havePort2)
-	}
-	if havePort1 != testCapiPort && havePort2 != testCapiPort {
-		m.Require().FailNowf("expected capi port not found", "wanted '%d' was not found instead have '%d' and '%d'", testCapiPort, havePort1, havePort2)
+	m.Require().Len(webhookPod.Spec.Containers[0].Ports, 1, "Rancher-webhook container has the incorrect number of ports")
+	havePort := webhookPod.Spec.Containers[0].Ports[0].ContainerPort
+	if havePort != testWebhookPort {
+		m.Require().FailNowf("expected webhook port not found", "wanted '%d' was not found instead have '%d'", testWebhookPort, havePort)
 	}
 }

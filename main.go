@@ -50,7 +50,7 @@ func run() error {
 		return err
 	}
 
-	if err := server.ListenAndServe(ctx, cfg, os.Getenv("ENABLE_CAPI") == "true", os.Getenv("ENABLE_MCM") != "false"); err != nil {
+	if err := server.ListenAndServe(ctx, cfg, os.Getenv("ENABLE_MCM") != "false"); err != nil {
 		return err
 	}
 
