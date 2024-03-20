@@ -118,3 +118,35 @@ func (m *IntegrationSuite) TestRoleTemplateNoAPIGroups() {
 	}
 	validateEndpoints(m.T(), endPoints, m.clientFactory)
 }
+
+func (m *IntegrationSuite) TestRoleTemplateInvalidContext() {
+	newObj := func() *v3.RoleTemplate { return &v3.RoleTemplate{} }
+	validCreateObj := &v3.RoleTemplate{
+		ObjectMeta: v1.ObjectMeta{
+			Name: "test-roletemplate-invalid-context",
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				Verbs:     []string{"GET", "WATCH"},
+				APIGroups: []string{"v1"},
+				Resources: []string{"pods"},
+			},
+		},
+		Context: "cluster",
+	}
+	invalidCreate := func() *v3.RoleTemplate {
+		invalidCreate := validCreateObj.DeepCopy()
+		invalidCreate.ProjectCreatorDefault = true
+		return invalidCreate
+	}
+	validDelete := func() *v3.RoleTemplate {
+		return validCreateObj
+	}
+	endPoints := &endPointObjs[*v3.RoleTemplate]{
+		invalidCreate:  invalidCreate,
+		newObj:         newObj,
+		validCreateObj: validCreateObj,
+		validDelete:    validDelete,
+	}
+	validateEndpoints(m.T(), endPoints, m.clientFactory)
+}
