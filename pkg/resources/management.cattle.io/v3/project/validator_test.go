@@ -901,6 +901,198 @@ func TestProjectValidation(t *testing.T) {
 			wantAllowed: false,
 			wantErr:     true,
 		},
+		{
+			name:      "container default resource limit specified correctly",
+			operation: admissionv1.Create,
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+					ContainerDefaultResourceLimit: &v3.ContainerResourceLimit{
+						RequestsCPU:    "1m",
+						LimitsCPU:      "20m",
+						RequestsMemory: "1Mi",
+						LimitsMemory:   "20Mi",
+					},
+				},
+			},
+			stateSetup: func(state *testState) {
+				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "testcluster",
+					},
+				}, nil)
+			},
+			wantAllowed: true,
+		},
+		{
+			name:      "cpu and memory requests equal to limits",
+			operation: admissionv1.Create,
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+					ContainerDefaultResourceLimit: &v3.ContainerResourceLimit{
+						RequestsCPU:    "20m",
+						LimitsCPU:      "20m",
+						RequestsMemory: "30Mi",
+						LimitsMemory:   "30Mi",
+					},
+				},
+			},
+			stateSetup: func(state *testState) {
+				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "testcluster",
+					},
+				}, nil)
+			},
+			wantAllowed: true,
+		},
+		{
+			name:      "cpu request over limit on create",
+			operation: admissionv1.Create,
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+					ContainerDefaultResourceLimit: &v3.ContainerResourceLimit{
+						RequestsCPU:    "30m",
+						LimitsCPU:      "20m",
+						RequestsMemory: "10Mi",
+						LimitsMemory:   "20Mi",
+					},
+				},
+			},
+			stateSetup: func(state *testState) {
+				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "testcluster",
+					},
+				}, nil)
+			},
+		},
+		{
+			name:      "memory request over limit on update",
+			operation: admissionv1.Update,
+			oldProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+					ContainerDefaultResourceLimit: &v3.ContainerResourceLimit{
+						RequestsCPU:    "10m",
+						LimitsCPU:      "20m",
+						RequestsMemory: "10Mi",
+						LimitsMemory:   "20Mi",
+					},
+				},
+			},
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+					ContainerDefaultResourceLimit: &v3.ContainerResourceLimit{
+						RequestsCPU:    "10m",
+						LimitsCPU:      "20m",
+						RequestsMemory: "500Mi",
+						LimitsMemory:   "20Mi",
+					},
+				},
+			},
+		},
+		{
+			name:      "cpu and memory requests both over limits on create",
+			operation: admissionv1.Create,
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+					ContainerDefaultResourceLimit: &v3.ContainerResourceLimit{
+						RequestsCPU:    "30m",
+						LimitsCPU:      "20m",
+						RequestsMemory: "30Mi",
+						LimitsMemory:   "20Mi",
+					},
+				},
+			},
+			stateSetup: func(state *testState) {
+				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "testcluster",
+					},
+				}, nil)
+			},
+		},
+		{
+			name:      "negative values on container resource limits cause an error",
+			operation: admissionv1.Create,
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+					ContainerDefaultResourceLimit: &v3.ContainerResourceLimit{
+						RequestsCPU:    "-1m",
+						LimitsCPU:      "20m",
+						RequestsMemory: "1Mi",
+						LimitsMemory:   "-20Mi",
+					},
+				},
+			},
+			stateSetup: func(state *testState) {
+				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "testcluster",
+					},
+				}, nil)
+			},
+		},
+		{
+			name:      "invalid values on container resource limits cause an error",
+			operation: admissionv1.Create,
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+					ContainerDefaultResourceLimit: &v3.ContainerResourceLimit{
+						RequestsCPU:    "apple",
+						LimitsCPU:      "20m",
+						RequestsMemory: "M83",
+						LimitsMemory:   "20Mi",
+					},
+				},
+			},
+			stateSetup: func(state *testState) {
+				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "testcluster",
+					},
+				}, nil)
+			},
+		},
 	}
 	for _, test := range tests {
 		test := test
