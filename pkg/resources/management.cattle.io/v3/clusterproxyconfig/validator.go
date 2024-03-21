@@ -48,7 +48,7 @@ func (v *Validator) Operations() []admissionregistrationv1.OperationType {
 // ValidatingWebhook returns the ValidatingWebhook used for this CRD.
 func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.WebhookClientConfig) []admissionregistrationv1.ValidatingWebhook {
 	valWebhook := admission.NewDefaultValidatingWebhook(v, clientConfig, admissionregistrationv1.NamespacedScope, v.Operations())
-	valWebhook.FailurePolicy = admission.Ptr(admissionregistrationv1.Ignore)
+	valWebhook.FailurePolicy = admission.Ptr(admissionregistrationv1.Fail)
 	return []admissionregistrationv1.ValidatingWebhook{*valWebhook}
 }
 
