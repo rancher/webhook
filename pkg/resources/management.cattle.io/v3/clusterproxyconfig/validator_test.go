@@ -17,6 +17,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+const (
+	testNamespace = "testclusternamespace"
+)
+
 var (
 	cpcGVR = metav1.GroupVersionResource{Group: "management.cattle.io", Version: "v3", Resource: "clusterproxyconfigs"}
 	cpcGVK = metav1.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "ClusterProxyConfig"}
@@ -51,7 +55,7 @@ func Test_admitter_Admit(t *testing.T) {
 			t.Parallel()
 			ctrl := gomock.NewController(t)
 			cpsCache := wranglerfake.NewMockCacheInterface[*v3api.ClusterProxyConfig](ctrl)
-			cpsCache.EXPECT().List(gomock.Any(), gomock.Any()).DoAndReturn(func(namespace string, _ labels.Selector) ([]*v3api.ClusterProxyConfig, error) {
+			cpsCache.EXPECT().List(testNamespace, labels.Everything()).DoAndReturn(func(_ string, _ labels.Selector) ([]*v3api.ClusterProxyConfig, error) {
 				if tt.wantErr {
 					return nil, fmt.Errorf("simulated list error")
 				}
@@ -86,6 +90,7 @@ func createRequest() *admission.Request {
 			Resource:        cpcGVR,
 			RequestKind:     &cpcGVK,
 			RequestResource: &cpcGVR,
+			Namespace:       testNamespace,
 			Operation:       admissionv1.Create,
 			UserInfo:        authenicationv1.UserInfo{Username: "test-user", UID: ""},
 			Object:          runtime.RawExtension{},
