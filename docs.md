@@ -115,8 +115,12 @@ Note: all checks are bypassed if the GlobalRole is being deleted, or if only the
 #### Invalid Fields - Create and Update
 
 On create or update, the following checks take place:
-- The webhook checks that each rule has at least one verb.
+- The webhook validates each rule using the standard Kubernetes RBAC checks (see next section).
 - Each new RoleTemplate referred to in `inheritedClusterRoles` must have a context of `cluster` and not be `locked`. This validation is skipped for RoleTemplates in `inheritedClusterRoles` for the prior version of this object.
+
+#### Rules Without Verbs, Resources, API groups
+
+Rules without verbs, resources, or apigroups are not permitted. The `rules` included in a GlobalRole are of the same type as the rules used by standard Kubernetes RBAC types (such as `Roles` from `rbac.authorization.k8s.io/v1`). Because of this, they inherit the same restrictions as these types, including this one.
 
 #### Escalation Prevention
 
@@ -250,9 +254,9 @@ Note: all checks are bypassed if the RoleTemplate is being deleted
 
 Circular references to a `RoleTemplate` (a inherits b, b inherits a) are not allowed. More specifically, if "roleTemplate1" is included in the `roleTemplateNames` of "roleTemplate2", then "roleTemplate2" must not be included in the `roleTemplateNames` of "roleTemplate1". This check prevents the creation of roles whose end-state cannot be resolved.
 
-#### Rules Without Verbs 
+#### Rules Without Verbs, Resources, API groups
 
-Rules without verbs are not permitted. The `rules` included in a RoleTemplate are of the same type as the rules used by standard Kubernetes RBAC types (such as `Roles` from `rbac.authorization.k8s.io/v1`). Because of this, they inherit the same restrictions as these types, including this one.
+Rules without verbs, resources, or apigroups are not permitted. The `rules` included in a RoleTemplate are of the same type as the rules used by standard Kubernetes RBAC types (such as `Roles` from `rbac.authorization.k8s.io/v1`). Because of this, they inherit the same restrictions as these types, including this one.
 
 #### Escalation Prevention
 

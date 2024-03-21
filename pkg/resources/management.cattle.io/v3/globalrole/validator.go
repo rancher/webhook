@@ -113,12 +113,19 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, fmt.Errorf("%s operation %v: %w", gvr.Resource, request.Operation, admission.ErrUnsupportedOperation)
 	}
 
-	err = a.validateFields(oldGR, newGR, fldPath)
+	err = a.validateInheritedClusterRoles(oldGR, newGR, fldPath.Child("inheritedClusterRoles"))
 	if err != nil {
 		if errors.As(err, admission.Ptr(new(field.Error))) {
 			return admission.ResponseBadRequest(err.Error()), nil
 		}
 		return nil, err
+	}
+
+	// Validate the global rules of the new GR
+	globalRules := a.grbResolver.GlobalRoleResolver.GlobalRulesFromRole(newGR)
+	returnError := common.ValidateRules(globalRules, false, fldPath.Child("rules"))
+	if returnError != nil {
+		return admission.ResponseBadRequest(returnError.Error()), nil
 	}
 
 	// check for escalation separately between cluster permissions and global permissions to prevent crossover
@@ -180,14 +187,6 @@ func validateCreateFields(oldRole *v3.GlobalRole, fldPath *field.Path) *field.Er
 		return field.Forbidden(fldPath, "cannot create builtin GlobalRoles")
 	}
 	return nil
-}
-
-// validateFields validates fields validates that the defined rules all have verbs and check the inheritedClusterRoles.
-func (a *admitter) validateFields(oldRole, newRole *v3.GlobalRole, fldPath *field.Path) error {
-	if err := common.CheckForVerbs(newRole.Rules); err != nil {
-		return field.Required(fldPath.Child("rules"), err.Error())
-	}
-	return a.validateInheritedClusterRoles(oldRole, newRole, fldPath.Child("inheritedClusterRoles"))
 }
 
 // validateInheritedClusterRoles validates that new RoleTemplates specified by InheritedClusterRoles have a context of
