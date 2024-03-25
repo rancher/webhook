@@ -11,7 +11,7 @@ RUN zypper -n install git docker vim less file curl wget awk
 RUN curl -sL https://get.helm.sh/helm-${HELM_VERSION}-linux-${ARCH}.tar.gz | tar xvzf - -C /usr/local/bin --strip-components=1
 
 RUN if [ "${ARCH}" = "amd64" ]; then \
-        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.55.2; \
+        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.57.1; \
         helm plugin install https://github.com/helm-unittest/helm-unittest.git --version ${HELM_UNITTEST_VERSION}>/out.txt 2>&1; \
     fi
 
