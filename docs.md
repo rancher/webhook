@@ -277,6 +277,7 @@ Users can only change RoleTemplates with rights less than or equal to those they
 The `roletemplates.context` field must be one of the following values [`"cluster"`, `"project"`, `""`].
 If the `roletemplates.administrative` is set to true the context must equal `"cluster"`.
 
+If the `roletemplate.ProjectCreatorDefault` is true, context must equal `"project"`
 #### Builtin Validation
 
 The `roletemplates.builtin` field is immutable, and new builtIn RoleTemplates cannot be created.
