@@ -236,7 +236,7 @@ func TestIsRulesAllowed(t *testing.T) {
 					sar: func() *k8fake.FakeSubjectAccessReviews {
 						k8Fake := &k8testing.Fake{}
 						fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
-						fakeSAR.Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (handled bool, ret runtime.Object, err error) {
+						fakeSAR.Fake.AddReactor("create", "subjectaccessreviews", func(_ k8testing.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, fmt.Errorf("error")
 						})
 						return fakeSAR

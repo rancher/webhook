@@ -17,7 +17,7 @@ func (m *IntegrationSuite) TestRKEMachineConfig() {
 	validCreateObj.SetName("test-rke.machine")
 	validCreateObj.SetNamespace(testNamespace)
 	validCreateObj.SetGroupVersionKind(objGVK)
-	invalidUpdate := func(created *unstructured.Unstructured) *unstructured.Unstructured {
+	invalidUpdate := func(_ *unstructured.Unstructured) *unstructured.Unstructured {
 		invalidUpdateObj := validCreateObj.DeepCopy()
 		invalidUpdateObj.SetAnnotations(map[string]string{auth.CreatorIDAnn: "foobar"})
 		return invalidUpdateObj
