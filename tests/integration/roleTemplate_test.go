@@ -119,7 +119,8 @@ func (m *IntegrationSuite) TestRoleTemplateNoAPIGroups() {
 	validateEndpoints(m.T(), endPoints, m.clientFactory)
 }
 
-func (m *IntegrationSuite) TestRoleTemplateInvalidContext() {
+// Test Cluster Context RoleTemplate with ProjectCreatorDefault which becomes an invalid value
+func (m *IntegrationSuite) TestRoleTemplateClusterContextWithProjectCreatorDefault() {
 	newObj := func() *v3.RoleTemplate { return &v3.RoleTemplate{} }
 	validCreateObj := &v3.RoleTemplate{
 		ObjectMeta: v1.ObjectMeta{
@@ -136,6 +137,7 @@ func (m *IntegrationSuite) TestRoleTemplateInvalidContext() {
 	}
 	invalidCreate := func() *v3.RoleTemplate {
 		invalidCreate := validCreateObj.DeepCopy()
+		// the line which sets this RoleTemplate as invalid
 		invalidCreate.ProjectCreatorDefault = true
 		return invalidCreate
 	}
