@@ -141,14 +141,16 @@ func (m *IntegrationSuite) TestRoleTemplateClusterContextWithProjectCreatorDefau
 		invalidCreate.ProjectCreatorDefault = true
 		return invalidCreate
 	}
+	invalidCreateErr := "Cluster context RoleTemplate can not have projectCreatorDefault=true"
 	validDelete := func() *v3.RoleTemplate {
 		return validCreateObj
 	}
 	endPoints := &endPointObjs[*v3.RoleTemplate]{
-		invalidCreate:  invalidCreate,
-		newObj:         newObj,
-		validCreateObj: validCreateObj,
-		validDelete:    validDelete,
+		invalidCreate:       invalidCreate,
+		newObj:              newObj,
+		validCreateObj:      validCreateObj,
+		validDelete:         validDelete,
+		invalidCreateErrMsg: invalidCreateErr,
 	}
 	validateEndpoints(m.T(), endPoints, m.clientFactory)
 }
