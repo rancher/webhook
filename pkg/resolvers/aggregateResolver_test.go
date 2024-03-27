@@ -57,7 +57,7 @@ func (a *AggregateResolverSuite) TestAggregateRuleResolverGetRules() {
 				expectedRules := []rbacv1.PolicyRule{a.ruleAdmin}
 				resolver := NewMockAuthorizationRuleResolver(gomock.NewController(t))
 				resolver.EXPECT().VisitRulesFor(testUser, testNameSpace, gomock.Any()).
-					DoAndReturn(func(userInfo user.Info, namespace string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) bool {
+					DoAndReturn(func(_ user.Info, _ string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) bool {
 						for _, rule := range expectedRules {
 							visitor(nil, &rule, nil)
 						}
@@ -76,13 +76,13 @@ func (a *AggregateResolverSuite) TestAggregateRuleResolverGetRules() {
 				expectedRules := []rbacv1.PolicyRule{}
 				resolver := NewMockAuthorizationRuleResolver(gomock.NewController(t))
 				resolver.EXPECT().VisitRulesFor(gomock.Any(), testNameSpace, gomock.Any()).
-					DoAndReturn(func(userInfo user.Info, namespace string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) bool {
+					DoAndReturn(func(_ user.Info, _ string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) bool {
 						visitor(nil, nil, errNotFound)
 						return true
 					})
 				resolver2 := NewMockAuthorizationRuleResolver(gomock.NewController(t))
 				resolver2.EXPECT().VisitRulesFor(gomock.Any(), testNameSpace, gomock.Any()).
-					DoAndReturn(func(userInfo user.Info, namespace string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) bool {
+					DoAndReturn(func(_ user.Info, _ string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) bool {
 						visitor(nil, nil, errNotFound)
 						return true
 					})
@@ -97,13 +97,13 @@ func (a *AggregateResolverSuite) TestAggregateRuleResolverGetRules() {
 				expectedRules := []rbacv1.PolicyRule{a.ruleReadPods}
 				resolver := NewMockAuthorizationRuleResolver(gomock.NewController(t))
 				resolver.EXPECT().VisitRulesFor(testUser, testNameSpace, gomock.Any()).
-					DoAndReturn(func(userInfo user.Info, namespace string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) bool {
+					DoAndReturn(func(_ user.Info, _ string, _ func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) bool {
 						return true
 					})
 				resolver.EXPECT().GetRoleReferenceRules(gomock.Any(), gomock.Any()).Return(expectedRules, nil)
 				resolver2 := NewMockAuthorizationRuleResolver(gomock.NewController(t))
 				resolver2.EXPECT().VisitRulesFor(testUser, testNameSpace, gomock.Any()).
-					DoAndReturn(func(userInfo user.Info, namespace string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) bool {
+					DoAndReturn(func(_ user.Info, _ string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) bool {
 						for _, rule := range expectedRules {
 							visitor(nil, &rule, nil)
 						}
@@ -122,7 +122,7 @@ func (a *AggregateResolverSuite) TestAggregateRuleResolverGetRules() {
 				expectedRules2 := []rbacv1.PolicyRule{a.ruleReadPods}
 				resolver := NewMockAuthorizationRuleResolver(gomock.NewController(t))
 				resolver.EXPECT().VisitRulesFor(testUser, testNameSpace, gomock.Any()).
-					DoAndReturn(func(userInfo user.Info, namespace string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) bool {
+					DoAndReturn(func(_ user.Info, _ string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) bool {
 						for _, rule := range expectedRules1 {
 							visitor(nil, &rule, nil)
 						}
@@ -131,7 +131,7 @@ func (a *AggregateResolverSuite) TestAggregateRuleResolverGetRules() {
 				resolver.EXPECT().GetRoleReferenceRules(gomock.Any(), gomock.Any()).Return(expectedRules1, nil)
 				resolver2 := NewMockAuthorizationRuleResolver(gomock.NewController(t))
 				resolver2.EXPECT().VisitRulesFor(testUser, testNameSpace, gomock.Any()).
-					DoAndReturn(func(userInfo user.Info, namespace string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) bool {
+					DoAndReturn(func(_ user.Info, _ string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) bool {
 						for _, rule := range expectedRules2 {
 							visitor(nil, &rule, nil)
 						}
