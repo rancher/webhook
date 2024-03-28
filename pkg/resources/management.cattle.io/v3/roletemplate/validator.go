@@ -192,8 +192,8 @@ func validateCreateFields(newRole *v3.RoleTemplate, fldPath *field.Path) *field.
 }
 
 func validateContextValue(newRole *v3.RoleTemplate, fldPath *field.Path) *field.Error {
-	if newRole.Context == clusterContext && newRole.ProjectCreatorDefault == true {
-		return field.Forbidden(fldPath.Child("projectCreatorDefault"), "Cluster context RoleTemplate can not have projectCreatorDefault=true")
+	if newRole.Context != projectContext && newRole.ProjectCreatorDefault {
+		return field.Forbidden(fldPath.Child("context"), "RoleTemplate context must be Project when projectCreatorDefault=true")
 	}
 	if newRole.Administrative && newRole.Context != clusterContext {
 		return field.Forbidden(fldPath.Child("administrative"), "only cluster roles can be administrative")
