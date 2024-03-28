@@ -85,15 +85,14 @@ type Object interface {
 	runtime.Object
 }
 type endPointObjs[T Object] struct {
-	invalidCreate       func() T
-	validCreateObj      T
-	newObj              func() T
-	invalidUpdate       func(obj T) T
-	validUpdate         func(obj T) T
-	invalidDelete       func() T
-	validDelete         func() T
-	gvk                 schema.GroupVersionKind
-	invalidCreateErrMsg string
+	invalidCreate  func() T
+	validCreateObj T
+	newObj         func() T
+	invalidUpdate  func(obj T) T
+	validUpdate    func(obj T) T
+	invalidDelete  func() T
+	validDelete    func() T
+	gvk            schema.GroupVersionKind
 }
 
 // validateEndpoints performs basic create and update operations used for testing an endpoint.
@@ -122,7 +121,7 @@ func validateEndpoints[T Object](t *testing.T, objs *endPointObjs[T], clientFact
 	if objs.invalidCreate != nil {
 		invalidObj := objs.invalidCreate()
 		err = client.Create(ctx, invalidObj.GetNamespace(), invalidObj, nil, v1.CreateOptions{})
-		assert.Error(t, err, "No error returned during the creation of an invalid Object", objs.invalidCreateErrMsg)
+		assert.Error(t, err, "No error returned during the creation of an invalid Object")
 	}
 	err = client.Create(ctx, objs.validCreateObj.GetNamespace(), objs.validCreateObj, result, v1.CreateOptions{})
 	assert.NoError(t, err, "Error returned during the creation of a valid Object")
