@@ -1,6 +1,9 @@
 package integration_test
 
 import (
+	"context"
+	"time"
+
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	rbacv1 "k8s.io/api/rbac/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -119,10 +122,9 @@ func (m *IntegrationSuite) TestRoleTemplateNoAPIGroups() {
 	validateEndpoints(m.T(), endPoints, m.clientFactory)
 }
 
-// Test Cluster Context RoleTemplate with ProjectCreatorDefault which becomes an invalid value
-func (m *IntegrationSuite) TestRoleTemplateClusterContextWithProjectCreatorDefault() {
-	newObj := func() *v3.RoleTemplate { return &v3.RoleTemplate{} }
-	validCreateObj := &v3.RoleTemplate{
+// ProjectCreatorDefault=true should not have other than Project context
+func (m *IntegrationSuite) TestRoleTemplateWithProjectCreatorDefault() {
+	invalidRoleTemplate := &v3.RoleTemplate{
 		ObjectMeta: v1.ObjectMeta{
 			Name: "test-roletemplate-invalid-context",
 		},
@@ -133,24 +135,18 @@ func (m *IntegrationSuite) TestRoleTemplateClusterContextWithProjectCreatorDefau
 				Resources: []string{"pods"},
 			},
 		},
-		Context: "cluster",
+		Context:               "cluster",
+		ProjectCreatorDefault: true,
 	}
-	invalidCreate := func() *v3.RoleTemplate {
-		invalidCreate := validCreateObj.DeepCopy()
-		// the line which sets this RoleTemplate as invalid
-		invalidCreate.ProjectCreatorDefault = true
-		return invalidCreate
-	}
-	invalidCreateErr := "Cluster context RoleTemplate can not have projectCreatorDefault=true"
-	validDelete := func() *v3.RoleTemplate {
-		return validCreateObj
-	}
-	endPoints := &endPointObjs[*v3.RoleTemplate]{
-		invalidCreate:       invalidCreate,
-		newObj:              newObj,
-		validCreateObj:      validCreateObj,
-		validDelete:         validDelete,
-		invalidCreateErrMsg: invalidCreateErr,
-	}
-	validateEndpoints(m.T(), endPoints, m.clientFactory)
+	gvk, err := m.clientFactory.GVKForObject(invalidRoleTemplate)
+	m.Require().NoError(err, "Failed to get gvk")
+	client, err := m.clientFactory.ForKind(gvk)
+	m.Require().NoError(err, "Failed to create client")
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	err = client.Create(ctx, invalidRoleTemplate.GetNamespace(), invalidRoleTemplate, nil, v1.CreateOptions{})
+	m.Assert().NotNil(err)
+	m.Assert().Contains(err.Error(), "RoleTemplate context must be Project when projectCreatorDefault=true")
 }
