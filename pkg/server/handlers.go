@@ -7,6 +7,7 @@ import (
 	nshandler "github.com/rancher/webhook/pkg/resources/core/v1/namespace"
 	"github.com/rancher/webhook/pkg/resources/core/v1/secret"
 	managementCluster "github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/cluster"
+	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/clusterproxyconfig"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/clusterroletemplatebinding"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/feature"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/fleetworkspace"
@@ -34,6 +35,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 	}
 
 	if clients.MultiClusterManagement {
+		clusterProxyConfigs := clusterproxyconfig.NewValidator(clients.Management.ClusterProxyConfig().Cache())
 		crtbResolver := resolvers.NewCRTBRuleResolver(clients.Management.ClusterRoleTemplateBinding().Cache(), clients.RoleTemplateResolver)
 		prtbResolver := resolvers.NewPRTBRuleResolver(clients.Management.ProjectRoleTemplateBinding().Cache(), clients.RoleTemplateResolver)
 		grbResolver := resolvers.NewGRBClusterRuleResolver(clients.Management.GlobalRoleBinding().Cache(), clients.GlobalRoleResolver)
@@ -49,7 +51,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		roles := role.NewValidator()
 		rolebindings := rolebinding.NewValidator()
 
-		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, nodeDriver, projects, roles, rolebindings)
+		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, nodeDriver, projects, roles, rolebindings, clusterProxyConfigs)
 	}
 	return handlers, nil
 }

@@ -38,9 +38,9 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/rancher/dynamiclistener v0.5.0-rc2
 	github.com/rancher/lasso v0.0.0-20240123150939-7055397d6dfa
-	github.com/rancher/rancher/pkg/apis v0.0.0-20240318165156-941d6d3102a3
+	github.com/rancher/rancher/pkg/apis v0.0.0-20240328110445-91a4620d7e49
 	github.com/rancher/rke v1.5.7-rc2
-	github.com/rancher/wrangler/v2 v2.1.3
+	github.com/rancher/wrangler/v2 v2.1.4
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63
