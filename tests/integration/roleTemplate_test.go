@@ -148,5 +148,5 @@ func (m *IntegrationSuite) TestRoleTemplateWithProjectCreatorDefault() {
 
 	err = client.Create(ctx, invalidRoleTemplate.GetNamespace(), invalidRoleTemplate, nil, v1.CreateOptions{})
 	m.Assert().NotNil(err)
-	m.Assert().Contains(err.Error(), "RoleTemplate context must be Project when projectCreatorDefault=true")
+	m.Assert().Contains(err.Error(), "RoleTemplate context must be project when projectCreatorDefault=true")
 }
