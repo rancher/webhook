@@ -76,7 +76,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 			Result: &metav1.Status{
 				Status:  "Failure",
 				Message: fmt.Sprintf("there may only be one clusterproxyconfig object defined per cluster"),
-				Reason:  metav1.StatusReasonInvalid,
+				Reason:  metav1.StatusReasonConflict,
 				Code:    http.StatusConflict,
 			},
 			Allowed: false,
