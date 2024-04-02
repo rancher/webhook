@@ -602,6 +602,23 @@ func (r *RoleTemplateSuite) Test_Create() {
 			},
 			allowed: true,
 		},
+		{
+			name: "cluster context with projectCreatorDefault=true",
+			args: args{
+				username: adminUser,
+				oldRT: func() *v3.RoleTemplate {
+					return nil
+				},
+				newRT: func() *v3.RoleTemplate {
+					baseRT := newDefaultRT()
+					baseRT.Rules = r.manageNodeRole.Rules
+					baseRT.Context = "cluster"
+					baseRT.ProjectCreatorDefault = true
+					return baseRT
+				},
+			},
+			allowed: false,
+		},
 	}
 
 	for i := range tests {

@@ -1,6 +1,9 @@
 package integration_test
 
 import (
+	"context"
+	"time"
+
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	rbacv1 "k8s.io/api/rbac/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -117,4 +120,33 @@ func (m *IntegrationSuite) TestRoleTemplateNoAPIGroups() {
 		validDelete:    validDelete,
 	}
 	validateEndpoints(m.T(), endPoints, m.clientFactory)
+}
+
+// ProjectCreatorDefault=true should not have other than Project context
+func (m *IntegrationSuite) TestRoleTemplateWithProjectCreatorDefault() {
+	invalidRoleTemplate := &v3.RoleTemplate{
+		ObjectMeta: v1.ObjectMeta{
+			Name: "test-roletemplate-invalid-context",
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				Verbs:     []string{"GET", "WATCH"},
+				APIGroups: []string{"v1"},
+				Resources: []string{"pods"},
+			},
+		},
+		Context:               "cluster",
+		ProjectCreatorDefault: true,
+	}
+	gvk, err := m.clientFactory.GVKForObject(invalidRoleTemplate)
+	m.Require().NoError(err, "Failed to get gvk")
+	client, err := m.clientFactory.ForKind(gvk)
+	m.Require().NoError(err, "Failed to create client")
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	err = client.Create(ctx, invalidRoleTemplate.GetNamespace(), invalidRoleTemplate, nil, v1.CreateOptions{})
+	m.Assert().NotNil(err)
+	m.Assert().Contains(err.Error(), "RoleTemplate context must be project when projectCreatorDefault=true")
 }

@@ -101,6 +101,7 @@ func (m *IntegrationSuite) TestMutateProject() {
 			GenerateName: "test-project-creator-",
 		},
 		ProjectCreatorDefault: true,
+		Context:               "project",
 	}
 	err = rtClient.Create(ctx, "", rt, rt, metav1.CreateOptions{})
 	m.Require().NoError(err)
