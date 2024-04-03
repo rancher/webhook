@@ -290,7 +290,7 @@ func NewPRTBCache(ctrl *gomock.Controller, bindings []*apisv3.ProjectRoleTemplat
 
 	projectCache.EXPECT().AddIndexer(prtbSubjectIndex, gomock.Any()).AnyTimes()
 
-	projectCache.EXPECT().GetByIndex(prtbSubjectIndex, gomock.Any()).DoAndReturn(func(index string, subject string) ([]*apisv3.ProjectRoleTemplateBinding, error) {
+	projectCache.EXPECT().GetByIndex(prtbSubjectIndex, gomock.Any()).DoAndReturn(func(_ string, subject string) ([]*apisv3.ProjectRoleTemplateBinding, error) {
 		retList := []*apisv3.ProjectRoleTemplateBinding{}
 
 		// for each binding create a lists of subject keys from the binding

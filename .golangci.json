@@ -11,12 +11,6 @@
 		]
 	},
 	"run": {
-		"skip-dirs": [
-			"pkg/generated"
-		],
-		"skip-files": [
-			"/zz_generated_"
-		],
 		"deadline": "5m"
 	},
 	"issues": {
@@ -25,6 +19,9 @@
 				"linters": "revive",
 				"text": "should have comment or be unexported"
 			}
+		],
+		"exclude-dirs": [
+			"pkg/generated"
 		]
 	}
 }
