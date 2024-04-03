@@ -22,9 +22,6 @@
 		],
 		"exclude-dirs": [
 			"pkg/generated"
-		],
-		"exclude-files": [
-			"//zz_generated_"
 		]
 	}
 }
