@@ -45,6 +45,15 @@ If yes, the webhook redacts the role, so that it only grants a deletion permissi
 
 # management.cattle.io/v3 
 
+## ClusterProxyConfig 
+
+### Validation Checks
+
+#### On create
+
+When creating a clusterproxyconfig, we check to make sure that one does not already exist for the given cluster.
+Only 1 clusterproxyconfig per downstream cluster is ever permitted.
+
 ## ClusterRoleTemplateBinding 
 
 ### Validation Checks
