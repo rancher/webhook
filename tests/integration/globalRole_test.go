@@ -52,3 +52,69 @@ func (m *IntegrationSuite) TestGlobalRole() {
 	}
 	validateEndpoints(m.T(), endPoints, m.clientFactory)
 }
+
+func (m *IntegrationSuite) TestGlobalRoleNoResources() {
+	newObj := func() *v3.GlobalRole { return &v3.GlobalRole{} }
+	validCreateObj := &v3.GlobalRole{
+		ObjectMeta: v1.ObjectMeta{
+			Name: "test-globalrole-no-resources",
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				Verbs:     []string{"GET", "WATCH"},
+				APIGroups: []string{"v1"},
+				Resources: []string{"pods"},
+			},
+		},
+	}
+	invalidCreate := func() *v3.GlobalRole {
+		invalidCreate := validCreateObj.DeepCopy()
+		if len(invalidCreate.Rules) != 0 {
+			invalidCreate.Rules[0].Resources = nil
+		}
+		return invalidCreate
+	}
+	validDelete := func() *v3.GlobalRole {
+		return validCreateObj
+	}
+	endPoints := &endPointObjs[*v3.GlobalRole]{
+		invalidCreate:  invalidCreate,
+		newObj:         newObj,
+		validCreateObj: validCreateObj,
+		validDelete:    validDelete,
+	}
+	validateEndpoints(m.T(), endPoints, m.clientFactory)
+}
+
+func (m *IntegrationSuite) TestGlobalRoleNoAPIGroups() {
+	newObj := func() *v3.GlobalRole { return &v3.GlobalRole{} }
+	validCreateObj := &v3.GlobalRole{
+		ObjectMeta: v1.ObjectMeta{
+			Name: "test-globalrole-no-apigroups",
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				Verbs:     []string{"GET", "WATCH"},
+				APIGroups: []string{"v1"},
+				Resources: []string{"pods"},
+			},
+		},
+	}
+	invalidCreate := func() *v3.GlobalRole {
+		invalidCreate := validCreateObj.DeepCopy()
+		if len(invalidCreate.Rules) != 0 {
+			invalidCreate.Rules[0].APIGroups = nil
+		}
+		return invalidCreate
+	}
+	validDelete := func() *v3.GlobalRole {
+		return validCreateObj
+	}
+	endPoints := &endPointObjs[*v3.GlobalRole]{
+		invalidCreate:  invalidCreate,
+		newObj:         newObj,
+		validCreateObj: validCreateObj,
+		validDelete:    validDelete,
+	}
+	validateEndpoints(m.T(), endPoints, m.clientFactory)
+}
