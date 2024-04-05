@@ -45,6 +45,7 @@ func main() {
 					v3.Node{},
 					v3.Project{},
 					v3.ClusterProxyConfig{},
+					v3.FleetWorkspace{},
 				},
 			},
 			"provisioning.cattle.io": {
@@ -89,6 +90,8 @@ func main() {
 			Types: []interface{}{
 				&rbacv1.Role{},
 				&rbacv1.RoleBinding{},
+				&rbacv1.ClusterRole{},
+				&rbacv1.ClusterRoleBinding{},
 			},
 		}}); err != nil {
 		fmt.Printf("ERROR: %v\n", err)

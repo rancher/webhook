@@ -8,12 +8,14 @@ import (
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
+	mgmtv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/resolvers"
 	"github.com/rancher/webhook/pkg/resources/common"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
@@ -34,12 +36,13 @@ const (
 
 // NewValidator returns a new validator used for validation globalRoles.
 func NewValidator(ruleResolver validation.AuthorizationRuleResolver, grbResolver *resolvers.GRBClusterRuleResolver,
-	sar authorizationv1.SubjectAccessReviewInterface) *Validator {
+	sar authorizationv1.SubjectAccessReviewInterface, fwCache mgmtv3.FleetWorkspaceCache) *Validator {
 	return &Validator{
 		admitter: admitter{
 			resolver:    ruleResolver,
 			grbResolver: grbResolver,
 			sar:         sar,
+			fwCache:     fwCache,
 		},
 	}
 }
@@ -73,6 +76,7 @@ type admitter struct {
 	resolver    validation.AuthorizationRuleResolver
 	grbResolver *resolvers.GRBClusterRuleResolver
 	sar         authorizationv1.SubjectAccessReviewInterface
+	fwCache     mgmtv3.FleetWorkspaceCache
 }
 
 // Admit is the entrypoint for the validator. Admit will return an error if it's unable to process the request.
@@ -127,6 +131,12 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		returnError = errors.Join(returnError, common.ValidateRules(rules, true,
 			nsrPath.Child(index)))
 	}
+	// Validate fleet workspace rules
+	if newGR.InheritedFleetWorkspacePermissions.ResourceRules != nil || newGR.InheritedFleetWorkspacePermissions.WorkspaceVerbs != nil {
+		fleetWorkspaceRules := a.grbResolver.GlobalRoleResolver.FleetWorkspaceRulesFromRole(newGR)
+		fwrPath := fldPath.Child("inheritedFleetWorkspacePermissions").Child("resourceRules")
+		returnError = errors.Join(returnError, common.ValidateRules(fleetWorkspaceRules, true, fwrPath))
+	}
 
 	if returnError != nil {
 		return admission.ResponseBadRequest(returnError.Error()), nil
@@ -154,11 +164,43 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 			return admission.ResponseAllowed(), nil
 		}
 	}
+	// Check for escalations in fleet workspace rules
+	if newGR.InheritedFleetWorkspacePermissions.ResourceRules != nil || newGR.InheritedFleetWorkspacePermissions.WorkspaceVerbs != nil {
+		fleetWorkspaceRules := a.grbResolver.GlobalRoleResolver.FleetWorkspaceRulesFromRole(newGR)
+		workspaceNames, err := a.allFleetWorkspaceNamesExceptLocal()
+		if err != nil {
+			return nil, fmt.Errorf("unable to fecht fleet workspaces: %w", err)
+		}
+		for _, w := range workspaceNames {
+			returnError = errors.Join(returnError, escalateChecker.IsRulesAllowed(fleetWorkspaceRules, a.resolver, w))
+			if escalateChecker.HasVerb() {
+				return admission.ResponseAllowed(), nil
+			}
+		}
+		fleetWorkspaceVerbs := a.grbResolver.GlobalRoleResolver.FleetWorkspaceVerbsRuleFromRole(newGR, workspaceNames)
+		returnError = errors.Join(returnError, escalateChecker.IsRulesAllowed(fleetWorkspaceVerbs, a.resolver, ""))
+	}
 	if returnError != nil {
 		return admission.ResponseFailedEscalation(fmt.Sprintf("errors due to escalation: %v", returnError)), nil
 	}
 
 	return admission.ResponseAllowed(), nil
+}
+
+// allFleetWorkspaceNamesExceptLocal returns all workspace names except fleet-local
+func (a *admitter) allFleetWorkspaceNamesExceptLocal() ([]string, error) {
+	workspaces, err := a.fwCache.List(labels.Everything())
+	if err != nil {
+		return nil, fmt.Errorf("unable to fecht fleet workspaces: %w", err)
+	}
+	var workspaceNames []string
+	for _, w := range workspaces {
+		if w.Name != "fleet-local" {
+			workspaceNames = append(workspaceNames, w.Name)
+		}
+	}
+
+	return workspaceNames, nil
 }
 
 // validateDelete checks if a global role can be deleted and returns the appropriate response.

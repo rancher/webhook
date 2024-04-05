@@ -717,6 +717,135 @@ func TestAdmit(t *testing.T) {
 			},
 			allowed: false,
 		},
+		{
+			name: "allowed InheritedFleetWorkspacePermissions",
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedFleetWorkspacePermissions.ResourceRules = []v1.PolicyRule{
+						ruleReadPods,
+					}
+					baseGR.InheritedFleetWorkspacePermissions.WorkspaceVerbs = []string{
+						"GET",
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+
+			allowed: true,
+		},
+		{
+			name: "not allowed InheritedFleetWorkspacePermissions.ResourceRules",
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedFleetWorkspacePermissions.ResourceRules = []v1.PolicyRule{
+						ruleAdmin,
+					}
+					baseGR.InheritedFleetWorkspacePermissions.WorkspaceVerbs = []string{
+						"GET",
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+
+			allowed: false,
+		},
+		{
+			name: "not allowed InheritedFleetWorkspacePermissions.WorkspaceVerbs",
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedFleetWorkspacePermissions.ResourceRules = []v1.PolicyRule{
+						ruleReadPods,
+					}
+					baseGR.InheritedFleetWorkspacePermissions.WorkspaceVerbs = []string{
+						"*",
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+
+			allowed: false,
+		},
+		{
+			name: "InheritedFleetWorkspacePermissions rules contains PolicyRule that is invalid",
+			args: args{
+				username: adminUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedFleetWorkspacePermissions.ResourceRules = []v1.PolicyRule{
+						{
+							APIGroups: []string{""},
+							Resources: []string{"pods"},
+							Verbs:     []string{},
+						},
+					}
+					return baseGR
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "update in InheritedFleetWorkspacePermissions with privilege escalation",
+			args: args{
+				username: testUser,
+				oldGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedFleetWorkspacePermissions.ResourceRules = []v1.PolicyRule{
+						ruleReadPods,
+					}
+					return baseGR
+				},
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedFleetWorkspacePermissions.ResourceRules = []v1.PolicyRule{
+						ruleAdmin,
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "update in InheritedFleetWorkspacePermissions with privilege escalation, escalate allowed",
+			args: args{
+				username: testUser,
+				oldGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedFleetWorkspacePermissions.ResourceRules = []v1.PolicyRule{
+						ruleReadPods,
+					}
+					return baseGR
+				},
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedFleetWorkspacePermissions.ResourceRules = []v1.PolicyRule{
+						ruleAdmin,
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					setSarResponse(true, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+			allowed: true,
+		},
 	}
 
 	for _, test := range tests {
@@ -728,7 +857,7 @@ func TestAdmit(t *testing.T) {
 				test.args.stateSetup(state)
 			}
 			grbResolver := state.createBaseGRBResolver()
-			admitters := globalrole.NewValidator(state.resolver, grbResolver, state.sarMock).Admitters()
+			admitters := globalrole.NewValidator(state.resolver, grbResolver, state.sarMock, state.fwCacheMock).Admitters()
 			assert.Len(t, admitters, 1)
 
 			req := createGRRequest(t, test)
@@ -746,7 +875,7 @@ func TestAdmit(t *testing.T) {
 func Test_UnexpectedErrors(t *testing.T) {
 	t.Parallel()
 	resolver, _ := validation.NewTestRuleResolver(nil, nil, nil, nil)
-	validator := globalrole.NewValidator(resolver, nil, nil)
+	validator := globalrole.NewValidator(resolver, nil, nil, nil)
 	admitters := validator.Admitters()
 	require.Len(t, admitters, 1, "wanted only one admitter")
 	test := testCase{

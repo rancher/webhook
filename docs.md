@@ -345,6 +345,22 @@ When a UserAttribute is updated, the following checks take place:
 
 # rbac.authorization.k8s.io/v1 
 
+## ClusterRole 
+
+### Validation Checks
+
+#### Invalid Fields - Update
+Users cannot update or remove the following label after it has been added:
+- authz.management.cattle.io/gr-owner
+
+## ClusterRoleBinding 
+
+### Validation Checks
+
+#### Invalid Fields - Update
+Users cannot update or remove the following label after it has been added:
+- authz.management.cattle.io/grb-owner
+
 ## Role 
 
 ### Validation Checks

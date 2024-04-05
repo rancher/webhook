@@ -21,6 +21,8 @@ import (
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/setting"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/userattribute"
 	provisioningCluster "github.com/rancher/webhook/pkg/resources/provisioning.cattle.io/v1/cluster"
+	"github.com/rancher/webhook/pkg/resources/rbac.authorization.k8s.io/v1/clusterrole"
+	"github.com/rancher/webhook/pkg/resources/rbac.authorization.k8s.io/v1/clusterrolebinding"
 	"github.com/rancher/webhook/pkg/resources/rbac.authorization.k8s.io/v1/role"
 	"github.com/rancher/webhook/pkg/resources/rbac.authorization.k8s.io/v1/rolebinding"
 	"github.com/rancher/webhook/pkg/resources/rke-machine-config.cattle.io/v1/machineconfig"
@@ -42,7 +44,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		prtbResolver := resolvers.NewPRTBRuleResolver(clients.Management.ProjectRoleTemplateBinding().Cache(), clients.RoleTemplateResolver)
 		grbResolver := resolvers.NewGRBClusterRuleResolver(clients.Management.GlobalRoleBinding().Cache(), clients.GlobalRoleResolver)
 		psact := podsecurityadmissionconfigurationtemplate.NewValidator(clients.Management.Cluster().Cache(), clients.Provisioning.Cluster().Cache())
-		globalRoles := globalrole.NewValidator(clients.DefaultResolver, grbResolver, clients.K8s.AuthorizationV1().SubjectAccessReviews())
+		globalRoles := globalrole.NewValidator(clients.DefaultResolver, grbResolver, clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.Management.FleetWorkspace().Cache())
 		globalRoleBindings := globalrolebinding.NewValidator(clients.DefaultResolver, grbResolver, clients.K8s.AuthorizationV1().SubjectAccessReviews())
 		prtbs := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver, clients.Management.Cluster().Cache(), clients.Management.Project().Cache())
 		crtbs := clusterroletemplatebinding.NewValidator(crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver, clients.Management.GlobalRoleBinding().Cache(), clients.Management.Cluster().Cache())
@@ -54,8 +56,10 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		rolebindings := rolebinding.NewValidator()
 		setting := setting.NewValidator()
 		userAttribute := userattribute.NewValidator()
+		clusterRoles := clusterrole.NewValidator()
+		clusterRoleBindings := clusterrolebinding.NewValidator()
 
-		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, nodeDriver, projects, roles, rolebindings, clusterProxyConfigs, userAttribute, setting)
+		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, nodeDriver, projects, roles, rolebindings, clusterRoles, clusterRoleBindings, clusterProxyConfigs, userAttribute, setting)
 	}
 	return handlers, nil
 }
