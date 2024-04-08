@@ -44,6 +44,7 @@ require (
 	github.com/rancher/rancher/pkg/apis v0.0.0-20240507200315-e6403cd399d7
 	github.com/rancher/rke v1.4.18-rc1
 	github.com/rancher/wrangler v1.1.1
+	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/exp v0.0.0-20230206171751-46f607a40771
