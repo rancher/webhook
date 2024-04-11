@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/labels"
-
 	"github.com/golang/mock/gomock"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
@@ -44,7 +42,7 @@ var (
 			},
 		},
 	}
-	clusterRoles = []*v1.ClusterRole{adminCR, readPodsCR, baseCR, readFleetWorkspacesCR}
+	clusterRoles = []*v1.ClusterRole{adminCR, readPodsCR, baseCR}
 
 	clusterRoleBindings = []*v1.ClusterRoleBinding{
 		{
@@ -76,12 +74,6 @@ var (
 				},
 			},
 		},
-		{
-			Subjects: []v1.Subject{
-				{Kind: v1.UserKind, Name: testUser},
-			},
-			RoleRef: v1.RoleRef{APIGroup: v1.GroupName, Kind: "ClusterRole", Name: readFleetWorkspacesCR.Name},
-		},
 	}
 	baseRT = v3.RoleTemplate{
 		ObjectMeta: metav1.ObjectMeta{
@@ -107,6 +99,12 @@ var (
 			},
 		},
 		InheritedClusterRoles: []string{baseRT.Name},
+		InheritedFleetWorkspacePermissions: v3.FleetWorkspacePermission{
+			ResourceRules: []v1.PolicyRule{
+				ruleReadPods,
+			},
+			WorkspaceVerbs: []string{"GET"},
+		},
 	}
 	baseGRB = v3.GlobalRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -136,13 +134,6 @@ var (
 		APIGroups: []string{"*"},
 		Resources: []string{"*"},
 	}
-	ruleReadFleetWorkspaces = v1.PolicyRule{
-		Verbs:         []string{"GET"},
-		APIGroups:     []string{"management.cattle.io"},
-		Resources:     []string{"fleetworkspaces"},
-		ResourceNames: []string{"fleet-default"},
-	}
-
 	adminCR = &v1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "admin-role",
@@ -152,10 +143,6 @@ var (
 	readPodsCR = &v1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{Name: "read-pods"},
 		Rules:      []v1.PolicyRule{ruleReadPods},
-	}
-	readFleetWorkspacesCR = &v1.ClusterRole{
-		ObjectMeta: metav1.ObjectMeta{Name: "read-fleetworkspaces"},
-		Rules:      []v1.PolicyRule{ruleReadFleetWorkspaces},
 	}
 
 	roleTemplate = v3.RoleTemplate{
@@ -191,7 +178,6 @@ type testState struct {
 	rtCacheMock  *fake.MockNonNamespacedCacheInterface[*v3.RoleTemplate]
 	grCacheMock  *fake.MockNonNamespacedCacheInterface[*v3.GlobalRole]
 	grbCacheMock *fake.MockNonNamespacedCacheInterface[*v3.GlobalRoleBinding]
-	fwCacheMock  *fake.MockNonNamespacedCacheInterface[*v3.FleetWorkspace]
 	sarMock      *k8fake.FakeSubjectAccessReviews
 	resolver     validation.AuthorizationRuleResolver
 }
@@ -279,21 +265,12 @@ func newDefaultState(t *testing.T) testState {
 	rtCacheMock := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
 	grCacheMock := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRole](ctrl)
 	grbCacheMock := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRoleBinding](ctrl)
-	fwCacheMock := fake.NewMockNonNamespacedCacheInterface[*v3.FleetWorkspace](ctrl)
 	grbs := []*v3.GlobalRoleBinding{&baseGRB}
 	grbCacheMock.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(testUser, "")).Return(grbs, nil).AnyTimes()
 	grbCacheMock.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(adminUser, "")).Return(grbs, nil).AnyTimes()
 	grbCacheMock.EXPECT().AddIndexer(gomock.Any(), gomock.Any()).AnyTimes()
 	grCacheMock.EXPECT().Get(baseGR.Name).Return(&baseGR, nil).AnyTimes()
 	rtCacheMock.EXPECT().Get(baseRT.Name).Return(&baseRT, nil).AnyTimes()
-	fwCacheMock.EXPECT().List(labels.Everything()).Return([]*v3.FleetWorkspace{
-		{
-			ObjectMeta: metav1.ObjectMeta{Name: "fleet-default"},
-		},
-		{
-			ObjectMeta: metav1.ObjectMeta{Name: "fleet-local"},
-		},
-	}, nil).AnyTimes()
 	k8Fake := &k8testing.Fake{}
 	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
 
@@ -302,7 +279,6 @@ func newDefaultState(t *testing.T) testState {
 		rtCacheMock:  rtCacheMock,
 		grCacheMock:  grCacheMock,
 		grbCacheMock: grbCacheMock,
-		fwCacheMock:  fwCacheMock,
 		sarMock:      fakeSAR,
 		resolver:     resolver,
 	}

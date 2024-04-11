@@ -41,32 +41,7 @@ func (g *GlobalRoleResolver) GlobalRulesFromRole(gr *v3.GlobalRole) []rbacv1.Pol
 	return gr.Rules
 }
 
-// FleetWorkspaceRulesFromRole finds all rules which apply to all fleet workspaces except fleet-local.
-func (g *GlobalRoleResolver) FleetWorkspaceRulesFromRole(gr *v3.GlobalRole) []rbacv1.PolicyRule {
-	// no rules on a nil role
-	if gr == nil {
-		return nil
-	}
-	return gr.InheritedFleetWorkspacePermissions.ResourceRules
-}
-
-// FleetWorkspaceRulesFromRole finds all rules which apply to all fleet workspaces except fleet-local.
-func (g *GlobalRoleResolver) FleetWorkspaceVerbsRuleFromRole(gr *v3.GlobalRole, workspaceNames []string) []rbacv1.PolicyRule {
-	if gr == nil {
-		return nil
-	}
-
-	return []rbacv1.PolicyRule{
-		{
-			Verbs:         gr.InheritedFleetWorkspacePermissions.WorkspaceVerbs,
-			APIGroups:     []string{"management.cattle.io"},
-			Resources:     []string{"fleetworkspaces"},
-			ResourceNames: workspaceNames,
-		},
-	}
-}
-
-// ClusterRulesFromRole finds all rules which this gr gives on downstream clusters.
+// ClusterRulesFromRole finds all rules which this gr gives on downstream clusters and fleet workspaces except local.
 func (g *GlobalRoleResolver) ClusterRulesFromRole(gr *v3.GlobalRole) ([]rbacv1.PolicyRule, error) {
 	if gr == nil {
 		return nil, nil
@@ -89,6 +64,16 @@ func (g *GlobalRoleResolver) ClusterRulesFromRole(gr *v3.GlobalRole) ([]rbacv1.P
 			return nil, fmt.Errorf("unable to get cluster rules for roleTemplate %s: %w", inheritedRoleTemplate, err)
 		}
 		rules = append(rules, templateRules...)
+	}
+	if gr.InheritedFleetWorkspacePermissions.ResourceRules != nil {
+		rules = append(rules, gr.InheritedFleetWorkspacePermissions.ResourceRules...)
+	}
+	if gr.InheritedFleetWorkspacePermissions.WorkspaceVerbs != nil {
+		rules = append(rules, rbacv1.PolicyRule{
+			Verbs:     gr.InheritedFleetWorkspacePermissions.WorkspaceVerbs,
+			APIGroups: []string{"management.cattle.io"},
+			Resources: []string{"fleetworkspaces"},
+		})
 	}
 	return rules, nil
 }

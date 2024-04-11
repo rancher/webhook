@@ -3,14 +3,16 @@ package clusterrole
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
+
+	admissionv1 "k8s.io/api/admission/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/stretchr/testify/require"
-	admissionv1 "k8s.io/api/admission/v1"
 	v1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 )
 
 var (
@@ -53,10 +55,11 @@ func TestAdmit(t *testing.T) {
 		newRole *v1.ClusterRole
 	}
 	type test struct {
-		name    string
-		args    args
-		allowed bool
-		wantErr bool
+		name                            string
+		args                            args
+		allowed                         bool
+		clusterRoleOldAndNewFromRequest clusterRoleOldAndNewFromRequest
+		wantErr                         bool
 	}
 	tests := []test{
 		{
@@ -131,6 +134,16 @@ func TestAdmit(t *testing.T) {
 			},
 			allowed: false,
 		},
+		{
+			name: "error getting old and new ClusterRole from request",
+			args: args{
+				oldRole: roleWithOwnerLabel.DeepCopy(),
+				newRole: emptyRole.DeepCopy(),
+			},
+			clusterRoleOldAndNewFromRequest: clusterRoleOldAndNewFromRequestError,
+			allowed:                         false,
+			wantErr:                         true,
+		},
 	}
 
 	for _, test := range tests {
@@ -157,8 +170,11 @@ func TestAdmit(t *testing.T) {
 			req.OldObject.Raw, err = json.Marshal(test.args.oldRole)
 			require.NoError(t, err)
 
-			admitter := NewValidator().Admitters()
-
+			validator := NewValidator()
+			if test.clusterRoleOldAndNewFromRequest != nil {
+				validator.admitter.clusterRoleOldAndNewFromRequest = test.clusterRoleOldAndNewFromRequest
+			}
+			admitter := validator.Admitters()
 			response, err := admitter[0].Admit(req)
 			if test.wantErr {
 				require.Error(t, err)
@@ -169,4 +185,8 @@ func TestAdmit(t *testing.T) {
 
 		})
 	}
+}
+
+func clusterRoleOldAndNewFromRequestError(_ *admissionv1.AdmissionRequest) (*v1.ClusterRole, *v1.ClusterRole, error) {
+	return nil, nil, errors.New("unexpected")
 }

@@ -3,6 +3,7 @@ package clusterrolebinding
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/rancher/webhook/pkg/admission"
@@ -54,10 +55,11 @@ func TestAdmit(t *testing.T) {
 		newRB *v1.ClusterRoleBinding
 	}
 	type test struct {
-		name    string
-		args    args
-		allowed bool
-		wantErr bool
+		name                                   string
+		args                                   args
+		allowed                                bool
+		clusterRoleBindingOldAndNewFromRequest clusterRoleBindingOldAndNewFromRequest
+		wantErr                                bool
 	}
 	tests := []test{
 		{
@@ -132,6 +134,16 @@ func TestAdmit(t *testing.T) {
 			},
 			allowed: false,
 		},
+		{
+			name: "error getting old and new ClusterRoleBinding from request",
+			args: args{
+				oldRB: roleBindingWithOwnerLabel.DeepCopy(),
+				newRB: emptyLabelsRoleBinding.DeepCopy(),
+			},
+			allowed:                                false,
+			clusterRoleBindingOldAndNewFromRequest: clusterRoleBindingOldAndNewFromRequestError,
+			wantErr:                                true,
+		},
 	}
 
 	for _, test := range tests {
@@ -158,7 +170,11 @@ func TestAdmit(t *testing.T) {
 			req.OldObject.Raw, err = json.Marshal(test.args.oldRB)
 			require.NoError(t, err)
 
-			admitter := NewValidator().Admitters()
+			validator := NewValidator()
+			if test.clusterRoleBindingOldAndNewFromRequest != nil {
+				validator.admitter.clusterRoleBindingOldAndNewFromRequest = test.clusterRoleBindingOldAndNewFromRequest
+			}
+			admitter := validator.Admitters()
 
 			response, err := admitter[0].Admit(req)
 			if test.wantErr {
@@ -167,7 +183,10 @@ func TestAdmit(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equalf(t, test.allowed, response.Allowed, "Response was incorrectly validated wanted response.Allowed = '%v' got '%v' message=%+v", test.allowed, response.Allowed, response.Result)
-
 		})
 	}
+}
+
+func clusterRoleBindingOldAndNewFromRequestError(_ *admissionv1.AdmissionRequest) (*v1.ClusterRoleBinding, *v1.ClusterRoleBinding, error) {
+	return nil, nil, errors.New("unexpected")
 }
