@@ -3,7 +3,7 @@
     "github>rancher/renovate-config#release"
   ],
   "baseBranches": [
-    "release/v0.4"
+    "release/v0.5"
   ],
   "prHourlyLimit": 2,
   "enabledManagers": [
@@ -11,6 +11,7 @@
     "dockerfile",
     "github-actions",
     "helm-values",
-    "regex"
+    "regex",
+    "gomod"
   ]
 }
