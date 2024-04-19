@@ -3,8 +3,6 @@ package clusterrole
 import (
 	"fmt"
 
-	v1 "k8s.io/api/rbac/v1"
-
 	"github.com/rancher/webhook/pkg/admission"
 	objectsv1 "github.com/rancher/webhook/pkg/generated/objects/rbac.authorization.k8s.io/v1"
 	"github.com/rancher/webhook/pkg/resources/common"
@@ -27,9 +25,7 @@ type Validator struct {
 // NewValidator returns a new validator for roles.
 func NewValidator() *Validator {
 	return &Validator{
-		admitter: admitter{
-			clusterRoleOldAndNewFromRequest: objectsv1.ClusterRoleOldAndNewFromRequest,
-		},
+		admitter: admitter{},
 	}
 }
 
@@ -68,10 +64,7 @@ func (v *Validator) Admitters() []admission.Admitter {
 	return []admission.Admitter{&v.admitter}
 }
 
-type clusterRoleOldAndNewFromRequest func(request *admissionv1.AdmissionRequest) (*v1.ClusterRole, *v1.ClusterRole, error)
-
 type admitter struct {
-	clusterRoleOldAndNewFromRequest clusterRoleOldAndNewFromRequest
 }
 
 // Admit is the entrypoint for the validator. Admit will return an error if it's unable to process the request.
@@ -79,7 +72,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	listTrace := trace.New("clusterRoleValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
-	oldRole, newRole, err := a.clusterRoleOldAndNewFromRequest(&request.AdmissionRequest)
+	oldRole, newRole, err := objectsv1.ClusterRoleOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return nil, err
 	}

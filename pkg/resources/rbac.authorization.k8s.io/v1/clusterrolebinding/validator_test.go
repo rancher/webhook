@@ -3,7 +3,6 @@ package clusterrolebinding
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"testing"
 
 	"github.com/rancher/webhook/pkg/admission"
@@ -55,11 +54,9 @@ func TestAdmit(t *testing.T) {
 		newRB *v1.ClusterRoleBinding
 	}
 	type test struct {
-		name                                   string
-		args                                   args
-		allowed                                bool
-		clusterRoleBindingOldAndNewFromRequest clusterRoleBindingOldAndNewFromRequest
-		wantErr                                bool
+		name    string
+		args    args
+		allowed bool
 	}
 	tests := []test{
 		{
@@ -140,9 +137,7 @@ func TestAdmit(t *testing.T) {
 				oldRB: roleBindingWithOwnerLabel.DeepCopy(),
 				newRB: emptyLabelsRoleBinding.DeepCopy(),
 			},
-			allowed:                                false,
-			clusterRoleBindingOldAndNewFromRequest: clusterRoleBindingOldAndNewFromRequestError,
-			wantErr:                                true,
+			allowed: false,
 		},
 	}
 
@@ -171,22 +166,36 @@ func TestAdmit(t *testing.T) {
 			require.NoError(t, err)
 
 			validator := NewValidator()
-			if test.clusterRoleBindingOldAndNewFromRequest != nil {
-				validator.admitter.clusterRoleBindingOldAndNewFromRequest = test.clusterRoleBindingOldAndNewFromRequest
-			}
 			admitter := validator.Admitters()
 
 			response, err := admitter[0].Admit(req)
-			if test.wantErr {
-				require.Error(t, err)
-				return
-			}
+
 			require.NoError(t, err)
 			require.Equalf(t, test.allowed, response.Allowed, "Response was incorrectly validated wanted response.Allowed = '%v' got '%v' message=%+v", test.allowed, response.Allowed, response.Result)
 		})
 	}
 }
 
-func clusterRoleBindingOldAndNewFromRequestError(_ *admissionv1.AdmissionRequest) (*v1.ClusterRoleBinding, *v1.ClusterRoleBinding, error) {
-	return nil, nil, errors.New("unexpected")
+func TestAdmin_errors(t *testing.T) {
+	t.Parallel()
+
+	req := &admission.Request{
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			UID:             "1",
+			Kind:            gvk,
+			Resource:        gvr,
+			RequestKind:     &gvk,
+			RequestResource: &gvr,
+			Operation:       admissionv1.Update,
+			Object:          runtime.RawExtension{},
+			OldObject:       runtime.RawExtension{},
+		},
+		Context: context.Background(),
+	}
+	req.Object = runtime.RawExtension{}
+
+	validator := NewValidator()
+	admitter := validator.Admitters()
+	_, err := admitter[0].Admit(req)
+	require.Error(t, err, "Admit should fail on bad request object")
 }

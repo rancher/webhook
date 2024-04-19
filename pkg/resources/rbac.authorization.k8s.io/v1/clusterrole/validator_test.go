@@ -3,7 +3,6 @@ package clusterrole
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"testing"
 
 	admissionv1 "k8s.io/api/admission/v1"
@@ -55,11 +54,9 @@ func TestAdmit(t *testing.T) {
 		newRole *v1.ClusterRole
 	}
 	type test struct {
-		name                            string
-		args                            args
-		allowed                         bool
-		clusterRoleOldAndNewFromRequest clusterRoleOldAndNewFromRequest
-		wantErr                         bool
+		name    string
+		args    args
+		allowed bool
 	}
 	tests := []test{
 		{
@@ -134,16 +131,6 @@ func TestAdmit(t *testing.T) {
 			},
 			allowed: false,
 		},
-		{
-			name: "error getting old and new ClusterRole from request",
-			args: args{
-				oldRole: roleWithOwnerLabel.DeepCopy(),
-				newRole: emptyRole.DeepCopy(),
-			},
-			clusterRoleOldAndNewFromRequest: clusterRoleOldAndNewFromRequestError,
-			allowed:                         false,
-			wantErr:                         true,
-		},
 	}
 
 	for _, test := range tests {
@@ -171,22 +158,34 @@ func TestAdmit(t *testing.T) {
 			require.NoError(t, err)
 
 			validator := NewValidator()
-			if test.clusterRoleOldAndNewFromRequest != nil {
-				validator.admitter.clusterRoleOldAndNewFromRequest = test.clusterRoleOldAndNewFromRequest
-			}
 			admitter := validator.Admitters()
 			response, err := admitter[0].Admit(req)
-			if test.wantErr {
-				require.Error(t, err)
-				return
-			}
 			require.NoError(t, err)
 			require.Equalf(t, test.allowed, response.Allowed, "Response was incorrectly validated wanted response.Allowed = '%v' got '%v' message=%+v", test.allowed, response.Allowed, response.Result)
-
 		})
 	}
 }
 
-func clusterRoleOldAndNewFromRequestError(_ *admissionv1.AdmissionRequest) (*v1.ClusterRole, *v1.ClusterRole, error) {
-	return nil, nil, errors.New("unexpected")
+func TestAdmin_errors(t *testing.T) {
+	t.Parallel()
+
+	req := &admission.Request{
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			UID:             "1",
+			Kind:            gvk,
+			Resource:        gvr,
+			RequestKind:     &gvk,
+			RequestResource: &gvr,
+			Operation:       admissionv1.Update,
+			Object:          runtime.RawExtension{},
+			OldObject:       runtime.RawExtension{},
+		},
+		Context: context.Background(),
+	}
+	req.Object = runtime.RawExtension{}
+
+	validator := NewValidator()
+	admitter := validator.Admitters()
+	_, err := admitter[0].Admit(req)
+	require.Error(t, err, "Admit should fail on bad request object")
 }
