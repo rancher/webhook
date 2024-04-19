@@ -23,8 +23,8 @@ type GRBClusterRuleResolver struct {
 	ruleResolver func(namespace string, gr *apisv3.GlobalRole, grResolver *auth.GlobalRoleResolver) ([]rbacv1.PolicyRule, error)
 }
 
-// New NewGRBClusterRuleResolver returns a new resolver for resolving rules given through gbrCache
-// which apply to cluster(s). This function can only be called once for each unique instance of grbCache.
+// NewGRRuleResolvers returns resolvers for resolving rules given through GlobalRoleBindings
+// which apply to cluster(s). This function can only be called once for each unique instance of GlobalRoleBindings.
 func NewGRRuleResolvers(grbCache v3.GlobalRoleBindingCache, grResolver *auth.GlobalRoleResolver) (*GRBClusterRuleResolver, *GRBClusterRuleResolver, *GRBClusterRuleResolver) {
 	grbCache.AddIndexer(grbSubjectIndex, grbBySubject)
 	inheritedClusterRoleResolver := &GRBClusterRuleResolver{
@@ -45,14 +45,14 @@ func NewGRRuleResolvers(grbCache v3.GlobalRoleBindingCache, grResolver *auth.Glo
 	fleetWorkspaceResourceRulesResolver := &GRBClusterRuleResolver{
 		gbrCache:   grbCache,
 		grResolver: grResolver,
-		ruleResolver: func(namespace string, gr *apisv3.GlobalRole, grResolver *auth.GlobalRoleResolver) ([]rbacv1.PolicyRule, error) {
+		ruleResolver: func(_ string, gr *apisv3.GlobalRole, grResolver *auth.GlobalRoleResolver) ([]rbacv1.PolicyRule, error) {
 			return grResolver.FleetWorkspacePermissionsResourceRulesFromRole(gr), nil
 		},
 	}
 	fleetWorkspaceVerbsResolver := &GRBClusterRuleResolver{
 		gbrCache:   grbCache,
 		grResolver: grResolver,
-		ruleResolver: func(namespace string, gr *apisv3.GlobalRole, grResolver *auth.GlobalRoleResolver) ([]rbacv1.PolicyRule, error) {
+		ruleResolver: func(_ string, gr *apisv3.GlobalRole, grResolver *auth.GlobalRoleResolver) ([]rbacv1.PolicyRule, error) {
 			return grResolver.FleetWorkspacePermissionsWorkspaceVerbsFromRole(gr), nil
 		},
 	}
@@ -69,16 +69,16 @@ func (g *GRBClusterRuleResolver) GetRoleReferenceRules(rbacv1.RoleRef, string) (
 // RulesFor returns the list of Cluster rules that apply in a given namespace (usually either the namespace of a
 // specific cluster or "" for all clusters). If an error is returned, the slice of PolicyRules may not be complete,
 // but contains all retrievable rules.
-func (r *GRBClusterRuleResolver) RulesFor(user user.Info, namespace string) ([]rbacv1.PolicyRule, error) {
+func (g *GRBClusterRuleResolver) RulesFor(user user.Info, namespace string) ([]rbacv1.PolicyRule, error) {
 	visitor := &ruleAccumulator{}
-	r.visitRulesForWithRuleResolver(user, namespace, visitor.visit, r.ruleResolver)
+	g.visitRulesForWithRuleResolver(user, namespace, visitor.visit, g.ruleResolver)
 	return visitor.rules, visitor.getError()
 }
 
 // VisitRulesFor invokes visitor() with each rule that applies to a given user in a given namespace, and each error encountered resolving those rules.
 // If visitor() returns false, visiting is short-circuited. This will return different rules for the "local" namespace.
-func (r *GRBClusterRuleResolver) VisitRulesFor(user user.Info, namespace string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) {
-	r.visitRulesForWithRuleResolver(user, namespace, visitor, r.ruleResolver)
+func (g *GRBClusterRuleResolver) VisitRulesFor(user user.Info, namespace string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) {
+	g.visitRulesForWithRuleResolver(user, namespace, visitor, g.ruleResolver)
 }
 
 // visitRulesForWithRuleResolver invokes visitor() with each rule that applies to a given user in a given namespace, and each error encountered resolving those rules.

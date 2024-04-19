@@ -140,6 +140,13 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		fwrPath := fldPath.Child("inheritedFleetWorkspacePermissions").Child("resourceRules")
 		returnError = errors.Join(returnError, common.ValidateRules(fleetWorkspaceRules, true, fwrPath))
 	}
+	// Validate fleet workspace verbs
+	if newGR.InheritedFleetWorkspacePermissions.WorkspaceVerbs != nil {
+		fleetWorkspaceVerbs := newGR.InheritedFleetWorkspacePermissions.WorkspaceVerbs
+		if len(fleetWorkspaceVerbs) == 0 {
+			returnError = errors.Join(returnError, fmt.Errorf("InheritedFleetWorkspacePermissions.WorkspaceVerbs can't be empty"))
+		}
+	}
 
 	if returnError != nil {
 		return admission.ResponseBadRequest(returnError.Error()), nil

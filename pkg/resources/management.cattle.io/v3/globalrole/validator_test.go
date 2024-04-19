@@ -799,6 +799,14 @@ func TestAdmit(t *testing.T) {
 			allowed: false,
 		},
 		{
+			name: "InheritedFleetWorkspacePermissions rules contains empty WorkspaceVerbs",
+			args: args{
+				username: adminUser,
+				rawNewGR: []byte(`{"kind":"GlobalRole","apiVersion":"management.cattle.io/v3","metadata":{"name":"gr-new","generateName":"gr-","namespace":"c-namespace","uid":"6534e4ef-f07b-4c61-b88d-95a92cce4852","resourceVersion":"1","generation":1,"creationTimestamp":null},"displayName":"Test Global Role","description":"This is a role created for testing.","inheritedFleetWorkspacePermissions":{"resourceRules":[{"verbs":["GET","WATCH"],"apiGroups":["v1"],"resources":["pods"]}], "workspaceVerbs":[]},"status":{}}`),
+			},
+			allowed: false,
+		},
+		{
 			name: "update in InheritedFleetWorkspacePermissions with privilege escalation",
 			args: args{
 				username: testUser,

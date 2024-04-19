@@ -170,6 +170,7 @@ type testCase struct {
 type args struct {
 	oldGR      func() *v3.GlobalRole
 	newGR      func() *v3.GlobalRole
+	rawNewGR   []byte
 	stateSetup func(testState)
 	username   string
 }
@@ -225,10 +226,14 @@ func createGRRequest(t *testing.T, test testCase) *admission.Request {
 		req.OldObject.Raw, err = json.Marshal(oldGR)
 		assert.NoError(t, err, "Failed to marshal GR while creating request")
 	}
-	if newGR != nil {
-		req.Name = newGR.Name
-		req.Namespace = newGR.Namespace
-		req.Object.Raw, err = json.Marshal(newGR)
+	if newGR != nil || test.args.rawNewGR != nil {
+		if test.args.rawNewGR != nil {
+			req.Object.Raw = test.args.rawNewGR
+		} else {
+			req.Object.Raw, err = json.Marshal(newGR)
+			req.Name = newGR.Name
+			req.Namespace = newGR.Namespace
+		}
 		assert.NoError(t, err, "Failed to marshal GR while creating request")
 	} else {
 		req.Operation = admissionv1.Delete
