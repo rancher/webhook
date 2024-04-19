@@ -134,6 +134,10 @@ var (
 			},
 		},
 		InheritedClusterRoles: []string{baseRT.Name},
+		InheritedFleetWorkspacePermissions: v3.FleetWorkspacePermission{
+			ResourceRules:  fwResourceRules,
+			WorkspaceVerbs: fwWorkspaceVerbs,
+		},
 	}
 	adminGR = &v3.GlobalRole{
 		ObjectMeta: metav1.ObjectMeta{
@@ -248,6 +252,49 @@ var (
 					Verbs:     []string{"*"},
 				},
 			},
+		},
+	}
+	fwResourceRules = []rbacv1.PolicyRule{
+		{
+			APIGroups: []string{"fleet.cattle.io"},
+			Resources: []string{"gitrepos"},
+			Verbs:     []string{"get"},
+		},
+	}
+	fwWorkspaceVerbs     = []string{"GET"}
+	fwResourceRulesAdmin = []rbacv1.PolicyRule{
+		{
+			APIGroups: []string{"*"},
+			Resources: []string{"*"},
+			Verbs:     []string{"*"},
+		},
+	}
+	fwWorkspaceVerbsAdmin = []string{"*"}
+	fwGR                  = v3.GlobalRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "namespacedRules-gr",
+		},
+		InheritedFleetWorkspacePermissions: v3.FleetWorkspacePermission{
+			ResourceRules:  fwResourceRules,
+			WorkspaceVerbs: fwWorkspaceVerbs,
+		},
+	}
+	fwGRResourceRulesAdmin = v3.GlobalRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "namespacedRules-gr",
+		},
+		InheritedFleetWorkspacePermissions: v3.FleetWorkspacePermission{
+			ResourceRules:  fwResourceRulesAdmin,
+			WorkspaceVerbs: fwWorkspaceVerbs,
+		},
+	}
+	fwGRWorkspaceVerbsAdmin = v3.GlobalRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "namespacedRules-gr",
+		},
+		InheritedFleetWorkspacePermissions: v3.FleetWorkspacePermission{
+			ResourceRules:  fwResourceRules,
+			WorkspaceVerbs: fwWorkspaceVerbsAdmin,
 		},
 	}
 )

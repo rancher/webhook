@@ -284,7 +284,10 @@ func newDefaultState(t *testing.T) testState {
 	}
 }
 
-func (m *testState) createBaseGRBResolver() *resolvers.GRBClusterRuleResolver {
-	grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(m.rtCacheMock, nil), m.grCacheMock)
-	return resolvers.NewGRBClusterRuleResolver(m.grbCacheMock, grResolver)
+func (m *testState) createBaseGRResolver() *auth.GlobalRoleResolver {
+	return auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(m.rtCacheMock, nil), m.grCacheMock)
+}
+
+func (m *testState) createBaseGRBResolvers(grResolver *auth.GlobalRoleResolver) (*resolvers.GRBClusterRuleResolver, *resolvers.GRBClusterRuleResolver, *resolvers.GRBClusterRuleResolver) {
+	return resolvers.NewGRRuleResolvers(m.grbCacheMock, grResolver)
 }

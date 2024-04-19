@@ -65,17 +65,37 @@ func (g *GlobalRoleResolver) ClusterRulesFromRole(gr *v3.GlobalRole) ([]rbacv1.P
 		}
 		rules = append(rules, templateRules...)
 	}
+
+	return rules, nil
+}
+
+func (g *GlobalRoleResolver) FleetWorkspacePermissionsResourceRulesFromRole(gr *v3.GlobalRole) []rbacv1.PolicyRule {
+	if gr == nil {
+		return nil
+	}
+
+	var rules []rbacv1.PolicyRule
 	if gr.InheritedFleetWorkspacePermissions.ResourceRules != nil {
 		rules = append(rules, gr.InheritedFleetWorkspacePermissions.ResourceRules...)
 	}
+
+	return rules
+}
+
+func (g *GlobalRoleResolver) FleetWorkspacePermissionsWorkspaceVerbsFromRole(gr *v3.GlobalRole) []rbacv1.PolicyRule {
+	if gr == nil {
+		return nil
+	}
+
 	if gr.InheritedFleetWorkspacePermissions.WorkspaceVerbs != nil {
-		rules = append(rules, rbacv1.PolicyRule{
+		return []rbacv1.PolicyRule{{
 			Verbs:     gr.InheritedFleetWorkspacePermissions.WorkspaceVerbs,
 			APIGroups: []string{"management.cattle.io"},
 			Resources: []string{"fleetworkspaces"},
-		})
+		}}
 	}
-	return rules, nil
+
+	return nil
 }
 
 // GetRoleTemplate allows the caller to retrieve the roleTemplates in use by a given global role. Does not
