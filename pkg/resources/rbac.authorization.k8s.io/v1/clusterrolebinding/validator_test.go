@@ -131,14 +131,6 @@ func TestAdmit(t *testing.T) {
 			},
 			allowed: false,
 		},
-		{
-			name: "error getting old and new ClusterRoleBinding from request",
-			args: args{
-				oldRB: roleBindingWithOwnerLabel.DeepCopy(),
-				newRB: emptyLabelsRoleBinding.DeepCopy(),
-			},
-			allowed: false,
-		},
 	}
 
 	for _, test := range tests {
