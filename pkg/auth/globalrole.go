@@ -74,12 +74,7 @@ func (g *GlobalRoleResolver) FleetWorkspacePermissionsResourceRulesFromRole(gr *
 		return nil
 	}
 
-	var rules []rbacv1.PolicyRule
-	if gr.InheritedFleetWorkspacePermissions.ResourceRules != nil {
-		rules = append(rules, gr.InheritedFleetWorkspacePermissions.ResourceRules...)
-	}
-
-	return rules
+	return gr.InheritedFleetWorkspacePermissions.ResourceRules
 }
 
 func (g *GlobalRoleResolver) FleetWorkspacePermissionsWorkspaceVerbsFromRole(gr *v3.GlobalRole) []rbacv1.PolicyRule {
