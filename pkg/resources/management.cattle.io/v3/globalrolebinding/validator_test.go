@@ -795,8 +795,8 @@ func TestAdmit(t *testing.T) {
 				test.args.stateSetup(state)
 			}
 			grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCacheMock, nil), state.grCacheMock)
-			icrResolver, fwRulesResolver, fwVerbsResolver := resolvers.NewGRRuleResolvers(state.grbCacheMock, grResolver)
-			admitters := globalrolebinding.NewValidator(state.resolver, icrResolver, fwRulesResolver, fwVerbsResolver, state.sarMock, grResolver).Admitters()
+			gbrResolvers := resolvers.NewGRBRuleResolvers(state.grbCacheMock, grResolver)
+			admitters := globalrolebinding.NewValidator(state.resolver, gbrResolvers, state.sarMock, grResolver).Admitters()
 			require.Len(t, admitters, 1)
 
 			req := createGRBRequest(t, test)
@@ -816,8 +816,8 @@ func Test_UnexpectedErrors(t *testing.T) {
 	t.Parallel()
 	state := newDefaultState(t)
 	grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCacheMock, nil), state.grCacheMock)
-	icrResolver, fwRulesResolver, fwVerbsResolver := resolvers.NewGRRuleResolvers(state.grbCacheMock, grResolver)
-	validator := globalrolebinding.NewValidator(state.resolver, icrResolver, fwRulesResolver, fwVerbsResolver, state.sarMock, grResolver)
+	gbrResolvers := resolvers.NewGRBRuleResolvers(state.grbCacheMock, grResolver)
+	validator := globalrolebinding.NewValidator(state.resolver, gbrResolvers, state.sarMock, grResolver)
 	admitters := validator.Admitters()
 	require.Len(t, admitters, 1, "wanted only one admitter")
 	admitter := admitters[0]

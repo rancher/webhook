@@ -34,16 +34,13 @@ const (
 )
 
 // NewValidator returns a new validator used for validation globalRoles.
-func NewValidator(ruleResolver validation.AuthorizationRuleResolver, icrResolver *resolvers.GRBClusterRuleResolver, fwResolver *resolvers.GRBClusterRuleResolver,
-	fwVerbsResolver *resolvers.GRBClusterRuleResolver, sar authorizationv1.SubjectAccessReviewInterface, grResolver *auth.GlobalRoleResolver) *Validator {
+func NewValidator(ruleResolver validation.AuthorizationRuleResolver, grbResolvers *resolvers.GRBRuleResolvers, sar authorizationv1.SubjectAccessReviewInterface, grResolver *auth.GlobalRoleResolver) *Validator {
 	return &Validator{
 		admitter: admitter{
-			resolver:        ruleResolver,
-			grResolver:      grResolver,
-			icrResolver:     icrResolver,
-			fwRulesResolver: fwResolver,
-			fwVerbsResolver: fwVerbsResolver,
-			sar:             sar,
+			resolver:     ruleResolver,
+			grResolver:   grResolver,
+			grbResolvers: grbResolvers,
+			sar:          sar,
 		},
 	}
 }
@@ -74,12 +71,10 @@ func (v *Validator) Admitters() []admission.Admitter {
 }
 
 type admitter struct {
-	resolver        validation.AuthorizationRuleResolver
-	grResolver      *auth.GlobalRoleResolver
-	icrResolver     *resolvers.GRBClusterRuleResolver
-	fwRulesResolver *resolvers.GRBClusterRuleResolver
-	fwVerbsResolver *resolvers.GRBClusterRuleResolver
-	sar             authorizationv1.SubjectAccessReviewInterface
+	resolver     validation.AuthorizationRuleResolver
+	grResolver   *auth.GlobalRoleResolver
+	grbResolvers *resolvers.GRBRuleResolvers
+	sar          authorizationv1.SubjectAccessReviewInterface
 }
 
 // Admit is the entrypoint for the validator. Admit will return an error if it's unable to process the request.
@@ -161,7 +156,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	fwWorkspaceVerbsRules := a.grResolver.FleetWorkspacePermissionsWorkspaceVerbsFromRole(newGR)
 
 	escalateChecker := common.NewCachedVerbChecker(request, newGR.Name, a.sar, gvr, escalateVerb)
-	returnError = errors.Join(returnError, escalateChecker.IsRulesAllowed(clusterRules, a.icrResolver, ""))
+	returnError = errors.Join(returnError, escalateChecker.IsRulesAllowed(clusterRules, a.grbResolvers.ICRResolver, ""))
 	if escalateChecker.HasVerb() {
 		return admission.ResponseAllowed(), nil
 	}
@@ -169,11 +164,11 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	if escalateChecker.HasVerb() {
 		return admission.ResponseAllowed(), nil
 	}
-	returnError = errors.Join(returnError, escalateChecker.IsRulesAllowed(fwResourceRules, a.fwRulesResolver, ""))
+	returnError = errors.Join(returnError, escalateChecker.IsRulesAllowed(fwResourceRules, a.grbResolvers.FWRulesResolver, ""))
 	if escalateChecker.HasVerb() {
 		return admission.ResponseAllowed(), nil
 	}
-	returnError = errors.Join(returnError, escalateChecker.IsRulesAllowed(fwWorkspaceVerbsRules, a.fwVerbsResolver, ""))
+	returnError = errors.Join(returnError, escalateChecker.IsRulesAllowed(fwWorkspaceVerbsRules, a.grbResolvers.FWVerbsResolver, ""))
 	if escalateChecker.HasVerb() {
 		return admission.ResponseAllowed(), nil
 	}

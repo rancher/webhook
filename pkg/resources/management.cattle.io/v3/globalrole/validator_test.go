@@ -865,8 +865,8 @@ func TestAdmit(t *testing.T) {
 				test.args.stateSetup(state)
 			}
 			grResolver := state.createBaseGRResolver()
-			icrResolver, fwResolver, fwVerbsResolver := state.createBaseGRBResolvers(grResolver)
-			admitters := globalrole.NewValidator(state.resolver, icrResolver, fwResolver, fwVerbsResolver, state.sarMock, grResolver).Admitters()
+			grbResolvers := state.createBaseGRBResolvers(grResolver)
+			admitters := globalrole.NewValidator(state.resolver, grbResolvers, state.sarMock, grResolver).Admitters()
 			assert.Len(t, admitters, 1)
 
 			req := createGRRequest(t, test)
@@ -884,7 +884,7 @@ func TestAdmit(t *testing.T) {
 func Test_UnexpectedErrors(t *testing.T) {
 	t.Parallel()
 	resolver, _ := validation.NewTestRuleResolver(nil, nil, nil, nil)
-	validator := globalrole.NewValidator(resolver, nil, nil, nil, nil, nil)
+	validator := globalrole.NewValidator(resolver, nil, nil, nil)
 	admitters := validator.Admitters()
 	require.Len(t, admitters, 1, "wanted only one admitter")
 	test := testCase{

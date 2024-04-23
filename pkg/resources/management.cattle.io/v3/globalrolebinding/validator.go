@@ -38,17 +38,14 @@ var (
 const bindVerb = "bind"
 
 // NewValidator returns a new validator for GlobalRoleBindings.
-func NewValidator(resolver rbacvalidation.AuthorizationRuleResolver, icrResolver *resolvers.GRBClusterRuleResolver,
-	fwRulesResolver *resolvers.GRBClusterRuleResolver, fwVerbsResolver *resolvers.GRBClusterRuleResolver,
+func NewValidator(resolver rbacvalidation.AuthorizationRuleResolver, grbResolvers *resolvers.GRBRuleResolvers,
 	sar authorizationv1.SubjectAccessReviewInterface, grResolver *auth.GlobalRoleResolver) *Validator {
 	return &Validator{
 		admitter: admitter{
-			resolver:        resolver,
-			icrResolver:     icrResolver,
-			fwRulesResolver: fwRulesResolver,
-			fwVerbsResolver: fwVerbsResolver,
-			sar:             sar,
-			grResolver:      grResolver,
+			resolver:     resolver,
+			grbResolvers: grbResolvers,
+			sar:          sar,
+			grResolver:   grResolver,
 		},
 	}
 }
@@ -79,12 +76,10 @@ func (v *Validator) Admitters() []admission.Admitter {
 }
 
 type admitter struct {
-	resolver        rbacvalidation.AuthorizationRuleResolver
-	icrResolver     *resolvers.GRBClusterRuleResolver
-	fwRulesResolver *resolvers.GRBClusterRuleResolver
-	fwVerbsResolver *resolvers.GRBClusterRuleResolver
-	grResolver      *auth.GlobalRoleResolver
-	sar             authorizationv1.SubjectAccessReviewInterface
+	resolver     rbacvalidation.AuthorizationRuleResolver
+	grbResolvers *resolvers.GRBRuleResolvers
+	grResolver   *auth.GlobalRoleResolver
+	sar          authorizationv1.SubjectAccessReviewInterface
 }
 
 // Admit handles the webhook admission request sent to this webhook.
@@ -145,7 +140,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	var returnError error
 	bindChecker := common.NewCachedVerbChecker(request, globalRole.Name, a.sar, globalRoleGvr, bindVerb)
 
-	returnError = bindChecker.IsRulesAllowed(clusterRules, a.icrResolver, "")
+	returnError = bindChecker.IsRulesAllowed(clusterRules, a.grbResolvers.ICRResolver, "")
 	if bindChecker.HasVerb() {
 		return admission.ResponseAllowed(), nil
 	}
@@ -153,11 +148,11 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	if bindChecker.HasVerb() {
 		return admission.ResponseAllowed(), nil
 	}
-	returnError = errors.Join(returnError, bindChecker.IsRulesAllowed(fwResourceRules, a.fwRulesResolver, ""))
+	returnError = errors.Join(returnError, bindChecker.IsRulesAllowed(fwResourceRules, a.grbResolvers.FWRulesResolver, ""))
 	if bindChecker.HasVerb() {
 		return admission.ResponseAllowed(), nil
 	}
-	returnError = errors.Join(returnError, bindChecker.IsRulesAllowed(fwWorkspaceVerbsRules, a.fwVerbsResolver, ""))
+	returnError = errors.Join(returnError, bindChecker.IsRulesAllowed(fwWorkspaceVerbsRules, a.grbResolvers.FWVerbsResolver, ""))
 	if bindChecker.HasVerb() {
 		return admission.ResponseAllowed(), nil
 	}

@@ -15,19 +15,26 @@ const (
 	localCluster    = "local"
 )
 
-// GRBClusterRuleResolver implements the rbacv1.AuthorizationRuleResolver interface. Provides rule resolution
+// GRBRuleResolvers contains three rule resolvers for: InheritedClusterRules, FleetWorkspaceRules, FleetWorkspaceVerbs.
+type GRBRuleResolvers struct {
+	ICRResolver     *GRBRuleResolver
+	FWRulesResolver *GRBRuleResolver
+	FWVerbsResolver *GRBRuleResolver
+}
+
+// GRBRuleResolver implements the rbacv1.AuthorizationRuleResolver interface. Provides rule resolution
 // for the permissions a GRB gives that apply in a given cluster (or all clusters).
-type GRBClusterRuleResolver struct {
+type GRBRuleResolver struct {
 	gbrCache     v3.GlobalRoleBindingCache
 	grResolver   *auth.GlobalRoleResolver
 	ruleResolver func(namespace string, gr *apisv3.GlobalRole, grResolver *auth.GlobalRoleResolver) ([]rbacv1.PolicyRule, error)
 }
 
-// NewGRRuleResolvers returns resolvers for resolving rules given through GlobalRoleBindings
-// which apply to cluster(s). This function can only be called once for each unique instance of GlobalRoleBindings.
-func NewGRRuleResolvers(grbCache v3.GlobalRoleBindingCache, grResolver *auth.GlobalRoleResolver) (*GRBClusterRuleResolver, *GRBClusterRuleResolver, *GRBClusterRuleResolver) {
+// NewGRBRuleResolvers returns resolvers for resolving rules given through GlobalRoleBindings
+// which apply to cluster(s). This function can only be called once for each unique instance of grbCache.
+func NewGRBRuleResolvers(grbCache v3.GlobalRoleBindingCache, grResolver *auth.GlobalRoleResolver) *GRBRuleResolvers {
 	grbCache.AddIndexer(grbSubjectIndex, grbBySubject)
-	inheritedClusterRoleResolver := &GRBClusterRuleResolver{
+	inheritedClusterRoleResolver := &GRBRuleResolver{
 		gbrCache:   grbCache,
 		grResolver: grResolver,
 		ruleResolver: func(namespace string, gr *apisv3.GlobalRole, grResolver *auth.GlobalRoleResolver) ([]rbacv1.PolicyRule, error) {
@@ -42,14 +49,14 @@ func NewGRRuleResolvers(grbCache v3.GlobalRoleBindingCache, grResolver *auth.Glo
 			return rules, err
 		},
 	}
-	fleetWorkspaceResourceRulesResolver := &GRBClusterRuleResolver{
+	fleetWorkspaceResourceRulesResolver := &GRBRuleResolver{
 		gbrCache:   grbCache,
 		grResolver: grResolver,
 		ruleResolver: func(_ string, gr *apisv3.GlobalRole, grResolver *auth.GlobalRoleResolver) ([]rbacv1.PolicyRule, error) {
 			return grResolver.FleetWorkspacePermissionsResourceRulesFromRole(gr), nil
 		},
 	}
-	fleetWorkspaceVerbsResolver := &GRBClusterRuleResolver{
+	fleetWorkspaceVerbsResolver := &GRBRuleResolver{
 		gbrCache:   grbCache,
 		grResolver: grResolver,
 		ruleResolver: func(_ string, gr *apisv3.GlobalRole, grResolver *auth.GlobalRoleResolver) ([]rbacv1.PolicyRule, error) {
@@ -57,19 +64,23 @@ func NewGRRuleResolvers(grbCache v3.GlobalRoleBindingCache, grResolver *auth.Glo
 		},
 	}
 
-	return inheritedClusterRoleResolver, fleetWorkspaceResourceRulesResolver, fleetWorkspaceVerbsResolver
+	return &GRBRuleResolvers{
+		ICRResolver:     inheritedClusterRoleResolver,
+		FWVerbsResolver: fleetWorkspaceVerbsResolver,
+		FWRulesResolver: fleetWorkspaceResourceRulesResolver,
+	}
 }
 
 // GetRoleReferenceRules is used to find which rules are granted by a rolebinding/clusterRoleBinding. Since we don't
 // use these primitives to refer to the globalRoles, this function returns an empty slice.
-func (g *GRBClusterRuleResolver) GetRoleReferenceRules(rbacv1.RoleRef, string) ([]rbacv1.PolicyRule, error) {
+func (g *GRBRuleResolver) GetRoleReferenceRules(rbacv1.RoleRef, string) ([]rbacv1.PolicyRule, error) {
 	return []rbacv1.PolicyRule{}, nil
 }
 
 // RulesFor returns the list of Cluster rules that apply in a given namespace (usually either the namespace of a
 // specific cluster or "" for all clusters). If an error is returned, the slice of PolicyRules may not be complete,
 // but contains all retrievable rules.
-func (g *GRBClusterRuleResolver) RulesFor(user user.Info, namespace string) ([]rbacv1.PolicyRule, error) {
+func (g *GRBRuleResolver) RulesFor(user user.Info, namespace string) ([]rbacv1.PolicyRule, error) {
 	visitor := &ruleAccumulator{}
 	g.visitRulesForWithRuleResolver(user, namespace, visitor.visit, g.ruleResolver)
 	return visitor.rules, visitor.getError()
@@ -77,13 +88,13 @@ func (g *GRBClusterRuleResolver) RulesFor(user user.Info, namespace string) ([]r
 
 // VisitRulesFor invokes visitor() with each rule that applies to a given user in a given namespace, and each error encountered resolving those rules.
 // If visitor() returns false, visiting is short-circuited. This will return different rules for the "local" namespace.
-func (g *GRBClusterRuleResolver) VisitRulesFor(user user.Info, namespace string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) {
+func (g *GRBRuleResolver) VisitRulesFor(user user.Info, namespace string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) {
 	g.visitRulesForWithRuleResolver(user, namespace, visitor, g.ruleResolver)
 }
 
 // visitRulesForWithRuleResolver invokes visitor() with each rule that applies to a given user in a given namespace, and each error encountered resolving those rules.
 // If visitor() returns false, visiting is short-circuited. This will return different rules for the "local" namespace.
-func (g *GRBClusterRuleResolver) visitRulesForWithRuleResolver(user user.Info, namespace string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool, ruleResolver func(namespace string, gr *apisv3.GlobalRole, grResolver *auth.GlobalRoleResolver) ([]rbacv1.PolicyRule, error)) {
+func (g *GRBRuleResolver) visitRulesForWithRuleResolver(user user.Info, namespace string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool, ruleResolver func(namespace string, gr *apisv3.GlobalRole, grResolver *auth.GlobalRoleResolver) ([]rbacv1.PolicyRule, error)) {
 	var grbs []*apisv3.GlobalRoleBinding
 	// gather all grbs that apply to this user through group or user assignment
 	for _, group := range user.GetGroups() {
