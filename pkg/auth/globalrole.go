@@ -41,7 +41,7 @@ func (g *GlobalRoleResolver) GlobalRulesFromRole(gr *v3.GlobalRole) []rbacv1.Pol
 	return gr.Rules
 }
 
-// ClusterRulesFromRole finds all rules which this gr gives on downstream clusters and fleet workspaces except local.
+// ClusterRulesFromRole finds all rules which this gr gives on downstream clusters.
 func (g *GlobalRoleResolver) ClusterRulesFromRole(gr *v3.GlobalRole) ([]rbacv1.PolicyRule, error) {
 	if gr == nil {
 		return nil, nil
