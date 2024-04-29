@@ -16,9 +16,16 @@ const (
 )
 
 // GRBRuleResolvers contains three rule resolvers for: InheritedClusterRules, FleetWorkspaceRules, FleetWorkspaceVerbs.
+// InheritedClusterRules grants permissions to all cluster except local.
+// FleetWorkspaceRules grants permissions to all fleetworkspaces except local.
+// FleetWorkspaceVerbs grants permissions to fleetworkspaces cluster-wide resource except local.
+// To ensure that rules are resolved without interference, we require separate resolvers for each of them.
 type GRBRuleResolvers struct {
-	ICRResolver     *GRBRuleResolver
+	// ICRResolver resolves rules for GlobalRole rules defined in InheritedClusterRoles.
+	ICRResolver *GRBRuleResolver
+	// FWRulesResolver resolves rules for GlobalRole rules defined in InheritedFleetWorkspacePermissions.ResourceRules.
 	FWRulesResolver *GRBRuleResolver
+	// FWVerbsResolver resolves rules for GlobalRole rules defined in InheritedFleetWorkspacePermissions.WorkspaceVerbs.
 	FWVerbsResolver *GRBRuleResolver
 }
 

@@ -723,11 +723,13 @@ func TestAdmit(t *testing.T) {
 				username: testUser,
 				newGR: func() *v3.GlobalRole {
 					baseGR := newDefaultGR()
-					baseGR.InheritedFleetWorkspacePermissions.ResourceRules = []v1.PolicyRule{
-						ruleReadPods,
-					}
-					baseGR.InheritedFleetWorkspacePermissions.WorkspaceVerbs = []string{
-						"GET",
+					baseGR.InheritedFleetWorkspacePermissions = &v3.FleetWorkspacePermission{
+						ResourceRules: []v1.PolicyRule{
+							ruleReadPods,
+						},
+						WorkspaceVerbs: []string{
+							"GET",
+						},
 					}
 					return baseGR
 				},
@@ -744,11 +746,13 @@ func TestAdmit(t *testing.T) {
 				username: testUser,
 				newGR: func() *v3.GlobalRole {
 					baseGR := newDefaultGR()
-					baseGR.InheritedFleetWorkspacePermissions.ResourceRules = []v1.PolicyRule{
-						ruleAdmin,
-					}
-					baseGR.InheritedFleetWorkspacePermissions.WorkspaceVerbs = []string{
-						"GET",
+					baseGR.InheritedFleetWorkspacePermissions = &v3.FleetWorkspacePermission{
+						ResourceRules: []v1.PolicyRule{
+							ruleAdmin,
+						},
+						WorkspaceVerbs: []string{
+							"GET",
+						},
 					}
 					return baseGR
 				},
@@ -765,11 +769,13 @@ func TestAdmit(t *testing.T) {
 				username: testUser,
 				newGR: func() *v3.GlobalRole {
 					baseGR := newDefaultGR()
-					baseGR.InheritedFleetWorkspacePermissions.ResourceRules = []v1.PolicyRule{
-						ruleReadPods,
-					}
-					baseGR.InheritedFleetWorkspacePermissions.WorkspaceVerbs = []string{
-						"*",
+					baseGR.InheritedFleetWorkspacePermissions = &v3.FleetWorkspacePermission{
+						ResourceRules: []v1.PolicyRule{
+							ruleReadPods,
+						},
+						WorkspaceVerbs: []string{
+							"*",
+						},
 					}
 					return baseGR
 				},
@@ -786,11 +792,13 @@ func TestAdmit(t *testing.T) {
 				username: adminUser,
 				newGR: func() *v3.GlobalRole {
 					baseGR := newDefaultGR()
-					baseGR.InheritedFleetWorkspacePermissions.ResourceRules = []v1.PolicyRule{
-						{
-							APIGroups: []string{""},
-							Resources: []string{"pods"},
-							Verbs:     []string{},
+					baseGR.InheritedFleetWorkspacePermissions = &v3.FleetWorkspacePermission{
+						ResourceRules: []v1.PolicyRule{
+							{
+								APIGroups: []string{""},
+								Resources: []string{"pods"},
+								Verbs:     []string{},
+							},
 						},
 					}
 					return baseGR
@@ -812,15 +820,19 @@ func TestAdmit(t *testing.T) {
 				username: testUser,
 				oldGR: func() *v3.GlobalRole {
 					baseGR := newDefaultGR()
-					baseGR.InheritedFleetWorkspacePermissions.ResourceRules = []v1.PolicyRule{
-						ruleReadPods,
+					baseGR.InheritedFleetWorkspacePermissions = &v3.FleetWorkspacePermission{
+						ResourceRules: []v1.PolicyRule{
+							ruleReadPods,
+						},
 					}
 					return baseGR
 				},
 				newGR: func() *v3.GlobalRole {
 					baseGR := newDefaultGR()
-					baseGR.InheritedFleetWorkspacePermissions.ResourceRules = []v1.PolicyRule{
-						ruleAdmin,
+					baseGR.InheritedFleetWorkspacePermissions = &v3.FleetWorkspacePermission{
+						ResourceRules: []v1.PolicyRule{
+							ruleAdmin,
+						},
 					}
 					return baseGR
 				},
@@ -836,15 +848,19 @@ func TestAdmit(t *testing.T) {
 				username: testUser,
 				oldGR: func() *v3.GlobalRole {
 					baseGR := newDefaultGR()
-					baseGR.InheritedFleetWorkspacePermissions.ResourceRules = []v1.PolicyRule{
-						ruleReadPods,
+					baseGR.InheritedFleetWorkspacePermissions = &v3.FleetWorkspacePermission{
+						ResourceRules: []v1.PolicyRule{
+							ruleReadPods,
+						},
 					}
 					return baseGR
 				},
 				newGR: func() *v3.GlobalRole {
 					baseGR := newDefaultGR()
-					baseGR.InheritedFleetWorkspacePermissions.ResourceRules = []v1.PolicyRule{
-						ruleAdmin,
+					baseGR.InheritedFleetWorkspacePermissions = &v3.FleetWorkspacePermission{
+						ResourceRules: []v1.PolicyRule{
+							ruleAdmin,
+						},
 					}
 					return baseGR
 				},

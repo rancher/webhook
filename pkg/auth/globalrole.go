@@ -70,7 +70,7 @@ func (g *GlobalRoleResolver) ClusterRulesFromRole(gr *v3.GlobalRole) ([]rbacv1.P
 }
 
 func (g *GlobalRoleResolver) FleetWorkspacePermissionsResourceRulesFromRole(gr *v3.GlobalRole) []rbacv1.PolicyRule {
-	if gr == nil {
+	if gr == nil || gr.InheritedFleetWorkspacePermissions == nil {
 		return nil
 	}
 
@@ -82,7 +82,7 @@ func (g *GlobalRoleResolver) FleetWorkspacePermissionsResourceRulesFromRole(gr *
 // use it to evaluate InheritedFleetWorkspacePermissions.WorkspaceVerbs. However, it shouldn't be used in a more generic evaluation
 // of permissions on the workspace object.
 func (g *GlobalRoleResolver) FleetWorkspacePermissionsWorkspaceVerbsFromRole(gr *v3.GlobalRole) []rbacv1.PolicyRule {
-	if gr == nil {
+	if gr == nil || gr.InheritedFleetWorkspacePermissions == nil {
 		return nil
 	}
 

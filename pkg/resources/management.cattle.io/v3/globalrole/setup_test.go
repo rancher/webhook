@@ -99,7 +99,7 @@ var (
 			},
 		},
 		InheritedClusterRoles: []string{baseRT.Name},
-		InheritedFleetWorkspacePermissions: v3.FleetWorkspacePermission{
+		InheritedFleetWorkspacePermissions: &v3.FleetWorkspacePermission{
 			ResourceRules: []v1.PolicyRule{
 				ruleReadPods,
 			},
