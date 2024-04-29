@@ -134,7 +134,7 @@ var (
 			},
 		},
 		InheritedClusterRoles: []string{baseRT.Name},
-		InheritedFleetWorkspacePermissions: v3.FleetWorkspacePermission{
+		InheritedFleetWorkspacePermissions: &v3.FleetWorkspacePermission{
 			ResourceRules:  fwResourceRules,
 			WorkspaceVerbs: fwWorkspaceVerbs,
 		},
@@ -274,7 +274,7 @@ var (
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "namespacedRules-gr",
 		},
-		InheritedFleetWorkspacePermissions: v3.FleetWorkspacePermission{
+		InheritedFleetWorkspacePermissions: &v3.FleetWorkspacePermission{
 			ResourceRules:  fwResourceRules,
 			WorkspaceVerbs: fwWorkspaceVerbs,
 		},
@@ -283,7 +283,7 @@ var (
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "namespacedRules-gr",
 		},
-		InheritedFleetWorkspacePermissions: v3.FleetWorkspacePermission{
+		InheritedFleetWorkspacePermissions: &v3.FleetWorkspacePermission{
 			ResourceRules:  fwResourceRulesAdmin,
 			WorkspaceVerbs: fwWorkspaceVerbs,
 		},
@@ -292,7 +292,7 @@ var (
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "namespacedRules-gr",
 		},
-		InheritedFleetWorkspacePermissions: v3.FleetWorkspacePermission{
+		InheritedFleetWorkspacePermissions: &v3.FleetWorkspacePermission{
 			ResourceRules:  fwResourceRules,
 			WorkspaceVerbs: fwWorkspaceVerbsAdmin,
 		},
