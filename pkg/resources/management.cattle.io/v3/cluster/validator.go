@@ -94,10 +94,6 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		if !response.Allowed {
 			return response, nil
 		}
-		response, err = a.validatePSP(request)
-		if err != nil {
-			return nil, fmt.Errorf("failed to validate PSP: %w", err)
-		}
 		if !response.Allowed {
 			return response, nil
 		}
@@ -264,25 +260,5 @@ func (a *admitter) checkPSAConfigOnCluster(cluster *apisv3.Cluster) (*admissionv
 		return admission.ResponseBadRequest("PodSecurity Configuration under kube-api.admission_configuration " +
 			"does not match the content of the PodSecurityAdmissionConfigurationTemplate"), nil
 	}
-	return admission.ResponseAllowed(), nil
-}
-
-// validatePSP validates if the PSP feature is enabled in a cluster which version is 1.25 or above.
-func (a *admitter) validatePSP(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
-	cluster, err := objectsv3.ClusterFromRequest(&request.AdmissionRequest)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cluster from request: %w", err)
-	}
-	parsedVersion, err := psa.GetClusterVersion(cluster.Spec.RancherKubernetesEngineConfig.Version)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse cluster version: %w", err)
-	}
-	if parsedRangeLessThan125(parsedVersion) {
-		return admission.ResponseAllowed(), nil
-	}
-	if cluster.Spec.DefaultPodSecurityPolicyTemplateName != "" || cluster.Spec.RancherKubernetesEngineConfig.Services.KubeAPI.PodSecurityPolicy {
-		return admission.ResponseBadRequest("cannot enable PodSecurityPolicy(PSP) or use PSP Template in cluster which k8s version is 1.25 and above"), nil
-	}
-
 	return admission.ResponseAllowed(), nil
 }
