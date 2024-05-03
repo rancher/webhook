@@ -32,14 +32,14 @@ var (
 )
 
 type retentionFieldsTest struct {
-	lastLogin    string
+	lastLogin    *string
 	disableAfter *string
 	deleteAfter  *string
 	allowed      bool
 }
 
 func (t *retentionFieldsTest) name() string {
-	return t.lastLogin + "_" +
+	return pointer.StringDeref(t.lastLogin, "nil") + "_" +
 		pointer.StringDeref(t.disableAfter, "nil") + "_" +
 		pointer.StringDeref(t.deleteAfter, "nil")
 }
@@ -73,11 +73,7 @@ var retentionFieldsTests = []retentionFieldsTest{
 		allowed:     true,
 	},
 	{
-		lastLogin: "",
-		allowed:   true,
-	},
-	{
-		lastLogin: time.Now().Format(time.RFC3339),
+		lastLogin: pointer.String(time.Now().Format(time.RFC3339)),
 		allowed:   true,
 	},
 	{
@@ -105,7 +101,10 @@ var retentionFieldsTests = []retentionFieldsTest{
 		deleteAfter: pointer.String("-1h"),
 	},
 	{
-		lastLogin: "2024-03-25T21:2:45Z", // Not a valid RFC3339 time.
+		lastLogin: pointer.String("2024-03-25T21:2:45Z"), // Not a valid RFC3339 time.
+	},
+	{
+		lastLogin: pointer.String(""),
 	},
 }
 

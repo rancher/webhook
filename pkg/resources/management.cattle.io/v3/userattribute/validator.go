@@ -72,7 +72,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 
 // PartialUserAttribute represents raw values of UserAttribute retention fields.
 type PartialUserAttribute struct {
-	LastLogin    string  `json:"lastLogin"`
+	LastLogin    *string `json:"lastLogin"`
 	DisableAfter *string `json:"disableAfter"`
 	DeleteAfter  *string `json:"deleteAfter"`
 }
@@ -88,8 +88,8 @@ func (a *admitter) validateRetentionFields(request *admission.Request) error {
 		return fmt.Errorf("failed to get PartialUserAttribute from request: %w", err)
 	}
 
-	if attr.LastLogin != "" {
-		if _, err = time.Parse(time.RFC3339, attr.LastLogin); err != nil {
+	if attr.LastLogin != nil {
+		if _, err = time.Parse(time.RFC3339, *attr.LastLogin); err != nil {
 			return field.TypeInvalid(field.NewPath("lastLogin"), attr.LastLogin, err.Error())
 		}
 	}
