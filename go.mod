@@ -38,9 +38,9 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/rancher/dynamiclistener v0.4.0-rc2
 	github.com/rancher/lasso v0.0.0-20240123150939-7055397d6dfa
-	github.com/rancher/rancher/pkg/apis v0.0.0-20240228182834-6005b4875e92
+	github.com/rancher/rancher/pkg/apis v0.0.0-20240507204544-6f09ead183a5
 	github.com/rancher/rke v1.5.9-rc2
-	github.com/rancher/wrangler/v2 v2.1.3
+	github.com/rancher/wrangler/v2 v2.1.4
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9
@@ -105,10 +105,10 @@ require (
 	github.com/prometheus/client_model v0.4.1-0.20230718164431-9a2bf3000d16 // indirect
 	github.com/prometheus/common v0.44.0 // indirect
 	github.com/prometheus/procfs v0.11.1 // indirect
-	github.com/rancher/aks-operator v1.2.1-rc9 // indirect
-	github.com/rancher/eks-operator v1.3.1-rc8 // indirect
+	github.com/rancher/aks-operator v1.2.1 // indirect
+	github.com/rancher/eks-operator v1.3.1 // indirect
 	github.com/rancher/fleet/pkg/apis v0.9.1-rc.2.0.20240213164401-2c6b1019687c // indirect
-	github.com/rancher/gke-operator v1.2.1-rc4 // indirect
+	github.com/rancher/gke-operator v1.2.1 // indirect
 	github.com/rancher/norman v0.0.0-20240206180703-6eda4bc94b4c // indirect
 	github.com/spf13/cobra v1.7.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
