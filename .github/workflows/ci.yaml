@@ -3,6 +3,9 @@ name: Webhook CI
 permissions:
   contents : read
 
+# TO DELETE:
+# EIO request 2287
+
 on:
   workflow_call:
   push:
