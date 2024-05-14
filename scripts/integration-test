@@ -13,10 +13,16 @@ entrypoint.sh >./rancher.log 2>&1 &
 RANCHER_PID=$!
 
 echo "Waiting for Rancher health check..."
+RETRIES=0
 while ! curl -sf http://localhost:80/healthz >/dev/null 2>&1; do
-    echo "Waiting for Rancher's /healthz endpoint to become available"
+    ((RETRIES++))
+    if (( RETRIES > 300 )) ; then
+      echo "Timed out waiting for Rancher to restart"
+    fi
+    echo -n '.'
     sleep 2
 done
+echo ''
 
 # Tail the rancher logs if rancher fails to deploy the webhook after 5 minutes.
 bash -c "sleep 300 && echo 'Rancher has not deployed webhook after 5m tailing logs' && tail -f ./rancher.log" &
