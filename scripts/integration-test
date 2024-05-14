@@ -19,10 +19,9 @@ while ! curl -sf http://localhost:80/healthz >/dev/null 2>&1; do
     if (( RETRIES > 300 )) ; then
       echo "Timed out waiting for Rancher to restart"
     fi
-    echo -n '.'
+    echo "Try # $RETRIES waiting for rancher"
     sleep 2
 done
-echo ''
 
 # Tail the rancher logs if rancher fails to deploy the webhook after 5 minutes.
 bash -c "sleep 300 && echo 'Rancher has not deployed webhook after 5m tailing logs' && tail -f ./rancher.log" &
