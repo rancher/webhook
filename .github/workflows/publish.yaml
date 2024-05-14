@@ -2,8 +2,7 @@ name : Publish Images
 
 on:
   push:
-    tags:
-      - "*"
+  pull_request:
 
 env:
   REGISTRY: docker.io
