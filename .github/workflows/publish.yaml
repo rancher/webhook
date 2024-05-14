@@ -10,7 +10,7 @@ env:
 
 jobs:
   ci :
-    uses: rancher/webhook/.github/workflows/ci.yaml@release/v0.3
+    uses: ./.github/workflows/ci.yaml
     permissions:
       contents: read
   push:
