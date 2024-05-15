@@ -18,8 +18,8 @@ RANCHER_PID=$!
 echo "Waiting for Rancher health check..."
 RETRIES=0
 while ! curl -sf http://localhost:80/healthz >/dev/null 2>&1; do
-    ((RETRIES++))
-    if (( RETRIES > 300 )) ; then
+    RETRIES=$(expr $RETRIES + 1)
+    if [ $RETRIES -gt 300 ]; then
       echo "Timed out waiting for Rancher to restart"
       kill -9 $RANCHER_PID
     fi
@@ -84,7 +84,7 @@ while ! helm upgrade rancher-webhook ./dist/artifacts/rancher-webhook-${HELM_VER
     if [ "$RETRIES" -ge 3 ]; then
         exit 1
     fi
-    RETRIES=$((RETRIES + 1))
+    RETRIES=$(expr $RETRIES + 1)
     sleep 2
 done
 
