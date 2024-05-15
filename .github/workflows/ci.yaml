@@ -53,6 +53,7 @@ jobs:
     runs-on : ${{ matrix.os }}
     container:
       image: rancher/rancher:v2.7-head
+      options: --privileged
     strategy:
       matrix:
         os : [
