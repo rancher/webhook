@@ -6,6 +6,11 @@ export CATTLE_SERVER_URL="https://$(ip route get 8.8.8.8 | awk '{print $7}'):443
 export CATTLE_BOOTSTRAP_PASSWORD="admin"
 export CATTLE_FEATURES="harvester=false"
 
+# Probably don't need this right now...
+if [ -n "${SKIP_FIXING_CGROUPS:-}" ] ; then
+    export SKIP_FIXING_CGROUPS=$SKIP_FIXING_CGROUPS
+fi
+
 cd $(dirname $0)/../
 
 echo "Starting Rancher Server"
@@ -20,7 +25,7 @@ RETRIES=0
 while ! curl -sf http://localhost:80/healthz >/dev/null 2>&1; do
     RETRIES=$(expr $RETRIES + 1)
     if [ $RETRIES -gt 100 ]; then
-      echo "Timed out waiting for Rancher to restart"
+      echo "Timed out waiting for Rancher to start"
       cat rancher.log
       kill -9 $RANCHER_PID || true
       exit 2
