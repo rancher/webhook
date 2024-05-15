@@ -20,15 +20,15 @@ jobs:
         uses: rancher-eio/read-vault-secrets@main
         with:
           secrets: |
-            secret/data/github/repo/${{ github.repository }}/fossa/credentials token | FOSSA
+            secret/data/github/repo/${{ github.repository }}/fossa/credentials token | FOSSA_API_KEY
       - name: Checkout Repo
         uses: actions/checkout@v4
       - name: Run FOSSA Analyze
         uses: fossas/fossa-action@v1.3.3
         with:
-          api-key: ${{ env.FOSSA }}
+          api-key: ${{ env.FOSSA_API_KEY }}
       - name: Run FOSSA test
         uses: fossas/fossa-action@v1.3.3
         with:
-          api-key: ${{ env.FOSSA }}
+          api-key: ${{ env.FOSSA_API_KEY }}
           run-tests: true

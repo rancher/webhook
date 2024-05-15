@@ -9,6 +9,8 @@ export CATTLE_FEATURES="harvester=false"
 cd $(dirname $0)/../
 
 echo "Starting Rancher Server"
+which entrypoint.sh
+cat $(which entrypoint.sh)
 entrypoint.sh >./rancher.log 2>&1 &
 RANCHER_PID=$!
 
@@ -18,8 +20,9 @@ while ! curl -sf http://localhost:80/healthz >/dev/null 2>&1; do
     ((RETRIES++))
     if (( RETRIES > 300 )) ; then
       echo "Timed out waiting for Rancher to restart"
+      kill -9 $RANCHER_PID
     fi
-    echo "Try # $RETRIES waiting for rancher"
+    echo "Try #$RETRIES waiting for rancher"
     sleep 2
 done
 
@@ -39,10 +42,10 @@ echo "Webhook deployed"
 kill ${TAIL_PID}
 
 # Wait for helm operation to complete and save rancher-webhook release info before we kill rancher and the cluster.
-while 
+while
 	status=$(kubectl get apps.catalog.cattle.io -n cattle-system rancher-webhook -o jsonpath="{@.status.summary.state}")
 	[[ "$status" != "deployed" ]]
-do 
+do
 	echo "Waiting for helm operation to finish, current status $status"
 	sleep 2
 done
