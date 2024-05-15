@@ -1,5 +1,5 @@
 #!/bin/bash
-set -ex
+set -e
 export KUBECONFIG=
 export CATTLE_DEV_MODE=yes
 export CATTLE_SERVER_URL="https://$(ip route get 8.8.8.8 | awk '{print $7}'):443"
@@ -19,9 +19,11 @@ echo "Waiting for Rancher health check..."
 RETRIES=0
 while ! curl -sf http://localhost:80/healthz >/dev/null 2>&1; do
     RETRIES=$(expr $RETRIES + 1)
-    if [ $RETRIES -gt 300 ]; then
+    if [ $RETRIES -gt 100 ]; then
       echo "Timed out waiting for Rancher to restart"
-      kill -9 $RANCHER_PID
+      cat rancher.log
+      kill -9 $RANCHER_PID || true
+      exit 2
     fi
     echo "Try #$RETRIES waiting for rancher"
     sleep 2
