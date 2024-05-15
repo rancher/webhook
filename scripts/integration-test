@@ -11,8 +11,8 @@ cd $(dirname $0)/../
 echo "Starting Rancher Server"
 #which entrypoint.sh
 #cat $(which entrypoint.sh)
-entrypoint.sh >./rancher.log 2>&1 &
-#bash -ex "$(which entrypoint.sh)" >./rancher.log 2>&1 &
+#entrypoint.sh >./rancher.log 2>&1 &
+bash -ex "$(which entrypoint.sh)" >./rancher.log 2>&1 &
 RANCHER_PID=$!
 
 echo "Waiting for Rancher health check..."
