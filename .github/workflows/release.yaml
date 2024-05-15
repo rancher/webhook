@@ -9,7 +9,14 @@ permissions:
 
 jobs:
   ci:
-    uses: ./.github/workflows/ci.yaml
+    steps:
+      - name : Checkout repository
+        uses : actions/checkout@v4
+        with :
+          fetch-depth : 0
+      - name : build
+        run : make build
+    #uses: ./.github/workflows/ci.yaml
     permissions:
       contents: read
   goreleaser:
