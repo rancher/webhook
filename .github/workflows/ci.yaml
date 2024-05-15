@@ -73,6 +73,8 @@ jobs:
         run : ls -R ./dist/artifacts
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+      - name: Install helm
+        uses: zypper -n install helm
       - name : Run integration tests
         run : ./scripts/integration-test
         env:

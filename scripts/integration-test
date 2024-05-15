@@ -20,7 +20,7 @@ echo "Starting Rancher Server"
 bash -ex "$(which entrypoint.sh)" >./rancher.log 2>&1 &
 RANCHER_PID=$!
 
-echo "Home on this here host $(hostname) is $HOME"
+echo "Home on this here container is $HOME"
 
 echo "Waiting for Rancher health check..."
 RETRIES=0
@@ -34,15 +34,16 @@ while ! curl -sf http://localhost:80/healthz >/dev/null 2>&1; do
     fi
     echo "Try #$RETRIES waiting for rancher"
     if [ $RETRIES -eq 10 ] ; then
-        echo "is k3s running?"
-        ps auxww | grep k3s
-        echo "is rancher running?"
-        ps auxww | grep rancher
+        #echo "is k3s running?"
+        #ps || true
+        #echo "is rancher running?"
+        #ps auxww | grep rancher
         echo "ok all of ps..."
-        ps auxww
+        ps auxww || echo 'no ps on this machine'
         echo "What about .kube"?
-        ls $HOME
-        ls $HOME/.kube
+        ls $HOME || true
+        ls $HOME/.kube || true
+        ls /etc/rancher || true
     fi
     
     sleep 2
