@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -ex
 export KUBECONFIG=
 export CATTLE_DEV_MODE=yes
 export CATTLE_SERVER_URL="https://$(ip route get 8.8.8.8 | awk '{print $7}'):443"
@@ -9,9 +9,10 @@ export CATTLE_FEATURES="harvester=false"
 cd $(dirname $0)/../
 
 echo "Starting Rancher Server"
-which entrypoint.sh
-cat $(which entrypoint.sh)
+#which entrypoint.sh
+#cat $(which entrypoint.sh)
 entrypoint.sh >./rancher.log 2>&1 &
+#bash -ex "$(which entrypoint.sh)" >./rancher.log 2>&1 &
 RANCHER_PID=$!
 
 echo "Waiting for Rancher health check..."
