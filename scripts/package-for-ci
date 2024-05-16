@@ -1,0 +1,25 @@
+#!/bin/bash
+set -e
+
+# This is similar to the backup-restore-operator CI for GHA-based runs:
+# The integration tests want a simple rancher/webhook image on the current TAG
+source $(dirname $0)/version
+
+cd $(dirname $0)/..
+
+mkdir -p dist/artifacts
+
+IMAGE=${REPO}/webhook:${TAG}
+DOCKERFILE=./package/Dockerfile
+if [ -e ${DOCKERFILE}.${ARCH} ]; then
+    DOCKERFILE=${DOCKERFILE}.${ARCH}
+fi
+
+if [[ ${USE_DOCKER_BUILDX} -eq 1 ]]; then
+    docker buildx build --platform linux/amd64 -f ${DOCKERFILE} . -t ${IMAGE} 
+else
+    docker build -f ${DOCKERFILE} -t ${IMAGE} .
+fi
+echo Built ${IMAGE}
+
+docker image save rancher/webhook:$TAG -o ./dist/artifacts/webhook.img
