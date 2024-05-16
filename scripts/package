@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -ex
 
 source $(dirname $0)/version
 
@@ -23,6 +23,8 @@ function build-image() {
 
 }
 
+echo "Running package"
+
 mkdir -p dist/artifacts
 cp bin/webhook dist/artifacts/webhook-linux${SUFFIX}
 for i in bin/webhook-*; do
@@ -38,3 +40,5 @@ done
 build-image rancher-webhook
 
 ./scripts/package-helm
+
+echo "Done running package"
