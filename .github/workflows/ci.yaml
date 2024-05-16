@@ -76,7 +76,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Install helm
-        run: apt install -n helm
+        run: zypper -n install helm
       - name : Run integration tests
         run : ./scripts/integration-test
         env:
