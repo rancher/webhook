@@ -1,0 +1,95 @@
+name: release
+
+on:
+  push:
+    tags:
+      - v*
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build and package
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch:
+        - amd64
+        - arm64
+    steps:
+
+    - name : Checkout repository
+       # https://github.com/actions/checkout/releases/tag/v4.1.1
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+    - name: Setup Go
+      # https://github.com/actions/setup-go/releases/tag/v5.0.0
+      uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+      with:
+        go-version-file: 'go.mod'
+
+    - name: Build and package
+      run: |
+          ./scripts/build
+          mkdir -p dist/artifacts
+          cp bin/webhook dist/artifacts/webhook-linux-${{ matrix.arch }}
+      env:
+        ARCH: "${{ matrix.arch}}"
+        GOARCH: "${{ matrix.arch}}"
+
+    - name: Generate checksum files
+      run: |
+        ls -lR dist
+        cd dist/artifacts
+        sha256sum webhook-linux-${{ matrix.arch }} > sha256sum-${{ matrix.arch }}.txt
+
+    - name: Upload artifacts
+      # https://github.com/actions/upload-artifact/commit/65462800fd760344b1a7b4382951275a0abb4808
+      uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+      with:
+        name: webhook-artifacts-${{ matrix.arch }}
+        path: |
+          dist/artifacts/webhook-linux-${{ matrix.arch }}
+          dist/artifacts/sha256sum-${{ matrix.arch }}.txt
+          dist/artifacts/rancher-webhook-*.tgz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+
+    - name : Checkout repository
+       # https://github.com/actions/checkout/releases/tag/v4.1.1
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+    - name: package-helm
+      run: ./scripts/package-helm
+
+    - name: Download the amd64 artifacts
+      # https://github.com/actions/download-artifact/commit/65a9edc5881444af0b9093a5e628f2fe47ea3b2e
+      uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e
+      with:
+        name: webhook-artifacts-amd64
+        path: dist/artifacts
+
+    - name: Download the arm64 artifacts
+      # https://github.com/actions/download-artifact/commit/65a9edc5881444af0b9093a5e628f2fe47ea3b2e
+      uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e
+      with:
+        name: webhook-artifacts-arm64
+        path: dist/artifacts
+
+    - name: Get the version
+      run: |
+        source ./scripts/version
+        echo "TAG=$(echo $TAG | sed 's/-amd64$//')" >> $GITHUB_ENV
+
+    - name: Upload the files
+      run: |
+        ls -lR dist
+        cd dist/artifacts
+        gh --repo "${{ github.repository }}" release create ${{ github.ref_name }} --prerelease --verify-tag --generate-notes webhook-linux-* sha256sum-*.txt rancher-webhook*.tgz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
