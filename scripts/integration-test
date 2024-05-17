@@ -50,9 +50,9 @@ kubectl config view
 echo "Uploading new webhook image"
 
 if [ -d ./dist ] ; then
-  ls -lr .dist
+  ls -lr ./dist
 else
-  echo 'no .dist dir here'
+  echo 'no ./dist dir here'
 fi
 
 ###### Upload the newly created webhook image to containerd, then install the webhook chart using the new image
