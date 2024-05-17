@@ -40,8 +40,16 @@ done
 #echo "Rancher has been stopped starting K3s."
 # Start Cluster without Rancher.
 #k3s server --cluster-init --disable=traefik,servicelb,metrics-server,local-storage --node-name=local-node --log=./k3s.log >/dev/null 2>&1 &
-KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
+# Something might wrong with kubectl
+set -x
+kubectl version
+echo "KUBECONFIG=<$KUBECONFIG>"
+ls /etc
+if [ -d /etc/rancher ] ; then
+ls -r /etc/rancher
+fi
+KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 # Wait for cluster to start.
 while ! kubectl version >/dev/null 2>&1; do
     echo "Waiting for cluster to start"
