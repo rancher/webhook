@@ -44,19 +44,16 @@ done
 # Something might wrong with kubectl
 set -x
 kubectl version
-echo "KUBECONFIG=<$KUBECONFIG>"
-ls /etc
-if [ -d /etc/rancher ] ; then
-ls -r /etc/rancher
-fi
-KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-# Wait for cluster to start.
-while ! kubectl version >/dev/null 2>&1; do
-    echo "Waiting for cluster to start"
-    sleep 5
-done
+kubectl config view
+# KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
 echo "Uploading new webhook image"
+
+if [ -d ./dist ] ; then
+  ls -lr .dist
+else
+  echo 'no .dist dir here'
+fi
 
 ###### Upload the newly created webhook image to containerd, then install the webhook chart using the new image
 IMAGE_FILE=./dist/rancher-webhook-image.tar
