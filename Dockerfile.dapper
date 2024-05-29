@@ -3,7 +3,7 @@ FROM registry.suse.com/bci/golang:1.20
 ARG DAPPER_HOST_ARCH
 ENV ARCH $DAPPER_HOST_ARCH
 
-ENV HELM_VERSION v3.12.2
+ENV HELM_VERSION v3.13.3
 ENV HELM_UNITTEST_VERSION 0.3.2
 
 RUN zypper -n install git docker vim less file curl wget awk
@@ -11,13 +11,13 @@ RUN zypper -n install git docker vim less file curl wget awk
 RUN curl -sL https://get.helm.sh/helm-${HELM_VERSION}-linux-${ARCH}.tar.gz | tar xvzf - -C /usr/local/bin --strip-components=1
 
 RUN if [ "${ARCH}" = "amd64" ]; then \
-        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.54.0; \
+        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.57.1; \
         helm plugin install https://github.com/helm-unittest/helm-unittest.git --version ${HELM_UNITTEST_VERSION}>/out.txt 2>&1; \
     fi
 
 RUN GOBIN=/usr/local/bin go install github.com/golang/mock/mockgen@v1.6.0
 
-ENV DAPPER_ENV REPO TAG DRONE_TAG CROSS
+ENV DAPPER_ENV REPO TAG CROSS
 ENV DAPPER_SOURCE /go/src/github.com/rancher/webhook/
 ENV DAPPER_OUTPUT ./bin ./dist
 ENV DAPPER_DOCKER_SOCKET true
