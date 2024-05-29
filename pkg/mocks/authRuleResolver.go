@@ -2,7 +2,7 @@
 // Source: k8s.io/kubernetes/pkg/registry/rbac/validation (interfaces: AuthorizationRuleResolver)
 
 // Package resolvers is a generated GoMock package.
-package resolvers
+package mocks
 
 import (
 	fmt "fmt"

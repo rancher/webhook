@@ -279,6 +279,6 @@ func newDefaultState(t *testing.T) testState {
 }
 
 func (m *testState) createBaseGRBResolver() *resolvers.GRBClusterRuleResolver {
-	grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(m.rtCacheMock, nil), m.grCacheMock)
+	grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(m.rtCacheMock, nil, nil), m.grCacheMock)
 	return resolvers.NewGRBClusterRuleResolver(m.grbCacheMock, grResolver)
 }

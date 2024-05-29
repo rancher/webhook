@@ -324,7 +324,7 @@ func (g *GRBClusterRuleResolverSuite) TestGRBClusterRuleResolver() {
 				test.setup(state)
 			}
 
-			grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCache, nil), state.grCache)
+			grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCache, nil, nil), state.grCache)
 			grbResolver := NewGRBClusterRuleResolver(state.grbCache, grResolver)
 
 			rules, err := grbResolver.RulesFor(g.userInfo, test.namespace)

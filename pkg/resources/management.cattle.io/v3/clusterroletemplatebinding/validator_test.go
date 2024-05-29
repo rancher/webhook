@@ -34,13 +34,16 @@ const (
 
 type ClusterRoleTemplateBindingSuite struct {
 	suite.Suite
-	adminRT         *apisv3.RoleTemplate
-	readNodesRT     *apisv3.RoleTemplate
-	lockedRT        *apisv3.RoleTemplate
-	projectRT       *apisv3.RoleTemplate
-	adminCR         *rbacv1.ClusterRole
-	writeNodeCR     *rbacv1.ClusterRole
-	readServiceRole *rbacv1.Role
+	adminRT                   *apisv3.RoleTemplate
+	readNodesRT               *apisv3.RoleTemplate
+	lockedRT                  *apisv3.RoleTemplate
+	projectRT                 *apisv3.RoleTemplate
+	externalRulesWriteNodesRT *apisv3.RoleTemplate
+	externalClusterRoleRT     *v3.RoleTemplate
+	adminCR                   *rbacv1.ClusterRole
+	writeNodeCR               *rbacv1.ClusterRole
+	readPodsCR                *rbacv1.ClusterRole
+	readServiceRole           *rbacv1.Role
 }
 
 func TestClusterRoleTemplateBindings(t *testing.T) {
@@ -87,6 +90,27 @@ func (c *ClusterRoleTemplateBindingSuite) SetupSuite() {
 		Administrative: true,
 		Context:        "cluster",
 	}
+	c.externalRulesWriteNodesRT = &apisv3.RoleTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "external-rule-write-nodes",
+		},
+		DisplayName:    "External Role",
+		ExternalRules:  []rbacv1.PolicyRule{ruleWriteNodes},
+		External:       true,
+		Builtin:        true,
+		Administrative: true,
+		Context:        "cluster",
+	}
+	c.externalClusterRoleRT = &apisv3.RoleTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "read-pods-role",
+		},
+		DisplayName:    "External Role",
+		External:       true,
+		Builtin:        true,
+		Administrative: true,
+		Context:        "cluster",
+	}
 	c.lockedRT = &apisv3.RoleTemplate{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "locked-role",
@@ -117,6 +141,10 @@ func (c *ClusterRoleTemplateBindingSuite) SetupSuite() {
 	c.readServiceRole = &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "namespace1", Name: "read-service"},
 		Rules:      []rbacv1.PolicyRule{ruleReadServices},
+	}
+	c.readPodsCR = &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{Name: "read-pods-role"},
+		Rules:      []rbacv1.PolicyRule{ruleReadPods},
 	}
 }
 
@@ -151,7 +179,8 @@ func (c *ClusterRoleTemplateBindingSuite) Test_PrivilegeEscalation() {
 	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
 	roleTemplateCache.EXPECT().Get(c.adminRT.Name).Return(c.adminRT, nil).AnyTimes()
 	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
-	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
+	featuresCache := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache, featuresCache)
 	crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
 	crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
 	crtbCache.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(crtbUser, newDefaultCRTB().ClusterName)).Return([]*apisv3.ClusterRoleTemplateBinding{
@@ -301,7 +330,8 @@ func (c *ClusterRoleTemplateBindingSuite) Test_UpdateValidation() {
 	roleTemplateCache.EXPECT().Get(c.adminRT.Name).Return(c.adminRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().List(gomock.Any()).Return([]*apisv3.RoleTemplate{c.adminRT}, nil).AnyTimes()
 	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
-	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
+	featuresCache := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache, featuresCache)
 	crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
 	crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
 	crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
@@ -623,18 +653,37 @@ func (c *ClusterRoleTemplateBindingSuite) Test_UpdateValidation() {
 }
 
 func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
+	type testState struct {
+		featureCacheMock     *fake.MockNonNamespacedCacheInterface[*apisv3.Feature]
+		clusterRoleCacheMock *fake.MockNonNamespacedCacheInterface[*rbacv1.ClusterRole]
+	}
+	ctrl := gomock.NewController(c.T())
 	const adminUser = "admin-userid"
+	const writeNodeUser = "write-node-userid"
+	const readPodUser = "read-pod-userid"
 	const badRoleTemplateName = "bad-roletemplate"
 	const missingCluster = "missing-cluster"
 	const errorCluster = "error-cluster"
 	const nilCluster = "nil-cluster"
-	clusterRoles := []*rbacv1.ClusterRole{c.adminCR}
+	clusterRoles := []*rbacv1.ClusterRole{c.adminCR, c.writeNodeCR, c.readPodsCR}
 	clusterRoleBindings := []*rbacv1.ClusterRoleBinding{
 		{
 			Subjects: []rbacv1.Subject{
 				{Kind: rbacv1.UserKind, Name: adminUser},
 			},
 			RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: c.adminCR.Name},
+		},
+		{
+			Subjects: []rbacv1.Subject{
+				{Kind: rbacv1.UserKind, Name: writeNodeUser},
+			},
+			RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: c.writeNodeCR.Name},
+		},
+		{
+			Subjects: []rbacv1.Subject{
+				{Kind: rbacv1.UserKind, Name: readPodUser},
+			},
+			RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: c.readPodsCR.Name},
 		},
 	}
 
@@ -654,57 +703,59 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 		GlobalRoleName: "some-gr",
 	}
 
-	resolver, _ := validation.NewTestRuleResolver(nil, nil, clusterRoles, clusterRoleBindings)
+	validatorWithMocks := func(state testState) *clusterroletemplatebinding.Validator {
+		resolver, _ := validation.NewTestRuleResolver(nil, nil, clusterRoles, clusterRoleBindings)
+		roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
+		roleTemplateCache.EXPECT().Get(c.adminRT.Name).Return(c.adminRT, nil).AnyTimes()
+		roleTemplateCache.EXPECT().Get(c.externalRulesWriteNodesRT.Name).Return(c.externalRulesWriteNodesRT, nil).AnyTimes()
+		roleTemplateCache.EXPECT().Get(c.externalClusterRoleRT.Name).Return(c.externalClusterRoleRT, nil).AnyTimes()
+		roleTemplateCache.EXPECT().Get(c.lockedRT.Name).Return(c.lockedRT, nil).AnyTimes()
+		roleTemplateCache.EXPECT().Get(c.projectRT.Name).Return(c.projectRT, nil).AnyTimes()
+		expectedError := apierrors.NewNotFound(schema.GroupResource{}, "")
+		roleTemplateCache.EXPECT().Get(badRoleTemplateName).Return(nil, expectedError).AnyTimes()
+		roleTemplateCache.EXPECT().Get("").Return(nil, expectedError).AnyTimes()
+		roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, state.clusterRoleCacheMock, state.featureCacheMock)
+		crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
+		crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
+		crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+		grbCache := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRoleBinding](ctrl)
+		notFoundError := apierrors.NewNotFound(schema.GroupResource{
+			Group:    "management.cattle.io",
+			Resource: "globalrolebindings",
+		}, "not-found")
+		grbCache.EXPECT().Get(validGRB.Name).Return(&validGRB, nil).AnyTimes()
+		grbCache.EXPECT().Get(deletingGRB.Name).Return(&deletingGRB, nil).AnyTimes()
+		grbCache.EXPECT().Get("error").Return(nil, fmt.Errorf("server not available")).AnyTimes()
+		grbCache.EXPECT().Get("not-found").Return(nil, notFoundError).AnyTimes()
+		grbCache.EXPECT().Get("nil-grb").Return(nil, nil).AnyTimes()
 
-	ctrl := gomock.NewController(c.T())
-	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
-	roleTemplateCache.EXPECT().Get(c.adminRT.Name).Return(c.adminRT, nil).AnyTimes()
-	roleTemplateCache.EXPECT().Get(c.lockedRT.Name).Return(c.lockedRT, nil).AnyTimes()
-	roleTemplateCache.EXPECT().Get(c.projectRT.Name).Return(c.projectRT, nil).AnyTimes()
-	expectedError := apierrors.NewNotFound(schema.GroupResource{}, "")
-	roleTemplateCache.EXPECT().Get(badRoleTemplateName).Return(nil, expectedError).AnyTimes()
-	roleTemplateCache.EXPECT().Get("").Return(nil, expectedError).AnyTimes()
-	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
-	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
-	crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
-	crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
-	crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
-	grbCache := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRoleBinding](ctrl)
-	notFoundError := apierrors.NewNotFound(schema.GroupResource{
-		Group:    "management.cattle.io",
-		Resource: "globalrolebindings",
-	}, "not-found")
-	grbCache.EXPECT().Get(validGRB.Name).Return(&validGRB, nil).AnyTimes()
-	grbCache.EXPECT().Get(deletingGRB.Name).Return(&deletingGRB, nil).AnyTimes()
-	grbCache.EXPECT().Get("error").Return(nil, fmt.Errorf("server not available")).AnyTimes()
-	grbCache.EXPECT().Get("not-found").Return(nil, notFoundError).AnyTimes()
-	grbCache.EXPECT().Get("nil-grb").Return(nil, nil).AnyTimes()
+		clusterCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.Cluster](ctrl)
+		clusterCache.EXPECT().Get(defaultClusterID).Return(&apisv3.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: defaultClusterID,
+			},
+		}, nil).AnyTimes()
+		clusterCache.EXPECT().Get(errorCluster).Return(nil, fmt.Errorf("server not available")).AnyTimes()
+		clusterCache.EXPECT().Get(missingCluster).Return(nil, apierrors.NewNotFound(schema.GroupResource{
+			Group:    "management.cattle.io",
+			Resource: "clusters",
+		}, missingCluster)).AnyTimes()
+		clusterCache.EXPECT().Get(nilCluster).Return(nil, nil).AnyTimes()
 
-	clusterCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.Cluster](ctrl)
-	clusterCache.EXPECT().Get(defaultClusterID).Return(&apisv3.Cluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: defaultClusterID,
-		},
-	}, nil).AnyTimes()
-	clusterCache.EXPECT().Get(errorCluster).Return(nil, fmt.Errorf("server not available")).AnyTimes()
-	clusterCache.EXPECT().Get(missingCluster).Return(nil, apierrors.NewNotFound(schema.GroupResource{
-		Group:    "management.cattle.io",
-		Resource: "clusters",
-	}, missingCluster)).AnyTimes()
-	clusterCache.EXPECT().Get(nilCluster).Return(nil, nil).AnyTimes()
-
-	crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
-	validator := clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver, grbCache, clusterCache)
+		crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
+		return clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver, grbCache, clusterCache)
+	}
 	type args struct {
 		oldCRTB  func() *apisv3.ClusterRoleTemplateBinding
 		newCRTB  func() *apisv3.ClusterRoleTemplateBinding
 		username string
 	}
 	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
-		allowed bool
+		name       string
+		args       args
+		wantErr    bool
+		allowed    bool
+		stateSetup func(state testState)
 	}{
 		{
 			name: "base test valid CRTB",
@@ -970,6 +1021,104 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 			},
 			allowed: false,
 		},
+		{
+			name: "external RT with externalRules valid CRTB creation when feature flag is on",
+			args: args{
+				username: writeNodeUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					return nil
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.RoleTemplateName = "external-rule-write-nodes"
+
+					return baseCRTB
+				},
+			},
+			stateSetup: func(state testState) {
+				state.featureCacheMock.EXPECT().Get(auth.ExternalRulesFeature).Return(&apisv3.Feature{
+					ObjectMeta: metav1.ObjectMeta{},
+					Spec: apisv3.FeatureSpec{
+						Value: &[]bool{true}[0],
+					},
+				}, nil)
+			},
+			allowed: true,
+		},
+		{
+			name: "external RT with externalRules rejected when feature flag is on and there are not enough permissions",
+			args: args{
+				username: readPodUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					return nil
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.RoleTemplateName = "external-rule-write-nodes"
+
+					return baseCRTB
+				},
+			},
+			stateSetup: func(state testState) {
+				state.featureCacheMock.EXPECT().Get(auth.ExternalRulesFeature).Return(&apisv3.Feature{
+					ObjectMeta: metav1.ObjectMeta{},
+					Spec: apisv3.FeatureSpec{
+						Value: &[]bool{true}[0],
+					},
+				}, nil)
+			},
+			allowed: false,
+		},
+		{
+			name: "external RT valid CRTB creation when feature flag is off",
+			args: args{
+				username: adminUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					return nil
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.RoleTemplateName = "read-pods-role"
+
+					return baseCRTB
+				},
+			},
+			stateSetup: func(state testState) {
+				state.featureCacheMock.EXPECT().Get(auth.ExternalRulesFeature).Return(&apisv3.Feature{
+					ObjectMeta: metav1.ObjectMeta{},
+					Spec: apisv3.FeatureSpec{
+						Value: &[]bool{false}[0],
+					},
+				}, nil)
+				state.clusterRoleCacheMock.EXPECT().Get(c.readPodsCR.Name).Return(c.readPodsCR, nil)
+			},
+			allowed: true,
+		},
+		{
+			name: "external RT CRTB is rejected when there are not enough permissions when feature flag is off",
+			args: args{
+				username: writeNodeUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					return nil
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					basePRTB := newDefaultCRTB()
+					basePRTB.RoleTemplateName = "read-pods-role"
+
+					return basePRTB
+				},
+			},
+			stateSetup: func(state testState) {
+				state.featureCacheMock.EXPECT().Get(auth.ExternalRulesFeature).Return(&apisv3.Feature{
+					ObjectMeta: metav1.ObjectMeta{},
+					Spec: apisv3.FeatureSpec{
+						Value: &[]bool{false}[0],
+					},
+				}, nil)
+				state.clusterRoleCacheMock.EXPECT().Get(c.readPodsCR.Name).Return(c.readPodsCR, nil)
+			},
+			allowed: false,
+		},
 	}
 
 	for i := range tests {
@@ -977,6 +1126,16 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 		c.Run(test.name, func() {
 			c.T().Parallel()
 			req := createCRTBRequest(c.T(), test.args.oldCRTB(), test.args.newCRTB(), test.args.username)
+			featureCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.Feature](ctrl)
+			clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
+			state := testState{
+				clusterRoleCacheMock: clusterRoleCache,
+				featureCacheMock:     featureCache,
+			}
+			if test.stateSetup != nil {
+				test.stateSetup(state)
+			}
+			validator := validatorWithMocks(state)
 			admitters := validator.Admitters()
 			assert.Len(c.T(), admitters, 1)
 			resp, err := admitters[0].Admit(req)
