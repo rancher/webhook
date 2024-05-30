@@ -73,20 +73,6 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, err
 	}
 
-	if newFeature.Name == auth.ExternalRulesFeature {
-		adminRules := []rbacv1.PolicyRule{
-			{
-				Verbs:     []string{"*"},
-				APIGroups: []string{"*"},
-				Resources: []string{"*"},
-			},
-		}
-		err := auth.ConfirmNoEscalation(request, adminRules, "", a.ruleResolver)
-		if err != nil {
-			return admission.ResponseFailedEscalation(fmt.Sprintf("updating the 'external-rules' feature requires admin permissions due to security concerns: %s ", err.Error())), nil
-		}
-	}
-
 	if !isUpdateAllowed(oldFeature, newFeature) {
 		return &admissionv1.AdmissionResponse{
 			Result: &metav1.Status{
@@ -99,9 +85,60 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		}, nil
 	}
 
+	if newFeature.Name == auth.ExternalRulesFeature {
+		var rules []rbacv1.PolicyRule
+		oldFeatureValue := getEffectiveValue(oldFeature)
+		newFeatureValue := getEffectiveValue(newFeature)
+
+		// if the feature value isn't changing, allow it
+		if oldFeatureValue == newFeatureValue {
+			return &admissionv1.AdmissionResponse{
+				Allowed: true,
+			}, nil
+		}
+
+		if !oldFeatureValue && newFeatureValue {
+			// enabling the feature requires the "security-enable" verb
+			rules = []rbacv1.PolicyRule{
+				{
+					Verbs:         []string{"security-enable"},
+					APIGroups:     []string{"management.cattle.io"},
+					Resources:     []string{"features"},
+					ResourceNames: []string{"external-rules"},
+				},
+			}
+		} else {
+			// disabling the feature requires administrator permissions
+			rules = []rbacv1.PolicyRule{
+				{
+					Verbs:     []string{"*"},
+					APIGroups: []string{"*"},
+					Resources: []string{"*"},
+				},
+			}
+		}
+		err := auth.ConfirmNoEscalation(request, rules, "", a.ruleResolver)
+		if err != nil {
+			return admission.ResponseFailedEscalation(fmt.Sprintf("updating the 'external-rules' feature requires admin permissions: %s ", err.Error())), nil
+		}
+	}
+
 	return &admissionv1.AdmissionResponse{
 		Allowed: true,
 	}, nil
+}
+
+// getEffectiveValue considers a feature's default, value, and locked value to determine
+// its effective value.
+func getEffectiveValue(obj *v3.Feature) bool {
+	val := obj.Status.Default
+	if obj.Spec.Value != nil {
+		val = *obj.Spec.Value
+	}
+	if obj.Status.LockedValue != nil {
+		val = *obj.Status.LockedValue
+	}
+	return val
 }
 
 // isUpdateAllowed checks that the new value does not change on spec unless it's equal to the lockedValue,

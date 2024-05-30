@@ -136,7 +136,127 @@ func TestFeatureValueValid(t *testing.T) {
 			wantAdmit: true,
 		},
 		{
-			name: "external rules feature can't be changed by user with no *, *, * permission",
+			name: "external rules feature can't be enabled by users with update permissions",
+			oldFeature: v3.Feature{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: auth.ExternalRulesFeature,
+				},
+				Spec: v3.FeatureSpec{
+					Value: admission.Ptr(false),
+				},
+			},
+			newFeature: v3.Feature{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: auth.ExternalRulesFeature,
+				},
+				Spec: v3.FeatureSpec{
+					Value: admission.Ptr(true),
+				},
+			},
+			stateSetup: func(state testState) {
+				adminRules := []rbacv1.PolicyRule{
+					{
+						Verbs:     []string{"update"},
+						APIGroups: []string{"management.cattle.io"},
+						Resources: []string{"features"},
+					},
+				}
+				state.authorizationRuleResolverMock.EXPECT().RulesFor(gomock.Any(), gomock.Any()).Return(adminRules, nil)
+			},
+			wantAdmit: false,
+		},
+		{
+			name: "external rules feature can't be disabled by users with update permissions",
+			oldFeature: v3.Feature{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: auth.ExternalRulesFeature,
+				},
+				Spec: v3.FeatureSpec{
+					Value: admission.Ptr(true),
+				},
+			},
+			newFeature: v3.Feature{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: auth.ExternalRulesFeature,
+				},
+				Spec: v3.FeatureSpec{
+					Value: admission.Ptr(false),
+				},
+			},
+			stateSetup: func(state testState) {
+				adminRules := []rbacv1.PolicyRule{
+					{
+						Verbs:     []string{"update"},
+						APIGroups: []string{"management.cattle.io"},
+						Resources: []string{"features"},
+					},
+				}
+				state.authorizationRuleResolverMock.EXPECT().RulesFor(gomock.Any(), gomock.Any()).Return(adminRules, nil)
+			},
+			wantAdmit: false,
+		},
+		{
+			name: "external rules feature can't be set to nil by users with update permissions",
+			oldFeature: v3.Feature{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: auth.ExternalRulesFeature,
+				},
+				Spec: v3.FeatureSpec{
+					Value: admission.Ptr(true),
+				},
+			},
+			newFeature: v3.Feature{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: auth.ExternalRulesFeature,
+				},
+				Spec: v3.FeatureSpec{
+					Value: nil,
+				},
+			},
+			stateSetup: func(state testState) {
+				adminRules := []rbacv1.PolicyRule{
+					{
+						Verbs:     []string{"update"},
+						APIGroups: []string{"management.cattle.io"},
+						Resources: []string{"features"},
+					},
+				}
+				state.authorizationRuleResolverMock.EXPECT().RulesFor(gomock.Any(), gomock.Any()).Return(adminRules, nil)
+			},
+			wantAdmit: false,
+		},
+		{
+			name: "external rules feature can be enabled for users with security-enable (RA)",
+			oldFeature: v3.Feature{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: auth.ExternalRulesFeature,
+				},
+				Spec: v3.FeatureSpec{
+					Value: admission.Ptr(false),
+				},
+			},
+			newFeature: v3.Feature{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: auth.ExternalRulesFeature,
+				},
+				Spec: v3.FeatureSpec{
+					Value: admission.Ptr(true),
+				},
+			},
+			stateSetup: func(state testState) {
+				state.authorizationRuleResolverMock.EXPECT().RulesFor(gomock.Any(), gomock.Any()).Return([]rbacv1.PolicyRule{
+					{
+						Verbs:         []string{"security-enable"},
+						APIGroups:     []string{"management.cattle.io"},
+						Resources:     []string{"features"},
+						ResourceNames: []string{"external-rules"},
+					},
+				}, nil)
+			},
+			wantAdmit: true,
+		},
+		{
+			name: "external rules feature can't be disabled for users with security-enable (RA)",
 			oldFeature: v3.Feature{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: auth.ExternalRulesFeature,
@@ -156,13 +276,133 @@ func TestFeatureValueValid(t *testing.T) {
 			stateSetup: func(state testState) {
 				state.authorizationRuleResolverMock.EXPECT().RulesFor(gomock.Any(), gomock.Any()).Return([]rbacv1.PolicyRule{
 					{
-						Verbs:     []string{"*"},
-						APIGroups: []string{"management.cattle.io"},
-						Resources: []string{"feature"},
+						Verbs:         []string{"security-enable", "update"},
+						APIGroups:     []string{"management.cattle.io"},
+						Resources:     []string{"features"},
+						ResourceNames: []string{"external-rules"},
 					},
 				}, nil)
 			},
 			wantAdmit: false,
+		},
+		{
+			name: "external rules feature can be enabled with default value for users with security-enable (RA)",
+			oldFeature: v3.Feature{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: auth.ExternalRulesFeature,
+				},
+				Spec: v3.FeatureSpec{
+					Value: nil,
+				},
+				Status: v3.FeatureStatus{
+					Default: false,
+				},
+			},
+			newFeature: v3.Feature{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: auth.ExternalRulesFeature,
+				},
+				Spec: v3.FeatureSpec{
+					Value: admission.Ptr(true),
+				},
+			},
+			stateSetup: func(state testState) {
+				state.authorizationRuleResolverMock.EXPECT().RulesFor(gomock.Any(), gomock.Any()).Return([]rbacv1.PolicyRule{
+					{
+						Verbs:         []string{"security-enable"},
+						APIGroups:     []string{"management.cattle.io"},
+						Resources:     []string{"features"},
+						ResourceNames: []string{"external-rules"},
+					},
+				}, nil)
+			},
+			wantAdmit: true,
+		},
+		{
+			name: "external rules feature can't be disabled for users with security-enable (RA)",
+			oldFeature: v3.Feature{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: auth.ExternalRulesFeature,
+				},
+				Spec: v3.FeatureSpec{
+					Value: nil,
+				},
+				Status: v3.FeatureStatus{
+					Default: true,
+				},
+			},
+			newFeature: v3.Feature{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: auth.ExternalRulesFeature,
+				},
+				Spec: v3.FeatureSpec{
+					Value: admission.Ptr(false),
+				},
+			},
+			stateSetup: func(state testState) {
+				state.authorizationRuleResolverMock.EXPECT().RulesFor(gomock.Any(), gomock.Any()).Return([]rbacv1.PolicyRule{
+					{
+						Verbs:         []string{"security-enable", "update"},
+						APIGroups:     []string{"management.cattle.io"},
+						Resources:     []string{"features"},
+						ResourceNames: []string{"external-rules"},
+					},
+				}, nil)
+			},
+			wantAdmit: false,
+		},
+		{
+			name: "external rules feature can't be set to nil for users with security-enable (RA)",
+			oldFeature: v3.Feature{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: auth.ExternalRulesFeature,
+				},
+				Spec: v3.FeatureSpec{
+					Value: admission.Ptr(true),
+				},
+			},
+			newFeature: v3.Feature{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: auth.ExternalRulesFeature,
+				},
+				Spec: v3.FeatureSpec{
+					Value: nil,
+				},
+			},
+			stateSetup: func(state testState) {
+				state.authorizationRuleResolverMock.EXPECT().RulesFor(gomock.Any(), gomock.Any()).Return([]rbacv1.PolicyRule{
+					{
+						Verbs:         []string{"security-enable", "update"},
+						APIGroups:     []string{"management.cattle.io"},
+						Resources:     []string{"features"},
+						ResourceNames: []string{"external-rules"},
+					},
+				}, nil)
+			},
+			wantAdmit: false,
+		},
+		{
+			name: "external rules feature can be modified if the value doesn't change",
+			oldFeature: v3.Feature{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: auth.ExternalRulesFeature,
+				},
+				Spec: v3.FeatureSpec{
+					Value: admission.Ptr(true),
+				},
+			},
+			newFeature: v3.Feature{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: auth.ExternalRulesFeature,
+					Annotations: map[string]string{
+						"test-annotation": "test-value",
+					},
+				},
+				Spec: v3.FeatureSpec{
+					Value: admission.Ptr(true),
+				},
+			},
+			wantAdmit: true,
 		},
 	}
 
