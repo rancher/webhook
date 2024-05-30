@@ -6,11 +6,14 @@ import (
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
+	"github.com/rancher/webhook/pkg/auth"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 	"k8s.io/utils/trace"
 )
 
@@ -26,9 +29,11 @@ type Validator struct {
 }
 
 // NewValidator returns a new validator for features.
-func NewValidator() *Validator {
+func NewValidator(ruleResolver validation.AuthorizationRuleResolver) *Validator {
 	return &Validator{
-		admitter: admitter{},
+		admitter: admitter{
+			ruleResolver: ruleResolver,
+		},
 	}
 }
 
@@ -54,7 +59,9 @@ func (v *Validator) Admitters() []admission.Admitter {
 	return []admission.Admitter{&v.admitter}
 }
 
-type admitter struct{}
+type admitter struct {
+	ruleResolver validation.AuthorizationRuleResolver
+}
 
 // Admit handles the webhook admission request sent to this webhook.
 func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
@@ -64,6 +71,20 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	oldFeature, newFeature, err := objectsv3.FeatureOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return nil, err
+	}
+
+	if newFeature.Name == auth.ExternalRulesFeature {
+		adminRules := []rbacv1.PolicyRule{
+			{
+				Verbs:     []string{"*"},
+				APIGroups: []string{"*"},
+				Resources: []string{"*"},
+			},
+		}
+		err := auth.ConfirmNoEscalation(request, adminRules, "", a.ruleResolver)
+		if err != nil {
+			return admission.ResponseFailedEscalation(fmt.Sprintf("updating the 'external-rules' feature requires admin permissions due to security concerns: %s ", err.Error())), nil
+		}
 	}
 
 	if !isUpdateAllowed(oldFeature, newFeature) {

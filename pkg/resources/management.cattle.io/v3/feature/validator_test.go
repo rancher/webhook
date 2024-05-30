@@ -4,12 +4,16 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
+	"github.com/rancher/webhook/pkg/auth"
+	"github.com/rancher/webhook/pkg/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	admissionv1 "k8s.io/api/admission/v1"
 	authenicationv1 "k8s.io/api/authentication/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -20,6 +24,11 @@ var (
 )
 
 func TestFeatureValueValid(t *testing.T) {
+	type testState struct {
+		authorizationRuleResolverMock *mocks.MockAuthorizationRuleResolver
+	}
+	ctrl := gomock.NewController(t)
+
 	t.Parallel()
 	tests := []struct {
 		name       string
@@ -27,6 +36,7 @@ func TestFeatureValueValid(t *testing.T) {
 		oldFeature v3.Feature
 		wantError  bool
 		wantAdmit  bool
+		stateSetup func(state testState)
 	}{
 		{
 			name: "new feature locked with spec value changed",
@@ -95,13 +105,79 @@ func TestFeatureValueValid(t *testing.T) {
 			},
 			wantAdmit: true,
 		},
+		{
+			name: "external rules feature can be changed by admins",
+			oldFeature: v3.Feature{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: auth.ExternalRulesFeature,
+				},
+				Spec: v3.FeatureSpec{
+					Value: admission.Ptr(true),
+				},
+			},
+			newFeature: v3.Feature{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: auth.ExternalRulesFeature,
+				},
+				Spec: v3.FeatureSpec{
+					Value: admission.Ptr(false),
+				},
+			},
+			stateSetup: func(state testState) {
+				adminRules := []rbacv1.PolicyRule{
+					{
+						Verbs:     []string{"*"},
+						APIGroups: []string{"*"},
+						Resources: []string{"*"},
+					},
+				}
+				state.authorizationRuleResolverMock.EXPECT().RulesFor(gomock.Any(), gomock.Any()).Return(adminRules, nil)
+			},
+			wantAdmit: true,
+		},
+		{
+			name: "external rules feature can't be changed by user with no *, *, * permission",
+			oldFeature: v3.Feature{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: auth.ExternalRulesFeature,
+				},
+				Spec: v3.FeatureSpec{
+					Value: admission.Ptr(true),
+				},
+			},
+			newFeature: v3.Feature{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: auth.ExternalRulesFeature,
+				},
+				Spec: v3.FeatureSpec{
+					Value: admission.Ptr(false),
+				},
+			},
+			stateSetup: func(state testState) {
+				state.authorizationRuleResolverMock.EXPECT().RulesFor(gomock.Any(), gomock.Any()).Return([]rbacv1.PolicyRule{
+					{
+						Verbs:     []string{"*"},
+						APIGroups: []string{"management.cattle.io"},
+						Resources: []string{"feature"},
+					},
+				}, nil)
+			},
+			wantAdmit: false,
+		},
 	}
 
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			admitters := NewValidator().Admitters()
+			authorizationRuleResolverMock := mocks.NewMockAuthorizationRuleResolver(ctrl)
+			state := testState{
+				authorizationRuleResolverMock: authorizationRuleResolverMock,
+			}
+			if test.stateSetup != nil {
+				test.stateSetup(state)
+			}
+			admitters := NewValidator(state.authorizationRuleResolverMock).Admitters()
 			assert.Len(t, admitters, 1)
 
 			req := admission.Request{
@@ -137,7 +213,7 @@ func TestFeatureValueValid(t *testing.T) {
 
 func TestRejectsBadRequest(t *testing.T) {
 	t.Parallel()
-	admitters := NewValidator().Admitters()
+	admitters := NewValidator(nil).Admitters()
 	assert.Len(t, admitters, 1)
 
 	req := admission.Request{
