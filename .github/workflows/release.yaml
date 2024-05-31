@@ -1,37 +1,81 @@
-name: goreleaser
+name: release
 
 on:
   push:
     tags:
-      - '*'
+      - v*
 
 permissions:
   contents: write
 
 jobs:
-  ci:
-    uses: rancher/webhook/.github/workflows/ci.yaml@release/v0.5
-    permissions:
-      contents: read
-  goreleaser:
-    needs: [
-      ci
-    ]
+  build:
+    name: build and package
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+          arch:
+          - amd64
+          - arm64
+    steps:
+
+    - name : Checkout repository
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+       # https://github.com/actions/checkout/releases/tag/v4.1.1
+
+    - name: Setup Go
+      uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+       # https://github.com/actions/setup-go/releases/tag/v5.0.0
+      with:
+        go-version-file: 'go.mod'
+
+    - name: Build and package
+      run: ./scripts/build && ./scripts/package && ./scripts/package-helm
+      env:
+        ARCH: "${{ matrix.arch}}"
+
+    - name: Get the version
+      run: |
+        source ./scripts/version
+        echo "VERSION=$VERSION"
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+    - name: Generate checksum files
+      run: |
+        ls -lR dist
+        cd dist/artifacts
+        sha256sum webhook-linux-${{ matrix.arch}} > sha256sum-${{ matrix.arch}}.txt
+
+    - name: Upload artifacts
+      # https://github.com/actions/upload-artifact/commit/65462800fd760344b1a7b4382951275a0abb4808
+      uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+      with:
+        name: webhook-artifacts-${{ matrix.arch}}
+        path: |
+          dist/artifacts/webhook-linux-${{ matrix.arch}}
+          dist/artifacts/sha256sum-${{ matrix.arch}}.txt
+          dist/artifacts/rancher-webhook-*.tgz
+
+  release:
+    needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-tags: true
-      - uses: actions/setup-go@v5
-        with:
-          go-version: 1.22
-      - name: Package release helm charts
-        run: make package-helm
-      - run: mkdir -p ./build/artifacts/ && mv -v ./dist/artifacts/ ./build/
-      - uses: goreleaser/goreleaser-action@v5
-        with:
-          distribution: goreleaser
-          version: latest
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Download the amd64 artifacts
+      # https://github.com/actions/download-artifact/commit/65a9edc5881444af0b9093a5e628f2fe47ea3b2e
+      uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e
+      with:
+        name: webhook-artifacts-amd64
+        path: dist/artifacts
+    - name: Download the arm64 artifacts
+      # https://github.com/actions/download-artifact/commit/65a9edc5881444af0b9093a5e628f2fe47ea3b2e
+      uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e
+      with:
+        name: webhook-artifacts-arm64
+        path: dist/artifacts
+    - name: Upload the files
+      run: |
+        ls -lR dist
+        cd dist/artifacts
+        gh release upload $VERSION webhook-linux-* sha256sum-*.txt rancher-webhook*.tgz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

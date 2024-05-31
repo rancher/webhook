@@ -1,41 +1,40 @@
-name : Publish Webhook Images
+name: Publish Webhook Images
 
 on:
   push:
     tags:
-      - "*"
+      - v*
 
 env:
   REGISTRY: docker.io
-  REPO : rancher
+  REPO: rancher
+
+permissions:
+  contents: read
 
 jobs:
-  ci :
-    uses: rancher/webhook/.github/workflows/ci.yaml@release/v0.5
+  push:
     permissions:
       contents: read
-  push:
-    needs : [
-      ci
-    ]
-    permissions:
-      contents : read
       id-token: write
-    name : Build and push Webhook images
-    runs-on : ubuntu-latest
+    name: Build and push Webhook images
+    runs-on: ubuntu-latest
     steps:
-      - name : "Read vault secrets"
-        uses : rancher-eio/read-vault-secrets@main
+      - name: "Read vault secrets"
+        uses: rancher-eio/read-vault-secrets@main
         with:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials username | DOCKER_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials password | DOCKER_PASSWORD
       - name : Checkout repository
-        uses: actions/checkout@v4
+        # https://github.com/actions/checkout/releases/tag/v4.1.1
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        # https://github.com/docker/setup-buildx-action/commit/d70bba72b1f3fd22344832f00baa16ece964efeb
+        uses: docker/setup-buildx-action@d70bba72b1f3fd22344832f00baa16ece964efeb
       - name: Log in to the Container registry
-        uses: docker/login-action@v3
+        # https://github.com/docker/login-action/commit/0d4c9c5ea7693da7b068278f7b52bda2a190a446
+        uses: docker/login-action@0d4c9c5ea7693da7b068278f7b52bda2a190a446
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ env.DOCKER_USERNAME }}
@@ -45,7 +44,8 @@ jobs:
         run: |
           echo TAG_NAME=$(echo $GITHUB_REF | sed -e "s|refs/tags/||") >> $GITHUB_ENV
       - name: Build and push the webhook image
-        uses: docker/build-push-action@v5
+        # https://github.com/docker/build-push-action/commit/ca052bb54ab0790a636c9b5f226502c73d547a25
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
         with:
           context: .
           file: ./package/Dockerfile

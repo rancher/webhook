@@ -6,7 +6,7 @@ if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
 fi
 
 COMMIT=${COMMIT:-$(git rev-parse --short HEAD)}
-GIT_TAG=${GIT_TAG:-${DRONE_TAG:-$(git tag -l --contains HEAD | head -n 1)}}
+GIT_TAG=${GIT_TAG:-$(git tag -l --contains HEAD | head -n 1)}
 
 if [[ -z "$DIRTY" && -n "$GIT_TAG" ]]; then
     VERSION=$GIT_TAG
@@ -21,16 +21,16 @@ fi
 SUFFIX="-${ARCH}"
 
 HELM_TAG="${HELM_TAG:-${TAG:-${VERSION}}}"
-HELM_VERSION="${HELM_VERSION:-${HELM_TAG/v/}}"
+HELM_CHART_VERSION="${HELM_CHART_VERSION:-${HELM_TAG/v/}}"
 TAG="${TAG:-${VERSION}${SUFFIX}}"
 REPO="${REPO:-rancher}"
 
 if echo $TAG | grep -q dirty; then
     TAG=dev
     HELM_TAG=dev
-    HELM_VERSION=0.0.0-dev
+    HELM_CHART_VERSION=0.0.0-dev
 fi
 
 DIST_DIR="${DIST_DIR:-$(dirname $0)/../dist/}"
 mkdir -p ${DIST_DIR}
-echo "export TAG=${TAG}; export HELM_TAG=${HELM_TAG}; export HELM_VERSION=${HELM_VERSION};" >${DIST_DIR}/tags
+echo "export TAG=${TAG}; export HELM_TAG=${HELM_TAG}; export HELM_CHART_VERSION=${HELM_CHART_VERSION};" >${DIST_DIR}/tags

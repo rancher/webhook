@@ -8,13 +8,11 @@ on:
     branches:
       - release/v*
     paths-ignore:
-      - '*.md'
       - '.gitignore'
       - 'CODEOWNERS'
       - 'LICENSE'
   pull_request:
     paths-ignore:
-    - '*.md'
     - '.gitignore'
     - 'CODEOWNERS'
     - 'LICENSE'
@@ -25,69 +23,88 @@ permissions:
 jobs:
   build:
     name: CI
-    runs-on : ubuntu-latest
+    # This matrix syntax courtesy of stackoverflow.com/questions/66025220
     strategy:
       matrix:
-          arch:
-          - amd64
-          # TODO: See wrangler for an example of how to run tests on arm64, not ready here
-          # - arm64
+        archBox:
+        - { arch: amd64, vmArch: x64 }
+        - { arch: arm64, vmArch: arm64 }
+    runs-on: runs-on,runner=1cpu-linux-${{ matrix.archBox.vmArch }},run-id=${{ github.run_id }}
+# org-${{ github.repository_owner_id }}-${{ matrix.archBox.arch }}-k8s
+#    container:
+#      image: registry.suse.com/bci/nodejs:20
     steps:
       - name : Checkout repository
-        uses : actions/checkout@v4
+        # https://github.com/actions/checkout/releases/tag/v4.1.1
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Setup Go
+        # https://github.com/actions/setup-go/releases/tag/v5.0.0
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+        with:
+          go-version-file: 'go.mod'
 
       # TODO: Pull this next one out once there's a helm-release for rancher 2.9
-      - name : Checkout rancher/rancher and build the chart
+      - name: Checkout rancher/rancher and build the chart
         run: |
+          mkdir -p "${{ runner.temp}}"
           pushd "${{ runner.temp}}"
           git clone --depth 1 -b release/v2.9 https://github.com/rancher/rancher.git rancherDir
           cd rancherDir
           ./scripts/chart/build chart
-          sed -i -e 's/kubeVersion: < 1.29.0-0/kubeVersion: < 1.30.0-0/' build/chart/rancher/Chart.yaml
           tar cfz "${{ runner.temp }}/rancher.tgz" -C build/chart/rancher .
           popd
 
-      - run : make ci
-        name: ci
+#          # Install yq
+#          F=yq_linux_${{ matrix.archBox.arch }}
+#          curl --output yq.tgz -L --silent https://github.com/mikefarah/yq/releases/download/v4.44.1/${F}.tar.gz && tar xfz yq.tgz && chmod +x $F && mv $F /usr/bin/yq
+#      - name: zypper-install non rancher/rancher prerecs
+#        run: zypper install -y make docker
 
-#      - name: Build an image for integration testing
-#        run: ./scripts/package-for-ci
-#        env:
-#          ARCH: "${{ matrix.arch }}"
-#          SHA: "${{ github.sha }}"
+#      - name: Start the Docker Daemon
+#        run: 'nohup dockerd > "${{ runner.temp }}/docker.out" &
 
-      - name : install K3d
-        run : ./.github/workflows/scripts/install-k3d.sh
+      - name: install K3d
+        run: ./.github/workflows/scripts/install-k3d.sh
+        env:
+          K3D_VERSION: latest
 
-      - name : setup cluster
-        run : ./.github/workflows/scripts/setup-cluster.sh
+      - name: Setup Helm
+        # https://github.com/Azure/setup-helm/commit/fe7b79cd5ee1e45176fcad797de68ecaf3ca4814
+        uses: azure/setup-helm@fe7b79cd5ee1e45176fcad797de68ecaf3ca4814
+
+      - name: Setup Kubectl
+        # https://github.com/Azure/setup-kubectl/commit/3e0aec4d80787158d308d7b364cb1b702e7feb7f
+        uses: azure/setup-kubectl@3e0aec4d80787158d308d7b364cb1b702e7feb7f
+
+      - run: make ci
+        name: make ci
+
+      - name: setup cluster
+        run: ./.github/workflows/scripts/setup-cluster.sh
         env:
           CLUSTER_NAME: webhook
           K3S_VERSION: v1.28.9-k3s1
-          ARCH: "${{ matrix.arch }}"
+          ARCH: "${{ matrix.archBox.arch }}"
 
-      - name : import image
-        run : k3d image import dist/rancher-webhook-image.tar -c webhook
+      - name: import image
+        run: k3d image import dist/rancher-webhook-image.tar -c webhook
 
-      - name : start rancher
-        run : ./.github/workflows/scripts/start-rancher.sh
+      - name: start rancher
+        run: ./.github/workflows/scripts/start-rancher.sh
         env:
-          ARCH: "${{ matrix.arch }}"
           CHART_PATH: "${{ runner.temp }}/rancher.tgz"
           RANCHER_IMAGE_TAG: "v2.9-head"
           VERSION: "2.9"
 
-      - name : debug show image_tag file
-        run : cat dist/image_tag
+      - name: get vars
+        run: cat dist/image_tag >> $GITHUB_ENV
 
-      - name : get vars
-        run : cat dist/image_tag >> $GITHUB_ENV
-
-      - name : Run integration tests
-        run : ./.github/workflows/scripts/integration-test-ci
+      - name: Run integration tests
+        run: ./.github/workflows/scripts/integration-test-ci
         env:
-          ARCH: "${{ matrix.arch }}"
+          ARCH: "${{ matrix.archBox.arch }}"
           CLUSTER_NAME: webhook
           IMAGE_REPO: rancher/webhook
-          IMAGE_TAG: "${{ env.TAG }}"
+          IMAGE_TAG: "${{ env.IMAGE_TAG }}"
 

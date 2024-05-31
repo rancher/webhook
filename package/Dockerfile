@@ -11,4 +11,4 @@ COPY bin/webhook /usr/bin/
 
 USER $user
 
-CMD ["/usr/bin/webhook"]
+CMD ["webhook"]

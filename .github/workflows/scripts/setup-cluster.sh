@@ -57,12 +57,10 @@ wait_for_nodes(){
   done
 }
 
-k3d registry list --no-headers -o json | jq -r '.[].name' | xargs --no-run-if-empty k3d registry delete
-k3d cluster delete $CLUSTER_NAME || true
 k3d registry create gha -p 42765
 k3d cluster create $CLUSTER_NAME --servers 1 --agents 1 \
     --registry-use gha:42765 \
-    --image "docker.io/rancher/k3s:${K3S_VERSION}" --api-port 6550
+    --image "rancher/k3s:${K3S_VERSION}" --api-port 6550
 
 wait_for_nodes
 

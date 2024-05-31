@@ -12,8 +12,8 @@ cp -rf charts build/
 
 # must use sed -i'<backup_extension>'` for GNU and OSX compatibility
 sed -i'.bkp' \
-    -e 's/^version:.*/version: '${HELM_VERSION}'/' \
-    -e 's/appVersion:.*/appVersion: '${HELM_VERSION}'/' \
+    -e 's/^version:.*/version: '${HELM_CHART_VERSION}'/' \
+    -e 's/appVersion:.*/appVersion: '${HELM_CHART_VERSION}'/' \
     build/charts/rancher-webhook/Chart.yaml
 
 sed -i'.bkb' \
