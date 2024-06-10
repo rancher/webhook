@@ -3,7 +3,6 @@
 name: Webhook CI
 
 on:
-  workflow_call:
   push:
     branches:
       - release/v*
@@ -16,6 +15,8 @@ on:
     - '.gitignore'
     - 'CODEOWNERS'
     - 'LICENSE'
+  workflow_call:
+  workflow_dispatch:
 
 permissions:
   contents: read
