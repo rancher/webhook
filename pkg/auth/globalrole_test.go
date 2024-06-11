@@ -153,7 +153,7 @@ func TestGlobalRulesFromRole(t *testing.T) {
 			if test.stateSetup != nil {
 				test.stateSetup(state)
 			}
-			grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCacheMock, nil), nil)
+			grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCacheMock, nil, nil), nil)
 			rules := grResolver.GlobalRulesFromRole(test.globalRole)
 
 			require.Len(t, rules, len(test.wantRules))
@@ -264,7 +264,7 @@ func TestClusterRulesFromRole(t *testing.T) {
 			if test.stateSetup != nil {
 				test.stateSetup(state)
 			}
-			grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCacheMock, nil), nil)
+			grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCacheMock, nil, nil), nil)
 			rules, err := grResolver.ClusterRulesFromRole(test.globalRole)
 			if test.wantErr {
 				require.Error(t, err)
@@ -337,7 +337,7 @@ func TestGetRoleTemplatesForGlobalRole(t *testing.T) {
 			if test.stateSetup != nil {
 				test.stateSetup(state)
 			}
-			grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCacheMock, nil), nil)
+			grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCacheMock, nil, nil), nil)
 			roleTemplates, err := grResolver.GetRoleTemplatesForGlobalRole(test.globalRole)
 			if test.wantErr {
 				require.Error(t, err)
