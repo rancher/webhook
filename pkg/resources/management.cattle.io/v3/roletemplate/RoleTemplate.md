@@ -8,11 +8,12 @@ Circular references to a `RoleTemplate` (a inherits b, b inherits a) are not all
 
 ### Rules Without Verbs, Resources, API groups
 
-Rules without verbs, resources, or apigroups are not permitted. The `rules` included in a RoleTemplate are of the same type as the rules used by standard Kubernetes RBAC types (such as `Roles` from `rbac.authorization.k8s.io/v1`). Because of this, they inherit the same restrictions as these types, including this one.
+Rules without verbs, resources, or apigroups are not permitted. The `rules` and `externalRules` included in a RoleTemplate are of the same type as the rules used by standard Kubernetes RBAC types (such as `Roles` from `rbac.authorization.k8s.io/v1`). Because of this, they inherit the same restrictions as these types, including this one.
 
 ### Escalation Prevention
 
 Users can only change RoleTemplates with rights less than or equal to those they currently possess. This prevents privilege escalation. 
+Users can't create external RoleTemplates (or update existing RoleTemplates) with `ExternalRules` without having the `escalate` verb on that RoleTemplate.
 
 ### Context Validation
 
