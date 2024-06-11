@@ -121,6 +121,16 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return admission.ResponseBadRequest(fmt.Sprintf("Circular Reference: RoleTemplate %s already inherits RoleTemplate %s", circularTemplate.Name, newRT.Name)), nil
 	}
 
+	if newRT.ExternalRules != nil {
+		if !newRT.External {
+			return admission.ResponseBadRequest("ExternalRules can't be set in RoleTemplates with external=false"), nil
+		}
+		// verify external rules as per kubernetes rbac rules.
+		if err := common.ValidateRules(newRT.ExternalRules, false, fldPath.Child("externalRules")); err != nil {
+			return admission.ResponseBadRequest(fmt.Sprintf("Invalid externalRules: %v", err.Error())), nil
+		}
+	}
+
 	rules, err := a.roleTemplateResolver.RulesFromTemplate(newRT)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get all rules for '%s': %w", newRT.Name, err)
@@ -136,6 +146,11 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		logrus.Warnf("Failed to check for the 'escalate' verb on RoleTemplates: %v", err)
 	} else if allowed {
 		return admission.ResponseAllowed(), nil
+	}
+
+	if newRT.External && newRT.ExternalRules != nil {
+		// ExternalRules needs 'escalate' permissions. Request would have already been accepted if this user had 'escalate' permissions.
+		return admission.ResponseFailedEscalation("External RoleTemplates with ExternalRules can only be created for users with 'escalate' permissions"), nil
 	}
 
 	err = auth.ConfirmNoEscalation(request, rules, "", a.resolver)
