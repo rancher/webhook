@@ -8,6 +8,7 @@ import (
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
+	"github.com/rancher/wrangler/pkg/generic/fake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	v1 "k8s.io/api/admission/v1"
@@ -21,12 +22,18 @@ import (
 
 var errTest = errors.New("bad error")
 
+type testState struct {
+	featureCacheMock     *fake.MockNonNamespacedCacheInterface[*v3.Feature]
+	clusterRoleCacheMock *fake.MockNonNamespacedCacheInterface[*rbacv1.ClusterRole]
+}
+
 type tableTest struct {
-	wantRT    func() *v3.RoleTemplate
-	name      string
-	args      args
-	wantError bool
-	allowed   bool
+	wantRT     func() *v3.RoleTemplate
+	name       string
+	args       args
+	stateSetup func(state testState)
+	wantError  bool
+	allowed    bool
 }
 
 type args struct {

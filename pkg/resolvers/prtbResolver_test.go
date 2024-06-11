@@ -281,7 +281,7 @@ func (p *PRTBResolverSuite) NewTestPRTBResolver() *PRTBRuleResolver {
 	roleTemplateCache.EXPECT().Get(p.readRT.Name).Return(p.readRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().Get(p.writeRT.Name).Return(p.writeRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().Get(invalidName).Return(nil, errNotFound).AnyTimes()
-	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
+	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache, nil)
 	return NewPRTBRuleResolver(PRTBCache, roleResolver)
 }
 

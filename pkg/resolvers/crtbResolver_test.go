@@ -278,7 +278,7 @@ func (c *CRTBResolverSuite) NewTestCRTBResolver() *CRTBRuleResolver {
 	roleTemplateCache.EXPECT().Get(c.readRT.Name).Return(c.readRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().Get(c.writeRT.Name).Return(c.writeRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().Get(invalidName).Return(nil, errNotFound).AnyTimes()
-	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
+	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache, nil)
 	return NewCRTBRuleResolver(crtbCache, roleResolver)
 }
 

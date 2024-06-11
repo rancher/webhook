@@ -34,13 +34,16 @@ const (
 
 type ProjectRoleTemplateBindingSuite struct {
 	suite.Suite
-	adminRT          *apisv3.RoleTemplate
-	readNodesRT      *apisv3.RoleTemplate
-	lockedRT         *apisv3.RoleTemplate
-	clusterContextRT *apisv3.RoleTemplate
-	adminCR          *rbacv1.ClusterRole
-	writeNodeCR      *rbacv1.ClusterRole
-	readServiceRole  *rbacv1.Role
+	adminRT                   *apisv3.RoleTemplate
+	readNodesRT               *apisv3.RoleTemplate
+	lockedRT                  *apisv3.RoleTemplate
+	clusterContextRT          *apisv3.RoleTemplate
+	externalRulesWriteNodesRT *apisv3.RoleTemplate
+	externalClusterRoleRT     *apisv3.RoleTemplate
+	adminCR                   *rbacv1.ClusterRole
+	writeNodeCR               *rbacv1.ClusterRole
+	readPodsCR                *rbacv1.ClusterRole
+	readServiceRole           *rbacv1.Role
 }
 
 func TestProjectRoleTemplateBindings(t *testing.T) {
@@ -87,6 +90,27 @@ func (p *ProjectRoleTemplateBindingSuite) SetupSuite() {
 		Administrative: true,
 		Context:        "project",
 	}
+	p.externalRulesWriteNodesRT = &apisv3.RoleTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "external-rule-write-nodes",
+		},
+		DisplayName:    "External Role",
+		ExternalRules:  []rbacv1.PolicyRule{ruleWriteNodes},
+		External:       true,
+		Builtin:        true,
+		Administrative: true,
+		Context:        "project",
+	}
+	p.externalClusterRoleRT = &apisv3.RoleTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "read-pods-role",
+		},
+		DisplayName:    "External Role",
+		External:       true,
+		Builtin:        true,
+		Administrative: true,
+		Context:        "project",
+	}
 	p.lockedRT = &apisv3.RoleTemplate{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "locked-role",
@@ -117,6 +141,10 @@ func (p *ProjectRoleTemplateBindingSuite) SetupSuite() {
 	p.readServiceRole = &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "namespace1", Name: "read-service"},
 		Rules:      []rbacv1.PolicyRule{ruleReadServices},
+	}
+	p.readPodsCR = &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{Name: "read-pods-role"},
+		Rules:      []rbacv1.PolicyRule{ruleReadPods},
 	}
 }
 
@@ -152,7 +180,7 @@ func (p *ProjectRoleTemplateBindingSuite) TestPrivilegeEscalation() {
 	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
 	roleTemplateCache.EXPECT().Get(p.adminRT.Name).Return(p.adminRT, nil).AnyTimes()
 	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
-	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
+	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache, nil)
 	prtbCache := fake.NewMockCacheInterface[*apisv3.ProjectRoleTemplateBinding](ctrl)
 	prtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
 	prtbCache.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(prtbUser, projectID)).Return([]*apisv3.ProjectRoleTemplateBinding{{
@@ -321,7 +349,7 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnUpdate() {
 	roleTemplateCache.EXPECT().Get(p.adminRT.Name).Return(p.adminRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().List(gomock.Any()).Return([]*apisv3.RoleTemplate{p.adminRT}, nil).AnyTimes()
 	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
-	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
+	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache, nil)
 	prtbCache := fake.NewMockCacheInterface[*apisv3.ProjectRoleTemplateBinding](ctrl)
 	prtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
 	prtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
@@ -652,9 +680,16 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnUpdate() {
 }
 
 func (p *ProjectRoleTemplateBindingSuite) TestValidationOnCreate() {
+	type testState struct {
+		featureCacheMock     *fake.MockNonNamespacedCacheInterface[*apisv3.Feature]
+		clusterRoleCacheMock *fake.MockNonNamespacedCacheInterface[*rbacv1.ClusterRole]
+	}
+	ctrl := gomock.NewController(p.T())
 	const adminUser = "admin-userid"
+	const writeNodeUser = "write-node-userid"
+	const readPodUser = "read-pod-userid"
 	const badRoleTemplateName = "bad-roletemplate"
-	clusterRoles := []*rbacv1.ClusterRole{p.adminCR}
+	clusterRoles := []*rbacv1.ClusterRole{p.adminCR, p.writeNodeCR, p.readPodsCR}
 	clusterRoleBindings := []*rbacv1.ClusterRoleBinding{
 		{
 			Subjects: []rbacv1.Subject{
@@ -662,37 +697,72 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnCreate() {
 			},
 			RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: p.adminCR.Name},
 		},
+		{
+			Subjects: []rbacv1.Subject{
+				{Kind: rbacv1.UserKind, Name: writeNodeUser},
+			},
+			RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: p.writeNodeCR.Name},
+		},
+		{
+			Subjects: []rbacv1.Subject{
+				{Kind: rbacv1.UserKind, Name: readPodUser},
+			},
+			RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: p.readPodsCR.Name},
+		},
 	}
-	resolver, _ := validation.NewTestRuleResolver(nil, nil, clusterRoles, clusterRoleBindings)
 
-	ctrl := gomock.NewController(p.T())
-	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
-	roleTemplateCache.EXPECT().Get(p.adminRT.Name).Return(p.adminRT, nil).AnyTimes()
-	roleTemplateCache.EXPECT().Get(p.lockedRT.Name).Return(p.lockedRT, nil).AnyTimes()
-	roleTemplateCache.EXPECT().Get(p.clusterContextRT.Name).Return(p.clusterContextRT, nil).AnyTimes()
-	roleTemplateCache.EXPECT().Get(badRoleTemplateName).Return(nil, errExpected).AnyTimes()
-	roleTemplateCache.EXPECT().Get("").Return(nil, errExpected).AnyTimes()
-	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
-	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
-	prtbCache := fake.NewMockCacheInterface[*apisv3.ProjectRoleTemplateBinding](ctrl)
-	prtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
-	prtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
-	crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
-	crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
-	crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
-	crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
-	prtbResolver := resolvers.NewPRTBRuleResolver(prtbCache, roleResolver)
-	validator := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, resolver, roleResolver)
+	validatorWithMocks := func(state testState) *projectroletemplatebinding.Validator {
+		resolver, _ := validation.NewTestRuleResolver(nil, nil, clusterRoles, clusterRoleBindings)
+		roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
+		roleTemplateCache.EXPECT().Get(p.adminRT.Name).Return(p.adminRT, nil).AnyTimes()
+		roleTemplateCache.EXPECT().Get(p.externalRulesWriteNodesRT.Name).Return(p.externalRulesWriteNodesRT, nil).AnyTimes()
+		roleTemplateCache.EXPECT().Get(p.externalClusterRoleRT.Name).Return(p.externalClusterRoleRT, nil).AnyTimes()
+		roleTemplateCache.EXPECT().Get(p.lockedRT.Name).Return(p.lockedRT, nil).AnyTimes()
+		roleTemplateCache.EXPECT().Get(p.clusterContextRT.Name).Return(p.clusterContextRT, nil).AnyTimes()
+		roleTemplateCache.EXPECT().Get(badRoleTemplateName).Return(nil, errExpected).AnyTimes()
+		roleTemplateCache.EXPECT().Get("").Return(nil, errExpected).AnyTimes()
+		roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, state.clusterRoleCacheMock, state.featureCacheMock)
+		prtbCache := fake.NewMockCacheInterface[*apisv3.ProjectRoleTemplateBinding](ctrl)
+		prtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
+		prtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+		crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
+		crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
+		crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+		crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
+		prtbResolver := resolvers.NewPRTBRuleResolver(prtbCache, roleResolver)
+
+		clusterCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.Cluster](ctrl)
+		clusterCache.EXPECT().Get(clusterID).Return(&apisv3.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: clusterID,
+			},
+		}, nil).AnyTimes()
+
+		projectCache := fake.NewMockCacheInterface[*apisv3.Project](ctrl)
+		projectCache.EXPECT().Get(clusterID, projectID).Return(&apisv3.Project{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: clusterID,
+				Name:      projectID,
+			},
+			Spec: apisv3.ProjectSpec{
+				ClusterName: clusterID,
+			},
+		}, nil).AnyTimes()
+
+		return projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, resolver, roleResolver)
+	}
+
 	type args struct {
 		oldPRTB  func() *apisv3.ProjectRoleTemplateBinding
 		newPRTB  func() *apisv3.ProjectRoleTemplateBinding
 		username string
 	}
 	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
-		allowed bool
+		name       string
+		args       args
+		wantErr    bool
+		allowed    bool
+		stateSetup func(state testState)
 	}{
 		{
 			name: "base test valid PRTB creation",
@@ -863,12 +933,118 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnCreate() {
 			},
 			allowed: false,
 		},
+		{
+			name: "external RT with externalRules valid PRTB creation when feature flag is on",
+			args: args{
+				username: writeNodeUser,
+				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					return nil
+				},
+				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.RoleTemplateName = "external-rule-write-nodes"
+
+					return basePRTB
+				},
+			},
+			stateSetup: func(state testState) {
+				state.featureCacheMock.EXPECT().Get(auth.ExternalRulesFeature).Return(&apisv3.Feature{
+					ObjectMeta: metav1.ObjectMeta{},
+					Spec: apisv3.FeatureSpec{
+						Value: &[]bool{true}[0],
+					},
+				}, nil)
+			},
+			allowed: true,
+		},
+		{
+			name: "external RT with externalRules not created when feature flag is on and there are not enough permissions",
+			args: args{
+				username: readPodUser,
+				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					return nil
+				},
+				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.RoleTemplateName = "external-rule-write-nodes"
+
+					return basePRTB
+				},
+			},
+			stateSetup: func(state testState) {
+				state.featureCacheMock.EXPECT().Get(auth.ExternalRulesFeature).Return(&apisv3.Feature{
+					ObjectMeta: metav1.ObjectMeta{},
+					Spec: apisv3.FeatureSpec{
+						Value: &[]bool{true}[0],
+					},
+				}, nil)
+			},
+			allowed: false,
+		},
+		{
+			name: "external RT valid PRTB creation when feature flag is off",
+			args: args{
+				username: adminUser,
+				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					return nil
+				},
+				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.RoleTemplateName = "read-pods-role"
+
+					return basePRTB
+				},
+			},
+			stateSetup: func(state testState) {
+				state.featureCacheMock.EXPECT().Get(auth.ExternalRulesFeature).Return(&apisv3.Feature{
+					ObjectMeta: metav1.ObjectMeta{},
+					Spec: apisv3.FeatureSpec{
+						Value: &[]bool{false}[0],
+					},
+				}, nil)
+			},
+			allowed: true,
+		},
+		{
+			name: "external RT is created even when there are not enough permissions PRTB creation when feature flag is off",
+			args: args{
+				username: writeNodeUser,
+				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					return nil
+				},
+				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+					basePRTB := newBasePRTB()
+					basePRTB.RoleTemplateName = "read-pods-role"
+
+					return basePRTB
+				},
+			},
+			stateSetup: func(state testState) {
+				state.featureCacheMock.EXPECT().Get(auth.ExternalRulesFeature).Return(&apisv3.Feature{
+					ObjectMeta: metav1.ObjectMeta{},
+					Spec: apisv3.FeatureSpec{
+						Value: &[]bool{false}[0],
+					},
+				}, nil)
+			},
+			allowed: true,
+		},
 	}
 
 	for i := range tests {
 		test := tests[i]
 		p.Run(test.name, func() {
 			req := createPRTBRequest(p.T(), test.args.oldPRTB(), test.args.newPRTB(), test.args.username)
+			featureCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.Feature](ctrl)
+			clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
+			state := testState{
+				clusterRoleCacheMock: clusterRoleCache,
+				featureCacheMock:     featureCache,
+			}
+			if test.stateSetup != nil {
+				test.stateSetup(state)
+			}
+			validator := validatorWithMocks(state)
 			admitters := validator.Admitters()
 			p.Len(admitters, 1)
 			resp, err := admitters[0].Admit(req)
