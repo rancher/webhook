@@ -1,0 +1,78 @@
+name: release
+
+on:
+  push:
+    tags:
+      - v*
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build and package
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+          arch:
+          - amd64
+          - arm64
+    steps:
+
+    - name : Checkout repository
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+       # https://github.com/actions/checkout/releases/tag/v4.1.1
+
+    - name: Setup Go
+      uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+       # https://github.com/actions/setup-go/releases/tag/v5.0.0
+      with:
+        go-version-file: 'go.mod'
+
+    - name: Build and package
+      run: ./scripts/build && ./scripts/package && ./scripts/package-helm
+      env:
+        ARCH: "${{ matrix.arch}}"
+
+    - name: Get the version
+      run: |
+        source ./scripts/version
+        echo "VERSION=$VERSION"
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+    - name: Generate checksum files
+      run: |
+        ls -lR dist
+        cd dist/artifacts
+        sha256sum webhook-linux-${{ matrix.arch}} > sha256sum-${{ matrix.arch}}.txt
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: webhook-artifacts-${{ matrix.arch}}
+        path: |
+          dist/artifacts/webhook-linux-${{ matrix.arch}}
+          dist/artifacts/sha256sum-${{ matrix.arch}}.txt
+          dist/artifacts/rancher-webhook-*.tgz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download the amd64 artifacts
+      uses: actions/download-artifact@v2
+      with:
+        name: ${{ env.ARTIFACT_NAME }}-amd64
+        path: dist/artifacts
+    - name: Download the arm64 artifacts
+      uses: actions/download-artifact@v2
+      with:
+        name: ${{ env.ARTIFACT_NAME }}-arm64
+        path: dist/artifacts
+    - name: Upload the files
+      run: |
+        ls -lR dist
+        cd dist/artifacts
+        gh release upload $VERSION webhook-linux-* sha256sum-*.txt rancher-webhook*.tgz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
