@@ -24,4 +24,4 @@ kubectl rollout status --namespace cert-manager deploy/cert-manager --timeout 1m
 
 # Chart based
 
-helm upgrade --install rancher "$CHART_PATH" --namespace cattle-system --set hostname=localhost --wait --timeout=10m --create-namespace --version "$VERSION" --set rancherImage=rancher/rancher --set rancherImageTag="$RANCHER_IMAGE_TAG"
+helm upgrade --install rancher "$CHART_PATH" --namespace cattle-system --set replicas=1 --set hostname=localhost --wait --timeout=10m --create-namespace --version "$VERSION" --set rancherImage=rancher/rancher --set rancherImageTag="$RANCHER_IMAGE_TAG"

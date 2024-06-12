@@ -51,7 +51,8 @@ upgrade_rancher_webhook() {
 
 set +e
 
-upgrade_rancher_webhook
+try --max 3 --delay 2 --waitmsg "Upgrading Webhook" --failmsg "Failed to upgrade webhook" upgrade_rancher_webhook
+
 x=$(kubectl get pods -n cattle-system -l app=rancher-webhook | grep -v -e Running -e NAME | awk '{print $1}')
 if [ -n "$x" ] ; then
   echo "Logs for failed rancher-webhook $x ":
@@ -61,6 +62,13 @@ if [ -n "$x" ] ; then
   kubectl describe pod/"$x" -n cattle-system
   try --max 4 --failmsg "Couldn't helm upgrade rancher-webhook" upgrade_rancher_webhook
 fi
+
+echo "XXX Temporary: what rke-machine-config resources do we have?"
+kubectl api-resources | head -n 1
+kubectl api-resources | grep rke-machine-config.cattle.io/v1 | awk '{ print $4 }'
+kubectl get AzureConfig -A
+echo "What about the CRD?"
+kubectl get crd azureconfigs.rke-machine-config.cattle.io -o json
 
 # Done trying things, so reinstate 'set -e'
 set -e
