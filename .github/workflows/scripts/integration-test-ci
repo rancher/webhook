@@ -70,6 +70,11 @@ kubectl get AzureConfig -A
 echo "What about the CRD?"
 kubectl get crd azureconfigs.rke-machine-config.cattle.io -o json
 
+try --max 30 --delay 10 --waitmsg "Waiting for azureconfigs" kubectl get crd azureconfigs.rke-machine-config.cattle.io
+echo "Got the rke-machine configs?"
+kubectl get AzureConfig -A
+kubectl api-resources | grep rke-machine-config.cattle.io/v1 | awk '{ print $4 }'
+
 # Done trying things, so reinstate 'set -e'
 set -e
 
