@@ -1,8 +1,8 @@
 package integration_test
 
 import (
-	"os"
-	"runtime"
+//	"os"
+//	"runtime"
 
 	"github.com/rancher/webhook/pkg/auth"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
