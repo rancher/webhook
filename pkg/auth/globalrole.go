@@ -70,6 +70,18 @@ func (g *GlobalRoleResolver) ClusterRulesFromRole(gr *v3.GlobalRole) ([]rbacv1.P
 }
 
 func (g *GlobalRoleResolver) FleetWorkspacePermissionsResourceRulesFromRole(gr *v3.GlobalRole) []rbacv1.PolicyRule {
+	for _, name := range adminRoles {
+		if gr.Name == name {
+			return []rbacv1.PolicyRule{
+				{
+					Verbs:     []string{"*"},
+					APIGroups: []string{"fleet.cattle.io"},
+					Resources: []string{"clusterregistrationtokens", "gitreporestrictions", "clusterregistrations", "clusters", "gitrepos", "bundles", "clustergroups"},
+				},
+			}
+		}
+	}
+
 	if gr == nil || gr.InheritedFleetWorkspacePermissions == nil {
 		return nil
 	}
@@ -82,6 +94,16 @@ func (g *GlobalRoleResolver) FleetWorkspacePermissionsResourceRulesFromRole(gr *
 // use it to evaluate InheritedFleetWorkspacePermissions.WorkspaceVerbs. However, it shouldn't be used in a more generic evaluation
 // of permissions on the workspace object.
 func (g *GlobalRoleResolver) FleetWorkspacePermissionsWorkspaceVerbsFromRole(gr *v3.GlobalRole) []rbacv1.PolicyRule {
+	for _, name := range adminRoles {
+		if gr.Name == name {
+			return []rbacv1.PolicyRule{{
+				Verbs:     []string{"*"},
+				APIGroups: []string{"management.cattle.io"},
+				Resources: []string{"fleetworkspaces"},
+			}}
+		}
+	}
+
 	if gr == nil || gr.InheritedFleetWorkspacePermissions == nil {
 		return nil
 	}

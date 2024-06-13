@@ -24,8 +24,9 @@ import (
 )
 
 const (
-	adminUser = "admin-userid"
-	testUser  = "test-user"
+	adminUser           = "admin-userid"
+	testUser            = "test-user"
+	restrictedAdminUser = "restricted-admin-userid"
 )
 
 var (
@@ -42,7 +43,7 @@ var (
 			},
 		},
 	}
-	clusterRoles = []*v1.ClusterRole{adminCR, readPodsCR, baseCR}
+	clusterRoles = []*v1.ClusterRole{adminCR, readPodsCR, baseCR, restrictedAdminCR}
 
 	clusterRoleBindings = []*v1.ClusterRoleBinding{
 		{
@@ -50,6 +51,12 @@ var (
 				{Kind: v1.UserKind, Name: adminUser},
 			},
 			RoleRef: v1.RoleRef{APIGroup: v1.GroupName, Kind: "ClusterRole", Name: adminCR.Name},
+		},
+		{
+			Subjects: []v1.Subject{
+				{Kind: v1.UserKind, Name: restrictedAdminUser},
+			},
+			RoleRef: v1.RoleRef{APIGroup: v1.GroupName, Kind: "ClusterRole", Name: restrictedAdminCR.Name},
 		},
 		{
 			Subjects: []v1.Subject{
@@ -87,6 +94,24 @@ var (
 			},
 		},
 	}
+	clusterOwnerRT = v3.RoleTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster-owner",
+		},
+		Rules: []v1.PolicyRule{
+			{
+				APIGroups: []string{
+					"*",
+				},
+				Resources: []string{
+					"*",
+				},
+				Verbs: []string{
+					"*",
+				},
+			},
+		},
+	}
 	baseGR = v3.GlobalRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "base-gr",
@@ -106,12 +131,24 @@ var (
 			WorkspaceVerbs: []string{"GET"},
 		},
 	}
+	restrictedAdminGR = v3.GlobalRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "restricted-admin",
+		},
+	}
 	baseGRB = v3.GlobalRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "base-grb",
 		},
 		GlobalRoleName: baseGR.Name,
 		UserName:       testUser,
+	}
+	restrictedAdminGRB = v3.GlobalRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "restricted-admin-grb",
+		},
+		GlobalRoleName: restrictedAdminCR.Name,
+		UserName:       restrictedAdminUser,
 	}
 
 	ruleReadPods = v1.PolicyRule{
@@ -139,6 +176,12 @@ var (
 			Name: "admin-role",
 		},
 		Rules: []v1.PolicyRule{ruleAdmin},
+	}
+	restrictedAdminCR = &v1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "restricted-admin",
+		},
+		Rules: []v1.PolicyRule{},
 	}
 	readPodsCR = &v1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{Name: "read-pods"},
@@ -272,10 +315,13 @@ func newDefaultState(t *testing.T) testState {
 	grbCacheMock := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRoleBinding](ctrl)
 	grbs := []*v3.GlobalRoleBinding{&baseGRB}
 	grbCacheMock.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(testUser, "")).Return(grbs, nil).AnyTimes()
+	grbCacheMock.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(restrictedAdminUser, "")).Return([]*v3.GlobalRoleBinding{&restrictedAdminGRB}, nil).AnyTimes()
 	grbCacheMock.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(adminUser, "")).Return(grbs, nil).AnyTimes()
 	grbCacheMock.EXPECT().AddIndexer(gomock.Any(), gomock.Any()).AnyTimes()
 	grCacheMock.EXPECT().Get(baseGR.Name).Return(&baseGR, nil).AnyTimes()
+	rtCacheMock.EXPECT().Get(clusterOwnerRT.Name).Return(&clusterOwnerRT, nil).AnyTimes()
 	rtCacheMock.EXPECT().Get(baseRT.Name).Return(&baseRT, nil).AnyTimes()
+	rtCacheMock.EXPECT().Get(clusterOwnerRT.Name).Return(&clusterOwnerRT, nil).AnyTimes()
 	k8Fake := &k8testing.Fake{}
 	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
 
