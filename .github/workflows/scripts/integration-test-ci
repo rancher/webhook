@@ -66,6 +66,10 @@ for pod in $(kubectl get pods -n cattle-system -l app=rancher -o jsonpath='{.ite
     echo pod $pod
     kubectl logs pod/$pod -n cattle-system | grep -C 10 rke-machine -n
 done
+echo "And dump the CRDs. Count:"
+kubectl get crds | wc -l
+echo "And dump the CRDs. dumped:"
+kubectl get crds | sort
 echo "XXX Done dumping stuff"
 
 # Shut down the core rancher part, but leave the rest of the rancher environment running
