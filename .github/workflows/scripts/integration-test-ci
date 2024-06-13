@@ -72,9 +72,10 @@ kubectl get crds | grep  rke-machine-config.cattle.io
 echo "What about the azure-config CRD?"
 kubectl get crd azureconfigs.rke-machine-config.cattle.io -o json
 
-try --max 30 --delay 10 --waitmsg "Waiting for azureconfigs" kubectl get crd azureconfigs.rke-machine-config.cattle.io
+# try --max 30 --delay 10 --waitmsg "Waiting for azureconfigs" kubectl get crd azureconfigs.rke-machine-config.cattle.io
+# kubectl get crd azureconfigs.rke-machine-config.cattle.io
 echo "Got the rke-machine configs?"
-kubectl get AzureConfig -A
+# kubectl get AzureConfig -A
 kubectl api-resources | grep rke-machine-config.cattle.io/v1 | awk '{ print $4 }'
 
 echo "Let's look at the logs..."
