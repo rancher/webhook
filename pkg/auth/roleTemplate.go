@@ -7,6 +7,7 @@ import (
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	v1 "github.com/rancher/wrangler/v2/pkg/generated/controllers/rbac/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 const ExternalRulesFeature = "external-rules"
@@ -109,6 +110,9 @@ func (r *RoleTemplateResolver) gatherRules(roleTemplate *rancherv3.RoleTemplate,
 func (r *RoleTemplateResolver) isExternalRulesFeatureFlagEnabled() (bool, error) {
 	f, err := r.features.Get(ExternalRulesFeature)
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
 		return false, err
 	}
 	if f.Spec.Value == nil {
