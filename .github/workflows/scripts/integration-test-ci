@@ -79,6 +79,15 @@ echo "Got the rke-machine configs?"
 kubectl api-resources | grep rke-machine-config.cattle.io/v1 | awk '{ print $4 }'
 
 echo "Let's look at the logs..."
+echo "Namespaces:"
+kubectl get ns | grep cattle
+echo "First, what are our pods?:"
+kubectl get pods -n cattle-system
+echo "Next,  does the label thing work?"
+kubectl get pods -n cattle-system -l app=rancher
+echo "What about the jsonpath?"
+kubectl get pods -n cattle-system -l app=rancher -o jsonpath='{.items[*].metadata.name}'
+echo "OK, go loop through..."
 for pod in $(kubectl get pods -n cattle-system -l app=rancher -o jsonpath='{.items[*].metadata.name}'); do
     echo pod $pod
     kubectl logs pod/$pod -n cattle-system | grep -C 10 rke-machine -n
