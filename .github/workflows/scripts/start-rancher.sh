@@ -17,7 +17,7 @@ set -e
 
 helm repo update
 
-helm upgrade --install cert-manager --namespace cert-manager cert-manager/cert-manager --set installCRDs=true --create-namespace --wait --timeout=10m
+helm upgrade --install cert-manager --namespace cert-manager cert-manager/cert-manager --set installCRDs=true --create-namespace --wait --timeout=10m --include-crds
 
 # kubectl get pods --namespace cert-manager
 kubectl rollout status --namespace cert-manager deploy/cert-manager --timeout 1m
