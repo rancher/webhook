@@ -14,5 +14,5 @@ LINKFLAGS="-X main.GitCommit=$COMMIT $LINKFLAGS"
 CGO_ENABLED=0 go build -ldflags "$LINKFLAGS $OTHER_LINKFLAGS" -o bin/webhook
 if [ "$CROSS" = "true" ] && [ "$ARCH" = "amd64" ]; then
     GOOS=darwin go build -ldflags "$LINKFLAGS" -o bin/webhook-darwin
-    GOOS=windows go build -ldflags "$LINKFLAGS" -o bin/webhook-windows
+    GOOS=windows go build -ldflags "$LINKFLAGS" -o bin/webhook-windows-amd64.exe
 fi
