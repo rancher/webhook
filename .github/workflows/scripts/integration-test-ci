@@ -35,6 +35,8 @@ webhook_deployed() {
 try --waitmsg "Waiting for webhook to be deployed (2)" webhook_deployed
 echo "Webhook deployed"
 
+kubectl logs -f --tail=-1 -n cattle-system -l app=rancher
+
 try --max 48 --delay 5 --waitmsg "Waiting for the CRDs" --failmsg "No CRDs here" kubectl get crd azureconfigs.rke-machine-config.cattle.io
 
 x=<<'EOF'
