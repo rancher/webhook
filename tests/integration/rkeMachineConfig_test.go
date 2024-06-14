@@ -6,7 +6,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
+//	"os"
+//	"runtime"
+
 func (m *IntegrationSuite) TestRKEMachineConfig() {
+	//	if runtime.GOARCH == "arm64" && os.Getenv("CI") != "" {
+	//		m.T().Skip("Skipping the RKE Machine-Config test on arm64 in CI -- machine info not available")
+	//	}
 	objGVK := schema.GroupVersionKind{
 		Group:   "rke-machine-config.cattle.io",
 		Version: "v1",
