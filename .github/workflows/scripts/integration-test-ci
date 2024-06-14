@@ -37,7 +37,7 @@ echo "Webhook deployed"
 
 try --max 48 --delay 5 --waitmsg "Waiting for the CRDs" --failmsg "No CRDs here" kubectl get crd azureconfigs.rke-machine-config.cattle.io
 
-x=<<EOF
+x=<<'EOF'
 
 echo "What rke-machine things do we have?"
 
@@ -68,7 +68,7 @@ kubectl get pods -n cattle-system -l app=rancher -o jsonpath='{.items[*].metadat
 echo "OK, go loop through..."
 for pod in $(kubectl get pods -n cattle-system -l app=rancher -o jsonpath='{.items[*].metadata.name}'); do
     echo pod $pod
-    kubectl logs pod/$pod -n cattle-system | grep -C 10 rke-machine -n
+    kubectl logs pod/$pod -n cattle-system | grep rke-machine -n
 done
 echo "And dump the CRDs. Count:"
 kubectl get crds | wc -l
