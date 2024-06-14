@@ -69,6 +69,10 @@ func (g *GlobalRoleResolver) ClusterRulesFromRole(gr *v3.GlobalRole) ([]rbacv1.P
 	return rules, nil
 }
 
+// FleetWorkspacePermissionsResourceRulesFromRole finds rules which this GlobalRole gives on fleet resources in the workspace backing namespace.
+// This is assuming a user has permissions in all workspaces (including fleet-local), which is not true. That's fine if we
+// use it to evaluate InheritedFleetWorkspacePermissions.ResourceRules. However, it shouldn't be used in a more generic evaluation
+// of permissions on the workspace backing namespace.
 func (g *GlobalRoleResolver) FleetWorkspacePermissionsResourceRulesFromRole(gr *v3.GlobalRole) []rbacv1.PolicyRule {
 	for _, name := range adminRoles {
 		if gr.Name == name {
