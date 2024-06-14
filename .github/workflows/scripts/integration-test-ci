@@ -35,6 +35,10 @@ webhook_deployed() {
 try --waitmsg "Waiting for webhook to be deployed (2)" webhook_deployed
 echo "Webhook deployed"
 
+try --max 48 --delay 5 --waitmsg "Waiting for the CRDs" --failmsg "No CRDs here" kubectl get crd azureconfigs.rke-machine-config.cattle.io
+
+x=<<EOF
+
 echo "What rke-machine things do we have?"
 
 echo "XXX Temporary: what rke-machine-config resources do we have?"
@@ -71,6 +75,8 @@ kubectl get crds | wc -l
 echo "And dump the CRDs. dumped:"
 kubectl get crds | sort
 echo "XXX Done dumping stuff"
+
+EOF
 
 # Shut down the core rancher part, but leave the rest of the rancher environment running
 set -e
