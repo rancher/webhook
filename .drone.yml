@@ -21,7 +21,7 @@ steps:
     pull: always
     privileged: true
     commands:
-      - zypper -n install helm
+      - curl --cacert /etc/ssl/ca-bundle.pem -sL https://get.helm.sh/helm-v3.13.3-linux-amd64.tar.gz | tar xvzf - -C /usr/local/bin --strip-components=1
       - scripts/integration-test
 
   - name: github_binary_release
@@ -91,7 +91,7 @@ steps:
     pull: always
     privileged: true
     commands:
-      - zypper -n install helm
+      - curl --cacert /etc/ssl/ca-bundle.pem -sL https://get.helm.sh/helm-v3.13.3-linux-arm64.tar.gz | tar xvzf - -C /usr/local/bin --strip-components=1
       - scripts/integration-test
 
   - name: github_binary_release
