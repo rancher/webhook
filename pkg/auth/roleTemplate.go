@@ -5,7 +5,7 @@ import (
 
 	rancherv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
-	v1 "github.com/rancher/wrangler/v2/pkg/generated/controllers/rbac/v1"
+	v1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/rbac/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 )
 

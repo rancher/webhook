@@ -7,11 +7,11 @@ import (
 	"os"
 
 	"github.com/rancher/webhook/pkg/server"
-	_ "github.com/rancher/wrangler/v2/pkg/generated/controllers/admissionregistration.k8s.io"
-	"github.com/rancher/wrangler/v2/pkg/k8scheck"
-	"github.com/rancher/wrangler/v2/pkg/kubeconfig"
-	"github.com/rancher/wrangler/v2/pkg/ratelimit"
-	"github.com/rancher/wrangler/v2/pkg/signals"
+	_ "github.com/rancher/wrangler/v3/pkg/generated/controllers/admissionregistration.k8s.io"
+	"github.com/rancher/wrangler/v3/pkg/k8scheck"
+	"github.com/rancher/wrangler/v3/pkg/kubeconfig"
+	"github.com/rancher/wrangler/v3/pkg/ratelimit"
+	"github.com/rancher/wrangler/v3/pkg/signals"
 	"github.com/sirupsen/logrus"
 )
 

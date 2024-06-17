@@ -20,7 +20,7 @@ import (
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/clients"
 	"github.com/rancher/webhook/pkg/health"
-	admissionregistration "github.com/rancher/wrangler/v2/pkg/generated/controllers/admissionregistration.k8s.io/v1"
+	admissionregistration "github.com/rancher/wrangler/v3/pkg/generated/controllers/admissionregistration.k8s.io/v1"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
