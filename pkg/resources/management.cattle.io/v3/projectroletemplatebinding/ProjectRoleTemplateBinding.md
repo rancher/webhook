@@ -4,6 +4,8 @@
 
 Users can only create/update ProjectRoleTemplateBindings with rights less than or equal to those they currently possess.
 This is to prevent privilege escalation.
+For external RoleTemplates (RoleTemplates with `external` set to `true`), if the `external-rules` feature flag is enabled and `ExternalRules` is specified in the roleTemplate in `RoleTemplateName`,
+`ExternalRules` will be used for authorization. Otherwise, if `ExternalRules` are nil when the feature flag is on, the rules from the backing `ClusterRole` in the local cluster will be used.
 
 ### Invalid Fields - Create
 

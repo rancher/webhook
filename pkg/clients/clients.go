@@ -65,7 +65,7 @@ func New(ctx context.Context, rest *rest.Config, mcmEnabled bool) (*Clients, err
 	}
 
 	if mcmEnabled {
-		result.RoleTemplateResolver = auth.NewRoleTemplateResolver(mgmt.Management().V3().RoleTemplate().Cache(), clients.RBAC.ClusterRole().Cache())
+		result.RoleTemplateResolver = auth.NewRoleTemplateResolver(mgmt.Management().V3().RoleTemplate().Cache(), clients.RBAC.ClusterRole().Cache(), mgmt.Management().V3().Feature().Cache())
 	}
 
 	return result, nil

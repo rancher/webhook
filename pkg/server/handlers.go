@@ -25,7 +25,7 @@ import (
 // Validation returns a list of all ValidatingAdmissionHandlers used by the webhook.
 func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandler, error) {
 	handlers := []admission.ValidatingAdmissionHandler{
-		feature.NewValidator(),
+		feature.NewValidator(clients.DefaultResolver),
 		managementCluster.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache()),
 		provisioningCluster.NewProvisioningClusterValidator(clients),
 		machineconfig.NewValidator(),
