@@ -658,7 +658,7 @@ func TestAdmit(t *testing.T) {
 			if test.args.stateSetup != nil {
 				test.args.stateSetup(state)
 			}
-			grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCacheMock, nil), state.grCacheMock)
+			grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCacheMock, nil, nil), state.grCacheMock)
 			grbResolver := resolvers.NewGRBClusterRuleResolver(state.grbCacheMock, grResolver)
 			admitters := globalrolebinding.NewValidator(state.resolver, grbResolver, state.sarMock).Admitters()
 			require.Len(t, admitters, 1)
@@ -679,7 +679,7 @@ func TestAdmit(t *testing.T) {
 func Test_UnexpectedErrors(t *testing.T) {
 	t.Parallel()
 	state := newDefaultState(t)
-	grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCacheMock, nil), state.grCacheMock)
+	grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCacheMock, nil, nil), state.grCacheMock)
 	grbResolver := resolvers.NewGRBClusterRuleResolver(state.grbCacheMock, grResolver)
 	validator := globalrolebinding.NewValidator(state.resolver, grbResolver, state.sarMock)
 	admitters := validator.Admitters()

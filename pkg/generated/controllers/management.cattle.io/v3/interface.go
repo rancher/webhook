@@ -33,6 +33,7 @@ func init() {
 type Interface interface {
 	Cluster() ClusterController
 	ClusterRoleTemplateBinding() ClusterRoleTemplateBindingController
+	Feature() FeatureController
 	GlobalRole() GlobalRoleController
 	GlobalRoleBinding() GlobalRoleBindingController
 	Node() NodeController
@@ -58,6 +59,10 @@ func (v *version) Cluster() ClusterController {
 
 func (v *version) ClusterRoleTemplateBinding() ClusterRoleTemplateBindingController {
 	return generic.NewController[*v3.ClusterRoleTemplateBinding, *v3.ClusterRoleTemplateBindingList](schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "ClusterRoleTemplateBinding"}, "clusterroletemplatebindings", true, v.controllerFactory)
+}
+
+func (v *version) Feature() FeatureController {
+	return generic.NewNonNamespacedController[*v3.Feature, *v3.FeatureList](schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Feature"}, "features", v.controllerFactory)
 }
 
 func (v *version) GlobalRole() GlobalRoleController {

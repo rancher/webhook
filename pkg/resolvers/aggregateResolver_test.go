@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/rancher/webhook/pkg/mocks"
 	"github.com/stretchr/testify/suite"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apiserver/pkg/authentication/user"
@@ -55,7 +56,7 @@ func (a *AggregateResolverSuite) TestAggregateRuleResolverGetRules() {
 			namespace: testNameSpace,
 			resolvers: func(t *testing.T) ([]validation.AuthorizationRuleResolver, Rules) {
 				expectedRules := []rbacv1.PolicyRule{a.ruleAdmin}
-				resolver := NewMockAuthorizationRuleResolver(gomock.NewController(t))
+				resolver := mocks.NewMockAuthorizationRuleResolver(gomock.NewController(t))
 				resolver.EXPECT().VisitRulesFor(testUser, testNameSpace, gomock.Any()).
 					DoAndReturn(func(_ user.Info, _ string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) bool {
 						for _, rule := range expectedRules {
@@ -74,13 +75,13 @@ func (a *AggregateResolverSuite) TestAggregateRuleResolverGetRules() {
 			wantErr:   true,
 			resolvers: func(t *testing.T) ([]validation.AuthorizationRuleResolver, Rules) {
 				expectedRules := []rbacv1.PolicyRule{}
-				resolver := NewMockAuthorizationRuleResolver(gomock.NewController(t))
+				resolver := mocks.NewMockAuthorizationRuleResolver(gomock.NewController(t))
 				resolver.EXPECT().VisitRulesFor(gomock.Any(), testNameSpace, gomock.Any()).
 					DoAndReturn(func(_ user.Info, _ string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) bool {
 						visitor(nil, nil, errNotFound)
 						return true
 					})
-				resolver2 := NewMockAuthorizationRuleResolver(gomock.NewController(t))
+				resolver2 := mocks.NewMockAuthorizationRuleResolver(gomock.NewController(t))
 				resolver2.EXPECT().VisitRulesFor(gomock.Any(), testNameSpace, gomock.Any()).
 					DoAndReturn(func(_ user.Info, _ string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) bool {
 						visitor(nil, nil, errNotFound)
@@ -95,13 +96,13 @@ func (a *AggregateResolverSuite) TestAggregateRuleResolverGetRules() {
 			namespace: testNameSpace,
 			resolvers: func(t *testing.T) ([]validation.AuthorizationRuleResolver, Rules) {
 				expectedRules := []rbacv1.PolicyRule{a.ruleReadPods}
-				resolver := NewMockAuthorizationRuleResolver(gomock.NewController(t))
+				resolver := mocks.NewMockAuthorizationRuleResolver(gomock.NewController(t))
 				resolver.EXPECT().VisitRulesFor(testUser, testNameSpace, gomock.Any()).
 					DoAndReturn(func(_ user.Info, _ string, _ func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) bool {
 						return true
 					})
 				resolver.EXPECT().GetRoleReferenceRules(gomock.Any(), gomock.Any()).Return(expectedRules, nil)
-				resolver2 := NewMockAuthorizationRuleResolver(gomock.NewController(t))
+				resolver2 := mocks.NewMockAuthorizationRuleResolver(gomock.NewController(t))
 				resolver2.EXPECT().VisitRulesFor(testUser, testNameSpace, gomock.Any()).
 					DoAndReturn(func(_ user.Info, _ string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) bool {
 						for _, rule := range expectedRules {
@@ -120,7 +121,7 @@ func (a *AggregateResolverSuite) TestAggregateRuleResolverGetRules() {
 			resolvers: func(t *testing.T) ([]validation.AuthorizationRuleResolver, Rules) {
 				expectedRules1 := []rbacv1.PolicyRule{a.ruleAdmin}
 				expectedRules2 := []rbacv1.PolicyRule{a.ruleReadPods}
-				resolver := NewMockAuthorizationRuleResolver(gomock.NewController(t))
+				resolver := mocks.NewMockAuthorizationRuleResolver(gomock.NewController(t))
 				resolver.EXPECT().VisitRulesFor(testUser, testNameSpace, gomock.Any()).
 					DoAndReturn(func(_ user.Info, _ string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) bool {
 						for _, rule := range expectedRules1 {
@@ -129,7 +130,7 @@ func (a *AggregateResolverSuite) TestAggregateRuleResolverGetRules() {
 						return true
 					})
 				resolver.EXPECT().GetRoleReferenceRules(gomock.Any(), gomock.Any()).Return(expectedRules1, nil)
-				resolver2 := NewMockAuthorizationRuleResolver(gomock.NewController(t))
+				resolver2 := mocks.NewMockAuthorizationRuleResolver(gomock.NewController(t))
 				resolver2.EXPECT().VisitRulesFor(testUser, testNameSpace, gomock.Any()).
 					DoAndReturn(func(_ user.Info, _ string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) bool {
 						for _, rule := range expectedRules2 {
