@@ -42,11 +42,12 @@ const (
 	// MountPath is where the admission control configuration file will be mounted in the control plane nodes
 	mountPath = "/etc/rancher/%s/config/rancher-psact.yaml"
 
-	controlPlaneRoleLabel = "rke.cattle.io/control-plane-role"
-	secretAnnotation      = "rke.cattle.io/object-authorized-for-clusters"
-	runtimeK3S            = "k3s"
-	runtimeRKE2           = "rke2"
-	runtimeRKE            = "rke"
+	controlPlaneRoleLabel            = "rke.cattle.io/control-plane-role"
+	secretAnnotation                 = "rke.cattle.io/object-authorized-for-clusters"
+	allowDynamicSchemaDropAnnotation = "provisioning.cattle.io/allow-dynamic-schema-drop"
+	runtimeK3S                       = "k3s"
+	runtimeRKE2                      = "rke2"
+	runtimeRKE                       = "rke"
 )
 
 var (
@@ -133,11 +134,64 @@ func (m *ProvisioningClusterMutator) Admit(request *admission.Request) (*admissi
 		return response, nil
 	}
 
+	response, err = m.handleDynamicSchemaDrop(request, cluster)
+	if err != nil {
+		return nil, err
+	}
+	if response.Result != nil {
+		return response, nil
+	}
+
 	response.Allowed = true
 	if err = patch.CreatePatch(clusterJSON, cluster, response); err != nil {
 		return nil, fmt.Errorf("failed to create patch: %w", err)
 	}
 	return response, nil
+}
+
+// handleDynamicSchemaDrop watches for provisioning cluster updates, and reinserts the previous value of the
+// dynamicSchemaSpec field for a machine pool if the "provisioning.cattle.io/allow-dynamic-schema-drop" annotation is
+// not present and true on the cluster. If the value of the annotation is true, no mutation is performed.
+func (m *ProvisioningClusterMutator) handleDynamicSchemaDrop(request *admission.Request, cluster *v1.Cluster) (*admissionv1.AdmissionResponse, error) {
+	if cluster.Name == "local" || cluster.Spec.RKEConfig == nil {
+		return admission.ResponseAllowed(), nil
+	}
+
+	if request.Operation != admissionv1.Update {
+		return admission.ResponseAllowed(), nil
+	}
+
+	oldCluster, newCluster, err := objectsv1.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract old and new cluster objects: %w", err)
+	}
+
+	if newCluster.Annotations[allowDynamicSchemaDropAnnotation] == "true" {
+		return admission.ResponseAllowed(), nil
+	}
+
+	oldClusterPools := map[string]*v1.RKEMachinePool{}
+	for _, mp := range oldCluster.Spec.RKEConfig.MachinePools {
+		oldClusterPools[mp.Name] = &mp
+	}
+
+	newClusterPools := map[string]*v1.RKEMachinePool{}
+	for _, mp := range newCluster.Spec.RKEConfig.MachinePools {
+		newClusterPools[mp.Name] = &mp
+	}
+
+	for name, newPool := range newClusterPools {
+		oldPool, ok := oldClusterPools[name]
+		if !ok {
+			logrus.Debugf("new machine pool, skipping validation of dynamic schema spec")
+			continue
+		}
+		if oldPool.DynamicSchemaSpec != "" && newPool.DynamicSchemaSpec == "" {
+			logrus.Infof("provisioning cluster %s/%s machine pool %s dynamic schema spec mutated without supplying annotation %s, reverting", cluster.Namespace, cluster.Name, name, allowDynamicSchemaDropAnnotation)
+			newPool.DynamicSchemaSpec = oldPool.DynamicSchemaSpec
+		}
+	}
+	return admission.ResponseAllowed(), nil
 }
 
 // handlePSACT updates the cluster and an underlying secret to support PSACT.

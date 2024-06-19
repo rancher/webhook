@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
@@ -616,4 +617,97 @@ func TestAdmitPreserveUnknownFields(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Nil(t, response.Patch)
 
+}
+
+func TestDynamicSchemaDrop(t *testing.T) {
+	cluster := &v1.Cluster{
+		Spec: v1.ClusterSpec{
+			RKEConfig: &v1.RKEConfig{
+				MachinePools: []v1.RKEMachinePool{
+					{
+						Name: "A",
+					},
+				},
+			},
+		},
+	}
+	raw, err := json.Marshal(cluster)
+	assert.Nil(t, err)
+
+	m := ProvisioningClusterMutator{}
+
+	request := &admission.Request{
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Object: runtime.RawExtension{
+				Raw: raw,
+			},
+			OldObject: runtime.RawExtension{
+				Raw: raw,
+			},
+		},
+	}
+
+	// Always allowed on Create
+	request.Operation = admissionv1.Create
+	output := cluster.DeepCopy()
+	response, err := m.handleDynamicSchemaDrop(request, output)
+	assert.Nil(t, err)
+	assert.True(t, response.Allowed)
+	assert.True(t, reflect.DeepEqual(cluster, output))
+
+	// Allowed on update if no schema present
+	request.Operation = admissionv1.Update
+	output = cluster.DeepCopy()
+	response, err = m.handleDynamicSchemaDrop(request, output)
+	assert.Nil(t, err)
+	assert.True(t, response.Allowed)
+	assert.True(t, reflect.DeepEqual(cluster, output))
+
+	// Allowed on update if schemas match
+	cluster.Spec.RKEConfig.MachinePools[0].DynamicSchemaSpec = "a"
+	raw, err = json.Marshal(cluster)
+	assert.Nil(t, err)
+	request.AdmissionRequest.OldObject.Raw = raw
+	request.AdmissionRequest.Object.Raw = raw
+	output = cluster.DeepCopy()
+	response, err = m.handleDynamicSchemaDrop(request, output)
+	assert.Nil(t, err)
+	assert.True(t, response.Allowed)
+	assert.True(t, reflect.DeepEqual(cluster, output))
+
+	// Allowed on update if new pool is added
+	cluster.Spec.RKEConfig.MachinePools = append(cluster.Spec.RKEConfig.MachinePools, v1.RKEMachinePool{Name: "B"})
+	raw, err = json.Marshal(cluster)
+	assert.Nil(t, err)
+	request.AdmissionRequest.Object.Raw = raw
+	output = cluster.DeepCopy()
+	response, err = m.handleDynamicSchemaDrop(request, output)
+	assert.Nil(t, err)
+	assert.True(t, response.Allowed)
+	assert.True(t, reflect.DeepEqual(cluster, output))
+
+	// Rejected on update if schema is removed
+	cluster.Spec.RKEConfig.MachinePools[0].DynamicSchemaSpec = "b"
+	raw, err = json.Marshal(cluster)
+	assert.Nil(t, err)
+	request.AdmissionRequest.Object.Raw = raw
+	output = cluster.DeepCopy()
+	response, err = m.handleDynamicSchemaDrop(request, output)
+	assert.Nil(t, err)
+	assert.True(t, response.Allowed)
+	expected := cluster.DeepCopy()
+	expected.Spec.RKEConfig.MachinePools[0].DynamicSchemaSpec = "a"
+	assert.True(t, reflect.DeepEqual(cluster, output))
+
+	// Allowed on update if annotation is present and true
+	cluster.Annotations = map[string]string{allowDynamicSchemaDropAnnotation: "true"}
+	cluster.Spec.RKEConfig.MachinePools[0].DynamicSchemaSpec = "b"
+	raw, err = json.Marshal(cluster)
+	assert.Nil(t, err)
+	request.AdmissionRequest.Object.Raw = raw
+	output = cluster.DeepCopy()
+	response, err = m.handleDynamicSchemaDrop(request, output)
+	assert.Nil(t, err)
+	assert.True(t, response.Allowed)
+	assert.True(t, reflect.DeepEqual(cluster, output))
 }
