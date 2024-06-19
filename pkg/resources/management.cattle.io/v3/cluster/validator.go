@@ -280,9 +280,6 @@ func (a *admitter) validatePSP(request *admission.Request) (*admissionv1.Admissi
 	if parsedRangeLessThan125(parsedVersion) {
 		return admission.ResponseAllowed(), nil
 	}
-	if cluster.Spec.DefaultPodSecurityPolicyTemplateName != "" || cluster.Spec.RancherKubernetesEngineConfig.Services.KubeAPI.PodSecurityPolicy {
-		return admission.ResponseBadRequest("cannot enable PodSecurityPolicy(PSP) or use PSP Template in cluster which k8s version is 1.25 and above"), nil
-	}
 
 	return admission.ResponseAllowed(), nil
 }
