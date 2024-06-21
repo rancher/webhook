@@ -233,7 +233,7 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 		{
 			name: "Test externalRules (context=cluster) when feature flag is set to true",
 			args: args{
-				caches: func() (v3.RoleTemplateCache, wrbacv1.ClusterRoleCache, v3.FeatureCache) {
+				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache, v3.FeatureCache) {
 					ctrl := gomock.NewController(r.T())
 					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 					roleTemplateCache.EXPECT().Get(r.externalRulesClusterRT.Name).Return(r.externalRulesClusterRT, nil)
@@ -257,7 +257,7 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 		{
 			name: "Test externalRules (context=project) when feature flag is set to true",
 			args: args{
-				caches: func() (v3.RoleTemplateCache, wrbacv1.ClusterRoleCache, v3.FeatureCache) {
+				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache, v3.FeatureCache) {
 					ctrl := gomock.NewController(r.T())
 					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 					roleTemplateCache.EXPECT().Get(r.externalRulesProjectRT.Name).Return(r.externalRulesProjectRT, nil)
@@ -281,7 +281,7 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 		{
 			name: "Test externalRules (context=project) when feature flag is set to false",
 			args: args{
-				caches: func() (v3.RoleTemplateCache, wrbacv1.ClusterRoleCache, v3.FeatureCache) {
+				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache, v3.FeatureCache) {
 					ctrl := gomock.NewController(r.T())
 					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 					roleTemplateCache.EXPECT().Get(r.externalRulesProjectRT.Name).Return(r.externalRulesProjectRT, nil)
@@ -302,7 +302,7 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 		{
 			name: "Test externalRules (context=cluster) when feature flag is set to false",
 			args: args{
-				caches: func() (v3.RoleTemplateCache, wrbacv1.ClusterRoleCache, v3.FeatureCache) {
+				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache, v3.FeatureCache) {
 					ctrl := gomock.NewController(r.T())
 					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 					roleTemplateCache.EXPECT().Get(r.externalRulesClusterRT.Name).Return(r.externalRulesClusterRT, nil)
@@ -324,7 +324,7 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 		{
 			name: "Test external cluster role (context=cluster) when feature flag defaults to true",
 			args: args{
-				caches: func() (v3.RoleTemplateCache, wrbacv1.ClusterRoleCache, v3.FeatureCache) {
+				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache, v3.FeatureCache) {
 					ctrl := gomock.NewController(r.T())
 					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 					roleTemplateCache.EXPECT().Get(r.externalClusterRT.Name).Return(r.externalClusterRT, nil)
@@ -368,7 +368,7 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 		{
 			name: "Test external cluster role (context=cluster) when feature flag is set to false",
 			args: args{
-				caches: func() (v3.RoleTemplateCache, wrbacv1.ClusterRoleCache, v3.FeatureCache) {
+				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache, v3.FeatureCache) {
 					ctrl := gomock.NewController(r.T())
 					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 					roleTemplateCache.EXPECT().Get(r.externalClusterRT.Name).Return(r.externalClusterRT, nil)
@@ -393,7 +393,7 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 		{
 			name: "Test external cluster role (context=project) when feature flag is set to false",
 			args: args{
-				caches: func() (v3.RoleTemplateCache, wrbacv1.ClusterRoleCache, v3.FeatureCache) {
+				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache, v3.FeatureCache) {
 					ctrl := gomock.NewController(r.T())
 					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 					roleTemplateCache.EXPECT().Get(r.externalProjectRT.Name).Return(r.externalProjectRT, nil)
@@ -417,7 +417,7 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 		{
 			name: "Test non-existing external cluster role (context=cluster) when feature flag is set to true",
 			args: args{
-				caches: func() (v3.RoleTemplateCache, wrbacv1.ClusterRoleCache, v3.FeatureCache) {
+				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache, v3.FeatureCache) {
 					ctrl := gomock.NewController(r.T())
 					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 					roleTemplateCache.EXPECT().Get(r.externalClusterRT.Name).Return(r.externalClusterRT, nil)
@@ -441,7 +441,7 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 		{
 			name: "Test non-existing external cluster role (context=cluster) when feature flag is set to false",
 			args: args{
-				caches: func() (v3.RoleTemplateCache, wrbacv1.ClusterRoleCache, v3.FeatureCache) {
+				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache, v3.FeatureCache) {
 					ctrl := gomock.NewController(r.T())
 					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 					roleTemplateCache.EXPECT().Get(r.externalClusterRT.Name).Return(r.externalClusterRT, nil)
@@ -462,7 +462,7 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 		{
 			name: "Test non-existing external cluster role (context=project) when feature flag is set to true",
 			args: args{
-				caches: func() (v3.RoleTemplateCache, wrbacv1.ClusterRoleCache, v3.FeatureCache) {
+				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache, v3.FeatureCache) {
 					ctrl := gomock.NewController(r.T())
 					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 					roleTemplateCache.EXPECT().Get(r.externalProjectRT.Name).Return(r.externalProjectRT, nil)
@@ -483,7 +483,7 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 		{
 			name: "Test err getting ClusterRole when feature flag is disabled",
 			args: args{
-				caches: func() (v3.RoleTemplateCache, wrbacv1.ClusterRoleCache, v3.FeatureCache) {
+				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache, v3.FeatureCache) {
 					ctrl := gomock.NewController(r.T())
 					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 					roleTemplateCache.EXPECT().Get(r.externalClusterRT.Name).Return(r.externalClusterRT, nil)
@@ -504,7 +504,7 @@ func (r *RoleTemplateResolverSuite) TestRoleTemplateResolver() {
 		{
 			name: "Test err getting feature flag",
 			args: args{
-				caches: func() (v3.RoleTemplateCache, wrbacv1.ClusterRoleCache, v3.FeatureCache) {
+				caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache, v3.FeatureCache) {
 					ctrl := gomock.NewController(r.T())
 					roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 					roleTemplateCache.EXPECT().Get(r.externalClusterRT.Name).Return(r.externalClusterRT, nil)
