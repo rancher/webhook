@@ -8,6 +8,7 @@ import (
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
+	"github.com/rancher/webhook/pkg/auth"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/resolvers"
 	"github.com/rancher/webhook/pkg/resources/common"
@@ -33,13 +34,13 @@ const (
 )
 
 // NewValidator returns a new validator used for validation globalRoles.
-func NewValidator(ruleResolver validation.AuthorizationRuleResolver, grbResolver *resolvers.GRBClusterRuleResolver,
-	sar authorizationv1.SubjectAccessReviewInterface) *Validator {
+func NewValidator(ruleResolver validation.AuthorizationRuleResolver, grbResolvers *resolvers.GRBRuleResolvers, sar authorizationv1.SubjectAccessReviewInterface, grResolver *auth.GlobalRoleResolver) *Validator {
 	return &Validator{
 		admitter: admitter{
-			resolver:    ruleResolver,
-			grbResolver: grbResolver,
-			sar:         sar,
+			resolver:     ruleResolver,
+			grResolver:   grResolver,
+			grbResolvers: grbResolvers,
+			sar:          sar,
 		},
 	}
 }
@@ -70,9 +71,10 @@ func (v *Validator) Admitters() []admission.Admitter {
 }
 
 type admitter struct {
-	resolver    validation.AuthorizationRuleResolver
-	grbResolver *resolvers.GRBClusterRuleResolver
-	sar         authorizationv1.SubjectAccessReviewInterface
+	resolver     validation.AuthorizationRuleResolver
+	grResolver   *auth.GlobalRoleResolver
+	grbResolvers *resolvers.GRBRuleResolvers
+	sar          authorizationv1.SubjectAccessReviewInterface
 }
 
 // Admit is the entrypoint for the validator. Admit will return an error if it's unable to process the request.
@@ -119,7 +121,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	}
 
 	// Validate the global and namespaced rules of the new GR
-	globalRules := a.grbResolver.GlobalRoleResolver.GlobalRulesFromRole(newGR)
+	globalRules := a.grResolver.GlobalRulesFromRole(newGR)
 	returnError := common.ValidateRules(globalRules, false, fldPath.Child("rules"))
 
 	nsrPath := fldPath.Child("namespacedRules")
@@ -127,24 +129,46 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		returnError = errors.Join(returnError, common.ValidateRules(rules, true,
 			nsrPath.Child(index)))
 	}
+	// Validate fleet workspace rules
+	if newGR.InheritedFleetWorkspacePermissions != nil && newGR.InheritedFleetWorkspacePermissions.ResourceRules != nil {
+		fleetWorkspaceRules := newGR.InheritedFleetWorkspacePermissions.ResourceRules
+		fwrPath := fldPath.Child("inheritedFleetWorkspacePermissions").Child("resourceRules")
+		returnError = errors.Join(returnError, common.ValidateRules(fleetWorkspaceRules, true, fwrPath))
+	}
+	// Validate fleet workspace verbs
+	if newGR.InheritedFleetWorkspacePermissions != nil && newGR.InheritedFleetWorkspacePermissions.WorkspaceVerbs != nil {
+		fleetWorkspaceVerbs := newGR.InheritedFleetWorkspacePermissions.WorkspaceVerbs
+		if len(fleetWorkspaceVerbs) == 0 {
+			returnError = errors.Join(returnError, fmt.Errorf("InheritedFleetWorkspacePermissions.WorkspaceVerbs can't be empty"))
+		}
+	}
 
 	if returnError != nil {
 		return admission.ResponseBadRequest(returnError.Error()), nil
 	}
 
 	// Check for escalations in the rules
-	clusterRules, err := a.grbResolver.GlobalRoleResolver.ClusterRulesFromRole(newGR)
+	clusterRules, err := a.grResolver.ClusterRulesFromRole(newGR)
 	if err != nil {
 		return nil, fmt.Errorf("unable to resolve rules for new global role: %w", err)
 	}
+	fwResourceRules := a.grResolver.FleetWorkspacePermissionsResourceRulesFromRole(newGR)
+	fwWorkspaceVerbsRules := a.grResolver.FleetWorkspacePermissionsWorkspaceVerbsFromRole(newGR)
 
 	escalateChecker := common.NewCachedVerbChecker(request, newGR.Name, a.sar, gvr, escalateVerb)
-
-	returnError = escalateChecker.IsRulesAllowed(clusterRules, a.grbResolver, "")
+	returnError = errors.Join(returnError, escalateChecker.IsRulesAllowed(clusterRules, a.grbResolvers.ICRResolver, ""))
 	if escalateChecker.HasVerb() {
 		return admission.ResponseAllowed(), nil
 	}
 	returnError = errors.Join(returnError, escalateChecker.IsRulesAllowed(globalRules, a.resolver, ""))
+	if escalateChecker.HasVerb() {
+		return admission.ResponseAllowed(), nil
+	}
+	returnError = errors.Join(returnError, escalateChecker.IsRulesAllowed(fwResourceRules, a.grbResolvers.FWRulesResolver, ""))
+	if escalateChecker.HasVerb() {
+		return admission.ResponseAllowed(), nil
+	}
+	returnError = errors.Join(returnError, escalateChecker.IsRulesAllowed(fwWorkspaceVerbsRules, a.grbResolvers.FWVerbsResolver, ""))
 	if escalateChecker.HasVerb() {
 		return admission.ResponseAllowed(), nil
 	}
@@ -192,7 +216,7 @@ func (a *admitter) validateInheritedClusterRoles(oldGR *v3.GlobalRole, newGR *v3
 	var currentRoleTemplates []*v3.RoleTemplate
 	var err error
 	if newGR != nil {
-		currentRoleTemplates, err = a.grbResolver.GlobalRoleResolver.GetRoleTemplatesForGlobalRole(newGR)
+		currentRoleTemplates, err = a.grResolver.GetRoleTemplatesForGlobalRole(newGR)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				reason := fmt.Sprintf("unable to find all roleTemplates %s", err.Error())

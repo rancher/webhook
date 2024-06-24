@@ -8,6 +8,7 @@ import (
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
+	"github.com/rancher/webhook/pkg/auth"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/resolvers"
 	"github.com/rancher/webhook/pkg/resources/common"
@@ -37,13 +38,14 @@ var (
 const bindVerb = "bind"
 
 // NewValidator returns a new validator for GlobalRoleBindings.
-func NewValidator(resolver rbacvalidation.AuthorizationRuleResolver, grbResolver *resolvers.GRBClusterRuleResolver,
-	sar authorizationv1.SubjectAccessReviewInterface) *Validator {
+func NewValidator(resolver rbacvalidation.AuthorizationRuleResolver, grbResolvers *resolvers.GRBRuleResolvers,
+	sar authorizationv1.SubjectAccessReviewInterface, grResolver *auth.GlobalRoleResolver) *Validator {
 	return &Validator{
 		admitter: admitter{
-			resolver:    resolver,
-			grbResolver: grbResolver,
-			sar:         sar,
+			resolver:     resolver,
+			grbResolvers: grbResolvers,
+			sar:          sar,
+			grResolver:   grResolver,
 		},
 	}
 }
@@ -74,9 +76,10 @@ func (v *Validator) Admitters() []admission.Admitter {
 }
 
 type admitter struct {
-	resolver    rbacvalidation.AuthorizationRuleResolver
-	grbResolver *resolvers.GRBClusterRuleResolver
-	sar         authorizationv1.SubjectAccessReviewInterface
+	resolver     rbacvalidation.AuthorizationRuleResolver
+	grbResolvers *resolvers.GRBRuleResolvers
+	grResolver   *auth.GlobalRoleResolver
+	sar          authorizationv1.SubjectAccessReviewInterface
 }
 
 // Admit handles the webhook admission request sent to this webhook.
@@ -96,7 +99,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 
 	fldPath := field.NewPath(gvr.Resource)
 	// Pull the global role for validation.
-	globalRole, err := a.grbResolver.GlobalRoleResolver.GlobalRoleCache().Get(newGRB.GlobalRoleName)
+	globalRole, err := a.grResolver.GlobalRoleCache().Get(newGRB.GlobalRoleName)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return nil, fmt.Errorf("failed to get GlobalRole '%s': %w", newGRB.Name, err)
@@ -121,8 +124,10 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, err
 	}
 
-	globalRules := a.grbResolver.GlobalRoleResolver.GlobalRulesFromRole(globalRole)
-	clusterRules, err := a.grbResolver.GlobalRoleResolver.ClusterRulesFromRole(globalRole)
+	fwResourceRules := a.grResolver.FleetWorkspacePermissionsResourceRulesFromRole(globalRole)
+	fwWorkspaceVerbsRules := a.grResolver.FleetWorkspacePermissionsWorkspaceVerbsFromRole(globalRole)
+	globalRules := a.grResolver.GlobalRulesFromRole(globalRole)
+	clusterRules, err := a.grResolver.ClusterRulesFromRole(globalRole)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			reason := fmt.Sprintf("at least one roleTemplate was not found %s", err.Error())
@@ -135,7 +140,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	var returnError error
 	bindChecker := common.NewCachedVerbChecker(request, globalRole.Name, a.sar, globalRoleGvr, bindVerb)
 
-	returnError = bindChecker.IsRulesAllowed(clusterRules, a.grbResolver, "")
+	returnError = bindChecker.IsRulesAllowed(clusterRules, a.grbResolvers.ICRResolver, "")
 	if bindChecker.HasVerb() {
 		return admission.ResponseAllowed(), nil
 	}
@@ -143,6 +148,15 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	if bindChecker.HasVerb() {
 		return admission.ResponseAllowed(), nil
 	}
+	returnError = errors.Join(returnError, bindChecker.IsRulesAllowed(fwResourceRules, a.grbResolvers.FWRulesResolver, ""))
+	if bindChecker.HasVerb() {
+		return admission.ResponseAllowed(), nil
+	}
+	returnError = errors.Join(returnError, bindChecker.IsRulesAllowed(fwWorkspaceVerbsRules, a.grbResolvers.FWVerbsResolver, ""))
+	if bindChecker.HasVerb() {
+		return admission.ResponseAllowed(), nil
+	}
+
 	for namespace, rules := range globalRole.NamespacedRules {
 		returnError = errors.Join(returnError, bindChecker.IsRulesAllowed(rules, a.resolver, namespace))
 		if bindChecker.HasVerb() {
@@ -186,7 +200,7 @@ func (a *admitter) validateCreate(newBinding *v3.GlobalRoleBinding, globalRole *
 
 // validateGlobalRole validates that the attached global role isn't trying to use a locked RoleTemplate.
 func (a *admitter) validateGlobalRole(globalRole *v3.GlobalRole, fieldPath *field.Path) error {
-	roleTemplates, err := a.grbResolver.GlobalRoleResolver.GetRoleTemplatesForGlobalRole(globalRole)
+	roleTemplates, err := a.grResolver.GetRoleTemplatesForGlobalRole(globalRole)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			reason := fmt.Sprintf("unable to find all roleTemplates %s", err.Error())

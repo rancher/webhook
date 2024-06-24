@@ -730,6 +730,79 @@ func TestAdmit(t *testing.T) {
 			},
 			allowed: false,
 		},
+		{
+			name: "GR InheritedFleetWorkspacePermissions allowed",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					return &v3.GlobalRoleBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-grb",
+						},
+						UserName:       testUser,
+						GlobalRoleName: fwGR.Name,
+					}
+				},
+				stateSetup: func(ts testState) {
+					ts.grCacheMock.EXPECT().Get(fwGR.Name).Return(&fwGR, nil)
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "GR InheritedFleetWorkspacePermissions not allowed because ResourceRules permissions",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					return &v3.GlobalRoleBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-grb",
+						},
+						UserName:       testUser,
+						GlobalRoleName: fwGRResourceRulesAdmin.Name,
+					}
+				},
+				stateSetup: func(ts testState) {
+					ts.grCacheMock.EXPECT().Get(fwGRResourceRulesAdmin.Name).Return(&fwGRResourceRulesAdmin, nil)
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "GR InheritedFleetWorkspacePermissions not allowed because WorkspaceVerbs permissions",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					return &v3.GlobalRoleBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-grb",
+						},
+						UserName:       testUser,
+						GlobalRoleName: fwGRWorkspaceVerbsAdmin.Name,
+					}
+				},
+				stateSetup: func(ts testState) {
+					ts.grCacheMock.EXPECT().Get(fwGRWorkspaceVerbsAdmin.Name).Return(&fwGRWorkspaceVerbsAdmin, nil)
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "restricted admin can grant GR with InheritedFleetWorkspacePermissions",
+			args: args{
+				username: restrictedAdminUser,
+				newGRB: func() *v3.GlobalRoleBinding {
+					return &v3.GlobalRoleBinding{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "test-grb",
+						},
+						UserName:       testUser,
+						GlobalRoleName: fwGR.Name,
+					}
+				},
+				stateSetup: func(ts testState) {
+					ts.grCacheMock.EXPECT().Get(fwGR.Name).Return(&fwGR, nil)
+				},
+			},
+			allowed: true,
+		},
 	}
 
 	for _, test := range tests {
@@ -741,8 +814,8 @@ func TestAdmit(t *testing.T) {
 				test.args.stateSetup(state)
 			}
 			grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCacheMock, nil), state.grCacheMock)
-			grbResolver := resolvers.NewGRBClusterRuleResolver(state.grbCacheMock, grResolver)
-			admitters := globalrolebinding.NewValidator(state.resolver, grbResolver, state.sarMock).Admitters()
+			gbrResolvers := resolvers.NewGRBRuleResolvers(state.grbCacheMock, grResolver)
+			admitters := globalrolebinding.NewValidator(state.resolver, gbrResolvers, state.sarMock, grResolver).Admitters()
 			require.Len(t, admitters, 1)
 
 			req := createGRBRequest(t, test)
@@ -762,8 +835,8 @@ func Test_UnexpectedErrors(t *testing.T) {
 	t.Parallel()
 	state := newDefaultState(t)
 	grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCacheMock, nil), state.grCacheMock)
-	grbResolver := resolvers.NewGRBClusterRuleResolver(state.grbCacheMock, grResolver)
-	validator := globalrolebinding.NewValidator(state.resolver, grbResolver, state.sarMock)
+	gbrResolvers := resolvers.NewGRBRuleResolvers(state.grbCacheMock, grResolver)
+	validator := globalrolebinding.NewValidator(state.resolver, gbrResolvers, state.sarMock, grResolver)
 	admitters := validator.Admitters()
 	require.Len(t, admitters, 1, "wanted only one admitter")
 	admitter := admitters[0]

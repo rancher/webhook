@@ -135,7 +135,7 @@ Rules without verbs, resources, or apigroups are not permitted. The `rules` incl
 
  Escalation checks are bypassed if a user has the `escalate` verb on the GlobalRole that they are attempting to update or create. This can also be given through a wildcard permission (i.e. the `*` verb also gives `escalate`).
 
-Users can only change GlobalRoles with rights less than or equal to those they currently possess. This is to prevent privilege escalation. This includes the rules in the RoleTemplates referred to in `inheritedClusterRoles`.
+Users can only change GlobalRoles with rights less than or equal to those they currently possess. This is to prevent privilege escalation. This includes the rules in the RoleTemplates referred to in `inheritedClusterRoles` and the rules in `inheritedFleetWorkspacePermissions`.
 
 Users can only grant rules in the `NamespacedRules` field with rights less than or equal to those they currently possess. This works on a per namespace basis, meaning that the user must have the permission
 in the namespace specified. The `Rules` field apply to every namespace, which means a user can create `NamespacedRules` in any namespace that are equal to or less than the `Rules` they currently possess.
@@ -344,6 +344,22 @@ When a UserAttribute is updated, the following checks take place:
 - If set, `deleteAfter` must be zero or a positive duration (e.g. `240h`).
 
 # rbac.authorization.k8s.io/v1 
+
+## ClusterRole 
+
+### Validation Checks
+
+#### Invalid Fields - Update
+Users cannot update or remove the following label after it has been added:
+- authz.management.cattle.io/gr-owner
+
+## ClusterRoleBinding 
+
+### Validation Checks
+
+#### Invalid Fields - Update
+Users cannot update or remove the following label after it has been added:
+- authz.management.cattle.io/grb-owner
 
 ## Role 
 

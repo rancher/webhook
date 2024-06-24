@@ -25,14 +25,15 @@ import (
 )
 
 const (
-	adminUser     = "admin-user"
-	testUser      = "test-user"
-	noPrivUser    = "no-priv-user"
-	newUser       = "newUser-user"
-	newGroupPrinc = "local://group"
-	testGroup     = "testGroup"
-	notFoundName  = "not-found"
-	errName       = "error-Name"
+	adminUser           = "admin-user"
+	restrictedAdminUser = "restricted-admin-user"
+	testUser            = "test-user"
+	noPrivUser          = "no-priv-user"
+	newUser             = "newUser-user"
+	newGroupPrinc       = "local://group"
+	testGroup           = "testGroup"
+	notFoundName        = "not-found"
+	errName             = "error-Name"
 )
 
 type testCase struct {
@@ -122,6 +123,24 @@ var (
 			},
 		},
 	}
+	clusterOwnerRT = v3.RoleTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cluster-owner",
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{
+					"*",
+				},
+				Resources: []string{
+					"*",
+				},
+				Verbs: []string{
+					"*",
+				},
+			},
+		},
+	}
 	baseGR = v3.GlobalRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "base-gr",
@@ -134,6 +153,10 @@ var (
 			},
 		},
 		InheritedClusterRoles: []string{baseRT.Name},
+		InheritedFleetWorkspacePermissions: &v3.FleetWorkspacePermission{
+			ResourceRules:  fwResourceRules,
+			WorkspaceVerbs: fwWorkspaceVerbs,
+		},
 	}
 	adminGR = &v3.GlobalRole{
 		ObjectMeta: metav1.ObjectMeta{
@@ -149,6 +172,13 @@ var (
 		},
 		GlobalRoleName: baseGR.Name,
 		UserName:       testUser,
+	}
+	restrictedAdminGRB = v3.GlobalRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "res-grb",
+		},
+		GlobalRoleName: restrictedAdminGR.Name,
+		UserName:       restrictedAdminUser,
 	}
 	adminRT = v3.RoleTemplate{
 		ObjectMeta: metav1.ObjectMeta{
@@ -250,6 +280,54 @@ var (
 			},
 		},
 	}
+	restrictedAdminGR = v3.GlobalRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "restricted-admin",
+		},
+	}
+	fwResourceRules = []rbacv1.PolicyRule{
+		{
+			APIGroups: []string{"fleet.cattle.io"},
+			Resources: []string{"gitrepos"},
+			Verbs:     []string{"get"},
+		},
+	}
+	fwWorkspaceVerbs     = []string{"GET"}
+	fwResourceRulesAdmin = []rbacv1.PolicyRule{
+		{
+			APIGroups: []string{"*"},
+			Resources: []string{"*"},
+			Verbs:     []string{"*"},
+		},
+	}
+	fwWorkspaceVerbsAdmin = []string{"*"}
+	fwGR                  = v3.GlobalRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "namespacedRules-gr",
+		},
+		InheritedFleetWorkspacePermissions: &v3.FleetWorkspacePermission{
+			ResourceRules:  fwResourceRules,
+			WorkspaceVerbs: fwWorkspaceVerbs,
+		},
+	}
+	fwGRResourceRulesAdmin = v3.GlobalRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "namespacedRules-gr",
+		},
+		InheritedFleetWorkspacePermissions: &v3.FleetWorkspacePermission{
+			ResourceRules:  fwResourceRulesAdmin,
+			WorkspaceVerbs: fwWorkspaceVerbs,
+		},
+	}
+	fwGRWorkspaceVerbsAdmin = v3.GlobalRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "namespacedRules-gr",
+		},
+		InheritedFleetWorkspacePermissions: &v3.FleetWorkspacePermission{
+			ResourceRules:  fwResourceRules,
+			WorkspaceVerbs: fwWorkspaceVerbsAdmin,
+		},
+	}
 )
 
 // createGRBRequest will return a new webhookRequest using the given GRBs
@@ -317,12 +395,17 @@ func newDefaultState(t *testing.T) testState {
 	grbs := []*v3.GlobalRoleBinding{&baseGRB}
 	grbCacheMock.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(testUser, "")).Return(grbs, nil).AnyTimes()
 	grbCacheMock.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(adminUser, "")).Return(grbs, nil).AnyTimes()
+	grbCacheMock.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(restrictedAdminUser, "")).Return([]*v3.GlobalRoleBinding{&restrictedAdminGRB}, nil).AnyTimes()
+
 	grbCacheMock.EXPECT().AddIndexer(gomock.Any(), gomock.Any()).AnyTimes()
 	grCacheMock.EXPECT().Get(baseGR.Name).Return(&baseGR, nil).AnyTimes()
+	grCacheMock.EXPECT().Get(restrictedAdminGR.Name).Return(&restrictedAdminGR, nil).AnyTimes()
 	grCacheMock.EXPECT().Get(adminGR.Name).Return(adminGR, nil).AnyTimes()
 	grCacheMock.EXPECT().Get(notFoundName).Return(nil, newNotFound(notFoundName)).AnyTimes()
 	grCacheMock.EXPECT().Get("").Return(nil, newNotFound("")).AnyTimes()
 	rtCacheMock.EXPECT().Get(baseRT.Name).Return(&baseRT, nil).AnyTimes()
+	rtCacheMock.EXPECT().Get(clusterOwnerRT.Name).Return(&clusterOwnerRT, nil).AnyTimes()
+
 	k8Fake := &k8testing.Fake{}
 	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
 

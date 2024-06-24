@@ -65,7 +65,62 @@ func (g *GlobalRoleResolver) ClusterRulesFromRole(gr *v3.GlobalRole) ([]rbacv1.P
 		}
 		rules = append(rules, templateRules...)
 	}
+
 	return rules, nil
+}
+
+// FleetWorkspacePermissionsResourceRulesFromRole finds rules which this GlobalRole gives on fleet resources in the workspace backing namespace.
+// This is assuming a user has permissions in all workspaces (including fleet-local), which is not true. That's fine if we
+// use it to evaluate InheritedFleetWorkspacePermissions.ResourceRules. However, it shouldn't be used in a more generic evaluation
+// of permissions on the workspace backing namespace.
+func (g *GlobalRoleResolver) FleetWorkspacePermissionsResourceRulesFromRole(gr *v3.GlobalRole) []rbacv1.PolicyRule {
+	for _, name := range adminRoles {
+		if gr.Name == name {
+			return []rbacv1.PolicyRule{
+				{
+					Verbs:     []string{"*"},
+					APIGroups: []string{"fleet.cattle.io"},
+					Resources: []string{"clusterregistrationtokens", "gitreporestrictions", "clusterregistrations", "clusters", "gitrepos", "bundles", "clustergroups"},
+				},
+			}
+		}
+	}
+
+	if gr == nil || gr.InheritedFleetWorkspacePermissions == nil {
+		return nil
+	}
+
+	return gr.InheritedFleetWorkspacePermissions.ResourceRules
+}
+
+// FleetWorkspacePermissionsWorkspaceVerbsFromRole finds rules which this GlobalRole gives on the fleetworkspace cluster-wide resources.
+// This is assuming a user has permissions in all workspaces (including fleet-local), which is not true. That's fine if we
+// use it to evaluate InheritedFleetWorkspacePermissions.WorkspaceVerbs. However, it shouldn't be used in a more generic evaluation
+// of permissions on the workspace object.
+func (g *GlobalRoleResolver) FleetWorkspacePermissionsWorkspaceVerbsFromRole(gr *v3.GlobalRole) []rbacv1.PolicyRule {
+	for _, name := range adminRoles {
+		if gr.Name == name {
+			return []rbacv1.PolicyRule{{
+				Verbs:     []string{"*"},
+				APIGroups: []string{"management.cattle.io"},
+				Resources: []string{"fleetworkspaces"},
+			}}
+		}
+	}
+
+	if gr == nil || gr.InheritedFleetWorkspacePermissions == nil {
+		return nil
+	}
+
+	if gr.InheritedFleetWorkspacePermissions.WorkspaceVerbs != nil {
+		return []rbacv1.PolicyRule{{
+			Verbs:     gr.InheritedFleetWorkspacePermissions.WorkspaceVerbs,
+			APIGroups: []string{"management.cattle.io"},
+			Resources: []string{"fleetworkspaces"},
+		}}
+	}
+
+	return nil
 }
 
 // GetRoleTemplate allows the caller to retrieve the roleTemplates in use by a given global role. Does not

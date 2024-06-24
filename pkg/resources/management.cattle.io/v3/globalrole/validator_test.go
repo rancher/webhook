@@ -717,6 +717,340 @@ func TestAdmit(t *testing.T) {
 			},
 			allowed: false,
 		},
+		{
+			name: "allowed InheritedFleetWorkspacePermissions",
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedFleetWorkspacePermissions = &v3.FleetWorkspacePermission{
+						ResourceRules: []v1.PolicyRule{
+							ruleReadPods,
+						},
+						WorkspaceVerbs: []string{
+							"GET",
+						},
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+
+			allowed: true,
+		},
+		{
+			name: "not allowed InheritedFleetWorkspacePermissions.ResourceRules",
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedFleetWorkspacePermissions = &v3.FleetWorkspacePermission{
+						ResourceRules: []v1.PolicyRule{
+							ruleAdmin,
+						},
+						WorkspaceVerbs: []string{
+							"GET",
+						},
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+
+			allowed: false,
+		},
+		{
+			name: "not allowed InheritedFleetWorkspacePermissions.WorkspaceVerbs",
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedFleetWorkspacePermissions = &v3.FleetWorkspacePermission{
+						ResourceRules: []v1.PolicyRule{
+							ruleReadPods,
+						},
+						WorkspaceVerbs: []string{
+							"*",
+						},
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+
+			allowed: false,
+		},
+		{
+			name: "InheritedFleetWorkspacePermissions rules contains PolicyRule that is invalid",
+			args: args{
+				username: adminUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedFleetWorkspacePermissions = &v3.FleetWorkspacePermission{
+						ResourceRules: []v1.PolicyRule{
+							{
+								APIGroups: []string{""},
+								Resources: []string{"pods"},
+								Verbs:     []string{},
+							},
+						},
+					}
+					return baseGR
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "InheritedFleetWorkspacePermissions rules contains empty WorkspaceVerbs",
+			args: args{
+				username: adminUser,
+				rawNewGR: []byte(`{"kind":"GlobalRole","apiVersion":"management.cattle.io/v3","metadata":{"name":"gr-new","generateName":"gr-","namespace":"c-namespace","uid":"6534e4ef-f07b-4c61-b88d-95a92cce4852","resourceVersion":"1","generation":1,"creationTimestamp":null},"displayName":"Test Global Role","description":"This is a role created for testing.","inheritedFleetWorkspacePermissions":{"resourceRules":[{"verbs":["GET","WATCH"],"apiGroups":["v1"],"resources":["pods"]}], "workspaceVerbs":[]},"status":{}}`),
+			},
+			allowed: false,
+		},
+		{
+			name: "update in InheritedFleetWorkspacePermissions with privilege escalation",
+			args: args{
+				username: testUser,
+				oldGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedFleetWorkspacePermissions = &v3.FleetWorkspacePermission{
+						ResourceRules: []v1.PolicyRule{
+							ruleReadPods,
+						},
+					}
+					return baseGR
+				},
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedFleetWorkspacePermissions = &v3.FleetWorkspacePermission{
+						ResourceRules: []v1.PolicyRule{
+							ruleAdmin,
+						},
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "update in InheritedFleetWorkspacePermissions with privilege escalation, escalate allowed",
+			args: args{
+				username: testUser,
+				oldGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedFleetWorkspacePermissions = &v3.FleetWorkspacePermission{
+						ResourceRules: []v1.PolicyRule{
+							ruleReadPods,
+						},
+					}
+					return baseGR
+				},
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedFleetWorkspacePermissions = &v3.FleetWorkspacePermission{
+						ResourceRules: []v1.PolicyRule{
+							ruleAdmin,
+						},
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					setSarResponse(true, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "restricted admin can create GR with InheritedFleetWorkspacePermissions and fleet rules",
+			args: args{
+				username: restrictedAdminUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedFleetWorkspacePermissions = &v3.FleetWorkspacePermission{
+						ResourceRules: []v1.PolicyRule{
+							{
+								Verbs:     []string{"get", "list", "create", "delete"},
+								APIGroups: []string{"fleet.cattle.io"},
+								Resources: []string{"bundles", "gitrepos"},
+							},
+						},
+						WorkspaceVerbs: []string{
+							"get",
+							"create",
+						},
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					state.grCacheMock.EXPECT().Get(restrictedAdminGR.Name).Return(&restrictedAdminGR, nil).AnyTimes()
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+
+			allowed: true,
+		},
+		{
+			name: "restricted admin can create GR with InheritedFleetWorkspacePermissions and fleet rules and *",
+			args: args{
+				username: restrictedAdminUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedFleetWorkspacePermissions = &v3.FleetWorkspacePermission{
+						ResourceRules: []v1.PolicyRule{
+							{
+								Verbs:     []string{"*"},
+								APIGroups: []string{"fleet.cattle.io"},
+								Resources: []string{"bundles", "gitrepos"},
+							},
+						},
+						WorkspaceVerbs: []string{
+							"*",
+						},
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					state.grCacheMock.EXPECT().Get(restrictedAdminGR.Name).Return(&restrictedAdminGR, nil).AnyTimes()
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+
+			allowed: true,
+		},
+		{
+			name: "restricted admin can't create GR with InheritedFleetWorkspacePermissions and pod rules",
+			args: args{
+				username: restrictedAdminUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedFleetWorkspacePermissions = &v3.FleetWorkspacePermission{
+						ResourceRules: []v1.PolicyRule{
+							{
+								Verbs:     []string{"get", ""},
+								APIGroups: []string{""},
+								Resources: []string{"pods"},
+							},
+						},
+						WorkspaceVerbs: []string{
+							"get",
+							"create",
+						},
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					state.grCacheMock.EXPECT().Get(restrictedAdminGR.Name).Return(&restrictedAdminGR, nil).AnyTimes()
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+
+			allowed: false,
+		},
+		{
+			name: "restricted admin can update GR with InheritedFleetWorkspacePermissions and fleet rules",
+			args: args{
+				username: restrictedAdminUser,
+				oldGR: func() *v3.GlobalRole {
+					return newDefaultGR()
+				},
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedFleetWorkspacePermissions = &v3.FleetWorkspacePermission{
+						ResourceRules: []v1.PolicyRule{
+							{
+								Verbs:     []string{"get", "list", "create", "delete"},
+								APIGroups: []string{"fleet.cattle.io"},
+								Resources: []string{"bundles", "gitrepos"},
+							},
+						},
+						WorkspaceVerbs: []string{
+							"get",
+							"create",
+						},
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					state.grCacheMock.EXPECT().Get(restrictedAdminGR.Name).Return(&restrictedAdminGR, nil).AnyTimes()
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+
+			allowed: true,
+		},
+		{
+			name: "restricted admin can update GR with InheritedFleetWorkspacePermissions and fleet rules and *",
+			args: args{
+				username: restrictedAdminUser,
+				oldGR: func() *v3.GlobalRole {
+					return newDefaultGR()
+				},
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedFleetWorkspacePermissions = &v3.FleetWorkspacePermission{
+						ResourceRules: []v1.PolicyRule{
+							{
+								Verbs:     []string{"*"},
+								APIGroups: []string{"fleet.cattle.io"},
+								Resources: []string{"bundles", "gitrepos"},
+							},
+						},
+						WorkspaceVerbs: []string{
+							"*",
+						},
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					state.grCacheMock.EXPECT().Get(restrictedAdminGR.Name).Return(&restrictedAdminGR, nil).AnyTimes()
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+
+			allowed: true,
+		},
+		{
+			name: "restricted admin can't update GR with InheritedFleetWorkspacePermissions and pod rules",
+			args: args{
+				username: restrictedAdminUser,
+				oldGR: func() *v3.GlobalRole {
+					return newDefaultGR()
+				},
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedFleetWorkspacePermissions = &v3.FleetWorkspacePermission{
+						ResourceRules: []v1.PolicyRule{
+							{
+								Verbs:     []string{"get", ""},
+								APIGroups: []string{""},
+								Resources: []string{"pods"},
+							},
+						},
+						WorkspaceVerbs: []string{
+							"get",
+							"create",
+						},
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					state.grCacheMock.EXPECT().Get(restrictedAdminGR.Name).Return(&restrictedAdminGR, nil).AnyTimes()
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+				},
+			},
+
+			allowed: false,
+		},
 	}
 
 	for _, test := range tests {
@@ -727,8 +1061,9 @@ func TestAdmit(t *testing.T) {
 			if test.args.stateSetup != nil {
 				test.args.stateSetup(state)
 			}
-			grbResolver := state.createBaseGRBResolver()
-			admitters := globalrole.NewValidator(state.resolver, grbResolver, state.sarMock).Admitters()
+			grResolver := state.createBaseGRResolver()
+			grbResolvers := state.createBaseGRBResolvers(grResolver)
+			admitters := globalrole.NewValidator(state.resolver, grbResolvers, state.sarMock, grResolver).Admitters()
 			assert.Len(t, admitters, 1)
 
 			req := createGRRequest(t, test)
@@ -746,7 +1081,7 @@ func TestAdmit(t *testing.T) {
 func Test_UnexpectedErrors(t *testing.T) {
 	t.Parallel()
 	resolver, _ := validation.NewTestRuleResolver(nil, nil, nil, nil)
-	validator := globalrole.NewValidator(resolver, nil, nil)
+	validator := globalrole.NewValidator(resolver, nil, nil, nil)
 	admitters := validator.Admitters()
 	require.Len(t, admitters, 1, "wanted only one admitter")
 	test := testCase{

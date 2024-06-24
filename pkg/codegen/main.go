@@ -89,6 +89,8 @@ func main() {
 			Types: []interface{}{
 				&rbacv1.Role{},
 				&rbacv1.RoleBinding{},
+				&rbacv1.ClusterRole{},
+				&rbacv1.ClusterRoleBinding{},
 			},
 		}}); err != nil {
 		fmt.Printf("ERROR: %v\n", err)
