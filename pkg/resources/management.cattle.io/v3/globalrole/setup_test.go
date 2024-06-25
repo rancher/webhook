@@ -336,7 +336,7 @@ func newDefaultState(t *testing.T) testState {
 }
 
 func (m *testState) createBaseGRResolver() *auth.GlobalRoleResolver {
-	return auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(m.rtCacheMock, nil), m.grCacheMock)
+	return auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(m.rtCacheMock, nil, nil), m.grCacheMock)
 }
 
 func (m *testState) createBaseGRBResolvers(grResolver *auth.GlobalRoleResolver) *resolvers.GRBRuleResolvers {

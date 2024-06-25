@@ -45,6 +45,7 @@ func main() {
 					v3.Node{},
 					v3.Project{},
 					v3.ClusterProxyConfig{},
+					v3.Feature{},
 				},
 			},
 			"provisioning.cattle.io": {

@@ -39,15 +39,15 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/rancher/dynamiclistener v0.5.0-rc6
 	github.com/rancher/lasso v0.0.0-20240424194130-d87ec407d941
-	github.com/rancher/rancher/pkg/apis v0.0.0-20240529165126-aacda464b851
-	github.com/rancher/rke v1.6.0-rc4
+	github.com/rancher/rancher/pkg/apis v0.0.0-20240618122559-b9ec494d4f6f
+	github.com/rancher/rke v1.6.0-rc6
 	github.com/rancher/wrangler/v2 v2.2.0-rc6
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 	golang.org/x/exp v0.0.0-20240416160154-fe59bbe5cc7f
-	golang.org/x/text v0.15.0
-	golang.org/x/tools v0.20.0
+	golang.org/x/text v0.16.0
+	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d
 	k8s.io/api v0.29.4
 	k8s.io/apimachinery v0.29.4
 	k8s.io/apiserver v0.29.4
@@ -105,10 +105,10 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.47.0 // indirect
 	github.com/prometheus/procfs v0.14.0 // indirect
-	github.com/rancher/aks-operator v1.9.0-rc.1 // indirect
-	github.com/rancher/eks-operator v1.9.0-rc.1 // indirect
-	github.com/rancher/fleet/pkg/apis v0.9.4 // indirect
-	github.com/rancher/gke-operator v1.9.0-rc.1 // indirect
+	github.com/rancher/aks-operator v1.9.0-rc.6 // indirect
+	github.com/rancher/eks-operator v1.9.0-rc.5 // indirect
+	github.com/rancher/fleet/pkg/apis v0.10.0-rc.16 // indirect
+	github.com/rancher/gke-operator v1.9.0-rc.4 // indirect
 	github.com/rancher/norman v0.0.0-20240503193601-9f5f6586bb5b // indirect
 	github.com/spf13/cobra v1.8.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
@@ -127,13 +127,13 @@ require (
 	go.opentelemetry.io/proto/otlp v1.2.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	golang.org/x/crypto v0.23.0 // indirect
+	golang.org/x/crypto v0.24.0 // indirect
 	golang.org/x/mod v0.17.0 // indirect
-	golang.org/x/net v0.25.0 // indirect
+	golang.org/x/net v0.26.0 // indirect
 	golang.org/x/oauth2 v0.20.0 // indirect
 	golang.org/x/sync v0.7.0 // indirect
-	golang.org/x/sys v0.20.0 // indirect
-	golang.org/x/term v0.20.0 // indirect
+	golang.org/x/sys v0.21.0 // indirect
+	golang.org/x/term v0.21.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240429193739-8cf5692501f6 // indirect

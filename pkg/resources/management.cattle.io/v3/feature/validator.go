@@ -6,11 +6,14 @@ import (
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
+	"github.com/rancher/webhook/pkg/auth"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 	"k8s.io/utils/trace"
 )
 
@@ -26,9 +29,11 @@ type Validator struct {
 }
 
 // NewValidator returns a new validator for features.
-func NewValidator() *Validator {
+func NewValidator(ruleResolver validation.AuthorizationRuleResolver) *Validator {
 	return &Validator{
-		admitter: admitter{},
+		admitter: admitter{
+			ruleResolver: ruleResolver,
+		},
 	}
 }
 
@@ -54,7 +59,9 @@ func (v *Validator) Admitters() []admission.Admitter {
 	return []admission.Admitter{&v.admitter}
 }
 
-type admitter struct{}
+type admitter struct {
+	ruleResolver validation.AuthorizationRuleResolver
+}
 
 // Admit handles the webhook admission request sent to this webhook.
 func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
@@ -78,9 +85,60 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		}, nil
 	}
 
+	if newFeature.Name == auth.ExternalRulesFeature {
+		var rules []rbacv1.PolicyRule
+		oldFeatureValue := getEffectiveValue(oldFeature)
+		newFeatureValue := getEffectiveValue(newFeature)
+
+		// if the feature value isn't changing, allow it
+		if oldFeatureValue == newFeatureValue {
+			return &admissionv1.AdmissionResponse{
+				Allowed: true,
+			}, nil
+		}
+
+		if !oldFeatureValue && newFeatureValue {
+			// enabling the feature requires the "security-enable" verb
+			rules = []rbacv1.PolicyRule{
+				{
+					Verbs:         []string{"security-enable"},
+					APIGroups:     []string{"management.cattle.io"},
+					Resources:     []string{"features"},
+					ResourceNames: []string{"external-rules"},
+				},
+			}
+		} else {
+			// disabling the feature requires administrator permissions
+			rules = []rbacv1.PolicyRule{
+				{
+					Verbs:     []string{"*"},
+					APIGroups: []string{"*"},
+					Resources: []string{"*"},
+				},
+			}
+		}
+		err := auth.ConfirmNoEscalation(request, rules, "", a.ruleResolver)
+		if err != nil {
+			return admission.ResponseFailedEscalation(fmt.Sprintf("updating the 'external-rules' feature requires admin permissions: %s ", err.Error())), nil
+		}
+	}
+
 	return &admissionv1.AdmissionResponse{
 		Allowed: true,
 	}, nil
+}
+
+// getEffectiveValue considers a feature's default, value, and locked value to determine
+// its effective value.
+func getEffectiveValue(obj *v3.Feature) bool {
+	val := obj.Status.Default
+	if obj.Spec.Value != nil {
+		val = *obj.Spec.Value
+	}
+	if obj.Status.LockedValue != nil {
+		val = *obj.Status.LockedValue
+	}
+	return val
 }
 
 // isUpdateAllowed checks that the new value does not change on spec unless it's equal to the lockedValue,
