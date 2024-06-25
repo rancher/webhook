@@ -179,8 +179,7 @@ func (c *ClusterRoleTemplateBindingSuite) Test_PrivilegeEscalation() {
 	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
 	roleTemplateCache.EXPECT().Get(c.adminRT.Name).Return(c.adminRT, nil).AnyTimes()
 	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
-	featuresCache := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
-	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache, featuresCache)
+	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
 	crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
 	crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
 	crtbCache.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(crtbUser, newDefaultCRTB().ClusterName)).Return([]*apisv3.ClusterRoleTemplateBinding{
@@ -330,8 +329,7 @@ func (c *ClusterRoleTemplateBindingSuite) Test_UpdateValidation() {
 	roleTemplateCache.EXPECT().Get(c.adminRT.Name).Return(c.adminRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().List(gomock.Any()).Return([]*apisv3.RoleTemplate{c.adminRT}, nil).AnyTimes()
 	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
-	featuresCache := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
-	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache, featuresCache)
+	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
 	crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
 	crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
 	crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
@@ -654,7 +652,6 @@ func (c *ClusterRoleTemplateBindingSuite) Test_UpdateValidation() {
 
 func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 	type testState struct {
-		featureCacheMock     *fake.MockNonNamespacedCacheInterface[*apisv3.Feature]
 		clusterRoleCacheMock *fake.MockNonNamespacedCacheInterface[*rbacv1.ClusterRole]
 	}
 	ctrl := gomock.NewController(c.T())
@@ -714,7 +711,7 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 		expectedError := apierrors.NewNotFound(schema.GroupResource{}, "")
 		roleTemplateCache.EXPECT().Get(badRoleTemplateName).Return(nil, expectedError).AnyTimes()
 		roleTemplateCache.EXPECT().Get("").Return(nil, expectedError).AnyTimes()
-		roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, state.clusterRoleCacheMock, state.featureCacheMock)
+		roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, state.clusterRoleCacheMock)
 		crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
 		crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
 		crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
@@ -1022,7 +1019,7 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 			allowed: false,
 		},
 		{
-			name: "external RT with externalRules valid CRTB creation when feature flag is on",
+			name: "external RT with externalRules valid CRTB creation",
 			args: args{
 				username: writeNodeUser,
 				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
@@ -1035,18 +1032,10 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 					return baseCRTB
 				},
 			},
-			stateSetup: func(state testState) {
-				state.featureCacheMock.EXPECT().Get(auth.ExternalRulesFeature).Return(&apisv3.Feature{
-					ObjectMeta: metav1.ObjectMeta{},
-					Spec: apisv3.FeatureSpec{
-						Value: &[]bool{true}[0],
-					},
-				}, nil)
-			},
 			allowed: true,
 		},
 		{
-			name: "external RT with externalRules rejected when feature flag is on and there are not enough permissions",
+			name: "external RT with externalRules rejected when there are not enough permissions",
 			args: args{
 				username: readPodUser,
 				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
@@ -1059,64 +1048,6 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 					return baseCRTB
 				},
 			},
-			stateSetup: func(state testState) {
-				state.featureCacheMock.EXPECT().Get(auth.ExternalRulesFeature).Return(&apisv3.Feature{
-					ObjectMeta: metav1.ObjectMeta{},
-					Spec: apisv3.FeatureSpec{
-						Value: &[]bool{true}[0],
-					},
-				}, nil)
-			},
-			allowed: false,
-		},
-		{
-			name: "external RT valid CRTB creation when feature flag is off",
-			args: args{
-				username: adminUser,
-				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
-					return nil
-				},
-				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
-					baseCRTB := newDefaultCRTB()
-					baseCRTB.RoleTemplateName = "read-pods-role"
-
-					return baseCRTB
-				},
-			},
-			stateSetup: func(state testState) {
-				state.featureCacheMock.EXPECT().Get(auth.ExternalRulesFeature).Return(&apisv3.Feature{
-					ObjectMeta: metav1.ObjectMeta{},
-					Spec: apisv3.FeatureSpec{
-						Value: &[]bool{false}[0],
-					},
-				}, nil)
-				state.clusterRoleCacheMock.EXPECT().Get(c.readPodsCR.Name).Return(c.readPodsCR, nil)
-			},
-			allowed: true,
-		},
-		{
-			name: "external RT CRTB is rejected when there are not enough permissions when feature flag is off",
-			args: args{
-				username: writeNodeUser,
-				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
-					return nil
-				},
-				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
-					basePRTB := newDefaultCRTB()
-					basePRTB.RoleTemplateName = "read-pods-role"
-
-					return basePRTB
-				},
-			},
-			stateSetup: func(state testState) {
-				state.featureCacheMock.EXPECT().Get(auth.ExternalRulesFeature).Return(&apisv3.Feature{
-					ObjectMeta: metav1.ObjectMeta{},
-					Spec: apisv3.FeatureSpec{
-						Value: &[]bool{false}[0],
-					},
-				}, nil)
-				state.clusterRoleCacheMock.EXPECT().Get(c.readPodsCR.Name).Return(c.readPodsCR, nil)
-			},
 			allowed: false,
 		},
 	}
@@ -1126,11 +1057,9 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 		c.Run(test.name, func() {
 			c.T().Parallel()
 			req := createCRTBRequest(c.T(), test.args.oldCRTB(), test.args.newCRTB(), test.args.username)
-			featureCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.Feature](ctrl)
 			clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 			state := testState{
 				clusterRoleCacheMock: clusterRoleCache,
-				featureCacheMock:     featureCache,
 			}
 			if test.stateSetup != nil {
 				test.stateSetup(state)
