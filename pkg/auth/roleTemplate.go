@@ -9,21 +9,17 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 )
 
-const ExternalRulesFeature = "external-rules"
-
 // RoleTemplateResolver provides an interface to flatten role templates into slice of rules.
 type RoleTemplateResolver struct {
 	roleTemplates v3.RoleTemplateCache
 	clusterRoles  v1.ClusterRoleCache
-	features      v3.FeatureCache
 }
 
 // NewRoleTemplateResolver creates a newly allocated RoleTemplateResolver from the provided caches
-func NewRoleTemplateResolver(roleTemplates v3.RoleTemplateCache, clusterRoles v1.ClusterRoleCache, features v3.FeatureCache) *RoleTemplateResolver {
+func NewRoleTemplateResolver(roleTemplates v3.RoleTemplateCache, clusterRoles v1.ClusterRoleCache) *RoleTemplateResolver {
 	return &RoleTemplateResolver{
 		roleTemplates: roleTemplates,
 		clusterRoles:  clusterRoles,
-		features:      features,
 	}
 }
 
@@ -63,25 +59,12 @@ func (r *RoleTemplateResolver) gatherRules(roleTemplate *rancherv3.RoleTemplate,
 	seen[roleTemplate.Name] = true
 
 	if roleTemplate.External {
-		externalRulesEnabled, err := r.isExternalRulesFeatureFlagEnabled()
-		if err != nil {
-			return nil, fmt.Errorf("failed to check externalRules feature flag: %w", err)
-		}
-
-		if externalRulesEnabled {
-			if roleTemplate.ExternalRules != nil {
-				rules = append(rules, roleTemplate.ExternalRules...)
-			} else {
-				cr, err := r.clusterRoles.Get(roleTemplate.Name)
-				if err != nil {
-					return nil, fmt.Errorf("for external RoleTemplates, externalRules must be provided or a backing clusterRole must be installed to check for privilege escalations: failed to get ClusterRole %q: %w", roleTemplate.Name, err)
-				}
-				rules = append(rules, cr.Rules...)
-			}
-		} else if roleTemplate.Context == "cluster" {
+		if roleTemplate.ExternalRules != nil {
+			rules = append(rules, roleTemplate.ExternalRules...)
+		} else {
 			cr, err := r.clusterRoles.Get(roleTemplate.Name)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get ClusterRole %q: %w", roleTemplate.Name, err)
+				return nil, fmt.Errorf("for external RoleTemplates, externalRules must be provided or a backing clusterRole must be installed to check for privilege escalations: failed to get ClusterRole %q: %w", roleTemplate.Name, err)
 			}
 			rules = append(rules, cr.Rules...)
 		}
@@ -104,15 +87,4 @@ func (r *RoleTemplateResolver) gatherRules(roleTemplate *rancherv3.RoleTemplate,
 		}
 	}
 	return rules, nil
-}
-
-func (r *RoleTemplateResolver) isExternalRulesFeatureFlagEnabled() (bool, error) {
-	f, err := r.features.Get(ExternalRulesFeature)
-	if err != nil {
-		return false, err
-	}
-	if f.Spec.Value == nil {
-		return f.Status.Default, nil
-	}
-	return *f.Spec.Value, nil
 }

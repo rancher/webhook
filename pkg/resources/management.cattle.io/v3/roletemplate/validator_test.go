@@ -163,14 +163,6 @@ func (r *RoleTemplateSuite) Test_PrivilegeEscalation() {
 					return baseRT
 				},
 			},
-			stateSetup: func(state testState) {
-				state.featureCacheMock.EXPECT().Get(auth.ExternalRulesFeature).Return(&v3.Feature{
-					ObjectMeta: metav1.ObjectMeta{},
-					Spec: v3.FeatureSpec{
-						Value: &[]bool{true}[0],
-					},
-				}, nil)
-			},
 			allowed: true,
 		},
 		{
@@ -187,40 +179,6 @@ func (r *RoleTemplateSuite) Test_PrivilegeEscalation() {
 
 					return baseRT
 				},
-			},
-			stateSetup: func(state testState) {
-				state.featureCacheMock.EXPECT().Get(auth.ExternalRulesFeature).Return(&v3.Feature{
-					ObjectMeta: metav1.ObjectMeta{},
-					Spec: v3.FeatureSpec{
-						Value: &[]bool{true}[0],
-					},
-				}, nil)
-			},
-			allowed: false,
-		},
-		{
-			name: "user without escalate permissions can't create external RoleTemplates with externalRules when the feature flag is off",
-			args: args{
-				username: noPrivUser,
-				oldRT: func() *v3.RoleTemplate {
-					return nil
-				},
-				newRT: func() *v3.RoleTemplate {
-					baseRT := newDefaultRT()
-					baseRT.External = true
-					baseRT.ExternalRules = r.manageNodeRole.Rules
-
-					return baseRT
-				},
-			},
-			stateSetup: func(state testState) {
-				state.featureCacheMock.EXPECT().Get(auth.ExternalRulesFeature).Return(&v3.Feature{
-					ObjectMeta: metav1.ObjectMeta{},
-					Spec: v3.FeatureSpec{
-						Value: &[]bool{false}[0],
-					},
-				}, nil)
-				state.clusterRoleCacheMock.EXPECT().Get(newDefaultRT().Name).Return(&rbacv1.ClusterRole{}, nil)
 			},
 			allowed: false,
 		},
@@ -241,14 +199,6 @@ func (r *RoleTemplateSuite) Test_PrivilegeEscalation() {
 					return baseRT
 				},
 			},
-			stateSetup: func(state testState) {
-				state.featureCacheMock.EXPECT().Get(auth.ExternalRulesFeature).Return(&v3.Feature{
-					ObjectMeta: metav1.ObjectMeta{},
-					Spec: v3.FeatureSpec{
-						Value: &[]bool{true}[0],
-					},
-				}, nil)
-			},
 			allowed: false,
 		},
 		{
@@ -268,14 +218,6 @@ func (r *RoleTemplateSuite) Test_PrivilegeEscalation() {
 					return baseRT
 				},
 			},
-			stateSetup: func(state testState) {
-				state.featureCacheMock.EXPECT().Get(auth.ExternalRulesFeature).Return(&v3.Feature{
-					ObjectMeta: metav1.ObjectMeta{},
-					Spec: v3.FeatureSpec{
-						Value: &[]bool{true}[0],
-					},
-				}, nil)
-			},
 			allowed: true,
 		},
 	}
@@ -284,17 +226,15 @@ func (r *RoleTemplateSuite) Test_PrivilegeEscalation() {
 		test := tests[i]
 		r.Run(test.name, func() {
 			r.T().Parallel()
-			featureCache := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
 			clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 
 			state := testState{
 				clusterRoleCacheMock: clusterRoleCache,
-				featureCacheMock:     featureCache,
 			}
 			if test.stateSetup != nil {
 				test.stateSetup(state)
 			}
-			roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache, state.featureCacheMock)
+			roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
 			validator := roletemplate.NewValidator(resolver, roleResolver, fakeSAR, grCache)
 			admitters := validator.Admitters()
 			r.Len(admitters, 1, "wanted only one admitter")
@@ -324,8 +264,7 @@ func (r *RoleTemplateSuite) Test_UpdateValidation() {
 	roleTemplateCache.EXPECT().AddIndexer(expectedIndexerName, gomock.Any())
 	roleTemplateCache.EXPECT().Get(r.adminRT.Name).Return(r.adminRT, nil).AnyTimes()
 	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
-	featureCache := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
-	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache, featureCache)
+	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
 	grCache := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRole](ctrl)
 	grCache.EXPECT().AddIndexer(expectedGlobalRefIndex, gomock.Any())
 
@@ -715,52 +654,6 @@ func (r *RoleTemplateSuite) Test_Create() {
 			allowed: false,
 		},
 		{
-			name: "create new external RoleTemplate when feature flag is off",
-			args: args{
-				username: adminUser,
-				oldRT: func() *v3.RoleTemplate {
-					return nil
-				},
-				newRT: func() *v3.RoleTemplate {
-					rt := newDefaultRT()
-					rt.External = true
-					return rt
-				},
-			},
-			stateSetup: func(state testState) {
-				state.featureCacheMock.EXPECT().Get(auth.ExternalRulesFeature).Return(&v3.Feature{
-					Spec: v3.FeatureSpec{
-						Value: &[]bool{false}[0],
-					},
-				}, nil)
-				state.clusterRoleCacheMock.EXPECT().Get("rt-new").Return(&rbacv1.ClusterRole{}, nil)
-			},
-			allowed: true,
-		},
-		{
-			name: "create new external RoleTemplate when feature flag is off, context is project and backing ClusterRole doesn't exist",
-			args: args{
-				username: adminUser,
-				oldRT: func() *v3.RoleTemplate {
-					return nil
-				},
-				newRT: func() *v3.RoleTemplate {
-					rt := newDefaultRT()
-					rt.External = true
-					rt.Context = "project"
-					return rt
-				},
-			},
-			stateSetup: func(state testState) {
-				state.featureCacheMock.EXPECT().Get(auth.ExternalRulesFeature).Return(&v3.Feature{
-					Spec: v3.FeatureSpec{
-						Value: &[]bool{false}[0],
-					},
-				}, nil)
-			},
-			allowed: true,
-		},
-		{
 			name: "invalid external rules",
 			args: args{
 				username: adminUser,
@@ -839,16 +732,14 @@ func (r *RoleTemplateSuite) Test_Create() {
 		test := tests[i]
 		r.Run(test.name, func() {
 			r.T().Parallel()
-			featureCache := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
 			clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 			state := testState{
 				clusterRoleCacheMock: clusterRoleCache,
-				featureCacheMock:     featureCache,
 			}
 			if test.stateSetup != nil {
 				test.stateSetup(state)
 			}
-			roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache, state.featureCacheMock)
+			roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
 			validator := roletemplate.NewValidator(resolver, roleResolver, fakeSAR, grCache)
 			admitters := validator.Admitters()
 			r.Len(admitters, 1, "wanted only one admitter")
@@ -918,7 +809,7 @@ func (r *RoleTemplateSuite) Test_Delete() {
 				grCache.EXPECT().AddIndexer(expectedGlobalRefIndex, gomock.Any())
 				grCache.EXPECT().GetByIndex(expectedGlobalRefIndex, gomock.Any()).Return([]*v3.GlobalRole{}, nil).AnyTimes()
 				return testMocks{
-					rtResolver: auth.NewRoleTemplateResolver(roleTemplateCache, nil, nil),
+					rtResolver: auth.NewRoleTemplateResolver(roleTemplateCache, nil),
 					grCache:    grCache,
 				}
 			},
@@ -970,7 +861,7 @@ func (r *RoleTemplateSuite) Test_Delete() {
 				grCache.EXPECT().GetByIndex(expectedGlobalRefIndex, gomock.Any()).Return([]*v3.GlobalRole{}, nil).AnyTimes()
 
 				return testMocks{
-					rtResolver: auth.NewRoleTemplateResolver(roleTemplateCache, nil, nil),
+					rtResolver: auth.NewRoleTemplateResolver(roleTemplateCache, nil),
 					grCache:    grCache,
 				}
 			},
@@ -997,7 +888,7 @@ func (r *RoleTemplateSuite) Test_Delete() {
 				grCache.EXPECT().AddIndexer(expectedGlobalRefIndex, gomock.Any())
 				grCache.EXPECT().GetByIndex(expectedGlobalRefIndex, gomock.Any()).Return([]*v3.GlobalRole{}, nil).AnyTimes()
 				return testMocks{
-					rtResolver: auth.NewRoleTemplateResolver(roleTemplateCache, nil, nil),
+					rtResolver: auth.NewRoleTemplateResolver(roleTemplateCache, nil),
 					grCache:    grCache,
 				}
 			},
@@ -1033,8 +924,7 @@ func (r *RoleTemplateSuite) Test_ErrorHandling() {
 	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
 	roleTemplateCache.EXPECT().AddIndexer(expectedIndexerName, gomock.Any())
 	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
-	featureCache := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
-	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache, featureCache)
+	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
 	grCache := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRole](ctrl)
 	grCache.EXPECT().AddIndexer(expectedGlobalRefIndex, gomock.Any())
 
@@ -1148,8 +1038,7 @@ func (r *RoleTemplateSuite) Test_CheckCircularRef() {
 
 			req := createRTRequest(r.T(), nil, newRT, adminUser)
 			clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
-			featureCache := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
-			roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache, featureCache)
+			roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
 
 			validator := roletemplate.NewValidator(resolver, roleResolver, fakeSAR, grCache)
 			admitters := validator.Admitters()

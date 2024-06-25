@@ -23,7 +23,6 @@ import (
 var errTest = errors.New("bad error")
 
 type testState struct {
-	featureCacheMock     *fake.MockNonNamespacedCacheInterface[*v3.Feature]
 	clusterRoleCacheMock *fake.MockNonNamespacedCacheInterface[*rbacv1.ClusterRole]
 }
 
