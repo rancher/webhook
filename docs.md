@@ -349,6 +349,22 @@ When a UserAttribute is updated, the following checks take place:
 - If set, `disableAfter` must be zero or a positive duration (e.g. `240h`).
 - If set, `deleteAfter` must be zero or a positive duration (e.g. `240h`).
 
+# provisioning.cattle.io/v1 
+
+## Cluster 
+
+### Mutation Checks
+
+#### On Update
+
+##### Dynamic Schema Drop
+
+For all `cluster.provisioning.cattle.io/v1` objects, check for the presence of the 
+`provisioning.cattle.io/allow-dynamic-schema-drop` annotation. If the value is `"true"`, perform no mutations. If the 
+value is not present or not `"true"`, compare the value of the `dynamicSchemaSpec` field for each `machinePool`, to 
+its' previous value. If the values are not identical, revert the value for the `dynamicSchemaSpec` for the specific 
+`machinePool`, but do not reject the request.
+
 # rbac.authorization.k8s.io/v1 
 
 ## ClusterRole 
