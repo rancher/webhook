@@ -103,7 +103,7 @@ func (m *ProvisioningClusterMutator) Admit(request *admission.Request) (*admissi
 	listTrace := trace.New("provisioningCluster Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
-	cluster, oldCluster, err := objectsv1.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
+	oldCluster, cluster, err := objectsv1.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -135,10 +135,7 @@ func (m *ProvisioningClusterMutator) Admit(request *admission.Request) (*admissi
 	}
 
 	if request.Operation == admissionv1.Update {
-		response, err = m.handleDynamicSchemaDrop(request, oldCluster, cluster)
-		if err != nil {
-			return nil, fmt.Errorf("unable to evaluate dynamic schema drop, %w", err)
-		}
+		response = m.handleDynamicSchemaDrop(request, oldCluster, cluster)
 		if response.Result != nil {
 			return response, nil
 		}
@@ -154,13 +151,13 @@ func (m *ProvisioningClusterMutator) Admit(request *admission.Request) (*admissi
 // handleDynamicSchemaDrop watches for provisioning cluster updates, and reinserts the previous value of the
 // dynamicSchemaSpec field for a machine pool if the "provisioning.cattle.io/allow-dynamic-schema-drop" annotation is
 // not present and true on the cluster. If the value of the annotation is true, no mutation is performed.
-func (m *ProvisioningClusterMutator) handleDynamicSchemaDrop(request *admission.Request, oldCluster, cluster *v1.Cluster) (*admissionv1.AdmissionResponse, error) {
+func (m *ProvisioningClusterMutator) handleDynamicSchemaDrop(request *admission.Request, oldCluster, cluster *v1.Cluster) *admissionv1.AdmissionResponse {
 	if cluster.Name == "local" || cluster.Spec.RKEConfig == nil {
-		return admission.ResponseAllowed(), nil
+		return admission.ResponseAllowed()
 	}
 
 	if cluster.Annotations[allowDynamicSchemaDropAnnotation] == "true" {
-		return admission.ResponseAllowed(), nil
+		return admission.ResponseAllowed()
 	}
 
 	oldClusterPools := map[string]*v1.RKEMachinePool{}
@@ -175,11 +172,11 @@ func (m *ProvisioningClusterMutator) handleDynamicSchemaDrop(request *admission.
 			continue
 		}
 		if oldPool.DynamicSchemaSpec != "" && newPool.DynamicSchemaSpec == "" {
-			logrus.Infof("provisioning cluster %s/%s machine pool %s dynamic schema spec mutated without supplying annotation %s, reverting", cluster.Namespace, cluster.Name, newPool.Name, allowDynamicSchemaDropAnnotation)
+			logrus.Debugf("provisioning cluster %s/%s machine pool %s dynamic schema spec mutated without supplying annotation %s, reverting", cluster.Namespace, cluster.Name, newPool.Name, allowDynamicSchemaDropAnnotation)
 			cluster.Spec.RKEConfig.MachinePools[i].DynamicSchemaSpec = oldPool.DynamicSchemaSpec
 		}
 	}
-	return admission.ResponseAllowed(), nil
+	return admission.ResponseAllowed()
 }
 
 // handlePSACT updates the cluster and an underlying secret to support PSACT.

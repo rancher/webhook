@@ -631,13 +631,11 @@ func TestDynamicSchemaDrop(t *testing.T) {
 		cluster    *v1.Cluster
 		oldCluster *v1.Cluster
 		expected   []v1.RKEMachinePool
-		expectErr  bool
 	}{
 		{
-			name:      "not v2prov cluster",
-			request:   &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
-			cluster:   &v1.Cluster{},
-			expectErr: false,
+			name:    "not v2prov cluster",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster: &v1.Cluster{},
 		},
 		{
 			name:    "no schema present on old or new cluster",
@@ -669,7 +667,6 @@ func TestDynamicSchemaDrop(t *testing.T) {
 					Name: "a",
 				},
 			},
-			expectErr: false,
 		},
 		{
 			name:    "matching schema present on old and new cluster",
@@ -704,7 +701,6 @@ func TestDynamicSchemaDrop(t *testing.T) {
 					DynamicSchemaSpec: "a",
 				},
 			},
-			expectErr: false,
 		},
 		{
 			name:    "schema present on old cluster but not new cluster without annotation",
@@ -738,7 +734,6 @@ func TestDynamicSchemaDrop(t *testing.T) {
 					DynamicSchemaSpec: "a",
 				},
 			},
-			expectErr: false,
 		},
 		{
 			name:    "schema present on old cluster but not new cluster with false annotation",
@@ -773,7 +768,6 @@ func TestDynamicSchemaDrop(t *testing.T) {
 					DynamicSchemaSpec: "a",
 				},
 			},
-			expectErr: false,
 		},
 		{
 			name:    "schema present on old cluster and new cluster with true annotation",
@@ -809,7 +803,6 @@ func TestDynamicSchemaDrop(t *testing.T) {
 					DynamicSchemaSpec: "a",
 				},
 			},
-			expectErr: false,
 		},
 		{
 			name:    "schema present on old cluster but not new cluster with true annotation",
@@ -843,7 +836,6 @@ func TestDynamicSchemaDrop(t *testing.T) {
 					Name: "a",
 				},
 			},
-			expectErr: false,
 		},
 		{
 			name:    "new machine pool without schema",
@@ -885,7 +877,6 @@ func TestDynamicSchemaDrop(t *testing.T) {
 					Name: "b",
 				},
 			},
-			expectErr: false,
 		},
 	}
 
@@ -894,9 +885,8 @@ func TestDynamicSchemaDrop(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			resp, err := m.handleDynamicSchemaDrop(tt.request, tt.oldCluster, tt.cluster)
-			assert.Equal(t, tt.expectErr, err != nil)
-			assert.Equal(t, !tt.expectErr, resp.Allowed)
+			resp := m.handleDynamicSchemaDrop(tt.request, tt.oldCluster, tt.cluster)
+			assert.True(t, resp.Allowed)
 			if tt.expected != nil {
 				assert.True(t, reflect.DeepEqual(tt.expected, tt.cluster.Spec.RKEConfig.MachinePools))
 			}
