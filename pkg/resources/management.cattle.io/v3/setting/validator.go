@@ -179,7 +179,6 @@ func effectiveValue(s v3.Setting) string {
 		return s.Value
 	} else if s.Default != "" {
 		return s.Default
-	} else {
-		return ""
 	}
+	return ""
 }
