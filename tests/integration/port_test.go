@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/rancher/lasso/pkg/client"
-	"github.com/rancher/wrangler/v2/pkg/kubeconfig"
-	"github.com/rancher/wrangler/v2/pkg/schemes"
+	"github.com/rancher/wrangler/v3/pkg/kubeconfig"
+	"github.com/rancher/wrangler/v3/pkg/schemes"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/suite"
 	corev1 "k8s.io/api/core/v1"

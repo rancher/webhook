@@ -10,7 +10,7 @@ import (
 	"github.com/rancher/webhook/pkg/admission"
 	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
-	"github.com/rancher/wrangler/v2/pkg/data/convert"
+	"github.com/rancher/wrangler/v3/pkg/data/convert"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	v1 "k8s.io/api/core/v1"

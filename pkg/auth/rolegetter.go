@@ -1,7 +1,7 @@
 package auth
 
 import (
-	wranglerv1 "github.com/rancher/wrangler/v2/pkg/generated/controllers/rbac/v1"
+	wranglerv1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/rbac/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/labels"
 )

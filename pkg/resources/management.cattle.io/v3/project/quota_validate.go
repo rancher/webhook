@@ -2,7 +2,7 @@ package project
 
 import (
 	mgmtv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-	"github.com/rancher/wrangler/v2/pkg/data/convert"
+	"github.com/rancher/wrangler/v3/pkg/data/convert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	quotav1 "k8s.io/apiserver/pkg/quota/v1"

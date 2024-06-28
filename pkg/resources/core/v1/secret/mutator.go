@@ -7,7 +7,7 @@ import (
 	"github.com/rancher/webhook/pkg/auth"
 	objectsv1 "github.com/rancher/webhook/pkg/generated/objects/core/v1"
 	"github.com/rancher/webhook/pkg/patch"
-	v1 "github.com/rancher/wrangler/v2/pkg/generated/controllers/rbac/v1"
+	v1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/rbac/v1"
 	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
