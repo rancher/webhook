@@ -602,6 +602,9 @@ func TestAdmitPreserveUnknownFields(t *testing.T) {
 			Object: runtime.RawExtension{
 				Raw: raw,
 			},
+			OldObject: runtime.RawExtension{
+				Raw: raw,
+			},
 		},
 	}
 
@@ -620,94 +623,283 @@ func TestAdmitPreserveUnknownFields(t *testing.T) {
 }
 
 func TestDynamicSchemaDrop(t *testing.T) {
-	cluster := &v1.Cluster{
-		Spec: v1.ClusterSpec{
-			RKEConfig: &v1.RKEConfig{
-				MachinePools: []v1.RKEMachinePool{
-					{
-						Name: "A",
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		request    *admission.Request
+		cluster    *v1.Cluster
+		oldCluster *v1.Cluster
+		expected   []v1.RKEMachinePool
+		expectErr  bool
+	}{
+		{
+			name:      "not v2prov cluster",
+			request:   &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster:   &v1.Cluster{},
+			expectErr: false,
+		},
+		{
+			name:    "no schema present on old or new cluster",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						MachinePools: []v1.RKEMachinePool{
+							{
+								Name: "a",
+							},
+						},
 					},
 				},
 			},
+			oldCluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						MachinePools: []v1.RKEMachinePool{
+							{
+								Name: "a",
+							},
+						},
+					},
+				},
+			},
+			expected: []v1.RKEMachinePool{
+				{
+					Name: "a",
+				},
+			},
+			expectErr: false,
+		},
+		{
+			name:    "matching schema present on old and new cluster",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						MachinePools: []v1.RKEMachinePool{
+							{
+								Name:              "a",
+								DynamicSchemaSpec: "a",
+							},
+						},
+					},
+				},
+			},
+			oldCluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						MachinePools: []v1.RKEMachinePool{
+							{
+								Name:              "a",
+								DynamicSchemaSpec: "a",
+							},
+						},
+					},
+				},
+			},
+			expected: []v1.RKEMachinePool{
+				{
+					Name:              "a",
+					DynamicSchemaSpec: "a",
+				},
+			},
+			expectErr: false,
+		},
+		{
+			name:    "schema present on old cluster but not new cluster without annotation",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						MachinePools: []v1.RKEMachinePool{
+							{
+								Name: "a",
+							},
+						},
+					},
+				},
+			},
+			oldCluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						MachinePools: []v1.RKEMachinePool{
+							{
+								Name:              "a",
+								DynamicSchemaSpec: "a",
+							},
+						},
+					},
+				},
+			},
+			expected: []v1.RKEMachinePool{
+				{
+					Name:              "a",
+					DynamicSchemaSpec: "a",
+				},
+			},
+			expectErr: false,
+		},
+		{
+			name:    "schema present on old cluster but not new cluster with false annotation",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{"provisioning.cattle.io/allow-dynamic-schema-drop": "false"}},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						MachinePools: []v1.RKEMachinePool{
+							{
+								Name: "a",
+							},
+						},
+					},
+				},
+			},
+			oldCluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						MachinePools: []v1.RKEMachinePool{
+							{
+								Name:              "a",
+								DynamicSchemaSpec: "a",
+							},
+						},
+					},
+				},
+			},
+			expected: []v1.RKEMachinePool{
+				{
+					Name:              "a",
+					DynamicSchemaSpec: "a",
+				},
+			},
+			expectErr: false,
+		},
+		{
+			name:    "schema present on old cluster and new cluster with true annotation",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{"provisioning.cattle.io/allow-dynamic-schema-drop": "true"}},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						MachinePools: []v1.RKEMachinePool{
+							{
+								Name:              "a",
+								DynamicSchemaSpec: "a",
+							},
+						},
+					},
+				},
+			},
+			oldCluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						MachinePools: []v1.RKEMachinePool{
+							{
+								Name:              "a",
+								DynamicSchemaSpec: "a",
+							},
+						},
+					},
+				},
+			},
+			expected: []v1.RKEMachinePool{
+				{
+					Name:              "a",
+					DynamicSchemaSpec: "a",
+				},
+			},
+			expectErr: false,
+		},
+		{
+			name:    "schema present on old cluster but not new cluster with true annotation",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{"provisioning.cattle.io/allow-dynamic-schema-drop": "true"}},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						MachinePools: []v1.RKEMachinePool{
+							{
+								Name: "a",
+							},
+						},
+					},
+				},
+			},
+			oldCluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						MachinePools: []v1.RKEMachinePool{
+							{
+								Name:              "a",
+								DynamicSchemaSpec: "a",
+							},
+						},
+					},
+				},
+			},
+			expected: []v1.RKEMachinePool{
+				{
+					Name: "a",
+				},
+			},
+			expectErr: false,
+		},
+		{
+			name:    "new machine pool without schema",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{"provisioning.cattle.io/allow-dynamic-schema-drop": "true"}},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						MachinePools: []v1.RKEMachinePool{
+							{
+								Name:              "a",
+								DynamicSchemaSpec: "a",
+							},
+							{
+								Name: "b",
+							},
+						},
+					},
+				},
+			},
+			oldCluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						MachinePools: []v1.RKEMachinePool{
+							{
+								Name:              "a",
+								DynamicSchemaSpec: "a",
+							},
+						},
+					},
+				},
+			},
+			expected: []v1.RKEMachinePool{
+				{
+					Name:              "a",
+					DynamicSchemaSpec: "a",
+				},
+				{
+					Name: "b",
+				},
+			},
+			expectErr: false,
 		},
 	}
-	raw, err := json.Marshal(cluster)
-	assert.Nil(t, err)
 
 	m := ProvisioningClusterMutator{}
 
-	request := &admission.Request{
-		AdmissionRequest: admissionv1.AdmissionRequest{
-			Object: runtime.RawExtension{
-				Raw: raw,
-			},
-			OldObject: runtime.RawExtension{
-				Raw: raw,
-			},
-		},
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := m.handleDynamicSchemaDrop(tt.request, tt.oldCluster, tt.cluster)
+			assert.Equal(t, tt.expectErr, err != nil)
+			assert.Equal(t, !tt.expectErr, resp.Allowed)
+			if tt.expected != nil {
+				assert.True(t, reflect.DeepEqual(tt.expected, tt.cluster.Spec.RKEConfig.MachinePools))
+			}
+		})
 	}
-
-	// Always allowed on Create
-	request.Operation = admissionv1.Create
-	output := cluster.DeepCopy()
-	response, err := m.handleDynamicSchemaDrop(request, output)
-	assert.Nil(t, err)
-	assert.True(t, response.Allowed)
-	assert.True(t, reflect.DeepEqual(cluster, output))
-
-	// Allowed on update if no schema present
-	request.Operation = admissionv1.Update
-	output = cluster.DeepCopy()
-	response, err = m.handleDynamicSchemaDrop(request, output)
-	assert.Nil(t, err)
-	assert.True(t, response.Allowed)
-	assert.True(t, reflect.DeepEqual(cluster, output))
-
-	// Allowed on update if schemas match
-	cluster.Spec.RKEConfig.MachinePools[0].DynamicSchemaSpec = "a"
-	raw, err = json.Marshal(cluster)
-	assert.Nil(t, err)
-	request.AdmissionRequest.OldObject.Raw = raw
-	request.AdmissionRequest.Object.Raw = raw
-	output = cluster.DeepCopy()
-	response, err = m.handleDynamicSchemaDrop(request, output)
-	assert.Nil(t, err)
-	assert.True(t, response.Allowed)
-	assert.True(t, reflect.DeepEqual(cluster, output))
-
-	// Allowed on update if new pool is added
-	cluster.Spec.RKEConfig.MachinePools = append(cluster.Spec.RKEConfig.MachinePools, v1.RKEMachinePool{Name: "B"})
-	raw, err = json.Marshal(cluster)
-	assert.Nil(t, err)
-	request.AdmissionRequest.Object.Raw = raw
-	output = cluster.DeepCopy()
-	response, err = m.handleDynamicSchemaDrop(request, output)
-	assert.Nil(t, err)
-	assert.True(t, response.Allowed)
-	assert.True(t, reflect.DeepEqual(cluster, output))
-
-	// Rejected on update if schema is removed
-	cluster.Spec.RKEConfig.MachinePools[0].DynamicSchemaSpec = "b"
-	raw, err = json.Marshal(cluster)
-	assert.Nil(t, err)
-	request.AdmissionRequest.Object.Raw = raw
-	output = cluster.DeepCopy()
-	response, err = m.handleDynamicSchemaDrop(request, output)
-	assert.Nil(t, err)
-	assert.True(t, response.Allowed)
-	expected := cluster.DeepCopy()
-	expected.Spec.RKEConfig.MachinePools[0].DynamicSchemaSpec = "a"
-	assert.True(t, reflect.DeepEqual(cluster, output))
-
-	// Allowed on update if annotation is present and true
-	cluster.Annotations = map[string]string{allowDynamicSchemaDropAnnotation: "true"}
-	cluster.Spec.RKEConfig.MachinePools[0].DynamicSchemaSpec = "b"
-	raw, err = json.Marshal(cluster)
-	assert.Nil(t, err)
-	request.AdmissionRequest.Object.Raw = raw
-	output = cluster.DeepCopy()
-	response, err = m.handleDynamicSchemaDrop(request, output)
-	assert.Nil(t, err)
-	assert.True(t, response.Allowed)
-	assert.True(t, reflect.DeepEqual(cluster, output))
 }
