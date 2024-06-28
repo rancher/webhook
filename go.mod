@@ -160,9 +160,9 @@ require (
 	k8s.io/klog/v2 v2.120.1 // indirect
 	k8s.io/kms v0.30.1 // indirect
 	k8s.io/kube-aggregator v0.30.0 // indirect
-	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 // indirect
-	k8s.io/kubelet v0.0.0 // indirect
-	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.29.0 // indirect
+	k8s.io/kube-openapi v0.0.0-20240430033511-f0e62f92d13f // indirect
+	k8s.io/kubelet v0.29.3 // indirect
+	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.30.3 // indirect
 	sigs.k8s.io/cli-utils v0.35.0 // indirect
 	sigs.k8s.io/cluster-api v1.7.3 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect

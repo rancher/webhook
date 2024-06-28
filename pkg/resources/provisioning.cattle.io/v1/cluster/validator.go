@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"reflect"
 	"regexp"
 	"slices"
 
@@ -108,7 +109,7 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 			return response, err
 		}
 
-		if response.Result = p.validateAgentEnvVars(cluster); response.Result != nil {
+		if response.Result = p.validateAgentEnvVars(request, oldCluster, cluster); response.Result != nil {
 			return response, err
 		}
 
@@ -127,18 +128,42 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 
 // validateAgentEnvVars will validate the provisioning cluster object's AgentEnvVars, ensuring that the
 // "CATTLE_AGENT_VAR_DIR" env var is not allowed to be updated.
-func (p *provisioningAdmitter) validateAgentEnvVars(cluster *v1.Cluster) *metav1.Status {
-	if cluster.Spec.RKEConfig == nil {
+func (p *provisioningAdmitter) validateAgentEnvVars(request *admission.Request, oldCluster, newCluster *v1.Cluster) *metav1.Status {
+	if newCluster.Spec.RKEConfig == nil {
 		return nil
 	}
-	if slices.ContainsFunc(cluster.Spec.AgentEnvVars, func(envVar rkev1.EnvVar) bool {
-		return envVar.Name == "CATTLE_AGENT_VAR_DIR"
-	}) {
-		return &metav1.Status{
-			Status:  "Failure",
-			Message: `"CATTLE_AGENT_VAR_DIR" cannot be set within "cluster.Spec.RKEConfig.AgentEnvVars": use "cluster.Spec.RKEConfig.DataDirectories.SystemAgent"`,
-			Reason:  metav1.StatusReasonBadRequest,
-			Code:    http.StatusBadRequest,
+	if request.Operation == admissionv1.Create {
+		if slices.ContainsFunc(newCluster.Spec.AgentEnvVars, func(envVar rkev1.EnvVar) bool {
+			return envVar.Name == "CATTLE_AGENT_VAR_DIR"
+		}) {
+			return &metav1.Status{
+				Status:  "Failure",
+				Message: `"CATTLE_AGENT_VAR_DIR" cannot be set within "cluster.Spec.RKEConfig.AgentEnvVars": use "cluster.Spec.RKEConfig.DataDirectories.SystemAgent"`,
+				Reason:  metav1.StatusReasonBadRequest,
+				Code:    http.StatusBadRequest,
+			}
+		}
+		return nil
+	}
+	if request.Operation == admissionv1.Update {
+		var oldCount, newCount int
+		for _, envVar := range oldCluster.Spec.AgentEnvVars {
+			if envVar.Name == "CATTLE_AGENT_VAR_DIR" {
+				oldCount++
+			}
+		}
+		for _, envVar := range newCluster.Spec.AgentEnvVars {
+			if envVar.Name == "CATTLE_AGENT_VAR_DIR" {
+				newCount++
+			}
+		}
+		if newCount > oldCount {
+			return &metav1.Status{
+				Status:  "Failure",
+				Message: `"CATTLE_AGENT_VAR_DIR" cannot be set within "cluster.Spec.RKEConfig.AgentEnvVars": use "cluster.Spec.RKEConfig.DataDirectories.SystemAgent"`,
+				Reason:  metav1.StatusReasonBadRequest,
+				Code:    http.StatusBadRequest,
+			}
 		}
 	}
 
@@ -160,13 +185,22 @@ func (p *provisioningAdmitter) validateDataDirectories(request *admission.Reques
 	oldEnvVars := slices.DeleteFunc(slices.Clone(oldCluster.Spec.AgentEnvVars), func(envVar rkev1.EnvVar) bool {
 		return envVar.Name != "CATTLE_AGENT_VAR_DIR"
 	})
-	// will be true when rancher performs one time migration to set SystemAgent data directory
-	if len(oldEnvVars) > 0 && newCluster.Spec.RKEConfig.DataDirectories.SystemAgent != oldEnvVars[len(oldEnvVars)-1].Value {
-		return &metav1.Status{
-			Status:  "Failure",
-			Message: `"CATTLE_AGENT_VAR_DIR" cannot be set within "cluster.Spec.RKEConfig.AgentEnvVars": use "cluster.Spec.RKEConfig.DataDirectories.SystemAgent"`,
-			Reason:  metav1.StatusReasonBadRequest,
-			Code:    http.StatusBadRequest,
+	// will be true up until rancher performs one time migration to set SystemAgent data directory
+	if len(oldEnvVars) > 0 {
+		newEnvVars := slices.DeleteFunc(slices.Clone(newCluster.Spec.AgentEnvVars), func(envVar rkev1.EnvVar) bool {
+			return envVar.Name != "CATTLE_AGENT_VAR_DIR"
+		})
+		if reflect.DeepEqual(newEnvVars, oldEnvVars) && oldCluster.Spec.RKEConfig.DataDirectories.SystemAgent == newCluster.Spec.RKEConfig.DataDirectories.SystemAgent {
+			// rancher migration has not been performed yet
+			return nil
+		}
+		if newCluster.Spec.RKEConfig.DataDirectories.SystemAgent != oldEnvVars[len(oldEnvVars)-1].Value {
+			return &metav1.Status{
+				Status:  "Failure",
+				Message: `"CATTLE_AGENT_VAR_DIR" cannot be set within "cluster.Spec.RKEConfig.AgentEnvVars": use "cluster.Spec.RKEConfig.DataDirectories.SystemAgent"`,
+				Reason:  metav1.StatusReasonBadRequest,
+				Code:    http.StatusBadRequest,
+			}
 		}
 	} else if oldCluster.Spec.RKEConfig.DataDirectories.SystemAgent != newCluster.Spec.RKEConfig.DataDirectories.SystemAgent {
 		return &metav1.Status{
