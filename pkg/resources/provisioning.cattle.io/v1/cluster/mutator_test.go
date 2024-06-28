@@ -841,7 +841,6 @@ func TestDynamicSchemaDrop(t *testing.T) {
 			name:    "new machine pool without schema",
 			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
 			cluster: &v1.Cluster{
-				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{"provisioning.cattle.io/allow-dynamic-schema-drop": "true"}},
 				Spec: v1.ClusterSpec{
 					RKEConfig: &v1.RKEConfig{
 						MachinePools: []v1.RKEMachinePool{
