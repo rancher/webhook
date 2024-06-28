@@ -19,9 +19,6 @@ import (
 
 func TestValidateAgentTLSMode(t *testing.T) {
 	t.Parallel()
-	type testState struct {
-		clusterCache *fake.MockNonNamespacedCacheInterface[*v3.Cluster]
-	}
 	tests := map[string]struct {
 		oldSetting         v3.Setting
 		newSetting         v3.Setting
@@ -278,17 +275,15 @@ func TestValidateAgentTLSMode(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			ctrl := gomock.NewController(t)
-			state := testState{
-				clusterCache: fake.NewMockNonNamespacedCacheInterface[*v3.Cluster](ctrl),
-			}
+			clusterCache := fake.NewMockNonNamespacedCacheInterface[*v3.Cluster](ctrl)
 			_, force := tc.newSetting.Annotations["cattle.io/force"]
 			if tc.operation == admissionv1.Update && !force && len(tc.clusters) > 0 {
-				state.clusterCache.EXPECT().List(gomock.Any()).Return(tc.clusters, nil)
+				clusterCache.EXPECT().List(gomock.Any()).Return(tc.clusters, nil)
 			}
 			if tc.clusterListerFails {
-				state.clusterCache.EXPECT().List(gomock.Any()).Return(tc.clusters, errors.New("some error"))
+				clusterCache.EXPECT().List(gomock.Any()).Return(tc.clusters, errors.New("some error"))
 			}
-			v := NewValidator(state.clusterCache)
+			v := NewValidator(clusterCache)
 			admitters := v.Admitters()
 			require.Len(t, admitters, 1)
 
