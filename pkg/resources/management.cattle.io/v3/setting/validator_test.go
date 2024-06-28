@@ -7,14 +7,15 @@ import (
 	"time"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-	"github.com/rancher/webhook/pkg/admission"
-	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/setting"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	v1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+
+	"github.com/rancher/webhook/pkg/admission"
+	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/setting"
 )
 
 type SettingSuite struct {
@@ -160,7 +161,7 @@ func (s *SettingSuite) validate(op v1.Operation) {
 }
 
 func (s *SettingSuite) setup() admission.Admitter {
-	validator := setting.NewValidator()
+	validator := setting.NewValidator(nil)
 	s.Len(validator.Admitters(), 1, "expected 1 admitter")
 
 	return validator.Admitters()[0]

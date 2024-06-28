@@ -54,7 +54,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		projects := project.NewValidator(clients.Management.Cluster().Cache())
 		roles := role.NewValidator()
 		rolebindings := rolebinding.NewValidator()
-		setting := setting.NewValidator()
+		setting := setting.NewValidator(clients.Management.Cluster().Cache())
 		userAttribute := userattribute.NewValidator()
 		clusterRoles := clusterrole.NewValidator()
 		clusterRoleBindings := clusterrolebinding.NewValidator()
