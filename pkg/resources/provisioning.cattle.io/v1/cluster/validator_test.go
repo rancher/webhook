@@ -238,6 +238,23 @@ func TestValidateAgentEnvVars(t *testing.T) {
 			shouldSucceed: false,
 		},
 		{
+			name:    "create with unrelated var",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+					AgentEnvVars: []rkev1.EnvVar{
+						{
+							Name:  "CATTLE_TEST_VAR",
+							Value: "a",
+						},
+					},
+				},
+			},
+			oldCluster:    nil,
+			shouldSucceed: true,
+		},
+		{
 			name:    "update equal",
 			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
 			cluster: &v1.Cluster{
@@ -308,6 +325,34 @@ func TestValidateAgentEnvVars(t *testing.T) {
 			},
 			shouldSucceed: false,
 		},
+
+		{
+			name:    "update unrelated vars",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+					AgentEnvVars: []rkev1.EnvVar{
+						{
+							Name:  "CATTLE_TEST_VAR",
+							Value: "a",
+						},
+					},
+				},
+			},
+			oldCluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+					AgentEnvVars: []rkev1.EnvVar{
+						{
+							Name:  "CATTLE_TEST_VAR",
+							Value: "b",
+						},
+					},
+				},
+			},
+			shouldSucceed: true,
+		},
 	}
 
 	a := provisioningAdmitter{}
@@ -315,8 +360,8 @@ func TestValidateAgentEnvVars(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			status := a.validateAgentEnvVars(tt.request, tt.oldCluster, tt.cluster)
-			assert.Equal(t, tt.shouldSucceed, status == nil)
+			response := a.validateAgentEnvVars(tt.request, tt.oldCluster, tt.cluster)
+			assert.Equal(t, tt.shouldSucceed, response.Allowed)
 		})
 	}
 }
@@ -343,6 +388,13 @@ func TestValidateDataDirectories(t *testing.T) {
 			request:       &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Delete}},
 			cluster:       nil,
 			oldCluster:    nil,
+			shouldSucceed: true,
+		},
+		{
+			name:          "Update unmanaged cluster",
+			request:       &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster:       &v1.Cluster{},
+			oldCluster:    &v1.Cluster{},
 			shouldSucceed: true,
 		},
 		{
@@ -531,8 +583,8 @@ func TestValidateDataDirectories(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			status := a.validateDataDirectories(tt.request, tt.oldCluster, tt.cluster)
-			assert.Equal(t, tt.shouldSucceed, status == nil)
+			response := a.validateDataDirectories(tt.request, tt.oldCluster, tt.cluster)
+			assert.Equal(t, tt.shouldSucceed, response.Allowed)
 		})
 	}
 }
