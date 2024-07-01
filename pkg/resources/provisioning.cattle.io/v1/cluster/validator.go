@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
-	"reflect"
 	"regexp"
 	"slices"
 
@@ -114,11 +113,7 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 			return response, err
 		}
 
-		if response = p.validateAgentEnvVars(request, oldCluster, cluster); response.Result != nil {
-			return response, err
-		}
-
-		if response = p.validateDataDirectories(request, oldCluster, cluster); response.Result != nil {
+		if response = p.validateDataDirectories(request, oldCluster, cluster); !response.Allowed {
 			return response, err
 		}
 	}
@@ -131,37 +126,42 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 	return response, nil
 }
 
-// validateAgentEnvVars will validate the provisioning cluster object's AgentEnvVars, ensuring that the
-// "CATTLE_AGENT_VAR_DIR" env var is not allowed to be added to an existing cluster, or set upon create for a new
-// cluster.
-func (p *provisioningAdmitter) validateAgentEnvVars(request *admission.Request, oldCluster, newCluster *v1.Cluster) *admissionv1.AdmissionResponse {
-	if newCluster.Spec.RKEConfig == nil {
-		return admission.ResponseAllowed()
+func getEnvVar(name string, envVars []rkev1.EnvVar) *rkev1.EnvVar {
+	var envVar *rkev1.EnvVar
+	for _, e := range envVars {
+		if e.Name == name {
+			envVar = &e
+		}
 	}
-	if request.Operation == admissionv1.Create {
-		if slices.ContainsFunc(newCluster.Spec.AgentEnvVars, func(envVar rkev1.EnvVar) bool {
-			return envVar.Name == systemAgentVarDirEnvVar
-		}) {
-			return admission.ResponseBadRequest(
-				fmt.Sprintf(`"%s" cannot be set within "cluster.Spec.RKEConfig.AgentEnvVars": use "cluster.Spec.RKEConfig.DataDirectories.SystemAgent"`, systemAgentVarDirEnvVar))
-		}
-		return admission.ResponseAllowed()
-	}
-	if request.Operation == admissionv1.Update {
-		var oldCount, newCount int
-		for _, envVar := range oldCluster.Spec.AgentEnvVars {
-			if envVar.Name == systemAgentVarDirEnvVar {
-				oldCount++
+	return envVar
+}
+
+// validateSystemAgentDataDirectory validates the effective system agent data directory, ensuring that the intended
+// previously configured "CATTLE_AGENT_VAR_DIR" is used during and post migration to the SystemAgent data directory
+// field. Once this migration is performed and the field is set, the existing of the env var is completely disallowed.
+func (p *provisioningAdmitter) validateSystemAgentDataDirectory(oldCluster, newCluster *v1.Cluster) *admissionv1.AdmissionResponse {
+	oldSystemAgentVarDirEnvVar := getEnvVar(systemAgentVarDirEnvVar, oldCluster.Spec.AgentEnvVars)
+	newSystemAgentVarDirEnvVar := getEnvVar(systemAgentVarDirEnvVar, newCluster.Spec.AgentEnvVars)
+	if oldSystemAgentVarDirEnvVar != nil && oldSystemAgentVarDirEnvVar.Value != "" {
+		if newCluster.Spec.RKEConfig.DataDirectories.SystemAgent != "" {
+			// new envs vars must be empty and new and old must be equal in order to perform migration
+			if newSystemAgentVarDirEnvVar != nil && newSystemAgentVarDirEnvVar.Value != "" {
+				return admission.ResponseBadRequest(fmt.Sprintf(`"%s" env var in "cluster.Spec.AgentEnvVars" must be removed when migrating SystemAgent data directory"`, systemAgentVarDirEnvVar))
 			}
-		}
-		for _, envVar := range newCluster.Spec.AgentEnvVars {
-			if envVar.Name == systemAgentVarDirEnvVar {
-				newCount++
+			if newCluster.Spec.RKEConfig.DataDirectories.SystemAgent != oldSystemAgentVarDirEnvVar.Value {
+				return admission.ResponseBadRequest(fmt.Sprintf(`System Agent data directory must be identical to previous "%s" env var in "cluster.Spec.AgentEnvVars" during migration`, systemAgentVarDirEnvVar))
 			}
+			// env var was removed or changed
+		} else if newSystemAgentVarDirEnvVar == nil || newSystemAgentVarDirEnvVar.Value != oldSystemAgentVarDirEnvVar.Value {
+			return admission.ResponseBadRequest(fmt.Sprintf(`"%s" env var in "cluster.Spec.AgentEnvVars" cannot be changed after cluster creation"`, systemAgentVarDirEnvVar))
 		}
-		if newCount > oldCount {
-			return admission.ResponseBadRequest(
-				fmt.Sprintf(`"%s" cannot be set within "cluster.Spec.RKEConfig.AgentEnvVars": use "cluster.Spec.RKEConfig.DataDirectories.SystemAgent"`, systemAgentVarDirEnvVar))
+	} else {
+		// post migration
+		if newCluster.Spec.RKEConfig.DataDirectories.SystemAgent != oldCluster.Spec.RKEConfig.DataDirectories.SystemAgent {
+			return admission.ResponseBadRequest("System Agent data directory cannot be changed after cluster creation")
+		}
+		if newSystemAgentVarDirEnvVar != nil && newSystemAgentVarDirEnvVar.Value != "" {
+			return admission.ResponseBadRequest(fmt.Sprintf(`"%s" env var in "cluster.Spec.AgentEnvVars" cannot be set after cluster creation"`, systemAgentVarDirEnvVar))
 		}
 	}
 
@@ -174,29 +174,25 @@ func (p *provisioningAdmitter) validateAgentEnvVars(request *admission.Request, 
 // cluster.Spec.RKEConfig.DataDirectories.SystemAgent field for the cluster. validateAgentEnvVars will ensure
 // "CATTLE_AGENT_VAR_DIR" is not added, so this exception only applies to the one-time Rancher migration.
 func (p *provisioningAdmitter) validateDataDirectories(request *admission.Request, oldCluster, newCluster *v1.Cluster) *admissionv1.AdmissionResponse {
-	if request.Operation != admissionv1.Update {
-		return admission.ResponseAllowed()
-	}
 	if newCluster.Spec.RKEConfig == nil {
 		return admission.ResponseAllowed()
 	}
-	oldSystemAgentVarDirEnvVars := slices.DeleteFunc(slices.Clone(oldCluster.Spec.AgentEnvVars), func(envVar rkev1.EnvVar) bool {
-		return envVar.Name != systemAgentVarDirEnvVar
-	})
-	// will be true up until rancher performs one time migration to set SystemAgent data directory if env var was previously set
-	if len(oldSystemAgentVarDirEnvVars) > 0 {
-		newSystemAgentVarDirEnvVars := slices.DeleteFunc(slices.Clone(newCluster.Spec.AgentEnvVars), func(envVar rkev1.EnvVar) bool {
-			return envVar.Name != systemAgentVarDirEnvVar
-		})
-		if !reflect.DeepEqual(newSystemAgentVarDirEnvVars, oldSystemAgentVarDirEnvVars) || oldCluster.Spec.RKEConfig.DataDirectories.SystemAgent != newCluster.Spec.RKEConfig.DataDirectories.SystemAgent {
-			if newCluster.Spec.RKEConfig.DataDirectories.SystemAgent != oldSystemAgentVarDirEnvVars[len(oldSystemAgentVarDirEnvVars)-1].Value {
-				// only valid during migration
-				return admission.ResponseBadRequest(
-					fmt.Sprintf(`"%s" cannot be set within "cluster.Spec.RKEConfig.AgentEnvVars": use "cluster.Spec.RKEConfig.DataDirectories.SystemAgent"`, systemAgentVarDirEnvVar))
-			}
+	// cannot set "CATTLE_AGENT_VAR_DIR" on create anymore, but still valid as a field until cluster is migrated.
+	if request.Operation == admissionv1.Create {
+		if slices.ContainsFunc(newCluster.Spec.AgentEnvVars, func(envVar rkev1.EnvVar) bool {
+			return envVar.Name == systemAgentVarDirEnvVar
+		}) {
+			return admission.ResponseBadRequest(
+				fmt.Sprintf(`"%s" cannot be set within "cluster.Spec.RKEConfig.AgentEnvVars": use "cluster.Spec.RKEConfig.DataDirectories.SystemAgent"`, systemAgentVarDirEnvVar))
 		}
-	} else if oldCluster.Spec.RKEConfig.DataDirectories.SystemAgent != newCluster.Spec.RKEConfig.DataDirectories.SystemAgent {
-		return admission.ResponseBadRequest("SystemAgent data directory cannot be changed after cluster creation")
+		return admission.ResponseAllowed()
+	}
+	if request.Operation != admissionv1.Update {
+		return admission.ResponseAllowed()
+	}
+
+	if response := p.validateSystemAgentDataDirectory(oldCluster, newCluster); !response.Allowed {
+		return response
 	}
 	if oldCluster.Spec.RKEConfig.DataDirectories.Provisioning != newCluster.Spec.RKEConfig.DataDirectories.Provisioning {
 		return admission.ResponseBadRequest("Provisioning data directory cannot be changed after cluster creation")
