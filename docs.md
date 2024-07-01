@@ -359,13 +359,12 @@ When a UserAttribute is updated, the following checks take place:
 
 ##### Data Directories
 
-For all `cluster.provisioning.cattle.io/v1` objects, prevent the creation of new objects with an env var (under 
-`spec.agentEnvVars`) with a name of `CATTLE_AGENT_VAR_DIR`. On update, also prevent new env vars with this name from 
-being added but allow them to be removed. Rancher will perform a one-time migration to move the system-agent data dir 
-definition to the top level field from the `AgentEnvVars` section. A secondary validator will ensure that the effective 
-data directory for the `system-agent` is not different from the one chosen during cluster creation. Additionally, the 
-changing of a data directory for the `system-agent`, kubernetes distro (RKE2/K3s), and CAPR components is also 
-prohibited.
+Prevent the creation of new objects with an env var (under `spec.agentEnvVars`) with a name of `CATTLE_AGENT_VAR_DIR`. 
+On update, also prevent new env vars with this name from being added but allow them to be removed. Rancher will perform 
+a one-time migration to move the system-agent data dir definition to the top level field from the `AgentEnvVars` 
+section. A secondary validator will ensure that the effective data directory for the `system-agent` is not different 
+from the one chosen during cluster creation. Additionally, the changing of a data directory for the `system-agent`, 
+kubernetes distro (RKE2/K3s), and CAPR components is also prohibited.
 
 ### Mutation Checks
 
