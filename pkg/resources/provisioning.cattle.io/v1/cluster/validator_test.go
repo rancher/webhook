@@ -377,6 +377,32 @@ func TestValidateSystemAgentDataDirectory(t *testing.T) {
 			shouldSucceed: true,
 		},
 		{
+			name: "change during migration",
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
+							DataDirectories: rkev1.DataDirectories{
+								SystemAgent: "b",
+							},
+						},
+					},
+				},
+			},
+			oldCluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+					AgentEnvVars: []rkev1.EnvVar{
+						{
+							Name:  "CATTLE_AGENT_VAR_DIR",
+							Value: "a",
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
 			name: "reverse migrate env var",
 			cluster: &v1.Cluster{
 				Spec: v1.ClusterSpec{
@@ -519,6 +545,38 @@ func TestValidateSystemAgentDataDirectory(t *testing.T) {
 			shouldSucceed: false,
 		},
 		{
+			name: "set data directory without migrating",
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
+							DataDirectories: rkev1.DataDirectories{
+								SystemAgent: "a",
+							},
+						},
+					},
+					AgentEnvVars: []rkev1.EnvVar{
+						{
+							Name:  "CATTLE_AGENT_VAR_DIR",
+							Value: "a",
+						},
+					},
+				},
+			},
+			oldCluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+					AgentEnvVars: []rkev1.EnvVar{
+						{
+							Name:  "CATTLE_AGENT_VAR_DIR",
+							Value: "a",
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
 			name: "update unrelated vars",
 			cluster: &v1.Cluster{
 				Spec: v1.ClusterSpec{
@@ -575,16 +633,47 @@ func TestValidateDataDirectories(t *testing.T) {
 			shouldSucceed: true,
 		},
 		{
-			name:          "Create",
-			request:       &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
-			cluster:       &v1.Cluster{},
+			name:    "Create",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+				},
+			},
 			oldCluster:    nil,
 			shouldSucceed: true,
 		},
 		{
-			name:          "Delete",
-			request:       &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Delete}},
-			cluster:       &v1.Cluster{},
+			name:    "Create with CATTLE_AGENT_VAR_DIR",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+					AgentEnvVars: []rkev1.EnvVar{
+						{
+							Name:  "CATTLE_AGENT_VAR_DIR",
+							Value: "a",
+						},
+					},
+				},
+			},
+			oldCluster:    nil,
+			shouldSucceed: false,
+		},
+		{
+			name:    "Delete",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Delete}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+					AgentEnvVars: []rkev1.EnvVar{
+						{
+							Name:  "CATTLE_AGENT_VAR_DIR",
+							Value: "a",
+						},
+					},
+				},
+			},
 			oldCluster:    nil,
 			shouldSucceed: true,
 		},

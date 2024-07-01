@@ -145,7 +145,7 @@ func (p *provisioningAdmitter) validateSystemAgentDataDirectory(oldCluster, newC
 	if oldSystemAgentVarDirEnvVar != nil && oldSystemAgentVarDirEnvVar.Value != "" {
 		if newCluster.Spec.RKEConfig.DataDirectories.SystemAgent != "" {
 			// new envs vars must be empty and new and old must be equal in order to perform migration
-			if newSystemAgentVarDirEnvVar != nil && newSystemAgentVarDirEnvVar.Value != "" {
+			if newSystemAgentVarDirEnvVar != nil {
 				return admission.ResponseBadRequest(fmt.Sprintf(`"%s" env var in "cluster.Spec.AgentEnvVars" must be removed when migrating SystemAgent data directory"`, systemAgentVarDirEnvVar))
 			}
 			if newCluster.Spec.RKEConfig.DataDirectories.SystemAgent != oldSystemAgentVarDirEnvVar.Value {
