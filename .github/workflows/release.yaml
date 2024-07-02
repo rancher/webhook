@@ -159,6 +159,7 @@ jobs:
         run: |
           echo TAG_NAME=$(echo $GITHUB_REF | sed -e "s|refs/tags/||") >> $GITHUB_ENV
       - name: Build and push the webhook image
+        id: build
         # https://github.com/docker/build-push-action/commit/ca052bb54ab0790a636c9b5f226502c73d547a25
         uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25
         with:
