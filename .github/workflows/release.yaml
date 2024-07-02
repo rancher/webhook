@@ -109,7 +109,7 @@ jobs:
         - arm64
     name: Build and push Webhook images
     runs-on: ubuntu-latest
-    needs: release
+    needs: build
     steps:
       - name : Checkout repository
         # https://github.com/actions/checkout/releases/tag/v4.1.1
@@ -122,15 +122,10 @@ jobs:
           name: webhook-artifacts-${{ matrix.arch }}
           path: dist/artifacts
 
-      - name: Move binary to bina
+      - name: Move binary to bin/
         run: |
-          pwd
-          ls -l
-          mkdir -p bin
-          find .
           cp -v dist/artifacts/webhook-linux-${{ matrix.arch }} bin/webhook
-          find .
-          ls -l
+          chmod +x bin/webhook
 
       # - name: "Read vault secrets"
       #   uses: rancher-eio/read-vault-secrets@main
