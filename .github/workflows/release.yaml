@@ -208,6 +208,8 @@ jobs:
       - name: output stuff
         run: |
           echo "$DOCKER_METADATA_OUTPUT_JSON"
+          echo docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REPO }}/rancher-webhook@sha256:%s ' *)
 
       - name: Create manifest list and push
         working-directory: /tmp/digests
