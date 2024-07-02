@@ -17,7 +17,7 @@ steps:
         path: /var/run/docker.sock
 
   - name: integration-test
-    image: rancher/rancher:v2.9-head
+    image: rancher/rancher:v2.9.0-alpha1
     pull: always
     privileged: true
     commands:
@@ -87,7 +87,7 @@ steps:
         path: /var/run/docker.sock
 
   - name: integration-test
-    image: rancher/rancher:v2.9-head
+    image: rancher/rancher:v2.9.0-alpha1
     pull: always
     privileged: true
     commands:
@@ -173,19 +173,3 @@ steps:
 depends_on:
   - amd64
   - arm64
-
----
-kind: pipeline
-name: fossa
-type: docker
-
-steps:
-  - name: fossa
-    image: rancher/drone-fossa:latest
-    failure: ignore
-    settings:
-      api_key:
-        from_secret: FOSSA_API_KEY
-      when:
-        instance:
-          - drone-publish.rancher.io
