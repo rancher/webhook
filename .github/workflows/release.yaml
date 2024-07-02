@@ -111,6 +111,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: release
     steps:
+      - name : Checkout repository
+        # https://github.com/actions/checkout/releases/tag/v4.1.1
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
       - name: Download the artifacts
         # https://github.com/actions/download-artifact/commit/65a9edc5881444af0b9093a5e628f2fe47ea3b2e
         uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e
@@ -135,10 +139,6 @@ jobs:
       #       secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials username | DOCKER_USERNAME ;
       #       secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials password | DOCKER_PASSWORD
 #
-      - name : Checkout repository
-        # https://github.com/actions/checkout/releases/tag/v4.1.1
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
