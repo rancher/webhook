@@ -101,7 +101,6 @@ jobs:
   image:
     permissions:
       contents: read
-      id-token: write
     strategy:
       matrix:
         arch:
