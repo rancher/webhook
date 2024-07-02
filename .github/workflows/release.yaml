@@ -124,6 +124,7 @@ jobs:
 
       - name: Move binary to bin/
         run: |
+          mkdir -p bin/
           cp -v dist/artifacts/webhook-linux-${{ matrix.arch }} bin/webhook
           chmod +x bin/webhook
 
