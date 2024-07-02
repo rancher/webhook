@@ -123,7 +123,9 @@ jobs:
           pwd
           ls -l
           mkdir -p bin
-          mv dist/artifacts/webhook-linux-${{ matrix.arch }} bin/webhook
+          find .
+          cp -v dist/artifacts/webhook-linux-${{ matrix.arch }} bin/webhook
+          find .
 
       # - name: "Read vault secrets"
       #   uses: rancher-eio/read-vault-secrets@main
