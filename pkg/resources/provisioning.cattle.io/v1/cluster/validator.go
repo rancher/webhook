@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 
 	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
+	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/clients"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
@@ -26,10 +28,15 @@ import (
 	"k8s.io/utils/trace"
 )
 
-const globalNamespace = "cattle-global-data"
+const (
+	globalNamespace         = "cattle-global-data"
+	systemAgentVarDirEnvVar = "CATTLE_AGENT_VAR_DIR"
+)
 
-var mgmtNameRegex = regexp.MustCompile("^c-[a-z0-9]{5}$")
-var fleetNameRegex = regexp.MustCompile("^[^-][-a-z0-9]+$")
+var (
+	mgmtNameRegex  = regexp.MustCompile("^c-[a-z0-9]{5}$")
+	fleetNameRegex = regexp.MustCompile("^[^-][-a-z0-9]+$")
+)
 
 // NewProvisioningClusterValidator returns a new validator for provisioning clusters
 func NewProvisioningClusterValidator(client *clients.Clients) *ProvisioningClusterValidator {
@@ -78,10 +85,12 @@ type provisioningAdmitter struct {
 func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	listTrace := trace.New("provisioningClusterValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
+
 	oldCluster, cluster, err := objectsv1.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return nil, err
 	}
+
 	response := &admissionv1.AdmissionResponse{}
 	if request.Operation == admissionv1.Create || request.Operation == admissionv1.Update {
 		if err := p.validateClusterName(request, response, cluster); err != nil || response.Result != nil {
@@ -103,6 +112,10 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 		if err := p.validateCloudCredentialAccess(request, response, oldCluster, cluster); err != nil || response.Result != nil {
 			return response, err
 		}
+
+		if response = p.validateDataDirectories(request, oldCluster, cluster); !response.Allowed {
+			return response, err
+		}
 	}
 
 	if err := p.validatePSACT(request, response, cluster); err != nil || response.Result != nil {
@@ -111,6 +124,84 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 
 	response.Allowed = true
 	return response, nil
+}
+
+func getEnvVar(name string, envVars []rkev1.EnvVar) *rkev1.EnvVar {
+	var envVar *rkev1.EnvVar
+	for _, e := range envVars {
+		if e.Name == name {
+			envVar = &e
+		}
+	}
+	return envVar
+}
+
+// validateSystemAgentDataDirectory validates the effective system agent data directory, ensuring that the intended
+// previously configured "CATTLE_AGENT_VAR_DIR" is used during and post migration to the SystemAgent data directory
+// field. Once this migration is performed and the field is set, the existing of the env var is completely disallowed.
+func (p *provisioningAdmitter) validateSystemAgentDataDirectory(oldCluster, newCluster *v1.Cluster) *admissionv1.AdmissionResponse {
+	oldSystemAgentVarDirEnvVar := getEnvVar(systemAgentVarDirEnvVar, oldCluster.Spec.AgentEnvVars)
+	newSystemAgentVarDirEnvVar := getEnvVar(systemAgentVarDirEnvVar, newCluster.Spec.AgentEnvVars)
+	if oldSystemAgentVarDirEnvVar != nil && oldSystemAgentVarDirEnvVar.Value != "" {
+		if newCluster.Spec.RKEConfig.DataDirectories.SystemAgent != "" {
+			// new envs vars must be empty and new and old must be equal in order to perform migration
+			if newSystemAgentVarDirEnvVar != nil {
+				return admission.ResponseBadRequest(fmt.Sprintf(`"%s" env var in "cluster.Spec.AgentEnvVars" must be removed when migrating SystemAgent data directory"`, systemAgentVarDirEnvVar))
+			}
+			if newCluster.Spec.RKEConfig.DataDirectories.SystemAgent != oldSystemAgentVarDirEnvVar.Value {
+				return admission.ResponseBadRequest(fmt.Sprintf(`System Agent data directory must be identical to previous "%s" env var in "cluster.Spec.AgentEnvVars" during migration`, systemAgentVarDirEnvVar))
+			}
+			// env var was removed or changed
+		} else if newSystemAgentVarDirEnvVar == nil || newSystemAgentVarDirEnvVar.Value != oldSystemAgentVarDirEnvVar.Value {
+			return admission.ResponseBadRequest(fmt.Sprintf(`"%s" env var in "cluster.Spec.AgentEnvVars" cannot be changed after cluster creation"`, systemAgentVarDirEnvVar))
+		}
+	} else {
+		// post migration
+		if newCluster.Spec.RKEConfig.DataDirectories.SystemAgent != oldCluster.Spec.RKEConfig.DataDirectories.SystemAgent {
+			return admission.ResponseBadRequest("System Agent data directory cannot be changed after cluster creation")
+		}
+		if newSystemAgentVarDirEnvVar != nil && newSystemAgentVarDirEnvVar.Value != "" {
+			return admission.ResponseBadRequest(fmt.Sprintf(`"%s" env var in "cluster.Spec.AgentEnvVars" cannot be set after cluster creation"`, systemAgentVarDirEnvVar))
+		}
+	}
+
+	return admission.ResponseAllowed()
+}
+
+// validateDataDirectories will validate updates to the cluster object to ensure the data directories are not changed.
+// The only exception when a data directory is allowed to be changed is if cluster.Spec.AgentEnvVars has an env var with
+// a name of "CATTLE_AGENT_VAR_DIR", which Rancher will perform a one-time migration to set the
+// cluster.Spec.RKEConfig.DataDirectories.SystemAgent field for the cluster. validateAgentEnvVars will ensure
+// "CATTLE_AGENT_VAR_DIR" is not added, so this exception only applies to the one-time Rancher migration.
+func (p *provisioningAdmitter) validateDataDirectories(request *admission.Request, oldCluster, newCluster *v1.Cluster) *admissionv1.AdmissionResponse {
+	if newCluster.Spec.RKEConfig == nil {
+		return admission.ResponseAllowed()
+	}
+	// cannot set "CATTLE_AGENT_VAR_DIR" on create anymore, but still valid as a field until cluster is migrated.
+	if request.Operation == admissionv1.Create {
+		if slices.ContainsFunc(newCluster.Spec.AgentEnvVars, func(envVar rkev1.EnvVar) bool {
+			return envVar.Name == systemAgentVarDirEnvVar
+		}) {
+			return admission.ResponseBadRequest(
+				fmt.Sprintf(`"%s" cannot be set within "cluster.Spec.RKEConfig.AgentEnvVars": use "cluster.Spec.RKEConfig.DataDirectories.SystemAgent"`, systemAgentVarDirEnvVar))
+		}
+		return admission.ResponseAllowed()
+	}
+	if request.Operation != admissionv1.Update {
+		return admission.ResponseAllowed()
+	}
+
+	if response := p.validateSystemAgentDataDirectory(oldCluster, newCluster); !response.Allowed {
+		return response
+	}
+	if oldCluster.Spec.RKEConfig.DataDirectories.Provisioning != newCluster.Spec.RKEConfig.DataDirectories.Provisioning {
+		return admission.ResponseBadRequest("Provisioning data directory cannot be changed after cluster creation")
+	}
+	if oldCluster.Spec.RKEConfig.DataDirectories.K8sDistro != newCluster.Spec.RKEConfig.DataDirectories.K8sDistro {
+		return admission.ResponseBadRequest("Distro data directory cannot be changed after cluster creation")
+	}
+
+	return admission.ResponseAllowed()
 }
 
 func (p *provisioningAdmitter) validateCloudCredentialAccess(request *admission.Request, response *admissionv1.AdmissionResponse, oldCluster, newCluster *v1.Cluster) error {
