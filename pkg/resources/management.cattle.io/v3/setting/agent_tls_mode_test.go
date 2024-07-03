@@ -252,6 +252,65 @@ func TestValidateAgentTLSMode(t *testing.T) {
 			operation: admissionv1.Update,
 			allowed:   true,
 		},
+		"update forbidden from system store to strict due to incorrect value on target status": {
+			oldSetting: v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "agent-tls-mode",
+				},
+				Default: "system-store",
+				Value:   "system-store",
+			},
+			newSetting: v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "agent-tls-mode",
+				},
+				Default: "strict",
+				Value:   "strict",
+			},
+			clusters: []*v3.Cluster{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "local",
+					},
+					Status: v3.ClusterStatus{
+						Conditions: []v3.ClusterCondition{
+							{
+								Type:   "AgentTlsStrictCheck",
+								Status: "True",
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cluster-1",
+					},
+					Status: v3.ClusterStatus{
+						Conditions: []v3.ClusterCondition{
+							{
+								Type:   "AgentTlsStrictCheck",
+								Status: "True",
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cluster-2",
+					},
+					Status: v3.ClusterStatus{
+						Conditions: []v3.ClusterCondition{
+							{
+								Type:   "AgentTlsStrictCheck",
+								Status: "False",
+							},
+						},
+					},
+				},
+			},
+			operation: admissionv1.Update,
+			allowed:   false,
+		},
 		"update forbidden on error to list clusters": {
 			oldSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
