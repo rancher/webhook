@@ -80,12 +80,15 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Setting from request: %w", err)
 	}
-	if request.Operation == admissionv1.Create || request.Operation == admissionv1.Update {
+	switch request.Operation {
+	case admissionv1.Create:
 		if err := a.validateUserRetentionSettings(newSetting); err != nil {
 			return admission.ResponseBadRequest(err.Error()), nil
 		}
-	}
-	if request.Operation == admissionv1.Update {
+	case admissionv1.Update:
+		if err := a.validateUserRetentionSettings(newSetting); err != nil {
+			return admission.ResponseBadRequest(err.Error()), nil
+		}
 		if err := a.validateAgentTLSMode(*oldSetting, *newSetting); err != nil {
 			return admission.ResponseBadRequest(err.Error()), nil
 		}
@@ -145,7 +148,7 @@ func (a *admitter) validateAgentTLSMode(oldSetting, newSetting v3.Setting) error
 			}
 			if !clusterConditionMatches(cluster, "AgentTlsStrictCheck", "True") {
 				return field.Forbidden(field.NewPath("value", "default"),
-					fmt.Sprintf("AgentTlsStrictCheck status of cluster %s isn't 'True'", cluster.Name))
+					fmt.Sprintf("AgentTlsStrictCheck condition of cluster %s isn't 'True'", cluster.Name))
 			}
 		}
 	}
