@@ -20,9 +20,14 @@ on:
 permissions:
   contents: read
 
+env:
+  REGISTRY: docker.io
+
 jobs:
   build:
     name: CI
+    permissions:
+      id-token: write
     strategy:
       matrix:
         archBox:
@@ -58,6 +63,22 @@ jobs:
 
       - name: ci
         run: make ci
+
+      - name: "Read vault secrets"
+        uses: rancher-eio/read-vault-secrets@main
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials username | DOCKER_USERNAME ;
+            secret/data/github/repo/${{ github.repository }}/dockerhub/rancher/credentials password | DOCKER_PASSWORD
+
+      # Login to avoid docker rate limit
+      - name: Log in to the Container registry
+        # https://github.com/docker/login-action/commit/0d4c9c5ea7693da7b068278f7b52bda2a190a446
+        uses: docker/login-action@0d4c9c5ea7693da7b068278f7b52bda2a190a446
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
 
       - name: setup cluster
         run: ./.github/workflows/scripts/setup-cluster.sh
