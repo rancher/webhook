@@ -3,7 +3,7 @@ set -exu
 
 cd $(dirname $0)/../
 
-source ./scripts/try.sh
+source ./.github/workflows/scripts/try.sh
 
 # Wait for rancher to start up
 try --delay 2 --max 30 --waitmsg "Waiting for rancher to start" --failmsg "No rancher here" kubectl rollout status --watch=true --timeout=10s -n cattle-system deploy/rancher
