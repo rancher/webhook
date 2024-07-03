@@ -150,6 +150,13 @@ jobs:
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ env.DOCKER_PASSWORD }}
 
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81
+        # https://github.com/docker/metadata-action/commit/8e5442c4ef9f78752691e2d8f8d19755c6f78e81
+        with:
+          images: ${{ env.IMAGE_NAME }}
+
       - name: Build and push the webhook image
         id: build
         # https://github.com/docker/build-push-action/commit/ca052bb54ab0790a636c9b5f226502c73d547a25
@@ -158,6 +165,10 @@ jobs:
           context: .
           file: ./package/Dockerfile
           platforms: "linux/${{ matrix.arch }}"
+          sbom: true
+          push: true
+          provenance: mode=max
+          tags: ${{ steps.meta.outputs.tags }}
           outputs: type=image,name=${{ env.REPO }}/rancher-webhook,push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
