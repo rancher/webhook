@@ -162,7 +162,6 @@ jobs:
         with:
           context: .
           file: ./package/Dockerfile
-          labels: ${{ steps.meta.outputs.labels }}
           platforms: "linux/${{ matrix.arch }}"
           outputs: type=image,name=${{ env.REPO }}/rancher-webhook,push-by-digest=true,name-canonical=true,push=true
           sbom: true
