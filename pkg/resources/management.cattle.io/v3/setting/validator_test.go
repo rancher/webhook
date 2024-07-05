@@ -388,9 +388,60 @@ func TestValidateAgentTLSMode(t *testing.T) {
 						Conditions: []v3.ClusterCondition{
 							{
 								Type:   "AgentTlsStrictCheck",
+								Status: "False",
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cluster-1",
+					},
+					Status: v3.ClusterStatus{
+						Conditions: []v3.ClusterCondition{
+							{
+								Type:   "AgentTlsStrictCheck",
 								Status: "True",
 							},
 						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "cluster-2",
+					},
+					Status: v3.ClusterStatus{
+						Conditions: []v3.ClusterCondition{
+							{
+								Type:   "AgentTlsStrictCheck",
+								Status: "True",
+							},
+						},
+					},
+				},
+			},
+			operation: v1.Update,
+			allowed:   true,
+		},
+		"update allowed with value changing from system store to strict": {
+			oldSetting: v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "agent-tls-mode",
+				},
+				Default: "system-store",
+				Value:   "",
+			},
+			newSetting: v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "agent-tls-mode",
+				},
+				Default: "system-store",
+				Value:   "strict",
+			},
+			clusters: []*v3.Cluster{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "local",
 					},
 				},
 				{
