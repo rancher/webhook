@@ -1,4 +1,4 @@
-FROM registry.suse.com/bci/golang:1.21
+FROM registry.suse.com/bci/golang:1.22
 
 ARG DAPPER_HOST_ARCH
 ENV ARCH $DAPPER_HOST_ARCH
@@ -17,7 +17,7 @@ RUN if [ "${ARCH}" = "amd64" ]; then \
 
 RUN GOBIN=/usr/local/bin go install github.com/golang/mock/mockgen@v1.6.0
 
-ENV DAPPER_ENV REPO TAG DRONE_TAG CROSS
+ENV DAPPER_ENV REPO TAG CROSS
 ENV DAPPER_SOURCE /go/src/github.com/rancher/webhook/
 ENV DAPPER_OUTPUT ./bin ./dist
 ENV DAPPER_DOCKER_SOCKET true
