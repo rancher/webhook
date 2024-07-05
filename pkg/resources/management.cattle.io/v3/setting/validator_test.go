@@ -550,6 +550,20 @@ func TestValidateAgentTLSMode(t *testing.T) {
 			clusterListerFails: true,
 			allowed:            false,
 		},
+		"ineffectual update allowed": {
+			oldSetting: v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "agent-tls-mode",
+				},
+			},
+			newSetting: v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "agent-tls-mode",
+				},
+			},
+			operation: v1.Update,
+			allowed:   true,
+		},
 	}
 	for name, tc := range tests {
 		name, tc := name, tc
