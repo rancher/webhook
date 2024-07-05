@@ -155,6 +155,14 @@ jobs:
         with:
           images: ${{ env.REPO }}/rancher-webhook
 
+      - name: Set labels to output
+        id: labels
+        run: |
+          echo "created=$(jq -cr '.labels."org.opencontainers.image.created"' <<< "$DOCKER_METADATA_OUTPUT_JSON")" >> "$GITHUB_OUTPUT"
+          echo "revision=$(jq -cr '.labels."org.opencontainers.image.revision"' <<< "$DOCKER_METADATA_OUTPUT_JSON")" >> "$GITHUB_OUTPUT"
+          echo "source=$(jq -cr '.labels."org.opencontainers.image.source"' <<< "$DOCKER_METADATA_OUTPUT_JSON").git" >> "$GITHUB_OUTPUT"
+          echo "url=$(jq -cr '.labels."org.opencontainers.image.url"' <<< "$DOCKER_METADATA_OUTPUT_JSON")" >> "$GITHUB_OUTPUT"
+
       - name: Build and push the webhook image
         id: build
         # https://github.com/docker/build-push-action/commit/ca052bb54ab0790a636c9b5f226502c73d547a25
@@ -164,7 +172,11 @@ jobs:
           file: ./package/Dockerfile
           platforms: "linux/${{ matrix.arch }}"
           outputs: type=image,name=${{ env.REPO }}/rancher-webhook,push-by-digest=true,name-canonical=true,push=true
-          sbom: true
+          build-args: |
+            LABEL_CREATED=${{ steps.labels.outputs.created }}
+            LABEL_REVISION=${{ steps.labels.outputs.revision }}
+            LABEL_SOURCE=${{ steps.labels.outputs.source }}
+            LABEL_URL=${{ steps.labels.outputs.url }}
 
       - name: Export digest
         run: |
