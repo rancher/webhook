@@ -1,12 +1,20 @@
 package integration_test
 
 import (
+	"os"
+	"runtime"
+
 	"github.com/rancher/webhook/pkg/auth"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 func (m *IntegrationSuite) TestRKEMachineConfig() {
+	if runtime.GOARCH == "arm64" && os.Getenv("CI") != "" {
+		// Temporarily workaround https://github.com/rancher/rancher/issues/45837 :
+		// Not all CRDs are built in GHA/arm64
+		m.T().Skip("Skipping the RKE Machine-Config test on arm64 in CI -- machine info not available")
+	}
 	objGVK := schema.GroupVersionKind{
 		Group:   "rke-machine-config.cattle.io",
 		Version: "v1",
