@@ -39,11 +39,11 @@ require (
 	github.com/evanphx/json-patch v5.9.0+incompatible
 	github.com/golang/mock v1.6.0
 	github.com/gorilla/mux v1.8.1
-	github.com/rancher/dynamiclistener v0.6.0-rc1
-	github.com/rancher/lasso v0.0.0-20240603075835-701e919d08b7
+	github.com/rancher/dynamiclistener v0.6.0-rc2
+	github.com/rancher/lasso v0.0.0-20240705194423-b2a060d103c1
 	github.com/rancher/rancher/pkg/apis v0.0.0-20240628084651-0dd62c26260a
 	github.com/rancher/rke v1.6.0-rc7
-	github.com/rancher/wrangler/v3 v3.0.0-rc2
+	github.com/rancher/wrangler/v3 v3.0.0
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
