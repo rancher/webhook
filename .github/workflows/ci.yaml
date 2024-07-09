@@ -24,6 +24,7 @@ jobs:
   build:
     name: CI
     strategy:
+      fail-fast: false
       matrix:
         archBox:
         - { arch: amd64, vmArch: x64 }
