@@ -47,7 +47,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		nodeDriver := nodedriver.NewValidator(clients.Management.Node().Cache(), clients.Dynamic)
 		projects := project.NewValidator(clients.Management.Cluster().Cache())
 		userAttribute := userattribute.NewValidator()
-		setting := setting.NewValidator()
+		setting := setting.NewValidator(clients.Management.Cluster().Cache())
 		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, nodeDriver, projects, userAttribute, setting)
 	}
 	return handlers, nil

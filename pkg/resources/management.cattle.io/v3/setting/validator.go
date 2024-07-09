@@ -6,14 +6,18 @@ import (
 	"time"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-	"github.com/rancher/webhook/pkg/admission"
-	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/robfig/cron"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/trace"
+
+	"github.com/rancher/webhook/pkg/admission"
+	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
+	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 )
 
 // MinDeleteInactiveUserAfter is the minimum duration for delete-inactive-user-after setting.
@@ -33,9 +37,11 @@ type Validator struct {
 }
 
 // NewValidator returns a new Validator instance.
-func NewValidator() *Validator {
+func NewValidator(clusterCache controllerv3.ClusterCache) *Validator {
 	return &Validator{
-		admitter: admitter{},
+		admitter: admitter{
+			clusterCache: clusterCache,
+		},
 	}
 }
 
@@ -61,29 +67,36 @@ func (v *Validator) Admitters() []admission.Admitter {
 	return []admission.Admitter{&v.admitter}
 }
 
-type admitter struct{}
+type admitter struct {
+	clusterCache controllerv3.ClusterCache
+}
 
 // Admit handles the webhook admission requests.
 func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	listTrace := trace.New("userAttributeValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
-	if request.Operation == admissionv1.Create || request.Operation == admissionv1.Update {
-		setting, err := objectsv3.SettingFromRequest(&request.AdmissionRequest)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get Setting from request: %w", err)
+	oldSetting, newSetting, err := objectsv3.SettingOldAndNewFromRequest(&request.AdmissionRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Setting from request: %w", err)
+	}
+	switch request.Operation {
+	case admissionv1.Create:
+		if err := a.validateUserRetentionSettings(newSetting); err != nil {
+			return admission.ResponseBadRequest(err.Error()), nil
 		}
-
-		err = a.validateSetting(setting)
-		if err != nil {
+	case admissionv1.Update:
+		if err := a.validateUserRetentionSettings(newSetting); err != nil {
+			return admission.ResponseBadRequest(err.Error()), nil
+		}
+		if err := a.validateAgentTLSMode(*oldSetting, *newSetting); err != nil {
 			return admission.ResponseBadRequest(err.Error()), nil
 		}
 	}
-
 	return admission.ResponseAllowed(), nil
 }
 
-func (a *admitter) validateSetting(s *v3.Setting) error {
+func (a *admitter) validateUserRetentionSettings(s *v3.Setting) error {
 	var err error
 
 	switch s.Name {
@@ -117,6 +130,31 @@ func (a *admitter) validateSetting(s *v3.Setting) error {
 	return nil
 }
 
+func (a *admitter) validateAgentTLSMode(oldSetting, newSetting v3.Setting) error {
+	if oldSetting.Name != "agent-tls-mode" || newSetting.Name != "agent-tls-mode" {
+		return nil
+	}
+	if effectiveValue(oldSetting) == "system-store" && effectiveValue(newSetting) == "strict" {
+		if _, force := newSetting.Annotations["cattle.io/force"]; force {
+			return nil
+		}
+		clusters, err := a.clusterCache.List(labels.NewSelector())
+		if err != nil {
+			return fmt.Errorf("failed to list clusters: %w", err)
+		}
+		for _, cluster := range clusters {
+			if cluster.Name == "local" {
+				continue
+			}
+			if !clusterConditionMatches(cluster, "AgentTlsStrictCheck", "True") {
+				return field.Forbidden(field.NewPath("value", "default"),
+					fmt.Sprintf("AgentTlsStrictCheck condition of cluster %s isn't 'True'", cluster.Name))
+			}
+		}
+	}
+	return nil
+}
+
 func validateDuration(value string) (time.Duration, error) {
 	dur, err := time.ParseDuration(value)
 	if err != nil {
@@ -128,4 +166,22 @@ func validateDuration(value string) (time.Duration, error) {
 	}
 
 	return dur, err
+}
+
+func clusterConditionMatches(cluster *v3.Cluster, t v3.ClusterConditionType, status v1.ConditionStatus) bool {
+	for _, cond := range cluster.Status.Conditions {
+		if cond.Type == t && cond.Status == status {
+			return true
+		}
+	}
+	return false
+}
+
+func effectiveValue(s v3.Setting) string {
+	if s.Value != "" {
+		return s.Value
+	} else if s.Default != "" {
+		return s.Default
+	}
+	return ""
 }
