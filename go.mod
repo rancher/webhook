@@ -5,6 +5,7 @@ go 1.22.0
 toolchain go1.22.5
 
 replace (
+	github.com/rancher/rke => github.com/rancher/rke v1.6.0-rc10
 	k8s.io/api => k8s.io/api v0.30.1
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.30.1
 	k8s.io/apimachinery => k8s.io/apimachinery v0.30.1
@@ -41,8 +42,8 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/rancher/dynamiclistener v0.6.0-rc2
 	github.com/rancher/lasso v0.0.0-20240705194423-b2a060d103c1
-	github.com/rancher/rancher/pkg/apis v0.0.0-20240628084651-0dd62c26260a
-	github.com/rancher/rke v1.6.0-rc7
+	github.com/rancher/rancher/pkg/apis v0.0.0-20240710151157-3a6de11e4de9
+	github.com/rancher/rke v1.6.0-rc9
 	github.com/rancher/wrangler/v3 v3.0.0
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.3
@@ -50,8 +51,8 @@ require (
 	golang.org/x/exp v0.0.0-20240416160154-fe59bbe5cc7f
 	golang.org/x/text v0.16.0
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d
-	k8s.io/api v0.30.1
-	k8s.io/apimachinery v0.30.1
+	k8s.io/api v0.30.2
+	k8s.io/apimachinery v0.30.2
 	k8s.io/apiserver v0.30.1
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/kubernetes v1.30.1
@@ -109,10 +110,9 @@ require (
 	github.com/prometheus/procfs v0.14.0 // indirect
 	github.com/rancher/aks-operator v1.9.0-rc.9 // indirect
 	github.com/rancher/eks-operator v1.9.0-rc.9 // indirect
-	github.com/rancher/fleet/pkg/apis v0.10.0-rc.16 // indirect
+	github.com/rancher/fleet/pkg/apis v0.10.0-rc.19 // indirect
 	github.com/rancher/gke-operator v1.9.0-rc.8 // indirect
-	github.com/rancher/norman v0.0.0-20240604183301-20cd23aadce1 // indirect
-	github.com/rancher/wrangler/v2 v2.2.0-rc6 // indirect
+	github.com/rancher/norman v0.0.0-20240708202514-a0127673d1b9 // indirect
 	github.com/spf13/cobra v1.8.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
