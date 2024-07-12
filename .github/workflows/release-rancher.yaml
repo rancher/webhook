@@ -1,0 +1,74 @@
+name: Bump Webhook RC against rancher/rancher
+on:
+  workflow_dispatch:
+    inputs:
+      rancher_ref:
+        description: "Submit PR against the following rancher/charts branch (eg: dev-v2.9)"
+        required: true
+        default: "release/v2.9"
+      prev_webhook:
+        description: "Previous Webhook version (eg: 0.5.0-rc13)"
+        required: true
+        default: ""
+      new_webhook:
+        description: "New Webhook version (eg: 0.5.0-rc14)"
+        required: true
+        default: ""
+
+env:
+  RANCHER_REF: ${{ github.event.inputs.rancher_ref }}
+  PREV_WEBHOOK: ${{ github.event.inputs.prev_webhook }}
+  NEW_WEBHOOK: ${{ github.event.inputs.new_webhook }}
+
+jobs:
+  create-rancher-charts-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref }}
+          path: webhook
+
+      # Checkout the fork first because it's simpler to setup the token for the
+      # push later on
+      - name: Checkout fork of rancher/rancher
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          repository: tomleb/rancher-rancher
+          token: ${{ secrets.PUSH_TO_FORKS_TOKEN }}
+          path: rancher
+
+      - name: Install dependencies
+        run: sudo snap install yq --channel=v4/stable
+
+      - name: Setup repo dir
+        run: |
+          cd rancher
+          BRANCH="gha-test-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "BRANCH=${BRANCH}" >> $GITHUB_ENV
+          git config --global user.email "webhook@example.com"
+          git config --global user.name "tomleb webhook Bot"
+          git remote add upstream https://github.com/rancher/rancher
+          git fetch upstream
+          git checkout -b $BRANCH "upstream/$RANCHER_REF"
+
+      - name: Run release script
+        run: |
+          ./webhook/.github/workflows/scripts/release-against-rancher.sh rancher "$NEW_WEBHOOK"
+
+      - name: Push and create pull request
+        env:
+           GITHUB_TOKEN: ${{ secrets.PUSH_TO_FORKS_TOKEN }}
+        run: |
+          cd rancher
+          git push origin $BRANCH
+
+          body=$(../webhook/.github/workflows/scripts/release-message.sh "$PREV_WEBHOOK" "$NEW_WEBHOOK")
+
+          gh pr create \
+            --title "[$RANCHER_REF] Bump rancher-webhook to v$NEW_WEBHOOK" \
+            --body "$body" \
+            --repo rancher/rancher \
+            --head "tomleb:$BRANCH" \
+            --base "$RANCHER_REF"
