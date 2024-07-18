@@ -262,9 +262,9 @@ func (s *secretHandler) ensureWebhookConfiguration(validatingConfig *v1.Validati
 		}
 	}
 
-	currMutation, err := s.mutatingController.Get(validatingConfig.Name, metav1.GetOptions{})
+	currMutation, err := s.mutatingController.Get(mutatingConfig.Name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
-		_, err = s.mutatingController.Create(currMutation)
+		_, err = s.mutatingController.Create(mutatingConfig)
 		if err != nil {
 			return fmt.Errorf("failed to create mutating configuration: %w", err)
 		}
