@@ -135,7 +135,7 @@ func (a *admitter) validateAgentTLSMode(oldSetting, newSetting v3.Setting) error
 		return nil
 	}
 	if effectiveValue(oldSetting) == "system-store" && effectiveValue(newSetting) == "strict" {
-		if _, force := newSetting.Annotations["cattle.io/force"]; force {
+		if force := newSetting.Annotations["cattle.io/force"]; force == "true" {
 			return nil
 		}
 		clusters, err := a.clusterCache.List(labels.NewSelector())
