@@ -170,6 +170,7 @@ func createPatch(oldObj, newObj any) ([]byte, error) {
 	patch := admission.PatchResponseFromRaw(oldJSON, newJSON)
 
 	patchJSON, err := json.Marshal(patch.Patches)
+	logrus.Infof("QQQ: main_test => json patch %s", patchJSON)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal patch: %w", err)
 	}
