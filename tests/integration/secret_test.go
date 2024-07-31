@@ -2,14 +2,17 @@ package integration_test
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/rancher/webhook/pkg/auth"
+	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 )
+
+//"k8s.io/apimachinery/pkg/types"
 
 func (m *IntegrationSuite) TestSecret() {
 	objGVK := schema.GroupVersionKind{
@@ -32,7 +35,7 @@ func (m *IntegrationSuite) TestSecret() {
 	err = client.Create(ctx, validCreateObj.Namespace, validCreateObj, result, metav1.CreateOptions{})
 	m.NoError(err, "Error returned during the creation of a valid Object")
 	m.Contains(result.Annotations, auth.CreatorIDAnn)
-	
+
 	newJSON, err := json.Marshal(result)
 	if err != nil {
 		logrus.Errorf("Error json encoding the secret: %s", err)
@@ -40,11 +43,11 @@ func (m *IntegrationSuite) TestSecret() {
 		logrus.Infof("json encoding the secret: %s", newJSON)
 	}
 
-/*
-	err = client.Patch(ctx, validCreateObj.Namespace, validCreateObj.Name, types.JSONPatchType,
-		patchJSON, result, metav1.PatchOptions{})
-	m.NoError(err, "Error returned while patching the secret")
-*/
+	/*
+		err = client.Patch(ctx, validCreateObj.Namespace, validCreateObj.Name, types.JSONPatchType,
+			patchJSON, result, metav1.PatchOptions{})
+		m.NoError(err, "Error returned while patching the secret")
+	*/
 	err = client.Delete(ctx, validCreateObj.Namespace, validCreateObj.Name, metav1.DeleteOptions{})
 	m.NoError(err, "Error returned during the deletion of a valid Object")
 }
