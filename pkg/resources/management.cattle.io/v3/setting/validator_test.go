@@ -20,6 +20,7 @@ import (
 
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/setting"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 )
 
 type SettingSuite struct {
@@ -162,6 +163,16 @@ func (s *SettingSuite) validate(op v1.Operation) {
 			}
 		})
 	}
+}
+
+func (s *SettingSuite) TestValidatingWebhooFailurePolicy() {
+	t := s.T()
+	validator := setting.NewValidator(nil)
+
+	webhook := validator.ValidatingWebhook(admissionregistrationv1.WebhookClientConfig{})
+	require.Len(t, webhook, 1)
+	ignorePolicy := admissionregistrationv1.Ignore
+	require.Equal(t, &ignorePolicy, webhook[0].FailurePolicy)
 }
 
 func (s *SettingSuite) setup() admission.Admitter {
