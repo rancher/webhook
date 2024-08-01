@@ -3,10 +3,10 @@ set -e
 
 cd $(dirname $0)
 
-./build
-./test
 ./validate
 ./validate-ci
+./build
+./test
 ./package
 ./package-helm
 ./test-helm
