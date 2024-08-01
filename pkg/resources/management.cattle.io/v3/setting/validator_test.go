@@ -165,7 +165,7 @@ func (s *SettingSuite) validate(op v1.Operation) {
 	}
 }
 
-func (s *SettingSuite) TestValidatingWebhooFailurePolicy() {
+func (s *SettingSuite) TestValidatingWebhookFailurePolicy() {
 	t := s.T()
 	validator := setting.NewValidator(nil)
 
