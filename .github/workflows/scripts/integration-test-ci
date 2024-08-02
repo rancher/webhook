@@ -40,6 +40,9 @@ set -e
 echo "Shutting down core rancher"
 kubectl scale deploy rancher -n cattle-system --replicas=0
 kubectl wait pods -l app=rancher --for=delete -n cattle-system
+# Make sure the webhook recreates configurations on startup
+kubectl delete validatingwebhookconfiguration rancher.cattle.io
+kubectl delete mutatingwebhookconfiguration rancher.cattle.io
 
 echo "Uploading new webhook image"
 
