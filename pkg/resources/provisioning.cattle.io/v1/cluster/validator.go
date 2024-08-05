@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"regexp"
 	"slices"
+	"strings"
 
 	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
@@ -21,9 +22,12 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	authv1 "k8s.io/api/authorization/v1"
+	k8sv1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/validation"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/utils/trace"
 )
@@ -31,6 +35,7 @@ import (
 const (
 	globalNamespace         = "cattle-global-data"
 	systemAgentVarDirEnvVar = "CATTLE_AGENT_VAR_DIR"
+	failureStatus           = "Failure"
 )
 
 var (
@@ -106,6 +111,16 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 		}
 
 		if response.Result = validateACEConfig(cluster); response.Result != nil {
+			return response, nil
+		}
+
+		if response.Result = errorListToStatus(validateAgentDeploymentCustomization(cluster.Spec.ClusterAgentDeploymentCustomization,
+			field.NewPath("spec", "clusterAgentDeploymentCustomization"))); response.Result != nil {
+			return response, nil
+		}
+
+		if response.Result = errorListToStatus(validateAgentDeploymentCustomization(cluster.Spec.FleetAgentDeploymentCustomization,
+			field.NewPath("spec", "fleetAgentDeploymentCustomization"))); response.Result != nil {
 			return response, nil
 		}
 
@@ -237,7 +252,7 @@ func (p *provisioningAdmitter) validateCloudCredentialAccess(request *admission.
 	}
 
 	response.Result = &metav1.Status{
-		Status:  "Failure",
+		Status:  failureStatus,
 		Message: resp.Status.Reason,
 		Reason:  metav1.StatusReasonUnauthorized,
 		Code:    http.StatusUnauthorized,
@@ -269,7 +284,7 @@ func (p *provisioningAdmitter) validateClusterName(request *admission.Request, r
 	}
 	if !isValidName(cluster.Name, cluster.Namespace, err == nil) {
 		response.Result = &metav1.Status{
-			Status:  "Failure",
+			Status:  failureStatus,
 			Message: "cluster name must be 63 characters or fewer, must not begin with a hyphen, cannot be \"local\" nor of the form \"c-xxxxx\", and can only contain lowercase alphanumeric characters or ' - '",
 			Reason:  metav1.StatusReasonInvalid,
 			Code:    http.StatusUnprocessableEntity,
@@ -291,7 +306,7 @@ func (p *provisioningAdmitter) validateMachinePoolNames(request *admission.Reque
 	for _, pool := range cluster.Spec.RKEConfig.MachinePools {
 		if len(pool.Name) > 63 {
 			response.Result = &metav1.Status{
-				Status:  "Failure",
+				Status:  failureStatus,
 				Message: "pool name must be 63 characters or fewer",
 				Reason:  metav1.StatusReasonInvalid,
 				Code:    http.StatusUnprocessableEntity,
@@ -352,7 +367,7 @@ func (p *provisioningAdmitter) validatePSACT(request *admission.Request, respons
 			}
 			if parsedRangeLessThan123(parsedVersion) {
 				response.Result = &metav1.Status{
-					Status:  "Failure",
+					Status:  failureStatus,
 					Message: "PodSecurityAdmissionConfigurationTemplate(PSACT) is only supported in k8s version 1.23 and above",
 					Reason:  metav1.StatusReasonBadRequest,
 					Code:    http.StatusBadRequest,
@@ -364,7 +379,7 @@ func (p *provisioningAdmitter) validatePSACT(request *admission.Request, respons
 			if _, err := p.psactCache.Get(templateName); err != nil {
 				if apierrors.IsNotFound(err) {
 					response.Result = &metav1.Status{
-						Status:  "Failure",
+						Status:  failureStatus,
 						Message: err.Error(),
 						Reason:  metav1.StatusReasonBadRequest,
 						Code:    http.StatusBadRequest,
@@ -393,10 +408,155 @@ func (p *provisioningAdmitter) validatePSACT(request *admission.Request, respons
 	return nil
 }
 
+func validateAgentDeploymentCustomization(customization *v1.AgentDeploymentCustomization, path *field.Path) field.ErrorList {
+	if customization == nil {
+		return nil
+	}
+	var errList field.ErrorList
+
+	errList = append(errList, validateAppendToleration(customization.AppendTolerations, path.Child("appendTolerations"))...)
+	errList = append(errList, validateAffinity(customization.OverrideAffinity, path.Child("overrideAffinity"))...)
+
+	return errList
+}
+func validateAffinity(overrideAffinity *k8sv1.Affinity, path *field.Path) field.ErrorList {
+	if overrideAffinity == nil {
+		return nil
+	}
+	var errList field.ErrorList
+
+	if affinity := overrideAffinity.NodeAffinity; affinity != nil {
+		errList = append(errList,
+			validatePreferredSchedulingTerms(affinity.PreferredDuringSchedulingIgnoredDuringExecution,
+				path.Child("nodeAffinity").Child("preferredDuringSchedulingIgnoredDuringExecution"))...,
+		)
+		errList = append(errList,
+			validateNodeSelector(affinity.RequiredDuringSchedulingIgnoredDuringExecution,
+				path.Child("nodeAffinity").Child("requiredDuringSchedulingIgnoredDuringExecution"))...,
+		)
+	}
+
+	if podAffinity := overrideAffinity.PodAffinity; podAffinity != nil {
+		errList = append(errList, validatePodAffinityTerms(podAffinity.RequiredDuringSchedulingIgnoredDuringExecution,
+			path.Child("podAffinity").Child("requiredDuringSchedulingIgnoredDuringExecution"))...)
+
+		errList = append(errList, validateWeightedPodAffinityTerms(podAffinity.PreferredDuringSchedulingIgnoredDuringExecution,
+			path.Child("podAffinity").Child("preferredDuringSchedulingIgnoredDuringExecution"))...)
+	}
+
+	if podAntiAffinity := overrideAffinity.PodAntiAffinity; podAntiAffinity != nil {
+		errList = append(errList, validatePodAffinityTerms(podAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution,
+			path.Child("podAntiAffinity").Child("requiredDuringSchedulingIgnoredDuringExecution"))...)
+
+		errList = append(errList, validateWeightedPodAffinityTerms(podAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution,
+			path.Child("podAntiAffinity").Child("preferredDuringSchedulingIgnoredDuringExecution"))...)
+
+	}
+	return errList
+}
+
+func validatePodAffinityTerms(terms []k8sv1.PodAffinityTerm, path *field.Path) field.ErrorList {
+	var errList field.ErrorList
+
+	for k, v := range terms {
+		errList = append(errList, validatePodAffinityTerm(v, path.Index(k))...)
+	}
+	return errList
+}
+
+func validateWeightedPodAffinityTerms(weightedPodAffinityTerm []k8sv1.WeightedPodAffinityTerm, path *field.Path) field.ErrorList {
+	var errList field.ErrorList
+	for k, v := range weightedPodAffinityTerm {
+		errList = append(errList, validatePodAffinityTerm(v.PodAffinityTerm, path.Index(k).Child("podAffinityTerm"))...)
+	}
+	return errList
+}
+
+func validatePodAffinityTerm(podAffinityTerm k8sv1.PodAffinityTerm, path *field.Path) field.ErrorList {
+	var errList field.ErrorList
+	errList = append(errList, validateLabelSelector(podAffinityTerm.LabelSelector, path.Child("labelSelector"))...)
+	errList = append(errList, validateLabelSelector(podAffinityTerm.NamespaceSelector, path.Child("namespaceSelector"))...)
+	return errList
+}
+
+func validateLabelSelector(labelSelector *metav1.LabelSelector, path *field.Path) field.ErrorList {
+	return validation.ValidateLabelSelector(labelSelector, validation.LabelSelectorValidationOptions{}, path)
+
+}
+
+func validatePreferredSchedulingTerms(schedulingTerms []k8sv1.PreferredSchedulingTerm, path *field.Path) field.ErrorList {
+	var errList field.ErrorList
+
+	for k, v := range schedulingTerms {
+		errList = append(errList, validateNodeSelectorTerm(v.Preference, path.Index(k).Child("preferences"))...)
+	}
+	return errList
+}
+
+func validateNodeSelector(nodeSelector *k8sv1.NodeSelector, path *field.Path) field.ErrorList {
+	if nodeSelector == nil {
+		return nil
+	}
+	var errList field.ErrorList
+	nodeSelectorPath := path.Child("nodeSelectorTerms")
+	for k, v := range nodeSelector.NodeSelectorTerms {
+		errList = append(errList, validateNodeSelectorTerm(v, nodeSelectorPath.Index(k))...)
+	}
+	return errList
+}
+
+func validateNodeSelectorTerm(term k8sv1.NodeSelectorTerm, path *field.Path) field.ErrorList {
+	var errList field.ErrorList
+	errList = append(errList, validateNodeSelectorRequirements(term.MatchFields, path.Child("matchFields"))...)
+	errList = append(errList, validateNodeSelectorRequirements(term.MatchExpressions, path.Child("matchExpressions"))...)
+	return errList
+}
+
+// validateNodeSelectorRequirements Validates the NodeSelectors
+// at the moment it only validates the key by calling validation.ValidateLabelName.
+func validateNodeSelectorRequirements(selector []k8sv1.NodeSelectorRequirement, path *field.Path) field.ErrorList {
+	var errList field.ErrorList
+	for k, s := range selector {
+		errList = append(errList, validation.ValidateLabelName(s.Key, path.Index(k).Child("key"))...)
+	}
+	return errList
+}
+
+// validateAppendToleration validate if tolerations follows the k8s standards
+// at the moment it only validates the key by calling validation.ValidateLabelName.
+func validateAppendToleration(toleration []k8sv1.Toleration, path *field.Path) field.ErrorList {
+	var errList field.ErrorList
+	for k, s := range toleration {
+		errList = append(errList, validation.ValidateLabelName(s.Key, path.Index(k))...)
+	}
+	return errList
+}
+
+// errorListToStatus convert an errorList to failure status, it breaks a line for each entry and adds a * in front
+func errorListToStatus(errList field.ErrorList) *metav1.Status {
+	if len(errList) == 0 {
+		return nil
+	}
+	var builder strings.Builder
+	builder.WriteString("* ")
+	for i, fieldErr := range errList {
+		builder.WriteString(fieldErr.Error())
+		if i != len(errList)-1 {
+			builder.WriteString("\n* ")
+		}
+	}
+	return &metav1.Status{
+		Status:  failureStatus,
+		Message: builder.String(),
+		Reason:  metav1.StatusReasonInvalid,
+		Code:    http.StatusUnprocessableEntity,
+	}
+}
+
 func validateACEConfig(cluster *v1.Cluster) *metav1.Status {
 	if cluster.Spec.RKEConfig != nil && cluster.Spec.LocalClusterAuthEndpoint.Enabled && cluster.Spec.LocalClusterAuthEndpoint.CACerts != "" && cluster.Spec.LocalClusterAuthEndpoint.FQDN == "" {
 		return &metav1.Status{
-			Status:  "Failure",
+			Status:  failureStatus,
 			Message: "CACerts defined but FQDN is not defined",
 			Reason:  metav1.StatusReasonInvalid,
 			Code:    http.StatusUnprocessableEntity,
