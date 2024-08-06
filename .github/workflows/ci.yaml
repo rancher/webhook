@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - release/v*
+    paths-ignore:
+      - '.gitignore'
+      - 'CODEOWNERS'
+      - 'LICENSE'
+  pull_request:
+    paths-ignore:
+    - '.gitignore'
+    - 'CODEOWNERS'
+    - 'LICENSE'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: CI
+    strategy:
+      matrix:
+        archBox:
+        - { arch: amd64, vmArch: x64 }
+        - { arch: arm64, vmArch: arm64 }
+    runs-on: runs-on,runner=1cpu-linux-${{ matrix.archBox.vmArch }},run-id=${{ github.run_id }}
+    steps:
+      - name : Checkout repository
+        # https://github.com/actions/checkout/releases/tag/v4.1.1
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - name: Setup Go
+        uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
+        # https://github.com/actions/setup-go/releases/tag/v5.0.0
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Checkout rancher/rancher and build the chart
+        run: |
+          mkdir -p "${{ runner.temp}}"
+          pushd "${{ runner.temp}}"
+          git clone --depth 1 -b release/v2.7 https://github.com/rancher/rancher.git rancherDir-v2.7
+          cd rancherDir-v2.7
+          ./scripts/chart/build chart
+          tar cfz "${{ runner.temp }}/rancher.tgz" -C build/chart/rancher .
+          popd
+
+      - name: install K3d
+        run: ./.github/workflows/scripts/install-k3d.sh
+        env:
+          K3D_VERSION: latest
+
+      - name: ci
+        run: make ci
+
+      - name: setup cluster
+        run: ./.github/workflows/scripts/setup-cluster.sh
+        env:
+          CLUSTER_NAME: webhook
+          K3S_VERSION: v1.26.15-k3s1
+          ARCH: "${{ matrix.archBox.arch }}"
+
+      - name: import image
+        run: k3d image import dist/rancher-webhook-image.tar -c webhook
+
+      - name: start rancher
+        run: ./.github/workflows/scripts/start-rancher.sh
+        env:
+          CHART_PATH: "${{ runner.temp }}/rancher.tgz"
+          RANCHER_IMAGE_TAG: "v2.7-head"
+          VERSION: "2.7"
+
+      - name: get vars
+        run: cat dist/image_tag >> $GITHUB_ENV
+
+      - name: Run integration tests
+        run: ./.github/workflows/scripts/integration-test-ci
+        env:
+          ARCH: "${{ matrix.archBox.arch }}"
+          CLUSTER_NAME: webhook
+          IMAGE_REPO: rancher/webhook
+          IMAGE_TAG: "${{ env.IMAGE_TAG }}"

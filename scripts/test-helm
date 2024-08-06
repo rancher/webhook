@@ -2,7 +2,6 @@
 set -e
 cd $(dirname $0)/..
 
-./scripts/package-helm
 echo Running helm lint
 helm lint ./charts/rancher-webhook
 # Check for unittest plugin
