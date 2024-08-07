@@ -38,13 +38,14 @@ var (
 )
 
 type retentionTest struct {
-	setting string
-	value   string
-	allowed bool
+	setting      string
+	defaultValue string
+	value        string
+	allowed      bool
 }
 
 func (t *retentionTest) name() string {
-	return t.setting + "_" + t.value
+	return t.setting + "_" + t.defaultValue + "_" + t.value
 }
 
 func (t *retentionTest) toSetting() ([]byte, error) {
@@ -52,7 +53,8 @@ func (t *retentionTest) toSetting() ([]byte, error) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: t.setting,
 		},
-		Value: t.value,
+		Default: t.defaultValue,
+		Value:   t.value,
 	})
 }
 func (t *retentionTest) toOldSetting() ([]byte, error) {
@@ -63,75 +65,55 @@ func (t *retentionTest) toOldSetting() ([]byte, error) {
 	})
 }
 
+const iso8601Date = "20240108T000000Z"
+
+var rfc3339Date = time.Now().Truncate(time.Second).Format(time.RFC3339)
+
 var retentionTests = []retentionTest{
-	{
-		setting: "disable-inactive-user-after",
-		value:   "",
-		allowed: true,
-	},
-	{
-		setting: "delete-inactive-user-after",
-		value:   "",
-		allowed: true,
-	},
-	{
-		setting: "user-last-login-default",
-		value:   "",
-		allowed: true,
-	},
-	{
-		setting: "user-retention-cron",
-		value:   "",
-		allowed: true,
-	},
-	{
-		setting: "disable-inactive-user-after",
-		value:   "2h30m",
-		allowed: true,
-	},
-	{
-		setting: "delete-inactive-user-after",
-		value:   setting.MinDeleteInactiveUserAfter.String(),
-		allowed: true,
-	},
-	{
-		setting: "user-last-login-default",
-		value:   "2024-01-08T00:00:00Z",
-		allowed: true,
-	},
-	{
-		setting: "user-retention-cron",
-		value:   "* * * * *",
-		allowed: true,
-	},
-	{
-		setting: "disable-inactive-user-after",
-		value:   "1w",
-	},
-	{
-		setting: "delete-inactive-user-after",
-		value:   "2d",
-	},
-	{
-		setting: "user-last-login-default",
-		value:   "foo",
-	},
-	{
-		setting: "user-retention-cron",
-		value:   "* * * * * *",
-	},
-	{
-		setting: "disable-inactive-user-after",
-		value:   "-1h",
-	},
-	{
-		setting: "delete-inactive-user-after",
-		value:   "-1h",
-	},
-	{
-		setting: "delete-inactive-user-after",
-		value:   (setting.MinDeleteInactiveUserAfter - time.Second).String(),
-	},
+	// Empty values and defaults.
+	{"disable-inactive-user-after", "", "", true},
+	{"delete-inactive-user-after", "", "", true},
+	{"user-last-login-default", "", "", true},
+	{"user-retention-cron", "", "", true},
+	// Zero durations are allowed and equivalent to setting values to an empty string.
+	{"disable-inactive-user-after", "", "0", true},
+	{"delete-inactive-user-after", "", "0", true},
+	{"disable-inactive-user-after", "0", "", true},
+	{"delete-inactive-user-after", "0", "", true},
+	// Values, no defaults.
+	{"disable-inactive-user-after", "", "2h30m", true},
+	{"delete-inactive-user-after", "", setting.MinDeleteInactiveUserAfter.String(), true},
+	{"user-last-login-default", "", rfc3339Date, true},
+	{"user-retention-cron", "", "* * * * *", true},
+	{"disable-inactive-user-after", "", "1w", false},
+	{"delete-inactive-user-after", "", "2d", false},
+	{"user-last-login-default", "", iso8601Date, false},
+	{"user-retention-cron", "", "* * * * * *", false},
+	{"disable-inactive-user-after", "", "-1h", false},
+	{"delete-inactive-user-after", "", "-1h", false},
+	{"delete-inactive-user-after", "", (setting.MinDeleteInactiveUserAfter - time.Second).String(), false},
+	// Defaults, no values.
+	{"disable-inactive-user-after", "2h30m", "", true},
+	{"delete-inactive-user-after", setting.MinDeleteInactiveUserAfter.String(), "", true},
+	{"user-last-login-default", rfc3339Date, "", true},
+	{"user-retention-cron", "* * * * *", "", true},
+	{"disable-inactive-user-after", "1w", "", false},
+	{"delete-inactive-user-after", "2d", "", false},
+	{"user-last-login-default", iso8601Date, "", false},
+	{"user-retention-cron", "* * * * * *", "", false},
+	{"disable-inactive-user-after", "-1h", "", false},
+	{"delete-inactive-user-after", "-1h", "", false},
+	{"delete-inactive-user-after", (setting.MinDeleteInactiveUserAfter - time.Second).String(), "", false},
+	// Valid defaults, invalid values.
+	{"disable-inactive-user-after", "2h30m", "1w", false},
+	{"delete-inactive-user-after", setting.MinDeleteInactiveUserAfter.String(), "4w", false},
+	{"user-last-login-default", rfc3339Date, iso8601Date, false},
+	{"user-retention-cron", "* * * * *", "* * * * * *", false},
+	// Invalid defaults, valid values.
+	{"disable-inactive-user-after", "1w", "2h30m", false},
+	{"delete-inactive-user-after", "4w", setting.MinDeleteInactiveUserAfter.String(), false},
+	{"user-last-login-default", iso8601Date, rfc3339Date, false},
+	{"user-retention-cron", "* * * * * *", "* * * * *", false},
 }
 
 func (s *SettingSuite) TestValidateRetentionSettingsOnUpdate() {
@@ -147,15 +129,15 @@ func (s *SettingSuite) validate(op v1.Operation) {
 
 	for _, test := range retentionTests {
 		test := test
-		s.Run(test.name(), func() {
-			t := s.T()
+		t := s.T()
+		t.Run(test.name(), func(t *testing.T) {
 			t.Parallel()
 
 			oldObjRaw, err := test.toOldSetting()
-			assert.NoError(t, err, "failed to marshal old Setting")
+			require.NoError(t, err, "failed to marshal old Setting")
 
 			objRaw, err := test.toSetting()
-			assert.NoError(t, err, "failed to marshal Setting")
+			require.NoError(t, err, "failed to marshal Setting")
 
 			resp, err := admitter.Admit(newRequest(op, objRaw, oldObjRaw))
 			if assert.NoError(t, err, "Admit failed") {
@@ -167,6 +149,8 @@ func (s *SettingSuite) validate(op v1.Operation) {
 
 func (s *SettingSuite) TestValidatingWebhookFailurePolicy() {
 	t := s.T()
+	t.Parallel()
+
 	validator := setting.NewValidator(nil)
 
 	webhook := validator.ValidatingWebhook(admissionregistrationv1.WebhookClientConfig{})
@@ -610,6 +594,7 @@ func TestValidateAgentTLSMode(t *testing.T) {
 			allowed:   true,
 		},
 	}
+
 	for name, tc := range tests {
 		name, tc := name, tc
 		t.Run(name, func(t *testing.T) {
