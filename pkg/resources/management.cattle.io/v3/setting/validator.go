@@ -89,48 +89,84 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		if err := a.validateUserRetentionSettings(newSetting); err != nil {
 			return admission.ResponseBadRequest(err.Error()), nil
 		}
-		if err := a.validateAgentTLSMode(*oldSetting, *newSetting); err != nil {
+		if err := a.validateAgentTLSMode(oldSetting, newSetting); err != nil {
 			return admission.ResponseBadRequest(err.Error()), nil
 		}
 	}
 	return admission.ResponseAllowed(), nil
 }
 
+var (
+	defaultFieldPath = field.NewPath("default")
+	valueFieldPath   = field.NewPath("value")
+)
+
 func (a *admitter) validateUserRetentionSettings(s *v3.Setting) error {
 	var err error
 
 	switch s.Name {
 	case "disable-inactive-user-after":
+		if s.Default != "" {
+			if _, fieldErr := validateDuration(s.Default); fieldErr != nil {
+				err = errors.Join(err, field.TypeInvalid(defaultFieldPath, s.Default, fieldErr.Error()))
+			}
+		}
 		if s.Value != "" {
-			_, err = validateDuration(s.Value)
+			if _, fieldErr := validateDuration(s.Value); fieldErr != nil {
+				err = errors.Join(err, field.TypeInvalid(valueFieldPath, s.Value, fieldErr.Error()))
+			}
 		}
 	case "delete-inactive-user-after":
+		minDeleteInactiveUserAfterErr := fmt.Errorf("must be at least %s", MinDeleteInactiveUserAfter)
+		if s.Default != "" {
+			dur, fieldErr := validateDuration(s.Default)
+			// Note: zero duration is allowed and is equivalent to "".
+			if fieldErr == nil && dur > 0 && dur < MinDeleteInactiveUserAfter {
+				fieldErr = minDeleteInactiveUserAfterErr
+			}
+			if fieldErr != nil {
+				err = errors.Join(err, field.TypeInvalid(defaultFieldPath, s.Default, fieldErr.Error()))
+			}
+		}
 		if s.Value != "" {
-			var dur time.Duration
-			dur, err = validateDuration(s.Value)
-			if err == nil && dur < MinDeleteInactiveUserAfter {
-				err = fmt.Errorf("must be at least %s", MinDeleteInactiveUserAfter)
+			dur, fieldErr := validateDuration(s.Value)
+			// Note: zero duration is allowed and is equivalent to "".
+			if fieldErr == nil && dur > 0 && dur < MinDeleteInactiveUserAfter {
+				fieldErr = minDeleteInactiveUserAfterErr
+			}
+			if fieldErr != nil {
+				err = errors.Join(err, field.TypeInvalid(valueFieldPath, s.Value, fieldErr.Error()))
 			}
 		}
 	case "user-last-login-default":
+		if s.Default != "" {
+			if _, fieldErr := time.Parse(time.RFC3339, s.Default); fieldErr != nil {
+				err = errors.Join(err, field.TypeInvalid(defaultFieldPath, s.Default, fieldErr.Error()))
+			}
+		}
 		if s.Value != "" {
-			_, err = time.Parse(time.RFC3339, s.Value)
+			if _, fieldErr := time.Parse(time.RFC3339, s.Value); fieldErr != nil {
+				err = errors.Join(err, field.TypeInvalid(valueFieldPath, s.Value, fieldErr.Error()))
+			}
 		}
 	case "user-retention-cron":
+		if s.Default != "" {
+			if _, fieldErr := cron.ParseStandard(s.Default); fieldErr != nil {
+				err = errors.Join(err, field.TypeInvalid(defaultFieldPath, s.Default, fieldErr.Error()))
+			}
+		}
 		if s.Value != "" {
-			_, err = cron.ParseStandard(s.Value)
+			if _, fieldErr := cron.ParseStandard(s.Value); fieldErr != nil {
+				err = errors.Join(err, field.TypeInvalid(valueFieldPath, s.Value, fieldErr.Error()))
+			}
 		}
 	default:
 	}
 
-	if err != nil {
-		return field.TypeInvalid(field.NewPath("value"), s.Value, err.Error())
-	}
-
-	return nil
+	return err
 }
 
-func (a *admitter) validateAgentTLSMode(oldSetting, newSetting v3.Setting) error {
+func (a *admitter) validateAgentTLSMode(oldSetting, newSetting *v3.Setting) error {
 	if oldSetting.Name != "agent-tls-mode" || newSetting.Name != "agent-tls-mode" {
 		return nil
 	}
@@ -177,7 +213,7 @@ func clusterConditionMatches(cluster *v3.Cluster, t v3.ClusterConditionType, sta
 	return false
 }
 
-func effectiveValue(s v3.Setting) string {
+func effectiveValue(s *v3.Setting) string {
 	if s.Value != "" {
 		return s.Value
 	} else if s.Default != "" {
