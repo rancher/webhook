@@ -16,12 +16,12 @@ env:
 jobs:
   build:
     name: build and package
-    runs-on: ubuntu-latest
     strategy:
       matrix:
-        arch:
-        - amd64
-        - arm64
+        archBox:
+        - { arch: amd64, vmArch: x64 }
+        - { arch: arm64, vmArch: arm64 }
+    runs-on: runs-on,runner=1cpu-linux-${{ matrix.archBox.vmArch }},run-id=${{ github.run_id }}
     steps:
 
     - name : Checkout repository
@@ -40,28 +40,28 @@ jobs:
           mkdir -p dist/artifacts
           cp bin/webhook dist/artifacts/webhook-linux-${{ matrix.arch }}
       env:
-        ARCH: "${{ matrix.arch}}"
-        GOARCH: "${{ matrix.arch}}"
+        ARCH: "${{ matrix.archBox.arch}}"
+        GOARCH: "${{ matrix.archBox.arch}}"
 
     - name: Generate checksum files
       run: |
         ls -lR dist
         cd dist/artifacts
-        sha256sum webhook-linux-${{ matrix.arch }} > sha256sum-${{ matrix.arch }}.txt
+        sha256sum webhook-linux-${{ matrix.archBox.arch }} > sha256sum-${{ matrix.archBox.arch }}.txt
 
     - name: Upload artifacts
       # https://github.com/actions/upload-artifact/commit/65462800fd760344b1a7b4382951275a0abb4808
       uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
       with:
-        name: webhook-artifacts-${{ matrix.arch }}
+        name: webhook-artifacts-${{ matrix.archBox.arch }}
         path: |
-          dist/artifacts/webhook-linux-${{ matrix.arch }}
-          dist/artifacts/sha256sum-${{ matrix.arch }}.txt
+          dist/artifacts/webhook-linux-${{ matrix.archBox.arch }}
+          dist/artifacts/sha256sum-${{ matrix.archBox.arch }}.txt
           dist/artifacts/rancher-webhook-*.tgz
 
   release:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: runs-on,runner=1cpu-linux-x64,run-id=${{ github.run_id }}
     steps:
 
     - name : Checkout repository
@@ -104,11 +104,11 @@ jobs:
       id-token: write
     strategy:
       matrix:
-        arch:
-        - amd64
-        - arm64
+        archBox:
+        - { arch: amd64, vmArch: x64 }
+        - { arch: arm64, vmArch: arm64 }
     name: Build and push Webhook images
-    runs-on: ubuntu-latest
+    runs-on: runs-on,runner=1cpu-linux-${{ matrix.archBox.vmArch }},run-id=${{ github.run_id }}
     needs: build
     steps:
       - name : Checkout repository
@@ -119,13 +119,13 @@ jobs:
         uses: actions/download-artifact@65a9edc5881444af0b9093a5e628f2fe47ea3b2e # v4.1.7
         # https://github.com/actions/download-artifact/releases/tag/v4.1.7
         with:
-          name: webhook-artifacts-${{ matrix.arch }}
+          name: webhook-artifacts-${{ matrix.archBox.arch }}
           path: dist/artifacts
 
       - name: Move binary to bin/
         run: |
           mkdir -p bin/
-          cp -v dist/artifacts/webhook-linux-${{ matrix.arch }} bin/webhook
+          cp -v dist/artifacts/webhook-linux-${{ matrix.archBox.arch }} bin/webhook
           chmod +x bin/webhook
 
       - name: "Read vault secrets"
@@ -158,7 +158,7 @@ jobs:
         with:
           context: .
           file: ./package/Dockerfile
-          platforms: "linux/${{ matrix.arch }}"
+          platforms: "linux/${{ matrix.archBox.arch }}"
           outputs: type=image,name=${{ env.REPO }}/rancher-webhook,push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
@@ -171,7 +171,7 @@ jobs:
         uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
         # https://github.com/actions/upload-artifact/releases/tag/v4.3.3
         with:
-          name: digests-${{ matrix.arch }}
+          name: digests-${{ matrix.archBox.arch }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1
@@ -179,7 +179,7 @@ jobs:
   merge:
     permissions:
       id-token: write
-    runs-on: ubuntu-latest
+    runs-on: runs-on,runner=1cpu-linux-x64,run-id=${{ github.run_id }}
     needs: image
     steps:
       - name: Download digests
