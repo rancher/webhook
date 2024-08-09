@@ -2,7 +2,6 @@ package integration_test
 
 import (
 	"context"
-	"github.com/sirupsen/logrus"
 	"time"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -39,16 +38,10 @@ func (m *IntegrationSuite) TestClusterProxyConfig() {
 	watcher, err := client.Watch(ctx, validCreateObj.Namespace, listOptions)
 	m.Assert().NoError(err, "Error returned trying to watch the clusterProxyConfig")
 	defer watcher.Stop()
-	for {
-		receivedEvent, ok := <-watcher.ResultChan()
-		m.Assert().True(ok, "The CPC watcher closed before it sent any notifications")
-		if receivedEvent.Object.GetObjectKind().GroupVersionKind().Kind == "ClusterProxyConfig" {
-			err = client.Get(ctx, validCreateObj.Namespace, cpcName, result, metav1.GetOptions{})
-			m.Assert().NoError(err, "Failed to client.Get %s/%s", validCreateObj.Namespace, cpcName)
-			break
-		}
-		logrus.Infof("Expecting a ClusterProxyConfig object from the watcher, got an object of kind %s", receivedEvent.Object.GetObjectKind().GroupVersionKind().Kind)
-	}
+
+	receivedEvent, ok := <-watcher.ResultChan()
+	m.Assert().True(ok, "The CPC watcher closed before it sent any notifications")
+	m.Assert().EqualValues(receivedEvent.Object.GetObjectKind().GroupVersionKind().Kind, "ClusterProxyConfig")
 
 	secondCPC := getObjectToCreate("anotherclusterproxyconfig")
 	// Attempting to create another CPC in the same namespace should fail
