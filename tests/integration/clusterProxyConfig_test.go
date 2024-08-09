@@ -36,12 +36,12 @@ func (m *IntegrationSuite) TestClusterProxyConfig() {
 		TimeoutSeconds: &timeout,
 	}
 	watcher, err := client.Watch(ctx, validCreateObj.Namespace, listOptions)
-	m.Assert().NoError(err, "Error returned trying to watch the clusterProxyConfig")
+	m.Require().NoError(err, "Error returned trying to watch the clusterProxyConfig")
 	defer watcher.Stop()
 
 	receivedEvent, ok := <-watcher.ResultChan()
-	m.Assert().True(ok, "The CPC watcher closed before it sent any notifications")
-	m.Assert().EqualValues(receivedEvent.Object.GetObjectKind().GroupVersionKind().Kind, "ClusterProxyConfig")
+	m.Require().True(ok, "The CPC watcher closed before it sent any notifications")
+	m.Require().EqualValues(receivedEvent.Object.GetObjectKind().GroupVersionKind().Kind, "ClusterProxyConfig")
 
 	secondCPC := getObjectToCreate("anotherclusterproxyconfig")
 	// Attempting to create another CPC in the same namespace should fail
