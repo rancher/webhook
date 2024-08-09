@@ -4,6 +4,7 @@ import (
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/clients"
 	"github.com/rancher/webhook/pkg/resolvers"
+	"github.com/rancher/webhook/pkg/resources/catalog.cattle.io/v1/clusterrepo"
 	nshandler "github.com/rancher/webhook/pkg/resources/core/v1/namespace"
 	"github.com/rancher/webhook/pkg/resources/core/v1/secret"
 	managementCluster "github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/cluster"
@@ -50,6 +51,10 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		setting := setting.NewValidator(clients.Management.Cluster().Cache())
 		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, nodeDriver, projects, userAttribute, setting)
 	}
+
+	clusterrepo := clusterrepo.NewValidator()
+	handlers = append(handlers, clusterrepo)
+
 	return handlers, nil
 }
 
