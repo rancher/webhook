@@ -2,6 +2,7 @@ package integration_test
 
 import (
 	"context"
+	"github.com/sirupsen/logrus"
 	"time"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -46,6 +47,7 @@ func (m *IntegrationSuite) TestClusterProxyConfig() {
 			m.Assert().NoError(err, "Failed to client.Get %s/%s", validCreateObj.Namespace, cpcName)
 			break
 		}
+		logrus.Infof("Expecting a ClusterProxyConfig object from the watcher, got an object of kind %s", receivedEvent.Object.GetObjectKind().GroupVersionKind().Kind)
 	}
 
 	secondCPC := getObjectToCreate("anotherclusterproxyconfig")
