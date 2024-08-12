@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"testing"
 	"time"
 
@@ -27,7 +28,7 @@ type SettingSuite struct {
 	suite.Suite
 }
 
-func TestRetentionFieldsValidation(t *testing.T) {
+func TestUserRetentionSettingsValidation(t *testing.T) {
 	t.Parallel()
 	suite.Run(t, new(SettingSuite))
 }
@@ -37,17 +38,19 @@ var (
 	gvr = metav1.GroupVersionResource{Group: "management.cattle.io", Version: "v3", Resource: "settings"}
 )
 
-type retentionTest struct {
-	setting string
-	value   string
-	allowed bool
+type userRetentionTest struct {
+	setting           string
+	value             string
+	userSessionTTL    int
+	userSessionTTLErr error
+	allowed           bool
 }
 
-func (t *retentionTest) name() string {
+func (t *userRetentionTest) name() string {
 	return t.setting + "_" + t.value
 }
 
-func (t *retentionTest) toSetting() ([]byte, error) {
+func (t *userRetentionTest) toSetting() ([]byte, error) {
 	return json.Marshal(v3.Setting{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: t.setting,
@@ -55,7 +58,7 @@ func (t *retentionTest) toSetting() ([]byte, error) {
 		Value: t.value,
 	})
 }
-func (t *retentionTest) toOldSetting() ([]byte, error) {
+func (t *userRetentionTest) toOldSetting() ([]byte, error) {
 	return json.Marshal(v3.Setting{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: t.setting,
@@ -63,7 +66,7 @@ func (t *retentionTest) toOldSetting() ([]byte, error) {
 	})
 }
 
-var retentionTests = []retentionTest{
+var userRetentionTests = []userRetentionTest{
 	{
 		setting: "disable-inactive-user-after",
 		value:   "",
@@ -85,14 +88,16 @@ var retentionTests = []retentionTest{
 		allowed: true,
 	},
 	{
-		setting: "disable-inactive-user-after",
-		value:   "2h30m",
-		allowed: true,
+		setting:        "disable-inactive-user-after",
+		userSessionTTL: 960,
+		value:          "16h1s",
+		allowed:        true,
 	},
 	{
-		setting: "delete-inactive-user-after",
-		value:   setting.MinDeleteInactiveUserAfter.String(),
-		allowed: true,
+		setting:        "delete-inactive-user-after",
+		userSessionTTL: 960,
+		value:          setting.MinDeleteInactiveUserAfter.String(),
+		allowed:        true,
 	},
 	{
 		setting: "user-last-login-default",
@@ -103,6 +108,30 @@ var retentionTests = []retentionTest{
 		setting: "user-retention-cron",
 		value:   "* * * * *",
 		allowed: true,
+	},
+	{
+		setting:           "disable-inactive-user-after",
+		userSessionTTL:    960,
+		userSessionTTLErr: errors.New("some error"),
+		value:             "16h", // 960 minutes.
+		allowed:           true,
+	},
+	{
+		setting:           "delete-inactive-user-after",
+		userSessionTTL:    960,
+		userSessionTTLErr: errors.New("some error"),
+		value:             setting.MinDeleteInactiveUserAfter.String(),
+		allowed:           true,
+	},
+	{
+		setting:        "disable-inactive-user-after",
+		userSessionTTL: 960,
+		value:          "15h59m59s",
+	},
+	{
+		setting:        "delete-inactive-user-after",
+		userSessionTTL: int((setting.MinDeleteInactiveUserAfter + time.Hour).Minutes()),
+		value:          setting.MinDeleteInactiveUserAfter.String(),
 	},
 	{
 		setting: "disable-inactive-user-after",
@@ -134,22 +163,36 @@ var retentionTests = []retentionTest{
 	},
 }
 
-func (s *SettingSuite) TestValidateRetentionSettingsOnUpdate() {
+func (s *SettingSuite) TestValidateUserRetentionSettingsOnUpdate() {
 	s.validate(v1.Update)
 }
 
-func (s *SettingSuite) TestValidateRetentionSettingsOnCreate() {
+func (s *SettingSuite) TestValidateUserRetentionSettingsOnCreate() {
 	s.validate(v1.Create)
 }
 
 func (s *SettingSuite) validate(op v1.Operation) {
-	admitter := s.setup()
-
-	for _, test := range retentionTests {
+	for _, test := range userRetentionTests {
 		test := test
-		s.Run(test.name(), func() {
-			t := s.T()
+		s.T().Run(test.name(), func(t *testing.T) {
 			t.Parallel()
+
+			ctrl := gomock.NewController(t)
+			settingCache := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
+
+			getUserSessionTTLCalledTimes := 0
+			if test.userSessionTTL > 0 || test.userSessionTTLErr != nil {
+				getUserSessionTTLCalledTimes = 1
+			}
+
+			settingCache.EXPECT().Get("auth-user-session-ttl-minutes").DoAndReturn(func(string) (*v3.Setting, error) {
+				if test.userSessionTTLErr != nil {
+					return nil, test.userSessionTTLErr
+				}
+				return &v3.Setting{
+					Default: strconv.Itoa(test.userSessionTTL),
+				}, nil
+			}).Times(getUserSessionTTLCalledTimes)
 
 			oldObjRaw, err := test.toOldSetting()
 			assert.NoError(t, err, "failed to marshal old Setting")
@@ -157,29 +200,24 @@ func (s *SettingSuite) validate(op v1.Operation) {
 			objRaw, err := test.toSetting()
 			assert.NoError(t, err, "failed to marshal Setting")
 
-			resp, err := admitter.Admit(newRequest(op, objRaw, oldObjRaw))
-			if assert.NoError(t, err, "Admit failed") {
-				assert.Equalf(t, test.allowed, resp.Allowed, "expected allowed %v got %v message=%v", test.allowed, resp.Allowed, resp.Result)
-			}
+			validator := setting.NewValidator(nil, settingCache)
+			require.Len(t, validator.Admitters(), 1)
+
+			resp, err := validator.Admitters()[0].Admit(newRequest(op, objRaw, oldObjRaw))
+			require.NoError(t, err)
+			assert.Equal(t, test.allowed, resp.Allowed)
 		})
 	}
 }
 
 func (s *SettingSuite) TestValidatingWebhookFailurePolicy() {
 	t := s.T()
-	validator := setting.NewValidator(nil)
+	validator := setting.NewValidator(nil, nil)
 
 	webhook := validator.ValidatingWebhook(admissionregistrationv1.WebhookClientConfig{})
 	require.Len(t, webhook, 1)
 	ignorePolicy := admissionregistrationv1.Ignore
 	require.Equal(t, &ignorePolicy, webhook[0].FailurePolicy)
-}
-
-func (s *SettingSuite) setup() admission.Admitter {
-	validator := setting.NewValidator(nil)
-	s.Len(validator.Admitters(), 1, "expected 1 admitter")
-
-	return validator.Admitters()[0]
 }
 
 func newRequest(op v1.Operation, obj, oldObj []byte) *admission.Request {
@@ -623,7 +661,7 @@ func TestValidateAgentTLSMode(t *testing.T) {
 			if tc.clusterListerFails {
 				clusterCache.EXPECT().List(gomock.Any()).Return(tc.clusters, errors.New("some error"))
 			}
-			v := setting.NewValidator(clusterCache)
+			v := setting.NewValidator(clusterCache, nil)
 			admitters := v.Admitters()
 			require.Len(t, admitters, 1)
 

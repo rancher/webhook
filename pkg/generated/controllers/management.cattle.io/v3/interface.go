@@ -42,6 +42,7 @@ type Interface interface {
 	Project() ProjectController
 	ProjectRoleTemplateBinding() ProjectRoleTemplateBindingController
 	RoleTemplate() RoleTemplateController
+	Setting() SettingController
 }
 
 func New(controllerFactory controller.SharedControllerFactory) Interface {
@@ -96,4 +97,8 @@ func (v *version) ProjectRoleTemplateBinding() ProjectRoleTemplateBindingControl
 
 func (v *version) RoleTemplate() RoleTemplateController {
 	return generic.NewNonNamespacedController[*v3.RoleTemplate, *v3.RoleTemplateList](schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "RoleTemplate"}, "roletemplates", v.controllerFactory)
+}
+
+func (v *version) Setting() SettingController {
+	return generic.NewNonNamespacedController[*v3.Setting, *v3.SettingList](schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Setting"}, "settings", v.controllerFactory)
 }

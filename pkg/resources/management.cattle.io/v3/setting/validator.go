@@ -3,10 +3,15 @@ package setting
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/admission"
+	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
+	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/robfig/cron"
+	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	v1 "k8s.io/api/core/v1"
@@ -14,10 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/trace"
-
-	"github.com/rancher/webhook/pkg/admission"
-	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
-	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 )
 
 // MinDeleteInactiveUserAfter is the minimum duration for delete-inactive-user-after setting.
@@ -37,10 +38,11 @@ type Validator struct {
 }
 
 // NewValidator returns a new Validator instance.
-func NewValidator(clusterCache controllerv3.ClusterCache) *Validator {
+func NewValidator(clusterCache controllerv3.ClusterCache, settingCache controllerv3.SettingCache) *Validator {
 	return &Validator{
 		admitter: admitter{
 			clusterCache: clusterCache,
+			settingCache: settingCache,
 		},
 	}
 }
@@ -69,6 +71,7 @@ func (v *Validator) Admitters() []admission.Admitter {
 
 type admitter struct {
 	clusterCache controllerv3.ClusterCache
+	settingCache controllerv3.SettingCache
 }
 
 // Admit handles the webhook admission requests.
@@ -96,20 +99,58 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	return admission.ResponseAllowed(), nil
 }
 
-func (a *admitter) validateUserRetentionSettings(s *v3.Setting) error {
-	var err error
+func (a *admitter) getAuthUserSessionTTLDuration() (time.Duration, error) {
+	setting, err := a.settingCache.Get("auth-user-session-ttl-minutes")
+	if err != nil {
+		return 0, fmt.Errorf("failed to get auth-user-session-ttl-minutes setting: %w", err)
+	}
+	value := effectiveValue(*setting)
+	if value == "" {
+		return 0, nil
+	}
 
+	minutes, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse auth-user-session-ttl-minutes setting: %w", err)
+	}
+
+	return time.Duration(minutes) * time.Minute, nil
+}
+
+func (a *admitter) isLessThanUserSessionTTL(dur time.Duration) bool {
+	authUserSessionTTLDuration, getErr := a.getAuthUserSessionTTLDuration()
+	if getErr != nil {
+		logrus.Warnf("failed to get auth-user-session-ttl-minutes setting: %v", getErr) // Log the error and move on.
+	}
+
+	return dur < authUserSessionTTLDuration
+}
+
+func (a *admitter) validateUserRetentionSettings(s *v3.Setting) error {
+	var (
+		err error
+		dur time.Duration
+	)
+
+	lessThanAuthUserSessionTTLErr := fmt.Errorf("can't be less than auth-user-session-ttl-minutes")
 	switch s.Name {
 	case "disable-inactive-user-after":
 		if s.Value != "" {
-			_, err = validateDuration(s.Value)
+			dur, err = validateDuration(s.Value)
+			if err == nil && dur > 0 && a.isLessThanUserSessionTTL(dur) { // Note: zero duration is allowed and is equivalent to "".
+				err = lessThanAuthUserSessionTTLErr
+			}
 		}
 	case "delete-inactive-user-after":
+		minDeleteInactiveUserAfterErr := fmt.Errorf("must be at least %s", MinDeleteInactiveUserAfter)
 		if s.Value != "" {
-			var dur time.Duration
 			dur, err = validateDuration(s.Value)
-			if err == nil && dur < MinDeleteInactiveUserAfter {
-				err = fmt.Errorf("must be at least %s", MinDeleteInactiveUserAfter)
+			if err == nil && dur > 0 { // Note: zero duration is allowed and is equivalent to "".
+				if dur < MinDeleteInactiveUserAfter {
+					err = minDeleteInactiveUserAfterErr
+				} else if a.isLessThanUserSessionTTL(dur) {
+					err = lessThanAuthUserSessionTTLErr
+				}
 			}
 		}
 	case "user-last-login-default":
