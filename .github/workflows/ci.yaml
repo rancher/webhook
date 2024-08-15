@@ -1,6 +1,4 @@
-# Add a comment to force a change.
-
-name: Webhook CI
+name: CI
 
 on:
   push:
@@ -31,7 +29,7 @@ jobs:
         - { arch: arm64, vmArch: arm64 }
     runs-on: runs-on,runner=1cpu-linux-${{ matrix.archBox.vmArch }},run-id=${{ github.run_id }}
     steps:
-      - name : Checkout repository
+      - name: Checkout repository
         # https://github.com/actions/checkout/releases/tag/v4.1.1
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
