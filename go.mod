@@ -5,7 +5,6 @@ go 1.22.0
 toolchain go1.22.5
 
 replace (
-	github.com/rancher/rke => github.com/rancher/rke v1.6.0-rc10
 	k8s.io/api => k8s.io/api v0.30.1
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.30.1
 	k8s.io/apimachinery => k8s.io/apimachinery v0.30.1
@@ -40,10 +39,10 @@ require (
 	github.com/evanphx/json-patch v5.9.0+incompatible
 	github.com/golang/mock v1.6.0
 	github.com/gorilla/mux v1.8.1
-	github.com/rancher/dynamiclistener v0.6.0-rc2
+	github.com/rancher/dynamiclistener v0.6.0
 	github.com/rancher/lasso v0.0.0-20240705194423-b2a060d103c1
 	github.com/rancher/rancher/pkg/apis v0.0.0-20240710151157-3a6de11e4de9
-	github.com/rancher/rke v1.6.0-rc9
+	github.com/rancher/rke v1.6.0
 	github.com/rancher/wrangler/v3 v3.0.0
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.3
