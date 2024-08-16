@@ -51,54 +51,23 @@ var tokenFieldsTests = []tokenFieldsTest{
 		allowed: true,
 	},
 	{
-		disableAfter: pointer.String("0"),
-		allowed:      true,
+		lastUsedAt: pointer.String(time.Now().Format(time.RFC3339)),
+		allowed:    true,
 	},
 	{
-		deleteAfter: pointer.String("0"),
-		allowed:     true,
+		lastUsedAt: pointer.String("2024-03-25T21:2:45Z"), // Not a valid RFC3339 time.
 	},
 	{
-		disableAfter: pointer.String("1h2m3s"),
-		allowed:      true,
+		lastUsedAt: pointer.String("1w"),
 	},
 	{
-		deleteAfter: pointer.String("1h2m3s"),
-		allowed:     true,
+		lastUsedAt: pointer.String("1d"),
 	},
 	{
-		lastLogin: pointer.String(time.Now().Format(time.RFC3339)),
-		allowed:   true,
+		lastUsedAt: pointer.String("-1h"),
 	},
 	{
-		disableAfter: pointer.String("1w"),
-	},
-	{
-		deleteAfter: pointer.String("1w"),
-	},
-	{
-		disableAfter: pointer.String("1d"),
-	},
-	{
-		deleteAfter: pointer.String("1d"),
-	},
-	{
-		disableAfter: pointer.String(""),
-	},
-	{
-		deleteAfter: pointer.String(""),
-	},
-	{
-		disableAfter: pointer.String("-1h"),
-	},
-	{
-		deleteAfter: pointer.String("-1h"),
-	},
-	{
-		lastLogin: pointer.String("2024-03-25T21:2:45Z"), // Not a valid RFC3339 time.
-	},
-	{
-		lastLogin: pointer.String(""),
+		lastUsedAt: pointer.String(""),
 	},
 }
 
