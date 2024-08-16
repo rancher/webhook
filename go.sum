@@ -287,8 +287,8 @@ github.com/rancher/aks-operator v1.2.3-rc.2 h1:NWY2TSX/5a5IkEoEN5UFzTA2No5BdVB37
 github.com/rancher/aks-operator v1.2.3-rc.2/go.mod h1:bDTl6512RHNeYbK5v4uMJL2SqXHQ0V4NEvKD/fC5HI0=
 github.com/rancher/client-go v1.28.6-rancher1 h1:nSoGKs12BuPviZtzemO7wTX8jxABaLqfYKFLRBV8MI0=
 github.com/rancher/client-go v1.28.6-rancher1/go.mod h1:+nu0Yp21Oeo/cBCsprNVXB2BfJTV51lFfe5tXl2rUL8=
-github.com/rancher/dynamiclistener v0.4.0-rc2 h1:tgBtNnQ2cQIsjBvto2BYmwP8NGpyg3N4Mp6zFyoGx9E=
-github.com/rancher/dynamiclistener v0.4.0-rc2/go.mod h1:Y+VdjQH9KQGE97uMwYEWqNN6puFQ17aBemIjVLYdlD8=
+github.com/rancher/dynamiclistener v0.4.0 h1:1bOlH4uzD5BPQ8fo2FeiWxiMp87ppwmyc2uYxN2z1kc=
+github.com/rancher/dynamiclistener v0.4.0/go.mod h1:Y+VdjQH9KQGE97uMwYEWqNN6puFQ17aBemIjVLYdlD8=
 github.com/rancher/eks-operator v1.3.3-rc.2 h1:HwnVuSzIVliQth0kB12v3L/rebN7My3km5mAceL+CAg=
 github.com/rancher/eks-operator v1.3.3-rc.2/go.mod h1:x8XL+U2H4w7rVVjtVkJkwTaw98NmttwBEAX5faNE3mM=
 github.com/rancher/fleet/pkg/apis v0.9.1-rc.2.0.20240213164401-2c6b1019687c h1:Oza71YDPN+jE9WY8xRVthD3MYkVYHHgsTOAxGSb9OLs=
@@ -301,8 +301,8 @@ github.com/rancher/norman v0.0.0-20240206180703-6eda4bc94b4c h1:ayqZqJ4AYYVaZGlB
 github.com/rancher/norman v0.0.0-20240206180703-6eda4bc94b4c/go.mod h1:WbNpu/HwChwKk54W0rWBdioxYVVZwVVz//UX84m/NvY=
 github.com/rancher/rancher/pkg/apis v0.0.0-20240709213639-d72c5157164a h1:HOqwa2b37BfJd1zhx9QrXSl96HzIKrk1n1QUDU+seho=
 github.com/rancher/rancher/pkg/apis v0.0.0-20240709213639-d72c5157164a/go.mod h1:cmEngja26JdZoxmEsK5xvLl3OEyjvq7UNHFmiprkivM=
-github.com/rancher/rke v1.5.11-rc4 h1:78eoh8ysvdsEnB8YQWhUHKTpqz17TvMvtJ1Z6DE1qQs=
-github.com/rancher/rke v1.5.11-rc4/go.mod h1:/z9oyKqYpFwgRBV9rfLxqUdjydz/VMCTcjld4uUt7uM=
+github.com/rancher/rke v1.5.11 h1:nwDfjUZSslLIvALgJZ0q07wfI2DDxTZ3M5zyIAmXsdI=
+github.com/rancher/rke v1.5.11/go.mod h1:/z9oyKqYpFwgRBV9rfLxqUdjydz/VMCTcjld4uUt7uM=
 github.com/rancher/wrangler/v2 v2.1.4 h1:ohov0i6A9dJHHO6sjfsH4Dqv93ZTdm5lIJVJdPzVdQc=
 github.com/rancher/wrangler/v2 v2.1.4/go.mod h1:af5OaGU/COgreQh1mRbKiUI64draT2NN34uk+PALFY8=
 github.com/robfig/cron v1.2.0 h1:ZjScXvvxeQ63Dbyxy76Fj3AT3Ut0aKsyd2/tl3DTMuQ=
