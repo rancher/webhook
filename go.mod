@@ -40,7 +40,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/rancher/dynamiclistener v0.6.0
-	github.com/rancher/lasso v0.0.0-20240705194423-b2a060d103c1
+	github.com/rancher/lasso v0.0.0-20240809125800-8da6f11865d5
 	github.com/rancher/rancher/pkg/apis v0.0.0-20240816071246-0c3b39a95054
 	github.com/rancher/rke v1.6.0
 	github.com/rancher/wrangler/v3 v3.0.0
