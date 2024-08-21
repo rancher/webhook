@@ -652,12 +652,145 @@ func TestValidateDataDirectories(t *testing.T) {
 					AgentEnvVars: []rkev1.EnvVar{
 						{
 							Name:  "CATTLE_AGENT_VAR_DIR",
-							Value: "a",
+							Value: "/a",
 						},
 					},
 				},
 			},
 			oldCluster:    nil,
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE distro data dir is relative",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
+							DataDirectories: rkev1.DataDirectories{
+								K8sDistro: "a",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE provisioning data dir is relative",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
+							DataDirectories: rkev1.DataDirectories{
+								Provisioning: "a",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE system agent data dir is relative",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
+							DataDirectories: rkev1.DataDirectories{
+								SystemAgent: "a",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE distro data dir == provisioning data dir",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
+							DataDirectories: rkev1.DataDirectories{
+								K8sDistro:    "/a",
+								Provisioning: "/a",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE distro data dir == system agent data dir",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
+							DataDirectories: rkev1.DataDirectories{
+								K8sDistro:   "/a",
+								SystemAgent: "/a",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE provisioning data dir == system agent data dir",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
+							DataDirectories: rkev1.DataDirectories{
+								Provisioning: "/a",
+								SystemAgent:  "/a",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE distro data dir contains provisioning data dir",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
+							DataDirectories: rkev1.DataDirectories{
+								K8sDistro:    "/a",
+								Provisioning: "/a/b",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE provisioning data dir contains distro data dir",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
+							DataDirectories: rkev1.DataDirectories{
+								K8sDistro:    "/a/b",
+								Provisioning: "/a",
+							},
+						},
+					},
+				},
+			},
 			shouldSucceed: false,
 		},
 		{
@@ -669,7 +802,7 @@ func TestValidateDataDirectories(t *testing.T) {
 					AgentEnvVars: []rkev1.EnvVar{
 						{
 							Name:  "CATTLE_AGENT_VAR_DIR",
-							Value: "a",
+							Value: "/a",
 						},
 					},
 				},
@@ -710,7 +843,7 @@ func TestValidateDataDirectories(t *testing.T) {
 					AgentEnvVars: []rkev1.EnvVar{
 						{
 							Name:  "CATTLE_AGENT_VAR_DIR",
-							Value: "a",
+							Value: "/a",
 						},
 					},
 				},
@@ -721,7 +854,7 @@ func TestValidateDataDirectories(t *testing.T) {
 					AgentEnvVars: []rkev1.EnvVar{
 						{
 							Name:  "CATTLE_AGENT_VAR_DIR",
-							Value: "a",
+							Value: "/a",
 						},
 					},
 				},
@@ -737,7 +870,7 @@ func TestValidateDataDirectories(t *testing.T) {
 					AgentEnvVars: []rkev1.EnvVar{
 						{
 							Name:  "CATTLE_AGENT_VAR_DIR",
-							Value: "a",
+							Value: "/a",
 						},
 					},
 				},
@@ -748,7 +881,7 @@ func TestValidateDataDirectories(t *testing.T) {
 					AgentEnvVars: []rkev1.EnvVar{
 						{
 							Name:  "CATTLE_AGENT_VAR_DIR",
-							Value: "b",
+							Value: "/b",
 						},
 					},
 				},
@@ -763,7 +896,7 @@ func TestValidateDataDirectories(t *testing.T) {
 					RKEConfig: &v1.RKEConfig{
 						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
 							DataDirectories: rkev1.DataDirectories{
-								SystemAgent: "a",
+								SystemAgent: "/a",
 							},
 						},
 					},
@@ -775,7 +908,7 @@ func TestValidateDataDirectories(t *testing.T) {
 					AgentEnvVars: []rkev1.EnvVar{
 						{
 							Name:  "CATTLE_AGENT_VAR_DIR",
-							Value: "a",
+							Value: "/a",
 						},
 					},
 				},
@@ -790,7 +923,7 @@ func TestValidateDataDirectories(t *testing.T) {
 					RKEConfig: &v1.RKEConfig{
 						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
 							DataDirectories: rkev1.DataDirectories{
-								SystemAgent: "a",
+								SystemAgent: "/a",
 							},
 						},
 					},
@@ -801,7 +934,7 @@ func TestValidateDataDirectories(t *testing.T) {
 					RKEConfig: &v1.RKEConfig{
 						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
 							DataDirectories: rkev1.DataDirectories{
-								SystemAgent: "b",
+								SystemAgent: "/b",
 							},
 						},
 					},
@@ -817,7 +950,7 @@ func TestValidateDataDirectories(t *testing.T) {
 					RKEConfig: &v1.RKEConfig{
 						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
 							DataDirectories: rkev1.DataDirectories{
-								Provisioning: "a",
+								Provisioning: "/a",
 							},
 						},
 					},
@@ -828,7 +961,7 @@ func TestValidateDataDirectories(t *testing.T) {
 					RKEConfig: &v1.RKEConfig{
 						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
 							DataDirectories: rkev1.DataDirectories{
-								Provisioning: "b",
+								Provisioning: "/b",
 							},
 						},
 					},
@@ -844,7 +977,7 @@ func TestValidateDataDirectories(t *testing.T) {
 					RKEConfig: &v1.RKEConfig{
 						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
 							DataDirectories: rkev1.DataDirectories{
-								K8sDistro: "a",
+								K8sDistro: "/a",
 							},
 						},
 					},
@@ -855,7 +988,7 @@ func TestValidateDataDirectories(t *testing.T) {
 					RKEConfig: &v1.RKEConfig{
 						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
 							DataDirectories: rkev1.DataDirectories{
-								K8sDistro: "b",
+								K8sDistro: "/b",
 							},
 						},
 					},
@@ -872,6 +1005,129 @@ func TestValidateDataDirectories(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			response := a.validateDataDirectories(tt.request, tt.oldCluster, tt.cluster)
 			assert.Equal(t, tt.shouldSucceed, response.Allowed)
+		})
+	}
+}
+
+func TestValidateDataDirectoryFormat(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		dir      string
+		expected bool
+	}{
+		{
+			name:     "relative",
+			dir:      "home",
+			expected: false,
+		},
+		{
+			name:     "trailing slash",
+			dir:      "/home/",
+			expected: false,
+		},
+		{
+			name:     "env var",
+			dir:      "/$HOME",
+			expected: false,
+		},
+		{
+			name:     "env var",
+			dir:      "/${HOME}",
+			expected: false,
+		},
+		{
+			name:     "expr",
+			dir:      "/`pwd`",
+			expected: false,
+		},
+		{
+			name:     "expr",
+			dir:      "/$(pwd)",
+			expected: false,
+		},
+		{
+			name:     "current directory",
+			dir:      "/./tmp",
+			expected: false,
+		},
+		{
+			name:     "current directory",
+			dir:      "/tmp/.",
+			expected: false,
+		},
+		{
+			name:     "parent directory",
+			dir:      "/tmp/../tmp",
+			expected: false,
+		},
+		{
+			name:     "current directory",
+			dir:      "/tmp/..",
+			expected: false,
+		},
+		{
+			name:     "valid",
+			dir:      "/tmp",
+			expected: true,
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			response := validateDataDirectoryFormat(tt.dir, "Test")
+			assert.Equal(t, tt.expected, response.Allowed)
+		})
+	}
+}
+
+func TestValidateDataDirectoryHierarchy(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		dataDirs map[string]string
+		expected bool
+	}{
+		{
+			name: "equal paths",
+			dataDirs: map[string]string{
+				"a": "/a",
+				"b": "/a",
+			},
+			expected: false,
+		},
+		{
+			name: "nested paths",
+			dataDirs: map[string]string{
+				"a": "/a",
+				"b": "/a/b",
+			},
+			expected: false,
+		},
+		{
+			name: "nested paths",
+			dataDirs: map[string]string{
+				"a": "/a/b",
+				"b": "/a",
+			},
+			expected: false,
+		},
+		{
+			name: "distinct paths",
+			dataDirs: map[string]string{
+				"a": "/a",
+				"b": "/b",
+			},
+			expected: true,
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			response := validateDataDirectoryHierarchy(tt.dataDirs)
+			assert.Equal(t, tt.expected, response.Allowed)
 		})
 	}
 }
