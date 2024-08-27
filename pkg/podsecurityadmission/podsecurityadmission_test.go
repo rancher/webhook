@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-	"github.com/rancher/rke/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	v1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
@@ -145,17 +144,23 @@ func TestGetPluginConfigFromCluster(t *testing.T) {
 }
 
 func getClusterBasic() *v3.Cluster {
-	return &v3.Cluster{
-		Spec: v3.ClusterSpec{
-			ClusterSpecBase: v3.ClusterSpecBase{
-				RancherKubernetesEngineConfig: &types.RancherKubernetesEngineConfig{
-					Services: types.RKEConfigServices{
-						KubeAPI: types.KubeAPIService{},
-					},
-				},
-			},
-		},
+	var data v3.Cluster
+	// Use a json-encoded representation of the desired data
+	// to avoid loading the RKE types module.
+	s := `{
+"spec": {
+    "rancherKubernetesEngineConfig": {
+      "services": {
+       "kubeApi": { }
+      }
+    }
+  }
+}`
+	err := json.Unmarshal([]byte(s), &data)
+	if err != nil {
+		panic(err)
 	}
+	return &data
 }
 
 func getClusterWithAdmissionConfig() *v3.Cluster {
