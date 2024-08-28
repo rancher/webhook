@@ -5,7 +5,7 @@ name: FOSSA Scanning
 on:
   # List the branches that must be scanned when a push event happens.
   push:
-    branches: ["master", "release/v*"]
+    branches: ["main", "release/v*"]
   pull_request:
   # For manual scans.
   workflow_dispatch:
