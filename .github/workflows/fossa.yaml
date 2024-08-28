@@ -5,7 +5,7 @@ name: FOSSA Scanning
 on:
   # List the branches that must be scanned when a push event happens.
   push:
-    branches: ["master", "release/v*"]
+    branches: ["main", "release/v*"]
   pull_request:
   # For manual scans.
   workflow_dispatch:
@@ -18,8 +18,9 @@ permissions:
 
 jobs:
   fossa-scanning:
-    # We're running inside a public repo, so use the public provided GH runners.
-    runs-on: ubuntu-latest
+    runs-on: org-${{ github.repository_owner_id }}-amd64-k8s
+    # We need an explicit container with the runner
+    container: registry.suse.com/bci/bci-base:15.6
     steps:
     - name: Checkout
       uses: actions/checkout@v4
