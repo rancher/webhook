@@ -97,22 +97,52 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 
 	switch request.Operation {
 	case admissionv1.Create:
-		return a.admitCommonCreateUpdate(oldSetting, newSetting)
+		return a.admitCreate(newSetting)
 	case admissionv1.Update:
-		if err := a.validateAgentTLSMode(oldSetting, newSetting); err != nil {
-			return admission.ResponseBadRequest(err.Error()), nil
-		}
-		return a.admitCommonCreateUpdate(oldSetting, newSetting)
+		return a.admitUpdate(oldSetting, newSetting)
+	default:
+		return admission.ResponseAllowed(), nil
 	}
-	return admission.ResponseAllowed(), nil
 }
 
-func (a *admitter) admitCommonCreateUpdate(_, newSetting *v3.Setting) (*admissionv1.AdmissionResponse, error) {
-	if err := a.validateUserRetentionSettings(newSetting); err != nil {
+func (a *admitter) admitCreate(newSetting *v3.Setting) (*admissionv1.AdmissionResponse, error) {
+	return a.admitCommonCreateUpdate(nil, newSetting)
+}
+
+func (a *admitter) admitUpdate(oldSetting, newSetting *v3.Setting) (*admissionv1.AdmissionResponse, error) {
+	var err error
+
+	switch newSetting.Name {
+	case AgentTLSMode:
+		err = a.validateAgentTLSMode(oldSetting, newSetting)
+	default:
+	}
+
+	if err != nil {
 		return admission.ResponseBadRequest(err.Error()), nil
 	}
 
-	if err := a.validateAuthUserSessionTTLMinutes(newSetting); err != nil {
+	return a.admitCommonCreateUpdate(oldSetting, newSetting)
+}
+
+func (a *admitter) admitCommonCreateUpdate(_, newSetting *v3.Setting) (*admissionv1.AdmissionResponse, error) {
+	var err error
+
+	switch newSetting.Name {
+	case DeleteInactiveUserAfter:
+		err = a.validateDeleteInactiveUserAfter(newSetting)
+	case DisableInactiveUserAfter:
+		err = a.validateDisableInactiveUserAfter(newSetting)
+	case UserLastLoginDefault:
+		err = a.validateUserLastLoginDefault(newSetting)
+	case UserRetentionCron:
+		err = a.validateUserRetentionCron(newSetting)
+	case AuthUserSessionTTLMinutes:
+		err = a.validateAuthUserSessionTTLMinutes(newSetting)
+	default:
+	}
+
+	if err != nil {
 		return admission.ResponseBadRequest(err.Error()), nil
 	}
 
@@ -120,10 +150,6 @@ func (a *admitter) admitCommonCreateUpdate(_, newSetting *v3.Setting) (*admissio
 }
 
 func (a *admitter) validateAuthUserSessionTTLMinutes(s *v3.Setting) error {
-	if s.Name != AuthUserSessionTTLMinutes {
-		return nil
-	}
-
 	if s.Value == "" {
 		return nil
 	}
@@ -163,61 +189,86 @@ func (a *admitter) validateAuthUserSessionTTLMinutes(s *v3.Setting) error {
 	return nil
 }
 
-func (a *admitter) validateUserRetentionSettings(s *v3.Setting) error {
-	var (
-		err error
-		dur time.Duration
-	)
+var errLessThanAuthUserSessionTTL = fmt.Errorf("can't be less than %s", AuthUserSessionTTLMinutes)
 
-	isLessThanUserSessionTTL := func(dur time.Duration) bool {
-		setting, err := a.settingCache.Get(AuthUserSessionTTLMinutes)
-		if err != nil {
-			logrus.Warnf("failed to get %s: %v", AuthUserSessionTTLMinutes, err)
-			return false // Deliberately allow to proceed.
-		}
-
-		authUserSessionTTLDuration, err := parseMinutes(effectiveValue(setting))
-		if err != nil {
-			logrus.Warnf("failed to parse %s: %s", AuthUserSessionTTLMinutes, err)
-			return false // Deliberately allow to proceed.
-		}
-
-		return dur < authUserSessionTTLDuration
+func (a *admitter) isLessThanUserSessionTTL(dur time.Duration) bool {
+	setting, err := a.settingCache.Get(AuthUserSessionTTLMinutes)
+	if err != nil {
+		logrus.Warnf("failed to get %s: %v", AuthUserSessionTTLMinutes, err)
+		return false // Deliberately allow to proceed.
 	}
 
-	lessThanAuthUserSessionTTLErr := fmt.Errorf("can't be less than %s", AuthUserSessionTTLMinutes)
-	switch s.Name {
-	case DisableInactiveUserAfter:
-		if s.Value != "" {
-			dur, err = validateDuration(s.Value)
-			if err == nil && dur > 0 && isLessThanUserSessionTTL(dur) { // Note: zero duration is allowed and is equivalent to "".
-				err = lessThanAuthUserSessionTTLErr
-			}
+	authUserSessionTTLDuration, err := parseMinutes(effectiveValue(setting))
+	if err != nil {
+		logrus.Warnf("failed to parse %s: %s", AuthUserSessionTTLMinutes, err)
+		return false // Deliberately allow to proceed.
+	}
+
+	return dur < authUserSessionTTLDuration
+}
+
+func (a *admitter) validateDisableInactiveUserAfter(s *v3.Setting) error {
+	if s.Value == "" {
+		return nil
+	}
+
+	dur, err := validateDuration(s.Value)
+	if err != nil {
+		return field.TypeInvalid(valuePath, s.Value, err.Error())
+	}
+
+	// Note: zero duration is allowed and is equivalent to "".
+	if dur > 0 && a.isLessThanUserSessionTTL(dur) {
+		return field.Forbidden(valuePath, errLessThanAuthUserSessionTTL.Error())
+	}
+
+	return nil
+}
+
+func (a *admitter) validateDeleteInactiveUserAfter(s *v3.Setting) error {
+	if s.Value == "" {
+		return nil
+	}
+
+	dur, err := validateDuration(s.Value)
+	if err != nil {
+		return field.TypeInvalid(valuePath, s.Value, err.Error())
+	}
+
+	// Note: zero duration is allowed and is equivalent to "".
+	if dur > 0 {
+		if dur < MinDeleteInactiveUserAfter {
+			err = fmt.Errorf("must be at least %s", MinDeleteInactiveUserAfter)
+		} else if a.isLessThanUserSessionTTL(dur) {
+			err = errLessThanAuthUserSessionTTL
 		}
-	case DeleteInactiveUserAfter:
-		minDeleteInactiveUserAfterErr := fmt.Errorf("must be at least %s", MinDeleteInactiveUserAfter)
-		if s.Value != "" {
-			dur, err = validateDuration(s.Value)
-			if err == nil && dur > 0 { // Note: zero duration is allowed and is equivalent to "".
-				if dur < MinDeleteInactiveUserAfter {
-					err = minDeleteInactiveUserAfterErr
-				} else if isLessThanUserSessionTTL(dur) {
-					err = lessThanAuthUserSessionTTLErr
-				}
-			}
-		}
-	case UserLastLoginDefault:
-		if s.Value != "" {
-			_, err = time.Parse(time.RFC3339, s.Value)
-		}
-	case UserRetentionCron:
-		if s.Value != "" {
-			_, err = cron.ParseStandard(s.Value)
-		}
-	default:
 	}
 
 	if err != nil {
+		return field.Forbidden(valuePath, err.Error())
+	}
+
+	return nil
+}
+
+func (a *admitter) validateUserRetentionCron(s *v3.Setting) error {
+	if s.Value == "" {
+		return nil
+	}
+
+	if _, err := cron.ParseStandard(s.Value); err != nil {
+		return field.TypeInvalid(valuePath, s.Value, err.Error())
+	}
+
+	return nil
+}
+
+func (a *admitter) validateUserLastLoginDefault(s *v3.Setting) error {
+	if s.Value == "" {
+		return nil
+	}
+
+	if _, err := time.Parse(time.RFC3339, s.Value); err != nil {
 		return field.TypeInvalid(valuePath, s.Value, err.Error())
 	}
 
@@ -249,9 +300,6 @@ func parseMinutes(value string) (time.Duration, error) {
 }
 
 func (a *admitter) validateAgentTLSMode(oldSetting, newSetting *v3.Setting) error {
-	if oldSetting.Name != AgentTLSMode || newSetting.Name != AgentTLSMode {
-		return nil
-	}
 	if effectiveValue(oldSetting) == "system-store" && effectiveValue(newSetting) == "strict" {
 		if force := newSetting.Annotations["cattle.io/force"]; force == "true" {
 			return nil

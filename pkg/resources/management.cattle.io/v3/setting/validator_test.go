@@ -37,132 +37,67 @@ var (
 	gvr = metav1.GroupVersionResource{Group: "management.cattle.io", Version: "v3", Resource: "settings"}
 )
 
-func (s *SettingSuite) TestValidateUserRetentionSettingsOnUpdate() {
-	s.validateUserRetentionSettings(v1.Update)
+func (s *SettingSuite) TestValidateDisableInactiveUserAfterOnUpdate() {
+	s.validateDisableInactiveUserAfter(v1.Update)
 }
 
-func (s *SettingSuite) TestValidateUserRetentionSettingsOnCreate() {
-	s.validateUserRetentionSettings(v1.Create)
+func (s *SettingSuite) TestValidateDisableInactiveUserAfterOnCreate() {
+	s.validateDisableInactiveUserAfter(v1.Create)
 }
 
-func (s *SettingSuite) validateUserRetentionSettings(op v1.Operation) {
+func (s *SettingSuite) validateDisableInactiveUserAfter(op v1.Operation) {
 	tests := []struct {
-		setting           string
+		desc              string
 		value             string
 		userSessionTTL    string
 		userSessionTTLErr error
 		allowed           bool
 	}{
 		{
-			setting: setting.DisableInactiveUserAfter,
+			desc:    "disabled",
 			value:   "",
 			allowed: true,
 		},
 		{
-			setting: setting.DeleteInactiveUserAfter,
-			value:   "",
-			allowed: true,
-		},
-		{
-			setting: setting.UserLastLoginDefault,
-			value:   "",
-			allowed: true,
-		},
-		{
-			setting: setting.UserRetentionCron,
-			value:   "",
-			allowed: true,
-		},
-		{
-			setting:        setting.DisableInactiveUserAfter,
+			desc:           "reasonable value larger than user session ttl",
 			userSessionTTL: "960",
 			value:          "16h1s",
 			allowed:        true,
 		},
 		{
-			setting:        setting.DeleteInactiveUserAfter,
-			userSessionTTL: "960",
-			value:          setting.MinDeleteInactiveUserAfter.String(),
-			allowed:        true,
-		},
-		{
-			setting: setting.UserLastLoginDefault,
-			value:   "2024-01-08T00:00:00Z",
-			allowed: true,
-		},
-		{
-			setting: setting.UserRetentionCron,
-			value:   "* * * * *",
-			allowed: true,
-		},
-		{
-			setting:        setting.DisableInactiveUserAfter,
+			desc:           "nonsencial user session ttl value",
 			userSessionTTL: "foo",
 			value:          "15h",
 			allowed:        true,
 		},
 		{
-			setting:        setting.DeleteInactiveUserAfter,
-			userSessionTTL: "foo",
-			value:          setting.MinDeleteInactiveUserAfter.String(),
-			allowed:        true,
-		},
-		{
-			setting:           setting.DisableInactiveUserAfter,
+			desc:              "error getting user session ttl value",
 			userSessionTTLErr: errors.New("some error"),
 			value:             "16h", // 960 minutes.
 			allowed:           true,
 		},
 		{
-			setting:           setting.DeleteInactiveUserAfter,
-			userSessionTTLErr: errors.New("some error"),
-			value:             setting.MinDeleteInactiveUserAfter.String(),
-			allowed:           true,
-		},
-		{
-			setting:        setting.DisableInactiveUserAfter,
+			desc:           "value with minutes and seconds",
 			userSessionTTL: "960",
 			value:          "15h59m59s",
 		},
 		{
-			setting:        setting.DeleteInactiveUserAfter,
-			userSessionTTL: strconv.Itoa(int((setting.MinDeleteInactiveUserAfter + time.Hour).Minutes())),
-			value:          setting.MinDeleteInactiveUserAfter.String(),
+			desc:  "days modifier",
+			value: "1d",
 		},
 		{
-			setting: setting.DisableInactiveUserAfter,
-			value:   "1w",
+			desc:  "weeks modifier",
+			value: "1w",
 		},
 		{
-			setting: setting.DeleteInactiveUserAfter,
-			value:   "2d",
-		},
-		{
-			setting: setting.UserLastLoginDefault,
-			value:   "foo",
-		},
-		{
-			setting: setting.UserRetentionCron,
-			value:   "* * * * * *",
-		},
-		{
-			setting: setting.DisableInactiveUserAfter,
-			value:   "-1h",
-		},
-		{
-			setting: setting.DeleteInactiveUserAfter,
-			value:   "-1h",
-		},
-		{
-			setting: setting.DeleteInactiveUserAfter,
-			value:   (setting.MinDeleteInactiveUserAfter - time.Second).String(),
+			desc:  "negative value",
+			value: "-1h",
 		},
 	}
 
 	for _, test := range tests {
 		test := test
-		name := test.setting + "_" + test.value + "_" + test.userSessionTTL
-		s.T().Run(name, func(t *testing.T) {
+		s.T().Run(test.desc, func(t *testing.T) {
 			t.Parallel()
 
 			ctrl := gomock.NewController(t)
@@ -182,27 +117,224 @@ func (s *SettingSuite) validateUserRetentionSettings(op v1.Operation) {
 				}, nil
 			}).Times(getUserSessionTTLCalledTimes)
 
-			oldObjRaw, err := json.Marshal(v3.Setting{
+			validator := setting.NewValidator(nil, settingCache)
+			s.testAdmit(t, validator, &v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: test.setting,
+					Name: setting.DisableInactiveUserAfter,
 				},
-			})
-			assert.NoError(t, err, "failed to marshal old Setting")
-
-			objRaw, err := json.Marshal(v3.Setting{
+			}, &v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: test.setting,
+					Name: setting.DisableInactiveUserAfter,
 				},
 				Value: test.value,
-			})
-			assert.NoError(t, err, "failed to marshal Setting")
+			}, op, test.allowed)
+		})
+	}
+}
+
+func (s *SettingSuite) TestValidateDeleteInactiveUserAfterOnUpdate() {
+	s.validateDeleteInactiveUserAfter(v1.Update)
+}
+
+func (s *SettingSuite) TestValidateDeleteInactiveUserAfterOnCreate() {
+	s.validateDeleteInactiveUserAfter(v1.Create)
+}
+
+func (s *SettingSuite) validateDeleteInactiveUserAfter(op v1.Operation) {
+	tests := []struct {
+		desc              string
+		value             string
+		userSessionTTL    string
+		userSessionTTLErr error
+		allowed           bool
+	}{
+		{
+			desc:    "disabled",
+			value:   "",
+			allowed: true,
+		},
+		{
+			desc:           "min allowed value",
+			userSessionTTL: "960",
+			value:          setting.MinDeleteInactiveUserAfter.String(),
+			allowed:        true,
+		},
+		{
+			desc:           "nonsensical user session ttl value",
+			userSessionTTL: "foo",
+			value:          setting.MinDeleteInactiveUserAfter.String(),
+			allowed:        true,
+		},
+		{
+			desc:              "error getting user session ttl value",
+			userSessionTTLErr: errors.New("some error"),
+			value:             setting.MinDeleteInactiveUserAfter.String(),
+			allowed:           true,
+		},
+		{
+			desc:           "value less than user session ttl",
+			userSessionTTL: strconv.Itoa(int((setting.MinDeleteInactiveUserAfter + time.Hour).Minutes())),
+			value:          setting.MinDeleteInactiveUserAfter.String(),
+		},
+		{
+			desc:  "value less than min allowed",
+			value: (setting.MinDeleteInactiveUserAfter - time.Second).String(),
+		},
+		{
+			desc:  "days modifier",
+			value: "1d",
+		},
+		{
+			desc:  "weeks modifier",
+			value: "1w",
+		},
+		{
+			desc:  "negative value",
+			value: "-1h",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		s.T().Run(test.desc, func(t *testing.T) {
+			t.Parallel()
+
+			ctrl := gomock.NewController(t)
+			settingCache := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
+
+			getUserSessionTTLCalledTimes := 0
+			if test.userSessionTTL != "" || test.userSessionTTLErr != nil {
+				getUserSessionTTLCalledTimes = 1
+			}
+
+			settingCache.EXPECT().Get(setting.AuthUserSessionTTLMinutes).DoAndReturn(func(string) (*v3.Setting, error) {
+				if test.userSessionTTLErr != nil {
+					return nil, test.userSessionTTLErr
+				}
+				return &v3.Setting{
+					Default: test.userSessionTTL,
+				}, nil
+			}).Times(getUserSessionTTLCalledTimes)
 
 			validator := setting.NewValidator(nil, settingCache)
-			require.Len(t, validator.Admitters(), 1)
+			s.testAdmit(t, validator, &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: setting.DeleteInactiveUserAfter,
+				},
+			}, &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: setting.DeleteInactiveUserAfter,
+				},
+				Value: test.value,
+			}, op, test.allowed)
+		})
+	}
+}
 
-			resp, err := validator.Admitters()[0].Admit(newRequest(op, objRaw, oldObjRaw))
-			require.NoError(t, err)
-			assert.Equal(t, test.allowed, resp.Allowed)
+func (s *SettingSuite) TestValidateUserRetentionCronOnUpdate() {
+	s.validateUserRetentionCron(v1.Update)
+}
+
+func (s *SettingSuite) TestValidateUserRetentionCronOnCreate() {
+	s.validateUserRetentionCron(v1.Create)
+}
+
+func (s *SettingSuite) validateUserRetentionCron(op v1.Operation) {
+	tests := []struct {
+		desc    string
+		value   string
+		allowed bool
+	}{
+		{
+			desc:    "disabled",
+			value:   "",
+			allowed: true,
+		},
+		{
+			desc:    "valid cron expression",
+			value:   "* * * * *",
+			allowed: true,
+		},
+		{
+			desc:  "non-standard cron expression",
+			value: "* * * * * *",
+		},
+		{
+			desc:  "nonsensical value",
+			value: "foo",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		s.T().Run(test.desc, func(t *testing.T) {
+			t.Parallel()
+
+			validator := setting.NewValidator(nil, nil)
+			s.testAdmit(t, validator, &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: setting.UserRetentionCron,
+				},
+			}, &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: setting.UserRetentionCron,
+				},
+				Value: test.value,
+			}, op, test.allowed)
+		})
+	}
+}
+
+func (s *SettingSuite) TestValidateUserLastLoginDefaultOnUpdate() {
+	s.validateUserLastLoginDefault(v1.Update)
+}
+
+func (s *SettingSuite) TestValidateUserLastLoginDefaultOnCreate() {
+	s.validateUserLastLoginDefault(v1.Create)
+}
+
+func (s *SettingSuite) validateUserLastLoginDefault(op v1.Operation) {
+	tests := []struct {
+		desc    string
+		value   string
+		allowed bool
+	}{
+		{
+			desc:    "disabled",
+			value:   "",
+			allowed: true,
+		},
+		{
+			desc:    "valid RFC3339 date time",
+			value:   "2024-01-08T00:00:00Z", // RFC3339.
+			allowed: true,
+		},
+		{
+			desc:  "invalid RFC3339 date time",
+			value: "20240108T000000Z", // ISO8601.
+		},
+		{
+			desc:  "nonsensical value",
+			value: "foo",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		s.T().Run(test.desc, func(t *testing.T) {
+			t.Parallel()
+
+			validator := setting.NewValidator(nil, nil)
+			s.testAdmit(t, validator, &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: setting.UserLastLoginDefault,
+				},
+			}, &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: setting.UserLastLoginDefault,
+				},
+				Value: test.value,
+			}, op, test.allowed)
 		})
 	}
 }
@@ -317,8 +449,7 @@ func (s *SettingSuite) validateAuthUserSessionTTLMinutes(op v1.Operation) {
 
 	for _, test := range tests {
 		test := test
-		t := s.T()
-		t.Run(test.desc, func(t *testing.T) {
+		s.T().Run(test.desc, func(t *testing.T) {
 			t.Parallel()
 
 			var settingGetCalledTimes int
@@ -345,7 +476,8 @@ func (s *SettingSuite) validateAuthUserSessionTTLMinutes(op v1.Operation) {
 					ObjectMeta: metav1.ObjectMeta{Name: name},
 				}
 
-				// Make sure we use the effective value of the setting.
+				// Make sure we use the effective value of the setting
+				// by alternating between setting.Value and setting.Default.
 				if settingGetCalledTimes%2 == 0 {
 					setting.Value = value
 				} else {
@@ -355,30 +487,31 @@ func (s *SettingSuite) validateAuthUserSessionTTLMinutes(op v1.Operation) {
 				return setting, nil
 			}).AnyTimes()
 
-			oldObjRaw, err := json.Marshal(v3.Setting{
+			validator := setting.NewValidator(nil, settingCache)
+			s.testAdmit(t, validator, &v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: setting.AuthUserSessionTTLMinutes,
 				},
-			})
-			assert.NoError(t, err, "failed to marshal old Setting")
-
-			objRaw, err := json.Marshal(v3.Setting{
+			}, &v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: setting.AuthUserSessionTTLMinutes,
 				},
 				Value: test.value,
-			})
-			assert.NoError(t, err, "failed to marshal Setting")
-
-			validator := setting.NewValidator(nil, settingCache)
-			require.Len(t, validator.Admitters(), 1)
-
-			resp, err := validator.Admitters()[0].Admit(newRequest(op, objRaw, oldObjRaw))
-			require.NoError(t, err)
-			assert.Equal(t, test.allowed, resp.Allowed)
-
+			}, op, test.allowed)
 		})
 	}
+}
+
+func (s *SettingSuite) testAdmit(t *testing.T, validator *setting.Validator, oldSetting, newSetting *v3.Setting, op v1.Operation, allowed bool) {
+	oldObjRaw, err := json.Marshal(oldSetting)
+	require.NoError(t, err, "failed to marshal old Setting")
+
+	objRaw, err := json.Marshal(newSetting)
+	require.NoError(t, err, "failed to marshal Setting")
+
+	resp, err := validator.Admitters()[0].Admit(newRequest(op, objRaw, oldObjRaw))
+	require.NoError(t, err)
+	assert.Equal(t, allowed, resp.Allowed)
 }
 
 func (s *SettingSuite) TestValidatingWebhookFailurePolicy() {
