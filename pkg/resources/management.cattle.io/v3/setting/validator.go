@@ -21,6 +21,15 @@ import (
 	"k8s.io/utils/trace"
 )
 
+const (
+	DeleteInactiveUserAfter   = "delete-inactive-user-after"
+	DisableInactiveUserAfter  = "disable-inactive-user-after"
+	AuthUserSessionTTLMinutes = "auth-user-session-ttl-minutes"
+	UserLastLoginDefault      = "user-last-login-default"
+	UserRetentionCron         = "user-retention-cron"
+	AgentTLSMode              = "agent-tls-mode"
+)
+
 // MinDeleteInactiveUserAfter is the minimum duration for delete-inactive-user-after setting.
 // This is introduced to minimize the risk of deleting users accidentally by setting a relatively low value.
 // The admin can still set a lower value if needed by bypassing the webhook.
@@ -31,6 +40,8 @@ var gvr = schema.GroupVersionResource{
 	Version:  "v3",
 	Resource: "settings",
 }
+
+var valuePath = field.NewPath("value")
 
 // Validator validates settings.
 type Validator struct {
@@ -83,47 +94,73 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Setting from request: %w", err)
 	}
+
 	switch request.Operation {
 	case admissionv1.Create:
-		if err := a.validateUserRetentionSettings(newSetting); err != nil {
-			return admission.ResponseBadRequest(err.Error()), nil
-		}
+		return a.admitCommonCreateUpdate(oldSetting, newSetting)
 	case admissionv1.Update:
-		if err := a.validateUserRetentionSettings(newSetting); err != nil {
+		if err := a.validateAgentTLSMode(oldSetting, newSetting); err != nil {
 			return admission.ResponseBadRequest(err.Error()), nil
 		}
-		if err := a.validateAgentTLSMode(*oldSetting, *newSetting); err != nil {
-			return admission.ResponseBadRequest(err.Error()), nil
-		}
+		return a.admitCommonCreateUpdate(oldSetting, newSetting)
 	}
 	return admission.ResponseAllowed(), nil
 }
 
-func (a *admitter) getAuthUserSessionTTLDuration() (time.Duration, error) {
-	setting, err := a.settingCache.Get("auth-user-session-ttl-minutes")
-	if err != nil {
-		return 0, fmt.Errorf("failed to get auth-user-session-ttl-minutes setting: %w", err)
-	}
-	value := effectiveValue(*setting)
-	if value == "" {
-		return 0, nil
+func (a *admitter) admitCommonCreateUpdate(_, newSetting *v3.Setting) (*admissionv1.AdmissionResponse, error) {
+	if err := a.validateUserRetentionSettings(newSetting); err != nil {
+		return admission.ResponseBadRequest(err.Error()), nil
 	}
 
-	minutes, err := strconv.ParseInt(value, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse auth-user-session-ttl-minutes setting: %w", err)
+	if err := a.validateAuthUserSessionTTLMinutes(newSetting); err != nil {
+		return admission.ResponseBadRequest(err.Error()), nil
 	}
 
-	return time.Duration(minutes) * time.Minute, nil
+	return admission.ResponseAllowed(), nil
 }
 
-func (a *admitter) isLessThanUserSessionTTL(dur time.Duration) bool {
-	authUserSessionTTLDuration, getErr := a.getAuthUserSessionTTLDuration()
-	if getErr != nil {
-		logrus.Warnf("failed to get auth-user-session-ttl-minutes setting: %v", getErr) // Log the error and move on.
+func (a *admitter) validateAuthUserSessionTTLMinutes(s *v3.Setting) error {
+	if s.Name != AuthUserSessionTTLMinutes {
+		return nil
 	}
 
-	return dur < authUserSessionTTLDuration
+	if s.Value == "" {
+		return nil
+	}
+
+	userSessionDuration, err := parseMinutes(s.Value)
+	if err != nil {
+		return field.TypeInvalid(valuePath, s.Value, err.Error())
+	}
+	if userSessionDuration < 0 {
+		return field.TypeInvalid(valuePath, s.Value, "negative value")
+	}
+
+	isGreaterThanSetting := func(name string) bool {
+		setting, err := a.settingCache.Get(name)
+		if err != nil {
+			logrus.Warnf("failed to get %s: %s", name, err)
+			return false // Deliberately allow to proceed.
+		}
+
+		settingDur, err := time.ParseDuration(effectiveValue(setting))
+		if err != nil {
+			logrus.Warnf("failed to parse %s: %s", name, err)
+			return false // Deliberately allow to proceed.
+		}
+
+		return settingDur > 0 && userSessionDuration > settingDur
+	}
+
+	checkAgainst := []string{DisableInactiveUserAfter, DeleteInactiveUserAfter}
+
+	for _, name := range checkAgainst {
+		if isGreaterThanSetting(name) {
+			return field.TypeInvalid(valuePath, s.Value, "can't be greater than "+name)
+		}
+	}
+
+	return nil
 }
 
 func (a *admitter) validateUserRetentionSettings(s *v3.Setting) error {
@@ -132,32 +169,48 @@ func (a *admitter) validateUserRetentionSettings(s *v3.Setting) error {
 		dur time.Duration
 	)
 
-	lessThanAuthUserSessionTTLErr := fmt.Errorf("can't be less than auth-user-session-ttl-minutes")
+	isLessThanUserSessionTTL := func(dur time.Duration) bool {
+		setting, err := a.settingCache.Get(AuthUserSessionTTLMinutes)
+		if err != nil {
+			logrus.Warnf("failed to get %s: %v", AuthUserSessionTTLMinutes, err)
+			return false // Deliberately allow to proceed.
+		}
+
+		authUserSessionTTLDuration, err := parseMinutes(effectiveValue(setting))
+		if err != nil {
+			logrus.Warnf("failed to parse %s: %s", AuthUserSessionTTLMinutes, err)
+			return false // Deliberately allow to proceed.
+		}
+
+		return dur < authUserSessionTTLDuration
+	}
+
+	lessThanAuthUserSessionTTLErr := fmt.Errorf("can't be less than %s", AuthUserSessionTTLMinutes)
 	switch s.Name {
-	case "disable-inactive-user-after":
+	case DisableInactiveUserAfter:
 		if s.Value != "" {
 			dur, err = validateDuration(s.Value)
-			if err == nil && dur > 0 && a.isLessThanUserSessionTTL(dur) { // Note: zero duration is allowed and is equivalent to "".
+			if err == nil && dur > 0 && isLessThanUserSessionTTL(dur) { // Note: zero duration is allowed and is equivalent to "".
 				err = lessThanAuthUserSessionTTLErr
 			}
 		}
-	case "delete-inactive-user-after":
+	case DeleteInactiveUserAfter:
 		minDeleteInactiveUserAfterErr := fmt.Errorf("must be at least %s", MinDeleteInactiveUserAfter)
 		if s.Value != "" {
 			dur, err = validateDuration(s.Value)
 			if err == nil && dur > 0 { // Note: zero duration is allowed and is equivalent to "".
 				if dur < MinDeleteInactiveUserAfter {
 					err = minDeleteInactiveUserAfterErr
-				} else if a.isLessThanUserSessionTTL(dur) {
+				} else if isLessThanUserSessionTTL(dur) {
 					err = lessThanAuthUserSessionTTLErr
 				}
 			}
 		}
-	case "user-last-login-default":
+	case UserLastLoginDefault:
 		if s.Value != "" {
 			_, err = time.Parse(time.RFC3339, s.Value)
 		}
-	case "user-retention-cron":
+	case UserRetentionCron:
 		if s.Value != "" {
 			_, err = cron.ParseStandard(s.Value)
 		}
@@ -165,14 +218,38 @@ func (a *admitter) validateUserRetentionSettings(s *v3.Setting) error {
 	}
 
 	if err != nil {
-		return field.TypeInvalid(field.NewPath("value"), s.Value, err.Error())
+		return field.TypeInvalid(valuePath, s.Value, err.Error())
 	}
 
 	return nil
 }
 
-func (a *admitter) validateAgentTLSMode(oldSetting, newSetting v3.Setting) error {
-	if oldSetting.Name != "agent-tls-mode" || newSetting.Name != "agent-tls-mode" {
+// validateDuration parses the value as durations and makes sure it's not negative.
+func validateDuration(value string) (time.Duration, error) {
+	dur, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, err
+	}
+
+	if dur < 0 {
+		return 0, errors.New("negative value")
+	}
+
+	return dur, err
+}
+
+// parseMinutes parses the value as minutes as returns the duration.
+func parseMinutes(value string) (time.Duration, error) {
+	minutes, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return time.Duration(minutes) * time.Minute, nil
+}
+
+func (a *admitter) validateAgentTLSMode(oldSetting, newSetting *v3.Setting) error {
+	if oldSetting.Name != AgentTLSMode || newSetting.Name != AgentTLSMode {
 		return nil
 	}
 	if effectiveValue(oldSetting) == "system-store" && effectiveValue(newSetting) == "strict" {
@@ -196,33 +273,23 @@ func (a *admitter) validateAgentTLSMode(oldSetting, newSetting v3.Setting) error
 	return nil
 }
 
-func validateDuration(value string) (time.Duration, error) {
-	dur, err := time.ParseDuration(value)
-	if err != nil {
-		return 0, err
-	}
-
-	if dur < 0 {
-		return 0, errors.New("negative duration")
-	}
-
-	return dur, err
-}
-
 func clusterConditionMatches(cluster *v3.Cluster, t v3.ClusterConditionType, status v1.ConditionStatus) bool {
 	for _, cond := range cluster.Status.Conditions {
 		if cond.Type == t && cond.Status == status {
 			return true
 		}
 	}
+
 	return false
 }
 
-func effectiveValue(s v3.Setting) string {
+// effectiveValue returns the effective value of the setting.
+func effectiveValue(s *v3.Setting) string {
 	if s.Value != "" {
 		return s.Value
 	} else if s.Default != "" {
 		return s.Default
 	}
+
 	return ""
 }

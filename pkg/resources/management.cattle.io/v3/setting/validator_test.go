@@ -10,18 +10,17 @@ import (
 
 	"github.com/golang/mock/gomock"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/admission"
+	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/setting"
 	"github.com/rancher/wrangler/v3/pkg/generic/fake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	v1 "k8s.io/api/admission/v1"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-
-	"github.com/rancher/webhook/pkg/admission"
-	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/setting"
-	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 )
 
 type SettingSuite struct {
@@ -38,166 +37,164 @@ var (
 	gvr = metav1.GroupVersionResource{Group: "management.cattle.io", Version: "v3", Resource: "settings"}
 )
 
-type userRetentionTest struct {
-	setting           string
-	value             string
-	userSessionTTL    int
-	userSessionTTLErr error
-	allowed           bool
-}
-
-func (t *userRetentionTest) name() string {
-	return t.setting + "_" + t.value
-}
-
-func (t *userRetentionTest) toSetting() ([]byte, error) {
-	return json.Marshal(v3.Setting{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: t.setting,
-		},
-		Value: t.value,
-	})
-}
-func (t *userRetentionTest) toOldSetting() ([]byte, error) {
-	return json.Marshal(v3.Setting{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: t.setting,
-		},
-	})
-}
-
-var userRetentionTests = []userRetentionTest{
-	{
-		setting: "disable-inactive-user-after",
-		value:   "",
-		allowed: true,
-	},
-	{
-		setting: "delete-inactive-user-after",
-		value:   "",
-		allowed: true,
-	},
-	{
-		setting: "user-last-login-default",
-		value:   "",
-		allowed: true,
-	},
-	{
-		setting: "user-retention-cron",
-		value:   "",
-		allowed: true,
-	},
-	{
-		setting:        "disable-inactive-user-after",
-		userSessionTTL: 960,
-		value:          "16h1s",
-		allowed:        true,
-	},
-	{
-		setting:        "delete-inactive-user-after",
-		userSessionTTL: 960,
-		value:          setting.MinDeleteInactiveUserAfter.String(),
-		allowed:        true,
-	},
-	{
-		setting: "user-last-login-default",
-		value:   "2024-01-08T00:00:00Z",
-		allowed: true,
-	},
-	{
-		setting: "user-retention-cron",
-		value:   "* * * * *",
-		allowed: true,
-	},
-	{
-		setting:           "disable-inactive-user-after",
-		userSessionTTL:    960,
-		userSessionTTLErr: errors.New("some error"),
-		value:             "16h", // 960 minutes.
-		allowed:           true,
-	},
-	{
-		setting:           "delete-inactive-user-after",
-		userSessionTTL:    960,
-		userSessionTTLErr: errors.New("some error"),
-		value:             setting.MinDeleteInactiveUserAfter.String(),
-		allowed:           true,
-	},
-	{
-		setting:        "disable-inactive-user-after",
-		userSessionTTL: 960,
-		value:          "15h59m59s",
-	},
-	{
-		setting:        "delete-inactive-user-after",
-		userSessionTTL: int((setting.MinDeleteInactiveUserAfter + time.Hour).Minutes()),
-		value:          setting.MinDeleteInactiveUserAfter.String(),
-	},
-	{
-		setting: "disable-inactive-user-after",
-		value:   "1w",
-	},
-	{
-		setting: "delete-inactive-user-after",
-		value:   "2d",
-	},
-	{
-		setting: "user-last-login-default",
-		value:   "foo",
-	},
-	{
-		setting: "user-retention-cron",
-		value:   "* * * * * *",
-	},
-	{
-		setting: "disable-inactive-user-after",
-		value:   "-1h",
-	},
-	{
-		setting: "delete-inactive-user-after",
-		value:   "-1h",
-	},
-	{
-		setting: "delete-inactive-user-after",
-		value:   (setting.MinDeleteInactiveUserAfter - time.Second).String(),
-	},
-}
-
 func (s *SettingSuite) TestValidateUserRetentionSettingsOnUpdate() {
-	s.validate(v1.Update)
+	s.validateUserRetentionSettings(v1.Update)
 }
 
 func (s *SettingSuite) TestValidateUserRetentionSettingsOnCreate() {
-	s.validate(v1.Create)
+	s.validateUserRetentionSettings(v1.Create)
 }
 
-func (s *SettingSuite) validate(op v1.Operation) {
-	for _, test := range userRetentionTests {
+func (s *SettingSuite) validateUserRetentionSettings(op v1.Operation) {
+	tests := []struct {
+		setting           string
+		value             string
+		userSessionTTL    string
+		userSessionTTLErr error
+		allowed           bool
+	}{
+		{
+			setting: setting.DisableInactiveUserAfter,
+			value:   "",
+			allowed: true,
+		},
+		{
+			setting: setting.DeleteInactiveUserAfter,
+			value:   "",
+			allowed: true,
+		},
+		{
+			setting: setting.UserLastLoginDefault,
+			value:   "",
+			allowed: true,
+		},
+		{
+			setting: setting.UserRetentionCron,
+			value:   "",
+			allowed: true,
+		},
+		{
+			setting:        setting.DisableInactiveUserAfter,
+			userSessionTTL: "960",
+			value:          "16h1s",
+			allowed:        true,
+		},
+		{
+			setting:        setting.DeleteInactiveUserAfter,
+			userSessionTTL: "960",
+			value:          setting.MinDeleteInactiveUserAfter.String(),
+			allowed:        true,
+		},
+		{
+			setting: setting.UserLastLoginDefault,
+			value:   "2024-01-08T00:00:00Z",
+			allowed: true,
+		},
+		{
+			setting: setting.UserRetentionCron,
+			value:   "* * * * *",
+			allowed: true,
+		},
+		{
+			setting:        setting.DisableInactiveUserAfter,
+			userSessionTTL: "foo",
+			value:          "15h",
+			allowed:        true,
+		},
+		{
+			setting:        setting.DeleteInactiveUserAfter,
+			userSessionTTL: "foo",
+			value:          setting.MinDeleteInactiveUserAfter.String(),
+			allowed:        true,
+		},
+		{
+			setting:           setting.DisableInactiveUserAfter,
+			userSessionTTLErr: errors.New("some error"),
+			value:             "16h", // 960 minutes.
+			allowed:           true,
+		},
+		{
+			setting:           setting.DeleteInactiveUserAfter,
+			userSessionTTLErr: errors.New("some error"),
+			value:             setting.MinDeleteInactiveUserAfter.String(),
+			allowed:           true,
+		},
+		{
+			setting:        setting.DisableInactiveUserAfter,
+			userSessionTTL: "960",
+			value:          "15h59m59s",
+		},
+		{
+			setting:        setting.DeleteInactiveUserAfter,
+			userSessionTTL: strconv.Itoa(int((setting.MinDeleteInactiveUserAfter + time.Hour).Minutes())),
+			value:          setting.MinDeleteInactiveUserAfter.String(),
+		},
+		{
+			setting: setting.DisableInactiveUserAfter,
+			value:   "1w",
+		},
+		{
+			setting: setting.DeleteInactiveUserAfter,
+			value:   "2d",
+		},
+		{
+			setting: setting.UserLastLoginDefault,
+			value:   "foo",
+		},
+		{
+			setting: setting.UserRetentionCron,
+			value:   "* * * * * *",
+		},
+		{
+			setting: setting.DisableInactiveUserAfter,
+			value:   "-1h",
+		},
+		{
+			setting: setting.DeleteInactiveUserAfter,
+			value:   "-1h",
+		},
+		{
+			setting: setting.DeleteInactiveUserAfter,
+			value:   (setting.MinDeleteInactiveUserAfter - time.Second).String(),
+		},
+	}
+
+	for _, test := range tests {
 		test := test
-		s.T().Run(test.name(), func(t *testing.T) {
+		name := test.setting + "_" + test.value + "_" + test.userSessionTTL
+		s.T().Run(name, func(t *testing.T) {
 			t.Parallel()
 
 			ctrl := gomock.NewController(t)
 			settingCache := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
 
 			getUserSessionTTLCalledTimes := 0
-			if test.userSessionTTL > 0 || test.userSessionTTLErr != nil {
+			if test.userSessionTTL != "" || test.userSessionTTLErr != nil {
 				getUserSessionTTLCalledTimes = 1
 			}
 
-			settingCache.EXPECT().Get("auth-user-session-ttl-minutes").DoAndReturn(func(string) (*v3.Setting, error) {
+			settingCache.EXPECT().Get(setting.AuthUserSessionTTLMinutes).DoAndReturn(func(string) (*v3.Setting, error) {
 				if test.userSessionTTLErr != nil {
 					return nil, test.userSessionTTLErr
 				}
 				return &v3.Setting{
-					Default: strconv.Itoa(test.userSessionTTL),
+					Default: test.userSessionTTL,
 				}, nil
 			}).Times(getUserSessionTTLCalledTimes)
 
-			oldObjRaw, err := test.toOldSetting()
+			oldObjRaw, err := json.Marshal(v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: test.setting,
+				},
+			})
 			assert.NoError(t, err, "failed to marshal old Setting")
 
-			objRaw, err := test.toSetting()
+			objRaw, err := json.Marshal(v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: test.setting,
+				},
+				Value: test.value,
+			})
 			assert.NoError(t, err, "failed to marshal Setting")
 
 			validator := setting.NewValidator(nil, settingCache)
@@ -206,6 +203,180 @@ func (s *SettingSuite) validate(op v1.Operation) {
 			resp, err := validator.Admitters()[0].Admit(newRequest(op, objRaw, oldObjRaw))
 			require.NoError(t, err)
 			assert.Equal(t, test.allowed, resp.Allowed)
+		})
+	}
+}
+
+func (s *SettingSuite) TestValidateAuthUserSessionTTLMinutesOnUpdate() {
+	s.validateAuthUserSessionTTLMinutes(v1.Update)
+}
+
+func (s *SettingSuite) TestValidateAuthUserSessionTTLMinutesOnCreate() {
+	s.validateAuthUserSessionTTLMinutes(v1.Create)
+}
+
+func (s *SettingSuite) validateAuthUserSessionTTLMinutes(op v1.Operation) {
+	tests := []struct {
+		desc            string
+		value           string
+		disableAfter    string
+		disableAfterErr error
+		deleteAfter     string
+		deleteAfterErr  error
+		allowed         bool
+	}{
+		{
+			desc:    "empty",
+			allowed: true,
+		},
+		{
+			desc:    "reasonable value",
+			value:   "960",
+			allowed: true,
+		},
+		{
+			desc:         "less than disable-inactive-user-after",
+			value:        "960", // 16h
+			disableAfter: "168h",
+			allowed:      true,
+		},
+		{
+			desc:        "less than delete-inactive-user-after",
+			value:       "960", // 16h
+			deleteAfter: "336h",
+			allowed:     true,
+		},
+		{
+			desc:         "less than both",
+			value:        "960", // 16h
+			disableAfter: "168h",
+			deleteAfter:  "336h",
+			allowed:      true,
+		},
+		{
+			desc:         "can't parse disable-inactive-user-after",
+			value:        "960", // 16h
+			disableAfter: "foo",
+			allowed:      true,
+		},
+		{
+			desc:        "can't parse delete-inactive-user-after",
+			value:       "960", // 16h
+			deleteAfter: "foo",
+			allowed:     true,
+		},
+		{
+			desc:            "error getting disable-inactive-user-after",
+			value:           "960", // 16h
+			disableAfterErr: errors.New("some error"),
+			allowed:         true,
+		},
+		{
+			desc:           "error getting delete-inactive-user-after",
+			value:          "960", // 16h
+			deleteAfterErr: errors.New("some error"),
+			allowed:        true,
+		},
+		{
+			desc:         "negative disable-inactive-user-after",
+			value:        "960", // 16h
+			disableAfter: "-1h",
+			allowed:      true,
+		},
+		{
+			desc:        "negative delete-inactive-user-after",
+			value:       "960", // 16h
+			deleteAfter: "-1h",
+			allowed:     true,
+		},
+		{
+			desc:  "can't parse value",
+			value: "foo",
+		},
+		{
+			desc:  "negative value",
+			value: "-960",
+		},
+		{
+			desc:         "greater than disable-inactive-user-after",
+			value:        "960", // 16h
+			disableAfter: "15h",
+		},
+		{
+			desc:        "greater than delete-inactive-user-after",
+			value:       "960", // 16h
+			deleteAfter: "15h",
+		},
+		{
+			desc:         "greater than both",
+			value:        "960", // 16h
+			disableAfter: "15h",
+			deleteAfter:  "15h",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t := s.T()
+		t.Run(test.desc, func(t *testing.T) {
+			t.Parallel()
+
+			var settingGetCalledTimes int
+			ctrl := gomock.NewController(t)
+			settingCache := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
+			settingCache.EXPECT().Get(gomock.Any()).DoAndReturn(func(name string) (*v3.Setting, error) {
+				var value string
+				switch name {
+				case setting.DisableInactiveUserAfter:
+					if test.disableAfterErr != nil {
+						return nil, test.disableAfterErr
+					}
+					value = test.disableAfter
+				case setting.DeleteInactiveUserAfter:
+					if test.deleteAfterErr != nil {
+						return nil, test.deleteAfterErr
+					}
+					value = test.deleteAfter
+				default:
+					t.Errorf("unexpected call to get setting %s", name)
+				}
+
+				setting := &v3.Setting{
+					ObjectMeta: metav1.ObjectMeta{Name: name},
+				}
+
+				// Make sure we use the effective value of the setting.
+				if settingGetCalledTimes%2 == 0 {
+					setting.Value = value
+				} else {
+					setting.Default = value
+				}
+
+				return setting, nil
+			}).AnyTimes()
+
+			oldObjRaw, err := json.Marshal(v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: setting.AuthUserSessionTTLMinutes,
+				},
+			})
+			assert.NoError(t, err, "failed to marshal old Setting")
+
+			objRaw, err := json.Marshal(v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: setting.AuthUserSessionTTLMinutes,
+				},
+				Value: test.value,
+			})
+			assert.NoError(t, err, "failed to marshal Setting")
+
+			validator := setting.NewValidator(nil, settingCache)
+			require.Len(t, validator.Admitters(), 1)
+
+			resp, err := validator.Admitters()[0].Admit(newRequest(op, objRaw, oldObjRaw))
+			require.NoError(t, err)
+			assert.Equal(t, test.allowed, resp.Allowed)
+
 		})
 	}
 }
@@ -250,7 +421,7 @@ func TestValidateAgentTLSMode(t *testing.T) {
 		"create allowed for system store": {
 			newSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "agent-tls-mode",
+					Name: setting.AgentTLSMode,
 				},
 				Default: "system-store",
 			},
@@ -260,7 +431,7 @@ func TestValidateAgentTLSMode(t *testing.T) {
 		"create allowed for strict": {
 			newSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "agent-tls-mode",
+					Name: setting.AgentTLSMode,
 				},
 				Default: "strict",
 			},
@@ -270,13 +441,13 @@ func TestValidateAgentTLSMode(t *testing.T) {
 		"update forbidden due to missing status": {
 			oldSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "agent-tls-mode",
+					Name: setting.AgentTLSMode,
 				},
 				Value: "system-store",
 			},
 			newSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "agent-tls-mode",
+					Name: setting.AgentTLSMode,
 				},
 				Value: "strict",
 			},
@@ -306,13 +477,13 @@ func TestValidateAgentTLSMode(t *testing.T) {
 		"update allowed without cluster status but with force annotation": {
 			oldSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "agent-tls-mode",
+					Name: setting.AgentTLSMode,
 				},
 				Default: "system-store",
 			},
 			newSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "agent-tls-mode",
+					Name: setting.AgentTLSMode,
 					Annotations: map[string]string{
 						"cattle.io/force": "true",
 					},
@@ -353,13 +524,13 @@ func TestValidateAgentTLSMode(t *testing.T) {
 		"update forbidden without cluster status and non-true force annotation": {
 			oldSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "agent-tls-mode",
+					Name: setting.AgentTLSMode,
 				},
 				Default: "system-store",
 			},
 			newSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "agent-tls-mode",
+					Name: setting.AgentTLSMode,
 					Annotations: map[string]string{
 						"cattle.io/force": "false",
 					},
@@ -387,13 +558,13 @@ func TestValidateAgentTLSMode(t *testing.T) {
 		"update allowed with cluster status and force annotation": {
 			oldSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "agent-tls-mode",
+					Name: setting.AgentTLSMode,
 				},
 				Value: "system-store",
 			},
 			newSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "agent-tls-mode",
+					Name: setting.AgentTLSMode,
 					Annotations: map[string]string{
 						"cattle.io/force": "true",
 					},
@@ -434,13 +605,13 @@ func TestValidateAgentTLSMode(t *testing.T) {
 		"update allowed from strict to system store": {
 			oldSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "agent-tls-mode",
+					Name: setting.AgentTLSMode,
 				},
 				Default: "strict",
 			},
 			newSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "agent-tls-mode",
+					Name: setting.AgentTLSMode,
 				},
 				Default: "system-store",
 			},
@@ -450,14 +621,14 @@ func TestValidateAgentTLSMode(t *testing.T) {
 		"update allowed from system store to strict": {
 			oldSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "agent-tls-mode",
+					Name: setting.AgentTLSMode,
 				},
 				Default: "system-store",
 				Value:   "system-store",
 			},
 			newSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "agent-tls-mode",
+					Name: setting.AgentTLSMode,
 				},
 				Default: "strict",
 				Value:   "strict",
@@ -509,14 +680,14 @@ func TestValidateAgentTLSMode(t *testing.T) {
 		"update allowed with value changing from system store to strict": {
 			oldSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "agent-tls-mode",
+					Name: setting.AgentTLSMode,
 				},
 				Default: "system-store",
 				Value:   "",
 			},
 			newSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "agent-tls-mode",
+					Name: setting.AgentTLSMode,
 				},
 				Default: "system-store",
 				Value:   "strict",
@@ -560,14 +731,14 @@ func TestValidateAgentTLSMode(t *testing.T) {
 		"update forbidden from system store to strict due to incorrect value on target status": {
 			oldSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "agent-tls-mode",
+					Name: setting.AgentTLSMode,
 				},
 				Default: "system-store",
 				Value:   "system-store",
 			},
 			newSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "agent-tls-mode",
+					Name: setting.AgentTLSMode,
 				},
 				Default: "strict",
 				Value:   "strict",
@@ -619,13 +790,13 @@ func TestValidateAgentTLSMode(t *testing.T) {
 		"update forbidden on error to list clusters": {
 			oldSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "agent-tls-mode",
+					Name: setting.AgentTLSMode,
 				},
 				Default: "system-store",
 			},
 			newSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "agent-tls-mode",
+					Name: setting.AgentTLSMode,
 				},
 				Default: "strict",
 			},
@@ -636,12 +807,12 @@ func TestValidateAgentTLSMode(t *testing.T) {
 		"ineffectual update allowed": {
 			oldSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "agent-tls-mode",
+					Name: setting.AgentTLSMode,
 				},
 			},
 			newSetting: v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "agent-tls-mode",
+					Name: setting.AgentTLSMode,
 				},
 			},
 			operation: v1.Update,
