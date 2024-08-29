@@ -65,7 +65,7 @@ func (s *SettingSuite) validateDisableInactiveUserAfter(op v1.Operation) {
 			allowed:        true,
 		},
 		{
-			desc:           "nonsencial user session ttl value",
+			desc:           "nonsensical user session ttl value",
 			userSessionTTL: "foo",
 			value:          "15h",
 			allowed:        true,
