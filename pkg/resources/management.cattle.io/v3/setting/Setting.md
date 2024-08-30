@@ -8,7 +8,6 @@ When settings are created or updated, the following common checks take place:
 - If set, `delete-inactive-user-after` must be zero or a positive duration and can't be less than `336h` (e.g. `336h`).
 - If set, `user-last-login-default` must be a date time according to RFC3339 (e.g. `2023-11-29T00:00:00Z`).
 - If set, `user-retention-cron` must be a valid standard cron expression (e.g. `0 0 * * 0`).
-- The `auth-user-session-ttl-minutes` .
 - The `auth-user-session-ttl-minutes` must be a positive integer and can't be greater than `disable-inactive-user-after` or `delete-inactive-user-after` if those values are set.
 
 ### Update
