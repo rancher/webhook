@@ -163,7 +163,7 @@ func (a *admitter) validateAuthUserSessionTTLMinutes(s *v3.Setting) error {
 	if err != nil {
 		return field.TypeInvalid(valuePath, s.Value, err.Error())
 	}
-	if userSessionDuration < 1 {
+	if userSessionDuration < 0 {
 		return field.TypeInvalid(valuePath, s.Value, "negative value")
 	}
 

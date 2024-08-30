@@ -362,6 +362,11 @@ func (s *SettingSuite) validateAuthUserSessionTTLMinutes(op v1.Operation) {
 			allowed: true,
 		},
 		{
+			desc:    "zero value",
+			value:   "0",
+			allowed: true,
+		},
+		{
 			desc:    "reasonable value",
 			value:   "960", // 16h
 			allowed: true,
@@ -427,10 +432,6 @@ func (s *SettingSuite) validateAuthUserSessionTTLMinutes(op v1.Operation) {
 			value:       "960",
 			deleteAfter: "-1h",
 			allowed:     true,
-		},
-		{
-			desc:  "zero value",
-			value: "0",
 		},
 		{
 			desc:  "can't parse value",
