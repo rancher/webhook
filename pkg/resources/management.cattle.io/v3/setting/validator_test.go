@@ -363,63 +363,74 @@ func (s *SettingSuite) validateAuthUserSessionTTLMinutes(op v1.Operation) {
 		},
 		{
 			desc:    "reasonable value",
-			value:   "960",
+			value:   "960", // 16h
 			allowed: true,
 		},
 		{
 			desc:         "less than disable-inactive-user-after",
-			value:        "960", // 16h
+			value:        "960",
 			disableAfter: "168h",
 			allowed:      true,
 		},
 		{
 			desc:        "less than delete-inactive-user-after",
-			value:       "960", // 16h
+			value:       "960",
 			deleteAfter: "336h",
 			allowed:     true,
 		},
 		{
 			desc:         "less than both",
-			value:        "960", // 16h
+			value:        "960",
 			disableAfter: "168h",
 			deleteAfter:  "336h",
 			allowed:      true,
 		},
 		{
+			desc:         "less than both zero values",
+			value:        "960",
+			disableAfter: "0s",
+			deleteAfter:  "0s",
+			allowed:      true,
+		},
+		{
 			desc:         "can't parse disable-inactive-user-after",
-			value:        "960", // 16h
+			value:        "960",
 			disableAfter: "foo",
 			allowed:      true,
 		},
 		{
 			desc:        "can't parse delete-inactive-user-after",
-			value:       "960", // 16h
+			value:       "960",
 			deleteAfter: "foo",
 			allowed:     true,
 		},
 		{
 			desc:            "error getting disable-inactive-user-after",
-			value:           "960", // 16h
+			value:           "960",
 			disableAfterErr: errors.New("some error"),
 			allowed:         true,
 		},
 		{
 			desc:           "error getting delete-inactive-user-after",
-			value:          "960", // 16h
+			value:          "960",
 			deleteAfterErr: errors.New("some error"),
 			allowed:        true,
 		},
 		{
 			desc:         "negative disable-inactive-user-after",
-			value:        "960", // 16h
+			value:        "960",
 			disableAfter: "-1h",
 			allowed:      true,
 		},
 		{
 			desc:        "negative delete-inactive-user-after",
-			value:       "960", // 16h
+			value:       "960",
 			deleteAfter: "-1h",
 			allowed:     true,
+		},
+		{
+			desc:  "zero value",
+			value: "0",
 		},
 		{
 			desc:  "can't parse value",

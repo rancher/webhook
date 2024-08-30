@@ -87,7 +87,7 @@ type admitter struct {
 
 // Admit handles the webhook admission requests.
 func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
-	listTrace := trace.New("userAttributeValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
+	listTrace := trace.New("settingValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
 	oldSetting, newSetting, err := objectsv3.SettingOldAndNewFromRequest(&request.AdmissionRequest)
@@ -149,6 +149,11 @@ func (a *admitter) admitCommonCreateUpdate(_, newSetting *v3.Setting) (*admissio
 	return admission.ResponseAllowed(), nil
 }
 
+// validateAuthUserSessionTTLMinutes validates the auth-user-session-ttl-minutes setting
+// to make sure it's a positive integer and that duration is not greater than
+// {disable|delete}-inactive-user-after settings if they are set.
+// If it encounters an error fetching or parsing {disable|delete}-inactive-user-after settings
+// it logs but doesn't return the error to avoid rejecting the request.
 func (a *admitter) validateAuthUserSessionTTLMinutes(s *v3.Setting) error {
 	if s.Value == "" {
 		return nil
@@ -158,20 +163,20 @@ func (a *admitter) validateAuthUserSessionTTLMinutes(s *v3.Setting) error {
 	if err != nil {
 		return field.TypeInvalid(valuePath, s.Value, err.Error())
 	}
-	if userSessionDuration < 0 {
+	if userSessionDuration < 1 {
 		return field.TypeInvalid(valuePath, s.Value, "negative value")
 	}
 
 	isGreaterThanSetting := func(name string) bool {
 		setting, err := a.settingCache.Get(name)
 		if err != nil {
-			logrus.Warnf("failed to get %s: %s", name, err)
+			logrus.Warnf("[settingValidator] Failed to get %s: %s", name, err)
 			return false // Deliberately allow to proceed.
 		}
 
 		settingDur, err := time.ParseDuration(effectiveValue(setting))
 		if err != nil {
-			logrus.Warnf("failed to parse %s: %s", name, err)
+			logrus.Warnf("[settingValidator] Failed to parse %s: %s", name, err)
 			return false // Deliberately allow to proceed.
 		}
 
@@ -191,22 +196,29 @@ func (a *admitter) validateAuthUserSessionTTLMinutes(s *v3.Setting) error {
 
 var errLessThanAuthUserSessionTTL = fmt.Errorf("can't be less than %s", AuthUserSessionTTLMinutes)
 
+// isLessThanUserSessionTTL checks if the given duration is less than the value of
+// auth-user-session-ttl-minutes setting.
+// If it encounters an error fetching or parsing auth-user-session-ttl-minutes setting
+// it logs the error and returns false to avoid rejecting the request.
 func (a *admitter) isLessThanUserSessionTTL(dur time.Duration) bool {
 	setting, err := a.settingCache.Get(AuthUserSessionTTLMinutes)
 	if err != nil {
-		logrus.Warnf("failed to get %s: %v", AuthUserSessionTTLMinutes, err)
+		logrus.Warnf("[settingValidator] Failed to get %s: %v", AuthUserSessionTTLMinutes, err)
 		return false // Deliberately allow to proceed.
 	}
 
 	authUserSessionTTLDuration, err := parseMinutes(effectiveValue(setting))
 	if err != nil {
-		logrus.Warnf("failed to parse %s: %s", AuthUserSessionTTLMinutes, err)
+		logrus.Warnf("[settingValidator] Failed to parse %s: %s", AuthUserSessionTTLMinutes, err)
 		return false // Deliberately allow to proceed.
 	}
 
 	return dur < authUserSessionTTLDuration
 }
 
+// validateDisableInactiveUserAfter validates the disable-inactive-user-after setting
+// to make sure it's a positive duration and that it's not less than the value of
+// auth-user-session-ttl-minutes setting.
 func (a *admitter) validateDisableInactiveUserAfter(s *v3.Setting) error {
 	if s.Value == "" {
 		return nil
@@ -225,6 +237,9 @@ func (a *admitter) validateDisableInactiveUserAfter(s *v3.Setting) error {
 	return nil
 }
 
+// validateDeleteInactiveUserAfter validates the delete-inactive-user-after setting
+// to make sure it's a positive duration and that it's not less than the value of
+// auth-user-session-ttl-minutes setting and MinDeleteInactiveUserAfter.
 func (a *admitter) validateDeleteInactiveUserAfter(s *v3.Setting) error {
 	if s.Value == "" {
 		return nil
@@ -251,6 +266,8 @@ func (a *admitter) validateDeleteInactiveUserAfter(s *v3.Setting) error {
 	return nil
 }
 
+// validateUserRetentionCron validates the user-retention-cron setting
+// to make sure it's a valid standard cron expression.
 func (a *admitter) validateUserRetentionCron(s *v3.Setting) error {
 	if s.Value == "" {
 		return nil
@@ -263,6 +280,8 @@ func (a *admitter) validateUserRetentionCron(s *v3.Setting) error {
 	return nil
 }
 
+// validateUserLastLoginDefault validates the user-last-login-default setting
+// to make sure it's a valid RFC3339 formatted date time.
 func (a *admitter) validateUserLastLoginDefault(s *v3.Setting) error {
 	if s.Value == "" {
 		return nil
@@ -335,7 +354,9 @@ func clusterConditionMatches(cluster *v3.Cluster, t v3.ClusterConditionType, sta
 func effectiveValue(s *v3.Setting) string {
 	if s.Value != "" {
 		return s.Value
-	} else if s.Default != "" {
+	}
+
+	if s.Default != "" {
 		return s.Default
 	}
 
