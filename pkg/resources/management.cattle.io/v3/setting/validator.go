@@ -187,7 +187,7 @@ func (a *admitter) validateAuthUserSessionTTLMinutes(s *v3.Setting) error {
 
 	for _, name := range checkAgainst {
 		if isGreaterThanSetting(name) {
-			return field.TypeInvalid(valuePath, s.Value, "can't be greater than "+name)
+			return field.Forbidden(valuePath, "can't be greater than "+name)
 		}
 	}
 
