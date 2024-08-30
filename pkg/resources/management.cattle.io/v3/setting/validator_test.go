@@ -59,6 +59,11 @@ func (s *SettingSuite) validateDisableInactiveUserAfter(op v1.Operation) {
 			allowed: true,
 		},
 		{
+			desc:    "zero value", // Semantically is the same as an empty value.
+			value:   "0s",
+			allowed: true,
+		},
+		{
 			desc:           "reasonable value larger than user session ttl",
 			userSessionTTL: "960",
 			value:          "16h1s",
@@ -151,6 +156,11 @@ func (s *SettingSuite) validateDeleteInactiveUserAfter(op v1.Operation) {
 		{
 			desc:    "disabled",
 			value:   "",
+			allowed: true,
+		},
+		{
+			desc:    "zero value", // Semantically is the same as an empty value.
+			value:   "0s",
 			allowed: true,
 		},
 		{
