@@ -8,4 +8,5 @@ cd $(dirname $0)
 ./validate
 ./validate-ci
 ./package
+./package-helm
 ./test-helm

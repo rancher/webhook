@@ -1,40 +1,37 @@
 #!/bin/bash
-set -e
+set -eu
 
 source $(dirname $0)/version
 
 cd $(dirname $0)/..
 
-function build-image() {
-    IMAGE=${REPO}/${1}:${TAG}
-    DOCKERFILE=package/Dockerfile${2}
-    if [ -e ${DOCKERFILE}.${ARCH} ]; then
-        DOCKERFILE=${DOCKERFILE}.${ARCH}
-    fi
-
-    docker build -f ${DOCKERFILE} -t ${IMAGE} .
-    echo Built ${IMAGE}
-
-    docker save -o dist/rancher-webhook-image.tar ${IMAGE}
-
-    if [ "${PUSH}" = "true" ]; then
-        docker push ${IMAGE}
-    fi
-
-}
+echo Running package
 
 mkdir -p dist/artifacts
 cp bin/webhook dist/artifacts/webhook-linux${SUFFIX}
 for i in bin/webhook-*; do
     if [ -e "$i" ]; then
-        if [ "$i" = webhook-windows-amd64 ]; then
-            cp $i dist/artifacts/webhook-windows-amd64.exe
-        else
-            cp $i dist/artifacts
-        fi
+        cp $i dist/artifacts
     fi
 done
+REPO=rancher
 
-build-image rancher-webhook
+IMAGE=${REPO}/webhook:${TAG}
+DOCKERFILE=./package/Dockerfile
+if [ -e ${DOCKERFILE}.${ARCH} ]; then
+    DOCKERFILE=${DOCKERFILE}.${ARCH}
+fi
 
-./scripts/package-helm
+if [[ ${USE_DOCKER_BUILDX:-0} -eq 1 ]]; then
+    docker buildx build --platform linux/amd64 -f ${DOCKERFILE} . -t ${IMAGE}
+else
+    docker build -f ${DOCKERFILE} -t ${IMAGE} .
+fi
+echo Built ${IMAGE}
+
+docker save -o dist/rancher-webhook-image.tar ${IMAGE}
+echo IMAGE_TAG="${TAG}" > dist/image_tag
+
+if [ "${PUSH:-}" = "true" ]; then
+    docker push ${IMAGE}
+fi
