@@ -51,7 +51,7 @@ jobs:
 
     - name: Upload artifacts
       # https://github.com/actions/upload-artifact/commit/65462800fd760344b1a7b4382951275a0abb4808
-      uses: actions/upload-artifact@b18b1d32f3f31abcdc29dee3f2484801fe7822f4
+      uses: actions/upload-artifact@b18b1d32f3f31abcdc29dee3f2484801fe7822f4 # v3.2.1
       with:
         name: webhook-artifacts-${{ matrix.arch }}
         path: |
