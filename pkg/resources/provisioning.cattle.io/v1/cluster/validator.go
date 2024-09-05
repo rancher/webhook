@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -183,7 +184,8 @@ func (p *provisioningAdmitter) validateSystemAgentDataDirectory(oldCluster, newC
 	return admission.ResponseAllowed()
 }
 
-// validateDataDirectories will validate updates to the cluster object to ensure the data directories are not changed.
+// validateDataDirectories will ensure that data directories are properly formatted on creation, not duplicated or embed
+// each other, and will also validate updates to the cluster object to ensure the data directories are not changed.
 // The only exception when a data directory is allowed to be changed is if cluster.Spec.AgentEnvVars has an env var with
 // a name of "CATTLE_AGENT_VAR_DIR", which Rancher will perform a one-time migration to set the
 // cluster.Spec.RKEConfig.DataDirectories.SystemAgent field for the cluster. validateAgentEnvVars will ensure
@@ -192,6 +194,9 @@ func (p *provisioningAdmitter) validateDataDirectories(request *admission.Reques
 	if newCluster.Spec.RKEConfig == nil {
 		return admission.ResponseAllowed()
 	}
+	distro := newCluster.Spec.RKEConfig.DataDirectories.K8sDistro
+	provisioning := newCluster.Spec.RKEConfig.DataDirectories.Provisioning
+	systemAgent := newCluster.Spec.RKEConfig.DataDirectories.SystemAgent
 	// cannot set "CATTLE_AGENT_VAR_DIR" on create anymore, but still valid as a field until cluster is migrated.
 	if request.Operation == admissionv1.Create {
 		if slices.ContainsFunc(newCluster.Spec.AgentEnvVars, func(envVar rkev1.EnvVar) bool {
@@ -199,6 +204,21 @@ func (p *provisioningAdmitter) validateDataDirectories(request *admission.Reques
 		}) {
 			return admission.ResponseBadRequest(
 				fmt.Sprintf(`"%s" cannot be set within "cluster.Spec.RKEConfig.AgentEnvVars": use "cluster.Spec.RKEConfig.DataDirectories.SystemAgent"`, systemAgentVarDirEnvVar))
+		}
+		dataDirectories := map[string]string{
+			"Distro":       distro,
+			"Provisioning": provisioning,
+			"System Agent": systemAgent,
+		}
+		for name, dir := range dataDirectories {
+			response := validateDataDirectoryFormat(dir, name)
+			if !response.Allowed {
+				return response
+			}
+		}
+		response := validateDataDirectoryHierarchy(dataDirectories)
+		if !response.Allowed {
+			return response
 		}
 		return admission.ResponseAllowed()
 	}
@@ -209,11 +229,87 @@ func (p *provisioningAdmitter) validateDataDirectories(request *admission.Reques
 	if response := p.validateSystemAgentDataDirectory(oldCluster, newCluster); !response.Allowed {
 		return response
 	}
-	if oldCluster.Spec.RKEConfig.DataDirectories.Provisioning != newCluster.Spec.RKEConfig.DataDirectories.Provisioning {
+	if oldCluster.Spec.RKEConfig.DataDirectories.K8sDistro != distro {
+		return admission.ResponseBadRequest("Distro data directory cannot be changed after cluster creation")
+	}
+	if oldCluster.Spec.RKEConfig.DataDirectories.Provisioning != provisioning {
 		return admission.ResponseBadRequest("Provisioning data directory cannot be changed after cluster creation")
 	}
-	if oldCluster.Spec.RKEConfig.DataDirectories.K8sDistro != newCluster.Spec.RKEConfig.DataDirectories.K8sDistro {
-		return admission.ResponseBadRequest("Distro data directory cannot be changed after cluster creation")
+
+	return admission.ResponseAllowed()
+}
+
+// validateDataDirectoryFormat ensures that no data directory contains a relative path, environment variables,
+// shell expressions, or references to the current or parent directory via use of "./" and "../" respectively.
+// dir is the path of the data directory, and name corresponds to a print friendly name for this data directory.
+func validateDataDirectoryFormat(dir, name string) *admissionv1.AdmissionResponse {
+	if dir == "" {
+		return admission.ResponseAllowed()
+	}
+	if !filepath.IsAbs(dir) {
+		return admission.ResponseBadRequest(
+			fmt.Sprintf("%s data directory must be an absolute path", name))
+	}
+	if strings.ContainsAny(dir, "\"'`*?#~=%$|&;<>{}[]()") {
+		return admission.ResponseBadRequest(
+			fmt.Sprintf("%s data directory cannot contain shell expressions", name))
+	}
+	if filepath.Clean(dir) != dir {
+		return admission.ResponseBadRequest(
+			fmt.Sprintf("%s data directory is not clean", name))
+	}
+
+	return admission.ResponseAllowed()
+}
+
+// validateDataDirectoryHierarchy ensures that no directories are equal, and no directories include other directories.
+// dataDirs is a map with keys corresponding to print friendly names for these data directories, and values representing
+// the specific data directories.
+func validateDataDirectoryHierarchy(dataDirs map[string]string) *admissionv1.AdmissionResponse {
+	paths := make([]struct {
+		name string
+		path string
+	}, 0, len(dataDirs))
+	for name, dir := range dataDirs {
+		// do not attempt to validate empty directory
+		if dir == "" {
+			continue
+		}
+		paths = append(paths, struct {
+			name string
+			path string
+		}{
+			name: name,
+			path: dir,
+		})
+	}
+
+	for i := range paths {
+		for j := i + 1; j < len(paths); j++ {
+			path1 := paths[i]
+			path2 := paths[j]
+
+			if path1.path == path2.path {
+				return admission.ResponseBadRequest(
+					fmt.Sprintf("%s data directory cannot be equal to %s data directory", path1.name, path2.name))
+			}
+
+			// check if paths contain one another
+			if matched, err := filepath.Match(fmt.Sprintf("%s%c*", path1.path, filepath.Separator), path2.path); err != nil {
+				return admission.ResponseBadRequest(
+					fmt.Sprintf("error determining if %s data directory is nested inside %s data directory: %s", path2.name, path1.name, err.Error()))
+			} else if matched {
+				return admission.ResponseBadRequest(
+					fmt.Sprintf("%s data directory cannot be nested inside %s data directory", path2.name, path1.name))
+			}
+			if matched, err := filepath.Match(fmt.Sprintf("%s%c*", path2.path, filepath.Separator), path1.path); err != nil {
+				return admission.ResponseBadRequest(
+					fmt.Sprintf("error determining if %s data directory is nested inside %s data directory: %s", path1.name, path2.name, err.Error()))
+			} else if matched {
+				return admission.ResponseBadRequest(
+					fmt.Sprintf("%s data directory cannot be nested inside %s data directory", path1.name, path2.name))
+			}
+		}
 	}
 
 	return admission.ResponseAllowed()
