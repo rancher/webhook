@@ -3,10 +3,15 @@ package setting
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/admission"
+	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
+	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/robfig/cron"
+	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	v1 "k8s.io/api/core/v1"
@@ -14,10 +19,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/trace"
+)
 
-	"github.com/rancher/webhook/pkg/admission"
-	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
-	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
+const (
+	DeleteInactiveUserAfter   = "delete-inactive-user-after"
+	DisableInactiveUserAfter  = "disable-inactive-user-after"
+	AuthUserSessionTTLMinutes = "auth-user-session-ttl-minutes"
+	UserLastLoginDefault      = "user-last-login-default"
+	UserRetentionCron         = "user-retention-cron"
+	AgentTLSMode              = "agent-tls-mode"
 )
 
 // MinDeleteInactiveUserAfter is the minimum duration for delete-inactive-user-after setting.
@@ -31,16 +41,19 @@ var gvr = schema.GroupVersionResource{
 	Resource: "settings",
 }
 
+var valuePath = field.NewPath("value")
+
 // Validator validates settings.
 type Validator struct {
 	admitter admitter
 }
 
 // NewValidator returns a new Validator instance.
-func NewValidator(clusterCache controllerv3.ClusterCache) *Validator {
+func NewValidator(clusterCache controllerv3.ClusterCache, settingCache controllerv3.SettingCache) *Validator {
 	return &Validator{
 		admitter: admitter{
 			clusterCache: clusterCache,
+			settingCache: settingCache,
 		},
 	}
 }
@@ -69,71 +82,243 @@ func (v *Validator) Admitters() []admission.Admitter {
 
 type admitter struct {
 	clusterCache controllerv3.ClusterCache
+	settingCache controllerv3.SettingCache
 }
 
 // Admit handles the webhook admission requests.
 func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
-	listTrace := trace.New("userAttributeValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
+	listTrace := trace.New("settingValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
 	oldSetting, newSetting, err := objectsv3.SettingOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Setting from request: %w", err)
 	}
+
 	switch request.Operation {
 	case admissionv1.Create:
-		if err := a.validateUserRetentionSettings(newSetting); err != nil {
-			return admission.ResponseBadRequest(err.Error()), nil
-		}
+		return a.admitCreate(newSetting)
 	case admissionv1.Update:
-		if err := a.validateUserRetentionSettings(newSetting); err != nil {
-			return admission.ResponseBadRequest(err.Error()), nil
-		}
-		if err := a.validateAgentTLSMode(*oldSetting, *newSetting); err != nil {
-			return admission.ResponseBadRequest(err.Error()), nil
-		}
+		return a.admitUpdate(oldSetting, newSetting)
+	default:
+		return admission.ResponseAllowed(), nil
 	}
-	return admission.ResponseAllowed(), nil
 }
 
-func (a *admitter) validateUserRetentionSettings(s *v3.Setting) error {
+func (a *admitter) admitCreate(newSetting *v3.Setting) (*admissionv1.AdmissionResponse, error) {
+	return a.admitCommonCreateUpdate(nil, newSetting)
+}
+
+func (a *admitter) admitUpdate(oldSetting, newSetting *v3.Setting) (*admissionv1.AdmissionResponse, error) {
 	var err error
 
-	switch s.Name {
-	case "disable-inactive-user-after":
-		if s.Value != "" {
-			_, err = validateDuration(s.Value)
-		}
-	case "delete-inactive-user-after":
-		if s.Value != "" {
-			var dur time.Duration
-			dur, err = validateDuration(s.Value)
-			if err == nil && dur < MinDeleteInactiveUserAfter {
-				err = fmt.Errorf("must be at least %s", MinDeleteInactiveUserAfter)
-			}
-		}
-	case "user-last-login-default":
-		if s.Value != "" {
-			_, err = time.Parse(time.RFC3339, s.Value)
-		}
-	case "user-retention-cron":
-		if s.Value != "" {
-			_, err = cron.ParseStandard(s.Value)
-		}
+	switch newSetting.Name {
+	case AgentTLSMode:
+		err = a.validateAgentTLSMode(oldSetting, newSetting)
 	default:
 	}
 
 	if err != nil {
-		return field.TypeInvalid(field.NewPath("value"), s.Value, err.Error())
+		return admission.ResponseBadRequest(err.Error()), nil
+	}
+
+	return a.admitCommonCreateUpdate(oldSetting, newSetting)
+}
+
+func (a *admitter) admitCommonCreateUpdate(_, newSetting *v3.Setting) (*admissionv1.AdmissionResponse, error) {
+	var err error
+
+	switch newSetting.Name {
+	case DeleteInactiveUserAfter:
+		err = a.validateDeleteInactiveUserAfter(newSetting)
+	case DisableInactiveUserAfter:
+		err = a.validateDisableInactiveUserAfter(newSetting)
+	case UserLastLoginDefault:
+		err = a.validateUserLastLoginDefault(newSetting)
+	case UserRetentionCron:
+		err = a.validateUserRetentionCron(newSetting)
+	case AuthUserSessionTTLMinutes:
+		err = a.validateAuthUserSessionTTLMinutes(newSetting)
+	default:
+	}
+
+	if err != nil {
+		return admission.ResponseBadRequest(err.Error()), nil
+	}
+
+	return admission.ResponseAllowed(), nil
+}
+
+// validateAuthUserSessionTTLMinutes validates the auth-user-session-ttl-minutes setting
+// to make sure it's a positive integer and that duration is not greater than
+// {disable|delete}-inactive-user-after settings if they are set.
+// If it encounters an error fetching or parsing {disable|delete}-inactive-user-after settings
+// it logs but doesn't return the error to avoid rejecting the request.
+func (a *admitter) validateAuthUserSessionTTLMinutes(s *v3.Setting) error {
+	if s.Value == "" {
+		return nil
+	}
+
+	userSessionDuration, err := parseMinutes(s.Value)
+	if err != nil {
+		return field.TypeInvalid(valuePath, s.Value, err.Error())
+	}
+	if userSessionDuration < 0 {
+		return field.TypeInvalid(valuePath, s.Value, "negative value")
+	}
+
+	isGreaterThanSetting := func(name string) bool {
+		setting, err := a.settingCache.Get(name)
+		if err != nil {
+			logrus.Warnf("[settingValidator] Failed to get %s: %s", name, err)
+			return false // Deliberately allow to proceed.
+		}
+
+		settingDur, err := time.ParseDuration(effectiveValue(setting))
+		if err != nil {
+			logrus.Warnf("[settingValidator] Failed to parse %s: %s", name, err)
+			return false // Deliberately allow to proceed.
+		}
+
+		return settingDur > 0 && userSessionDuration > settingDur
+	}
+
+	checkAgainst := []string{DisableInactiveUserAfter, DeleteInactiveUserAfter}
+
+	for _, name := range checkAgainst {
+		if isGreaterThanSetting(name) {
+			return field.Forbidden(valuePath, "can't be greater than "+name)
+		}
 	}
 
 	return nil
 }
 
-func (a *admitter) validateAgentTLSMode(oldSetting, newSetting v3.Setting) error {
-	if oldSetting.Name != "agent-tls-mode" || newSetting.Name != "agent-tls-mode" {
+var errLessThanAuthUserSessionTTL = fmt.Errorf("can't be less than %s", AuthUserSessionTTLMinutes)
+
+// isLessThanUserSessionTTL checks if the given duration is less than the value of
+// auth-user-session-ttl-minutes setting.
+// If it encounters an error fetching or parsing auth-user-session-ttl-minutes setting
+// it logs the error and returns false to avoid rejecting the request.
+func (a *admitter) isLessThanUserSessionTTL(dur time.Duration) bool {
+	setting, err := a.settingCache.Get(AuthUserSessionTTLMinutes)
+	if err != nil {
+		logrus.Warnf("[settingValidator] Failed to get %s: %v", AuthUserSessionTTLMinutes, err)
+		return false // Deliberately allow to proceed.
+	}
+
+	authUserSessionTTLDuration, err := parseMinutes(effectiveValue(setting))
+	if err != nil {
+		logrus.Warnf("[settingValidator] Failed to parse %s: %s", AuthUserSessionTTLMinutes, err)
+		return false // Deliberately allow to proceed.
+	}
+
+	return dur < authUserSessionTTLDuration
+}
+
+// validateDisableInactiveUserAfter validates the disable-inactive-user-after setting
+// to make sure it's a positive duration and that it's not less than the value of
+// auth-user-session-ttl-minutes setting.
+func (a *admitter) validateDisableInactiveUserAfter(s *v3.Setting) error {
+	if s.Value == "" {
 		return nil
 	}
+
+	dur, err := validateDuration(s.Value)
+	if err != nil {
+		return field.TypeInvalid(valuePath, s.Value, err.Error())
+	}
+
+	// Note: zero duration is allowed and is equivalent to "".
+	if dur > 0 && a.isLessThanUserSessionTTL(dur) {
+		return field.Forbidden(valuePath, errLessThanAuthUserSessionTTL.Error())
+	}
+
+	return nil
+}
+
+// validateDeleteInactiveUserAfter validates the delete-inactive-user-after setting
+// to make sure it's a positive duration and that it's not less than the value of
+// auth-user-session-ttl-minutes setting and MinDeleteInactiveUserAfter.
+func (a *admitter) validateDeleteInactiveUserAfter(s *v3.Setting) error {
+	if s.Value == "" {
+		return nil
+	}
+
+	dur, err := validateDuration(s.Value)
+	if err != nil {
+		return field.TypeInvalid(valuePath, s.Value, err.Error())
+	}
+
+	// Note: zero duration is allowed and is equivalent to "".
+	if dur > 0 {
+		if dur < MinDeleteInactiveUserAfter {
+			err = fmt.Errorf("must be at least %s", MinDeleteInactiveUserAfter)
+		} else if a.isLessThanUserSessionTTL(dur) {
+			err = errLessThanAuthUserSessionTTL
+		}
+	}
+
+	if err != nil {
+		return field.Forbidden(valuePath, err.Error())
+	}
+
+	return nil
+}
+
+// validateUserRetentionCron validates the user-retention-cron setting
+// to make sure it's a valid standard cron expression.
+func (a *admitter) validateUserRetentionCron(s *v3.Setting) error {
+	if s.Value == "" {
+		return nil
+	}
+
+	if _, err := cron.ParseStandard(s.Value); err != nil {
+		return field.TypeInvalid(valuePath, s.Value, err.Error())
+	}
+
+	return nil
+}
+
+// validateUserLastLoginDefault validates the user-last-login-default setting
+// to make sure it's a valid RFC3339 formatted date time.
+func (a *admitter) validateUserLastLoginDefault(s *v3.Setting) error {
+	if s.Value == "" {
+		return nil
+	}
+
+	if _, err := time.Parse(time.RFC3339, s.Value); err != nil {
+		return field.TypeInvalid(valuePath, s.Value, err.Error())
+	}
+
+	return nil
+}
+
+// validateDuration parses the value as durations and makes sure it's not negative.
+func validateDuration(value string) (time.Duration, error) {
+	dur, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, err
+	}
+
+	if dur < 0 {
+		return 0, errors.New("negative value")
+	}
+
+	return dur, err
+}
+
+// parseMinutes parses the value as minutes as returns the duration.
+func parseMinutes(value string) (time.Duration, error) {
+	minutes, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return time.Duration(minutes) * time.Minute, nil
+}
+
+func (a *admitter) validateAgentTLSMode(oldSetting, newSetting *v3.Setting) error {
 	if effectiveValue(oldSetting) == "system-store" && effectiveValue(newSetting) == "strict" {
 		if force := newSetting.Annotations["cattle.io/force"]; force == "true" {
 			return nil
@@ -155,33 +340,25 @@ func (a *admitter) validateAgentTLSMode(oldSetting, newSetting v3.Setting) error
 	return nil
 }
 
-func validateDuration(value string) (time.Duration, error) {
-	dur, err := time.ParseDuration(value)
-	if err != nil {
-		return 0, err
-	}
-
-	if dur < 0 {
-		return 0, errors.New("negative duration")
-	}
-
-	return dur, err
-}
-
 func clusterConditionMatches(cluster *v3.Cluster, t v3.ClusterConditionType, status v1.ConditionStatus) bool {
 	for _, cond := range cluster.Status.Conditions {
 		if cond.Type == t && cond.Status == status {
 			return true
 		}
 	}
+
 	return false
 }
 
-func effectiveValue(s v3.Setting) string {
+// effectiveValue returns the effective value of the setting.
+func effectiveValue(s *v3.Setting) string {
 	if s.Value != "" {
 		return s.Value
-	} else if s.Default != "" {
+	}
+
+	if s.Default != "" {
 		return s.Default
 	}
+
 	return ""
 }
