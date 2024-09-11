@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/webhook/pkg/admission"
 	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/resources/common"
 	"github.com/rancher/wrangler/v3/pkg/data/convert"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
@@ -37,10 +38,11 @@ type Validator struct {
 }
 
 // NewValidator returns a project validator.
-func NewValidator(clusterCache controllerv3.ClusterCache) *Validator {
+func NewValidator(clusterCache controllerv3.ClusterCache, userCache controllerv3.UserCache) *Validator {
 	return &Validator{
 		admitter: admitter{
 			clusterCache: clusterCache,
+			userCache:    userCache,
 		},
 	}
 }
@@ -72,6 +74,7 @@ func (v *Validator) Admitters() []admission.Admitter {
 
 type admitter struct {
 	clusterCache controllerv3.ClusterCache
+	userCache    controllerv3.UserCache
 }
 
 // Admit handles the webhook admission request sent to this webhook.
@@ -111,6 +114,15 @@ func (a *admitter) admitCreate(project *v3.Project) (*admissionv1.AdmissionRespo
 	if fieldErr != nil {
 		return admission.ResponseBadRequest(fieldErr.Error()), nil
 	}
+
+	fieldErr, err = common.CheckCreatorPrincipalName(a.userCache, project)
+	if err != nil {
+		return nil, fmt.Errorf("error checking creator principal: %w", err)
+	}
+	if fieldErr != nil {
+		return admission.ResponseBadRequest(fieldErr.Error()), nil
+	}
+
 	return a.admitCommonCreateUpdate(nil, project)
 }
 

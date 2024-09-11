@@ -2,12 +2,15 @@ package common
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
+	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	admissionv1 "k8s.io/api/admission/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/kubernetes/pkg/apis/rbac"
@@ -57,4 +60,36 @@ func ValidateRules(rules []rbacv1.PolicyRule, isNamespaced bool, fldPath *field.
 		returnErr = errors.Join(returnErr, fieldErrs.ToAggregate())
 	}
 	return returnErr
+}
+
+func CheckCreatorPrincipalName(userCache controllerv3.UserCache, obj metav1.Object) (*field.Error, error) {
+	annotations := obj.GetAnnotations()
+	principalName := annotations[auth.CreatorPrincipalNameAnn]
+	if principalName == "" { // Nothing to check.
+		return nil, nil
+	}
+
+	annotationsFieldPath := field.NewPath("metadata").Child("annotations")
+
+	creatorID := obj.GetAnnotations()[auth.CreatorIDAnn]
+	if creatorID == "" {
+		return field.Invalid(annotationsFieldPath, auth.CreatorPrincipalNameAnn, fmt.Sprintf("annotation %s is required", auth.CreatorIDAnn)), nil
+	}
+
+	user, err := userCache.Get(creatorID)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return field.Invalid(annotationsFieldPath, auth.CreatorPrincipalNameAnn, fmt.Sprintf("creator user %s doesn't exist", creatorID)), nil
+		}
+		return nil, fmt.Errorf("error getting creator user %s: %w", creatorID, err)
+	}
+
+	creatorPrincipalName := annotations[auth.CreatorPrincipalNameAnn]
+	for _, principal := range user.PrincipalIDs {
+		if principal == creatorPrincipalName {
+			return nil, nil
+		}
+	}
+
+	return field.Invalid(annotationsFieldPath, auth.CreatorPrincipalNameAnn, fmt.Sprintf("creator user %s doesn't have principal %s", creatorID, creatorPrincipalName)), nil
 }

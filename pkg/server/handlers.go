@@ -33,7 +33,11 @@ import (
 func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandler, error) {
 	handlers := []admission.ValidatingAdmissionHandler{
 		feature.NewValidator(),
-		managementCluster.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache()),
+		managementCluster.NewValidator(
+			clients.K8s.AuthorizationV1().SubjectAccessReviews(),
+			clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache(),
+			clients.Management.User().Cache(),
+		),
 		provisioningCluster.NewProvisioningClusterValidator(clients),
 		machineconfig.NewValidator(),
 		nshandler.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews()),
@@ -52,7 +56,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		roleTemplates := roletemplate.NewValidator(clients.DefaultResolver, clients.RoleTemplateResolver, clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.Management.GlobalRole().Cache())
 		secrets := secret.NewValidator(clients.RBAC.Role().Cache(), clients.RBAC.RoleBinding().Cache())
 		nodeDriver := nodedriver.NewValidator(clients.Management.Node().Cache(), clients.Dynamic)
-		projects := project.NewValidator(clients.Management.Cluster().Cache())
+		projects := project.NewValidator(clients.Management.Cluster().Cache(), clients.Management.User().Cache())
 		roles := role.NewValidator()
 		rolebindings := rolebinding.NewValidator()
 		setting := setting.NewValidator(clients.Management.Cluster().Cache(), clients.Management.Setting().Cache())
