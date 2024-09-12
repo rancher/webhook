@@ -71,7 +71,7 @@ func CheckCreatorPrincipalName(userCache controllerv3.UserCache, obj metav1.Obje
 
 	annotationsFieldPath := field.NewPath("metadata").Child("annotations")
 
-	creatorID := obj.GetAnnotations()[auth.CreatorIDAnn]
+	creatorID := annotations[auth.CreatorIDAnn]
 	if creatorID == "" {
 		return field.Invalid(annotationsFieldPath, auth.CreatorPrincipalNameAnn, fmt.Sprintf("annotation %s is required", auth.CreatorIDAnn)), nil
 	}
@@ -84,12 +84,11 @@ func CheckCreatorPrincipalName(userCache controllerv3.UserCache, obj metav1.Obje
 		return nil, fmt.Errorf("error getting creator user %s: %w", creatorID, err)
 	}
 
-	creatorPrincipalName := annotations[auth.CreatorPrincipalNameAnn]
 	for _, principal := range user.PrincipalIDs {
-		if principal == creatorPrincipalName {
+		if principal == principalName {
 			return nil, nil
 		}
 	}
 
-	return field.Invalid(annotationsFieldPath, auth.CreatorPrincipalNameAnn, fmt.Sprintf("creator user %s doesn't have principal %s", creatorID, creatorPrincipalName)), nil
+	return field.Invalid(annotationsFieldPath, auth.CreatorPrincipalNameAnn, fmt.Sprintf("creator user %s doesn't have principal %s", creatorID, principalName)), nil
 }
