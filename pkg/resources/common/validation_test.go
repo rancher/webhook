@@ -138,7 +138,7 @@ func TestCheckCreatorPrincipalName(t *testing.T) {
 			fieldErr:      true,
 		},
 		{
-			desc:          "principle doesn't belong to creator",
+			desc:          "principal doesn't belong to creator",
 			creatorID:     "u-12345",
 			principalName: "keycloak_user://12346",
 			fieldErr:      true,

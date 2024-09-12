@@ -408,7 +408,7 @@ func TestProjectValidation(t *testing.T) {
 			wantAllowed: false,
 		},
 		{
-			name:      "create with principle name annotation",
+			name:      "create with principal name annotation",
 			operation: admissionv1.Create,
 			newProject: &v3.Project{
 				ObjectMeta: metav1.ObjectMeta{
@@ -439,7 +439,7 @@ func TestProjectValidation(t *testing.T) {
 			wantAllowed: true,
 		},
 		{
-			name:      "create with principle name annotation but no creator id",
+			name:      "create with principal name annotation but no creator id",
 			operation: admissionv1.Create,
 			newProject: &v3.Project{
 				ObjectMeta: metav1.ObjectMeta{
@@ -464,7 +464,7 @@ func TestProjectValidation(t *testing.T) {
 			wantAllowed: false,
 		},
 		{
-			name:      "create with principle name annotation that doesn't belong to creator id",
+			name:      "create with principal name annotation that doesn't belong to creator id",
 			operation: admissionv1.Create,
 			newProject: &v3.Project{
 				ObjectMeta: metav1.ObjectMeta{
@@ -495,7 +495,7 @@ func TestProjectValidation(t *testing.T) {
 			wantAllowed: false,
 		},
 		{
-			name:      "create with principle name annotation but creator doesn't exist",
+			name:      "create with principal name annotation but creator doesn't exist",
 			operation: admissionv1.Create,
 			newProject: &v3.Project{
 				ObjectMeta: metav1.ObjectMeta{
@@ -521,7 +521,7 @@ func TestProjectValidation(t *testing.T) {
 			wantAllowed: false,
 		},
 		{
-			name:      "create with principle name annotation but error getting creator id",
+			name:      "create with principal name annotation but error getting creator id",
 			operation: admissionv1.Create,
 			newProject: &v3.Project{
 				ObjectMeta: metav1.ObjectMeta{

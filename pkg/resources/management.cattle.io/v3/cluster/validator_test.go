@@ -66,7 +66,7 @@ func TestAdmit(t *testing.T) {
 			expectAllowed: true,
 		},
 		{
-			name: "Create with creator principle",
+			name: "Create with creator principal",
 			newCluster: v3.Cluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "c-2bmj5",
@@ -80,7 +80,7 @@ func TestAdmit(t *testing.T) {
 			expectAllowed: true,
 		},
 		{
-			name: "Create with creator principle but no creator id",
+			name: "Create with creator principal but no creator id",
 			newCluster: v3.Cluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "c-2bmj5",
@@ -94,7 +94,7 @@ func TestAdmit(t *testing.T) {
 			expectedReason: metav1.StatusReasonBadRequest,
 		},
 		{
-			name: "Create with creator principle and non-existent creator id",
+			name: "Create with creator principal and non-existent creator id",
 			newCluster: v3.Cluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "c-2bmj5",
