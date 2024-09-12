@@ -1047,7 +1047,7 @@ func TestProjectValidation(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			// t.Parallel()
+			t.Parallel()
 			ctrl := gomock.NewController(t)
 			state := testState{
 				clusterCache: fake.NewMockNonNamespacedCacheInterface[*v3.Cluster](ctrl),
