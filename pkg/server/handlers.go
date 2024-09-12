@@ -3,6 +3,7 @@ package server
 import (
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/clients"
+	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/resolvers"
 	"github.com/rancher/webhook/pkg/resources/catalog.cattle.io/v1/clusterrepo"
 	nshandler "github.com/rancher/webhook/pkg/resources/core/v1/namespace"
@@ -31,13 +32,20 @@ import (
 
 // Validation returns a list of all ValidatingAdmissionHandlers used by the webhook.
 func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandler, error) {
+
+	var userCache v3.UserCache
+	if clients.MultiClusterManagement {
+		userCache = clients.Management.User().Cache()
+	}
+	clusters := managementCluster.NewValidator(
+		clients.K8s.AuthorizationV1().SubjectAccessReviews(),
+		clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache(),
+		userCache,
+	)
+
 	handlers := []admission.ValidatingAdmissionHandler{
 		feature.NewValidator(),
-		managementCluster.NewValidator(
-			clients.K8s.AuthorizationV1().SubjectAccessReviews(),
-			clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache(),
-			clients.Management.User().Cache(),
-		),
+		clusters,
 		provisioningCluster.NewProvisioningClusterValidator(clients),
 		machineconfig.NewValidator(),
 		nshandler.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews()),

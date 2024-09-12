@@ -90,7 +90,8 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, fmt.Errorf("failed to get cluster from request: %w", err)
 	}
 
-	if request.Operation == admissionv1.Create && cluster.Name != "local" {
+	if request.Operation == admissionv1.Create && a.userCache != nil {
+		// This check doesn't make sense for downstream clusters (userCache == nil)
 		fieldErr, err := common.CheckCreatorPrincipalName(a.userCache, cluster)
 		if err != nil {
 			return nil, fmt.Errorf("error checking creator principal: %w", err)
