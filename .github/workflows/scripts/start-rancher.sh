@@ -24,4 +24,17 @@ kubectl rollout status --namespace cert-manager deploy/cert-manager --timeout 1m
 
 # Chart based
 
-helm upgrade --install rancher "$CHART_PATH" --namespace cattle-system --set replicas=1 --set hostname=localhost --wait --timeout=10m --create-namespace --version "$VERSION" --set rancherImage=rancher/rancher --set rancherImageTag="$RANCHER_IMAGE_TAG"
+# Set empty CATTLE_RANCHER_WEBHOOK_VERSION to install any webhook that's in the
+# bundled charts index
+helm upgrade \
+    --install rancher "$CHART_PATH" \
+    --namespace cattle-system \
+    --wait --timeout=10m \
+    --create-namespace \
+    --version "$VERSION" \
+    --set replicas=1 \
+    --set hostname=localhost \
+    --set rancherImage=rancher/rancher \
+    --set rancherImageTag="$RANCHER_IMAGE_TAG" \
+    --set 'extraEnv[0].name=CATTLE_RANCHER_WEBHOOK_VERSION' \
+    --set "extraEnv[0].value="
