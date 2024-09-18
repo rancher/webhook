@@ -180,3 +180,97 @@ func TestCheckCreatorPrincipalName(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckCreatorAnnotationsOnUpdate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		desc     string
+		oldObj   metav1.Object
+		newObj   metav1.Object
+		fieldErr bool
+	}{
+		{
+			desc:   "no annotations",
+			oldObj: &v3.Project{},
+			newObj: &v3.Project{},
+		},
+		{
+			desc: "no change",
+			oldObj: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						auth.CreatorIDAnn:            "u-12345",
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+					},
+				},
+			},
+			newObj: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						auth.CreatorIDAnn:            "u-12345",
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+					},
+				},
+			},
+		},
+		{
+			desc: "annotations removed",
+			oldObj: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						auth.CreatorIDAnn:            "u-12345",
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+					},
+				},
+			},
+			newObj: &v3.Project{},
+		},
+		{
+			desc: "creator id changed",
+			oldObj: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						auth.CreatorIDAnn: "u-12345",
+					},
+				},
+			},
+			newObj: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						auth.CreatorIDAnn: "u-12346",
+					},
+				},
+			},
+			fieldErr: true,
+		},
+		{
+			desc: "principal name changed",
+			oldObj: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+					},
+				},
+			},
+			newObj: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12346",
+					},
+				},
+			},
+			fieldErr: true,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.desc, func(t *testing.T) {
+			t.Parallel()
+
+			fieldErr := CheckCreatorAnnotationsOnUpdate(test.oldObj, test.newObj)
+			require.Equal(t, test.fieldErr, fieldErr != nil)
+		})
+	}
+}

@@ -24,7 +24,6 @@ import (
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 )
 
-var parsedRangeLessThan125 = semver.MustParseRange("< 1.25.0-rancher0")
 var parsedRangeLessThan123 = semver.MustParseRange("< 1.23.0-rancher0")
 
 // NewValidator returns a new validator for management clusters.
@@ -37,7 +36,7 @@ func NewValidator(
 		admitter: admitter{
 			sar:       sar,
 			psact:     cache,
-			userCache: userCache,
+			userCache: userCache, // userCache is nil for downstream clusters.
 		},
 	}
 }
@@ -77,7 +76,12 @@ type admitter struct {
 
 // Admit handles the webhook admission request sent to this webhook.
 func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
-	response, err := a.validateFleetPermissions(request)
+	oldCluster, newCluster, err := objectsv3.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed get old and new clusters from request: %w", err)
+	}
+
+	response, err := a.validateFleetPermissions(request, oldCluster, newCluster)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate fleet permissions: %w", err)
 	}
@@ -85,29 +89,30 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return response, nil
 	}
 
-	cluster, err := objectsv3.ClusterFromRequest(&request.AdmissionRequest)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get cluster from request: %w", err)
-	}
-
-	if request.Operation == admissionv1.Create && a.userCache != nil {
-		// This check doesn't make sense for downstream clusters (userCache == nil)
-		fieldErr, err := common.CheckCreatorPrincipalName(a.userCache, cluster)
-		if err != nil {
-			return nil, fmt.Errorf("error checking creator principal: %w", err)
-		}
-		if fieldErr != nil {
-			return admission.ResponseBadRequest(fieldErr.Error()), nil
+	if a.userCache != nil {
+		// The following checks don't make sense for downstream clusters (userCache == nil)
+		if request.Operation == admissionv1.Create {
+			fieldErr, err := common.CheckCreatorPrincipalName(a.userCache, newCluster)
+			if err != nil {
+				return nil, fmt.Errorf("error checking creator principal: %w", err)
+			}
+			if fieldErr != nil {
+				return admission.ResponseBadRequest(fieldErr.Error()), nil
+			}
+		} else if request.Operation == admissionv1.Update {
+			if fieldErr := common.CheckCreatorAnnotationsOnUpdate(oldCluster, newCluster); fieldErr != nil {
+				return admission.ResponseBadRequest(fieldErr.Error()), nil
+			}
 		}
 	}
 
 	if request.Operation == admissionv1.Create || request.Operation == admissionv1.Update {
 		// no need to validate the local cluster, or imported cluster which represents a KEv2 cluster (GKE/EKS/AKS) or v1 Provisioning Cluster
-		if cluster.Name == "local" || cluster.Spec.RancherKubernetesEngineConfig == nil {
+		if newCluster.Name == "local" || newCluster.Spec.RancherKubernetesEngineConfig == nil {
 			return admission.ResponseAllowed(), nil
 		}
 
-		response, err = a.validatePSACT(request)
+		response, err = a.validatePSACT(oldCluster, newCluster, request.Operation)
 		if err != nil {
 			return nil, fmt.Errorf("failed to validate PodSecurityAdmissionConfigurationTemplate(PSACT): %w", err)
 		}
@@ -128,12 +133,7 @@ func toExtra(extra map[string]authenticationv1.ExtraValue) map[string]v1.ExtraVa
 }
 
 // validateFleetPermissions validates whether the request maker has required permissions around FleetWorkspace.
-func (a *admitter) validateFleetPermissions(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
-	oldCluster, newCluster, err := objectsv3.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get old and new clusters from request: %w", err)
-	}
-
+func (a *admitter) validateFleetPermissions(request *admission.Request, oldCluster, newCluster *apisv3.Cluster) (*admissionv1.AdmissionResponse, error) {
 	// Ensure that the FleetWorkspaceName field cannot be unset once it is set, as it would cause (likely unintentional)
 	// cluster deletion. Note that we're only enforcing this rule on UPDATE because Spec.FleetWorkspaceName will be
 	// empty on cluster deletion, which is fine.
@@ -192,12 +192,7 @@ func (a *admitter) validateFleetPermissions(request *admission.Request) (*admiss
 }
 
 // validatePSACT validates the cluster spec when PodSecurityAdmissionConfigurationTemplate is used.
-func (a *admitter) validatePSACT(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
-	oldCluster, newCluster, err := objectsv3.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get old and new clusters from request: %w", err)
-	}
-
+func (a *admitter) validatePSACT(oldCluster, newCluster *apisv3.Cluster, op admissionv1.Operation) (*admissionv1.AdmissionResponse, error) {
 	newTemplateName := newCluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName
 	oldTemplateName := oldCluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName
 
@@ -219,7 +214,7 @@ func (a *admitter) validatePSACT(request *admission.Request) (*admissionv1.Admis
 			return response, nil
 		}
 	} else {
-		switch request.Operation {
+		switch op {
 		case admissionv1.Create:
 			return admission.ResponseAllowed(), nil
 		case admissionv1.Update:

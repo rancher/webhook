@@ -130,6 +130,94 @@ func TestAdmit(t *testing.T) {
 			expectAllowed: true,
 		},
 		{
+			name: "Update changing creator id annotation",
+			oldCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "c-2bmj5",
+					Annotations: map[string]string{
+						auth.CreatorIDAnn: "u-12345",
+					},
+				},
+			},
+			newCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "c-2bmj5",
+					Annotations: map[string]string{
+						auth.CreatorIDAnn: "u-12346",
+					},
+				},
+			},
+			operation:      admissionv1.Update,
+			expectAllowed:  false,
+			expectedReason: metav1.StatusReasonBadRequest,
+		},
+		{
+			name: "Update changing principle name annotation",
+			oldCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "c-2bmj5",
+					Annotations: map[string]string{
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+					},
+				},
+			},
+			newCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "c-2bmj5",
+					Annotations: map[string]string{
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12346",
+					},
+				},
+			},
+			operation:      admissionv1.Update,
+			expectAllowed:  false,
+			expectedReason: metav1.StatusReasonBadRequest,
+		},
+		{
+			name: "Update removing creator annotations",
+			oldCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "c-2bmj5",
+					Annotations: map[string]string{
+						auth.CreatorIDAnn:            "u-12345",
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+					},
+				},
+			},
+			newCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "c-2bmj5",
+				},
+			},
+			operation:      admissionv1.Update,
+			expectAllowed:  true,
+			expectedReason: metav1.StatusReasonBadRequest,
+		},
+		{
+			name: "Update without changing creator annotations",
+			oldCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "c-2bmj5",
+					Annotations: map[string]string{
+						auth.CreatorIDAnn:            "u-12345",
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+					},
+				},
+			},
+			newCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "c-2bmj5",
+					Annotations: map[string]string{
+						auth.CreatorIDAnn:            "u-12345",
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+					},
+				},
+			},
+			operation:      admissionv1.Update,
+			expectAllowed:  true,
+			expectedReason: metav1.StatusReasonBadRequest,
+		},
+		{
 			name:          "Delete",
 			oldCluster:    v3.Cluster{Spec: v3.ClusterSpec{FleetWorkspaceName: "fleet-default"}},
 			operation:     admissionv1.Delete,

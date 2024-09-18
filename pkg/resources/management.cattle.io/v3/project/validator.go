@@ -131,6 +131,11 @@ func (a *admitter) admitUpdate(oldProject, newProject *v3.Project) (*admissionv1
 		fieldErr := field.Invalid(projectSpecFieldPath.Child(clusterNameField), newProject.Spec.ClusterName, "field is immutable")
 		return admission.ResponseBadRequest(fieldErr.Error()), nil
 	}
+
+	if fieldErr := common.CheckCreatorAnnotationsOnUpdate(oldProject, newProject); fieldErr != nil {
+		return admission.ResponseBadRequest(fieldErr.Error()), nil
+	}
+
 	return a.admitCommonCreateUpdate(oldProject, newProject)
 
 }

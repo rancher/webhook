@@ -62,14 +62,14 @@ func ValidateRules(rules []rbacv1.PolicyRule, isNamespaced bool, fldPath *field.
 	return returnErr
 }
 
+var annotationsFieldPath = field.NewPath("metadata").Child("annotations")
+
 func CheckCreatorPrincipalName(userCache controllerv3.UserCache, obj metav1.Object) (*field.Error, error) {
 	annotations := obj.GetAnnotations()
 	principalName := annotations[auth.CreatorPrincipalNameAnn]
 	if principalName == "" { // Nothing to check.
 		return nil, nil
 	}
-
-	annotationsFieldPath := field.NewPath("metadata").Child("annotations")
 
 	creatorID := annotations[auth.CreatorIDAnn]
 	if creatorID == "" {
@@ -91,4 +91,20 @@ func CheckCreatorPrincipalName(userCache controllerv3.UserCache, obj metav1.Obje
 	}
 
 	return field.Invalid(annotationsFieldPath, auth.CreatorPrincipalNameAnn, fmt.Sprintf("creator user %s doesn't have principal %s", creatorID, principalName)), nil
+}
+
+func CheckCreatorAnnotationsOnUpdate(oldObj, newObj metav1.Object) *field.Error {
+	oldAnnotations := oldObj.GetAnnotations()
+	newAnnotations := newObj.GetAnnotations()
+
+	for _, annotation := range []string{auth.CreatorIDAnn, auth.CreatorPrincipalNameAnn} {
+		if _, ok := newAnnotations[annotation]; ok {
+			// If the annotation exists on the new object it must be the same as on the old object.
+			if oldAnnotations[annotation] != newAnnotations[annotation] {
+				return field.Invalid(annotationsFieldPath, annotation, "annotation is immutable")
+			}
+		}
+	}
+
+	return nil
 }

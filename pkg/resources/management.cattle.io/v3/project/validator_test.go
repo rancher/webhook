@@ -1020,6 +1020,122 @@ func TestProjectValidation(t *testing.T) {
 			wantAllowed: false,
 		},
 		{
+			name:      "update changing creator id annotation",
+			operation: admissionv1.Update,
+			oldProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						auth.CreatorIDAnn: "u-12345",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "tescluster",
+					Annotations: map[string]string{
+						auth.CreatorIDAnn: "u-12346",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			wantAllowed: false,
+		},
+		{
+			name:      "update changing principle name annotation",
+			operation: admissionv1.Update,
+			oldProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "tescluster",
+					Annotations: map[string]string{
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12346",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			wantAllowed: false,
+		},
+		{
+			name:      "update removing creator annotations",
+			operation: admissionv1.Update,
+			oldProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						auth.CreatorIDAnn:            "u-12345",
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "tescluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			wantAllowed: true,
+		},
+		{
+			name:      "update without changing creator annotations",
+			operation: admissionv1.Update,
+			oldProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						auth.CreatorIDAnn:            "u-12345",
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "tescluster",
+					Annotations: map[string]string{
+						auth.CreatorIDAnn:            "u-12345",
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			wantAllowed: true,
+		},
+		{
 			name:      "invalid operation",
 			operation: admissionv1.Connect,
 			oldProject: &v3.Project{
