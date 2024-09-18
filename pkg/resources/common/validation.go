@@ -64,6 +64,8 @@ func ValidateRules(rules []rbacv1.PolicyRule, isNamespaced bool, fldPath *field.
 
 var annotationsFieldPath = field.NewPath("metadata").Child("annotations")
 
+// CheckCreatorPrincipalName checks that if creator-principal-name annotation is set then creatorId annotation must be set as well.
+// The value of creator-principal-name annotation should match the creator's user principal id.
 func CheckCreatorPrincipalName(userCache controllerv3.UserCache, obj metav1.Object) (*field.Error, error) {
 	annotations := obj.GetAnnotations()
 	principalName := annotations[auth.CreatorPrincipalNameAnn]
@@ -93,6 +95,9 @@ func CheckCreatorPrincipalName(userCache controllerv3.UserCache, obj metav1.Obje
 	return field.Invalid(annotationsFieldPath, auth.CreatorPrincipalNameAnn, fmt.Sprintf("creator user %s doesn't have principal %s", creatorID, principalName)), nil
 }
 
+// CheckCreatorAnnotationsOnUpdate checks that the creatorId and creator-principal-name annotations are immutable.
+// The only allowed update is removing the annotations.
+// This function should only be called for the update operation.
 func CheckCreatorAnnotationsOnUpdate(oldObj, newObj metav1.Object) *field.Error {
 	oldAnnotations := oldObj.GetAnnotations()
 	newAnnotations := newObj.GetAnnotations()
