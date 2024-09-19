@@ -10,10 +10,10 @@ import (
 	"github.com/golang/mock/gomock"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
+	"github.com/rancher/webhook/pkg/auth"
 	"github.com/rancher/wrangler/v3/pkg/generic/fake"
 	"github.com/stretchr/testify/assert"
 	admissionv1 "k8s.io/api/admission/v1"
-	v1 "k8s.io/api/admission/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -24,10 +24,11 @@ func TestProjectValidation(t *testing.T) {
 	t.Parallel()
 	type testState struct {
 		clusterCache *fake.MockNonNamespacedCacheInterface[*v3.Cluster]
+		userCache    *fake.MockNonNamespacedCacheInterface[*v3.User]
 	}
 	tests := []struct {
 		name        string
-		operation   v1.Operation
+		operation   admissionv1.Operation
 		stateSetup  func(state *testState)
 		newProject  *v3.Project
 		oldProject  *v3.Project
@@ -43,7 +44,7 @@ func TestProjectValidation(t *testing.T) {
 		},
 		{
 			name:      "no clusterName",
-			operation: v1.Create,
+			operation: admissionv1.Create,
 			newProject: &v3.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test",
@@ -58,7 +59,7 @@ func TestProjectValidation(t *testing.T) {
 		},
 		{
 			name:      "clusterName doesn't match namespace",
-			operation: v1.Create,
+			operation: admissionv1.Create,
 			newProject: &v3.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test",
@@ -74,7 +75,7 @@ func TestProjectValidation(t *testing.T) {
 		},
 		{
 			name:      "clusterName not found",
-			operation: v1.Create,
+			operation: admissionv1.Create,
 			newProject: &v3.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test",
@@ -97,7 +98,7 @@ func TestProjectValidation(t *testing.T) {
 		},
 		{
 			name:      "error when validating if the cluster exists",
-			operation: v1.Create,
+			operation: admissionv1.Create,
 			newProject: &v3.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test",
@@ -117,7 +118,7 @@ func TestProjectValidation(t *testing.T) {
 		},
 		{
 			name:      "nil return from the cluster cache",
-			operation: v1.Create,
+			operation: admissionv1.Create,
 			newProject: &v3.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test",
@@ -405,6 +406,146 @@ func TestProjectValidation(t *testing.T) {
 				}, nil)
 			},
 			wantAllowed: false,
+		},
+		{
+			name:      "create with principal name annotation",
+			operation: admissionv1.Create,
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+						auth.CreatorIDAnn:            "u-12345",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			stateSetup: func(state *testState) {
+				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "testcluster",
+					},
+				}, nil)
+				state.userCache.EXPECT().Get("u-12345").Return(&v3.User{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "u-12345",
+					},
+					PrincipalIDs: []string{"local://u-12345", "keycloak_user://12345"},
+				}, nil)
+			},
+			wantAllowed: true,
+		},
+		{
+			name:      "create with principal name annotation but no creator id",
+			operation: admissionv1.Create,
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			stateSetup: func(state *testState) {
+				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "testcluster",
+					},
+				}, nil)
+				state.userCache.EXPECT().Get("u-12345").Times(0)
+			},
+			wantAllowed: false,
+		},
+		{
+			name:      "create with principal name annotation that doesn't belong to creator id",
+			operation: admissionv1.Create,
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12346",
+						auth.CreatorIDAnn:            "u-12345",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			stateSetup: func(state *testState) {
+				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "testcluster",
+					},
+				}, nil)
+				state.userCache.EXPECT().Get("u-12345").Return(&v3.User{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "u-12345",
+					},
+					PrincipalIDs: []string{"local://u-12345", "keycloak_user://12345"},
+				}, nil)
+			},
+			wantAllowed: false,
+		},
+		{
+			name:      "create with principal name annotation but creator doesn't exist",
+			operation: admissionv1.Create,
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12346",
+						auth.CreatorIDAnn:            "u-12345",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			stateSetup: func(state *testState) {
+				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "testcluster",
+					},
+				}, nil)
+				state.userCache.EXPECT().Get("u-12345").Return(nil, apierrors.NewNotFound(schema.GroupResource{}, "u-12345"))
+			},
+			wantAllowed: false,
+		},
+		{
+			name:      "create with principal name annotation but error getting creator id",
+			operation: admissionv1.Create,
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12346",
+						auth.CreatorIDAnn:            "u-12345",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			stateSetup: func(state *testState) {
+				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "testcluster",
+					},
+				}, nil)
+				state.userCache.EXPECT().Get("u-12345").Return(nil, fmt.Errorf("some error"))
+			},
+			wantAllowed: false,
+			wantErr:     true,
 		},
 		{
 			name:      "update with no quotas (noop)",
@@ -879,6 +1020,122 @@ func TestProjectValidation(t *testing.T) {
 			wantAllowed: false,
 		},
 		{
+			name:      "update changing creator id annotation",
+			operation: admissionv1.Update,
+			oldProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						auth.CreatorIDAnn: "u-12345",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "tescluster",
+					Annotations: map[string]string{
+						auth.CreatorIDAnn: "u-12346",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			wantAllowed: false,
+		},
+		{
+			name:      "update changing principle name annotation",
+			operation: admissionv1.Update,
+			oldProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "tescluster",
+					Annotations: map[string]string{
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12346",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			wantAllowed: false,
+		},
+		{
+			name:      "update removing creator annotations",
+			operation: admissionv1.Update,
+			oldProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						auth.CreatorIDAnn:            "u-12345",
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "tescluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			wantAllowed: true,
+		},
+		{
+			name:      "update without changing creator annotations",
+			operation: admissionv1.Update,
+			oldProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						auth.CreatorIDAnn:            "u-12345",
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "tescluster",
+					Annotations: map[string]string{
+						auth.CreatorIDAnn:            "u-12345",
+						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			wantAllowed: true,
+		},
+		{
 			name:      "invalid operation",
 			operation: admissionv1.Connect,
 			oldProject: &v3.Project{
@@ -910,13 +1167,14 @@ func TestProjectValidation(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			state := testState{
 				clusterCache: fake.NewMockNonNamespacedCacheInterface[*v3.Cluster](ctrl),
+				userCache:    fake.NewMockNonNamespacedCacheInterface[*v3.User](ctrl),
 			}
 			if test.stateSetup != nil {
 				test.stateSetup(&state)
 			}
 			req, err := createProjectRequest(test.oldProject, test.newProject, test.operation, false)
 			assert.NoError(t, err)
-			validator := NewValidator(state.clusterCache)
+			validator := NewValidator(state.clusterCache, state.userCache)
 			admitters := validator.Admitters()
 			assert.Len(t, admitters, 1)
 			response, err := admitters[0].Admit(req)
@@ -937,7 +1195,7 @@ func TestProjectContainerDefaultLimitsValidation(t *testing.T) {
 	}
 	tests := []struct {
 		name        string
-		operation   v1.Operation
+		operation   admissionv1.Operation
 		limit       *v3.ContainerResourceLimit
 		wantAllowed bool
 	}{
@@ -1119,7 +1377,7 @@ func TestProjectContainerDefaultLimitsValidation(t *testing.T) {
 				}
 				req, err := createProjectRequest(oldProject, newProject, test.operation, false)
 				assert.NoError(t, err)
-				validator := NewValidator(state.clusterCache)
+				validator := NewValidator(state.clusterCache, nil)
 				admitters := validator.Admitters()
 				assert.Len(t, admitters, 1)
 				response, err := admitters[0].Admit(req)
@@ -1130,7 +1388,7 @@ func TestProjectContainerDefaultLimitsValidation(t *testing.T) {
 	}
 }
 
-func createProjectRequest(oldProject, newProject *v3.Project, operation v1.Operation, dryRun bool) (*admission.Request, error) {
+func createProjectRequest(oldProject, newProject *v3.Project, operation admissionv1.Operation, dryRun bool) (*admission.Request, error) {
 	gvk := metav1.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Project"}
 	gvr := metav1.GroupVersionResource{Group: "management.cattle.io", Version: "v3", Resource: "projects"}
 	req := &admission.Request{
@@ -1139,7 +1397,7 @@ func createProjectRequest(oldProject, newProject *v3.Project, operation v1.Opera
 	if oldProject == nil && newProject == nil {
 		return req, nil
 	}
-	req.AdmissionRequest = v1.AdmissionRequest{
+	req.AdmissionRequest = admissionv1.AdmissionRequest{
 		Kind:            gvk,
 		Resource:        gvr,
 		RequestKind:     &gvk,

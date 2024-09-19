@@ -22,6 +22,8 @@ import (
 const (
 	// CreatorIDAnn is an annotation key for the id of the creator.
 	CreatorIDAnn = "field.cattle.io/creatorId"
+	// CreatorPrincipalNameAnn is an annotation key for the principal name of the creator.
+	CreatorPrincipalNameAnn = "field.cattle.io/creator-principal-name"
 )
 
 // RequestUserHasVerb checks if the user associated with the context has a given verb on a given gvr for a specified name/namespace
