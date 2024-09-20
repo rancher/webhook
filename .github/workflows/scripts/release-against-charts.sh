@@ -57,7 +57,8 @@ git add ./assets/rancher-webhook ./charts/rancher-webhook ./index.yaml
 git commit -m "make remove"
 
 yq --inplace "del(.rancher-webhook.[] | select(. == \"${PREV_CHART_VERSION}+up${PREV_WEBHOOK_VERSION}\"))" release.yaml
-yq --inplace ".rancher-webhook += [\"${NEW_CHART_VERSION}+up${NEW_WEBHOOK_VERSION}\"]" release.yaml
+# Prepends to list
+yq --inplace ".rancher-webhook = [\"${NEW_CHART_VERSION}+up${NEW_WEBHOOK_VERSION}\"] + .rancher-webhook" release.yaml
 
 git add release.yaml
 git commit -m "Add rancher-webhook ${NEW_CHART_VERSION}+up${NEW_WEBHOOK_VERSION} to release.yaml"
