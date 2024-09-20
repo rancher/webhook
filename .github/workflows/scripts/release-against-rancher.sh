@@ -6,7 +6,7 @@
 #   ./release-against-rancher.sh <path to rancher repo> <new webhook release>
 #
 # Example:
-# ./release-against-charts.sh "${GITHUB_WORKSPACE}" "0.5.0-rc14"
+# ./release-against-charts.sh "${GITHUB_WORKSPACE}" "0.5.0-rc.14"
 
 RANCHER_DIR=$1
 NEW_WEBHOOK_VERSION=$2   # e.g. 0.5.2-rc.3

@@ -1,17 +1,17 @@
-name: Bump Webhook RC against rancher/charts
+name: Bump webhook in rancher/charts
 on:
   workflow_dispatch:
     inputs:
       charts_ref:
-        description: "Submit PR against the following rancher/charts branch (eg: dev-v2.9)"
+        description: "Submit PR against the following rancher/charts branch (eg: dev-v2.10)"
         required: true
-        default: "dev-v2.9"
+        default: "dev-v2.10"
       prev_webhook:
-        description: "Previous Webhook version (eg: 0.5.0-rc13)"
+        description: "Previous Webhook version (eg: 0.5.0-rc.13)"
         required: true
         default: ""
       new_webhook:
-        description: "New Webhook version (eg: 0.5.0-rc14)"
+        description: "New Webhook version (eg: 0.5.0-rc.14)"
         required: true
         default: ""
 
@@ -21,54 +21,75 @@ env:
   NEW_WEBHOOK: ${{ github.event.inputs.new_webhook }}
 
 jobs:
-  create-rancher-charts-pr:
+  create-charts-pr:
     runs-on: ubuntu-latest
+    permissions:
+      # Required for vault
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.ref }}
           path: webhook
 
-      # Checkout the fork first because it's simpler to setup the token for the
-      # push later on
-      - name: Checkout fork of rancher/charts
+      - uses: rancher-eio/read-vault-secrets@main
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials appId | APP_ID ;
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATE_KEY
+
+      # Fetch github token just for the charts repository
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ env.APP_ID }}
+          private-key: ${{ env.PRIVATE_KEY }}
+          repositories: |
+            charts
+
+      - name: Checkout charts repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          repository: tomleb/rancher-charts
-          token: ${{ secrets.PUSH_TO_FORKS_TOKEN }}
+          repository: ${{ github.repository_owner }}/charts
+          token: ${{ steps.app-token.outputs.token }}
           path: charts
+          # Allow making git push request later on
+          persist-credentials: true
+
+      - name: Configure the committer
+        run: |
+          cd charts
+          user_id=$(gh api "/users/$APP_USER" --jq .id)"
+          git config --global user.name "$APP_USER"
+          git config --global user.email "${user_id}+${APP_USER}@users.noreply.github.com>"
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_USER: "${{ steps.app-token.outputs.app-slug }}[bot]"
 
       - name: Install dependencies
         run: sudo snap install yq --channel=v4/stable
 
-      - name: Setup repo dir
-        run: |
-          cd charts
-          BRANCH="gha-test-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          echo "BRANCH=${BRANCH}" >> $GITHUB_ENV
-          git config --global user.email "webhook@example.com"
-          git config --global user.name "tomleb webhook Bot"
-          git remote add upstream https://github.com/rancher/charts
-          git fetch upstream
-          git checkout -b $BRANCH "upstream/$CHARTS_REF"
-
       - name: Run release script
         run: |
-          ./webhook/.github/workflows/scripts/release-against-charts.sh charts "$PREV_WEBHOOK" "$NEW_WEBHOOK"
+          cd charts
+          BRANCH="bump-webhook-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "BRANCH=${BRANCH}" >> $GITHUB_ENV
+          git checkout -b "$BRANCH" "$CHARTS_REF"
+          ./webhook/.github/workflows/scripts/release-against-charts.sh . "$PREV_WEBHOOK" "$NEW_WEBHOOK"
 
       - name: Push and create pull request
         env:
-           GITHUB_TOKEN: ${{ secrets.PUSH_TO_FORKS_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           cd charts
-          git push origin $BRANCH
+          git push origin "$BRANCH"
 
           body=$(../webhook/.github/workflows/scripts/release-message.sh "$PREV_WEBHOOK" "$NEW_WEBHOOK")
 
           gh pr create \
             --title "[$CHARTS_REF] Bump rancher-webhook to v$NEW_WEBHOOK" \
             --body "$body" \
-            --repo rancher/charts \
-            --head "tomleb:$BRANCH" \
+            --repo ${{ github.repository_owner }}/charts \
+            --head "${{ github.repository_owner }}:$BRANCH" \
             --base "$CHARTS_REF"

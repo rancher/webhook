@@ -6,7 +6,7 @@
 #   ./release-against-charts.sh <path to charts repo> <prev webhook release> <new webhook release>
 #
 # Example:
-# ./release-against-charts.sh "${GITHUB_WORKSPACE}" "0.5.0-rc13" "0.5.0-rc14"
+# ./release-against-charts.sh "${GITHUB_WORKSPACE}" "0.5.0-rc.13" "0.5.0-rc.14"
 
 CHARTS_DIR=$1
 PREV_WEBHOOK_VERSION=$2   # e.g. 0.5.2-rc.3
