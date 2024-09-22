@@ -1,0 +1,58 @@
+name: Release against charts
+
+on:
+  workflow_dispatch:
+    inputs:
+      charts_ref:
+        description: "Submit PR against the following rancher/charts branch (eg: dev-v2.10)"
+        required: true
+        default: "dev-v2.10"
+      new_webhook:
+        description: "New Webhook version (eg: 0.5.0-rc.14)"
+        required: true
+        default: ""
+
+env:
+  CHARTS_REF: ${{ github.event.inputs.charts_ref }}
+  NEW_WEBHOOK: ${{ github.event.inputs.new_webhook }}
+
+
+permissions:
+  contents: write
+
+jobs:
+  dostuff:
+    name: dostuff
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout charts repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          repository: ${{ github.repository_owner }}/rancher-charts
+          token: ${{ secrets.MY_TOKEN }}
+          # Allow making git push request later on
+          persist-credentials: true
+
+      - run: |
+          branch="test-slack-bot-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          git checkout -b $branch
+          git config --global user.email "you@example.com"
+          git config --global user.name "Your Name"
+          git commit --allow-empty -m "Bumping to rancher-webhook v$NEW_WEBHOOK"
+          git push -f origin $branch
+          pr_link=$(gh pr create \
+              --title "Bump rancher-webhook to v$NEW_WEBHOOK" \
+              --body "Test slackbot" \
+              --repo ${{ github.repository_owner }}/rancher-charts \
+              --head "${{ github.repository_owner }}:$branch" \
+              --base "$CHARTS_REF")
+          mkdir -p dist
+          echo $pr_link >> dist/pr_link
+        env:
+          GH_TOKEN: ${{ secrets.MY_TOKEN }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr-link
+          path: dist/pr_link

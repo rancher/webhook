@@ -1,0 +1,51 @@
+name: Release against rancher
+
+on:
+  workflow_dispatch:
+    inputs:
+      rancher_ref:
+        description: "Submit PR against the following rancher/rancher branch (eg: main)"
+        required: true
+        default: "main"
+      new_webhook:
+        description: "New Webhook version (eg: 0.5.0-rc.14)"
+        required: true
+        default: ""
+
+env:
+  RANCHER_REF: ${{ github.event.inputs.rancher_ref }}
+  NEW_WEBHOOK: ${{ github.event.inputs.new_webhook }}
+
+
+permissions:
+  contents: write
+
+jobs:
+  dostuff:
+    name: dostuff
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout rancher repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          repository: ${{ github.repository_owner }}/rancher-rancher
+          token: ${{ secrets.MY_TOKEN }}
+          # Allow making git push request later on
+          persist-credentials: true
+
+      - run: |
+          branch="test-slack-bot-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          git checkout -b $branch
+          git config --global user.email "you@example.com"
+          git config --global user.name "Your Name"
+          git commit --allow-empty -m "Bumping to rancher-webhook v$NEW_WEBHOOK"
+          git push -f origin $branch
+          pr_link=$(gh pr create \
+              --title "Bump rancher-webhook to v$NEW_WEBHOOK" \
+              --body "Test slackbot" \
+              --repo ${{ github.repository_owner }}/rancher-rancher \
+              --head "${{ github.repository_owner }}:$branch" \
+              --base "$RANCHER_REF")
+        env:
+          GH_TOKEN: ${{ secrets.MY_TOKEN }}
