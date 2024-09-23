@@ -1217,3 +1217,113 @@ func TestValidateAgentTLSMode(t *testing.T) {
 		})
 	}
 }
+
+func (s *SettingSuite) TestValidateAuthUserSessionTTLIdleMinutesOnUpdate() {
+	s.validateAuthUserSessionTTLIdleMinutes(v1.Update, s.T())
+}
+
+func (s *SettingSuite) TestValidateAuthUserSessionTTLIdleMinutesOnCreate() {
+	s.validateAuthUserSessionTTLIdleMinutes(v1.Create, s.T())
+}
+
+func (s *SettingSuite) validateAuthUserSessionTTLIdleMinutes(op v1.Operation, t *testing.T) {
+	ctrl := gomock.NewController(t)
+	settingCache := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
+
+	tests := []struct {
+		name      string
+		value     string
+		mockSetup func()
+		allowed   bool
+	}{
+		{
+			name:  "valid value",
+			value: "10",
+			mockSetup: func() {
+				settingCache.EXPECT().Get(gomock.Any()).DoAndReturn(func(_ string) (*v3.Setting, error) {
+					return &v3.Setting{
+						Value:   "",
+						Default: "960",
+					}, nil
+				}).Times(1)
+			},
+			allowed: true,
+		},
+		{
+			name:  "value is too high",
+			value: "10000",
+			mockSetup: func() {
+				settingCache.EXPECT().Get(gomock.Any()).DoAndReturn(func(_ string) (*v3.Setting, error) {
+					return &v3.Setting{
+						Value:   "",
+						Default: "960",
+					}, nil
+				}).Times(1)
+			},
+			allowed: false,
+		},
+		{
+			name:      "value is too low",
+			value:     "-10",
+			mockSetup: func() {},
+			allowed:   false,
+		},
+		{
+			name:      "value cannot be 0",
+			value:     "0",
+			mockSetup: func() {},
+			allowed:   false,
+		},
+		{
+			name:      "value cannot be a char",
+			value:     "A",
+			mockSetup: func() {},
+			allowed:   false,
+		},
+		{
+			name:  "invalid value due to auth-session-user-ttl-minutes",
+			value: "12",
+			mockSetup: func() {
+				settingCache.EXPECT().Get(gomock.Any()).DoAndReturn(func(_ string) (*v3.Setting, error) {
+					return &v3.Setting{
+						Value:   "10",
+						Default: "",
+					}, nil
+				}).Times(1)
+			},
+			allowed: false,
+		},
+		{
+			name:  "valid because auth-user-session-ttl-minutes equal 0 means token lives forever",
+			value: "1",
+			mockSetup: func() {
+				settingCache.EXPECT().Get(gomock.Any()).DoAndReturn(func(_ string) (*v3.Setting, error) {
+					return &v3.Setting{
+						Value:   "0",
+						Default: "",
+					}, nil
+				}).Times(1)
+			},
+			allowed: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			tt.mockSetup()
+
+			validator := setting.NewValidator(nil, settingCache)
+			s.testAdmit(t, validator, &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: setting.AuthUserSessionIdleTTLMinutes,
+				},
+			}, &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: setting.AuthUserSessionIdleTTLMinutes,
+				},
+				Value: tt.value,
+			}, op, tt.allowed)
+		})
+	}
+}
