@@ -16,6 +16,7 @@ import (
 	rbacValidation "k8s.io/kubernetes/pkg/apis/rbac/validation"
 )
 
+// CheckCreatorID validates the creatorID annotation
 func CheckCreatorID(request *admission.Request, oldObj, newObj metav1.Object) *metav1.Status {
 	status := &metav1.Status{
 		Status: "Failure",
@@ -24,6 +25,16 @@ func CheckCreatorID(request *admission.Request, oldObj, newObj metav1.Object) *m
 	}
 
 	newAnnotations := newObj.GetAnnotations()
+
+	if _, ok := newAnnotations[NoCreatorRBACAnn]; ok {
+		// if the NoCreatorRBAC annotation exists, the creatorID annotation must not exist
+		if _, ok := newAnnotations[CreatorIDAnn]; ok {
+			status.Message = "cannot have creatorID annotation when noCreatorRBAC is set"
+			return status
+		}
+		return nil
+	}
+
 	if request.Operation == admissionv1.Create {
 		// When creating the newObj the annotation must match the user creating it
 		if newAnnotations[CreatorIDAnn] != request.UserInfo.Username {

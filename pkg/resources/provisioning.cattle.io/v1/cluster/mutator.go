@@ -117,13 +117,7 @@ func (m *ProvisioningClusterMutator) Admit(request *admission.Request) (*admissi
 	}
 
 	if request.Operation == admissionv1.Create {
-		// Set Annotation on the cluster
-		annotations := cluster.GetAnnotations()
-		if annotations == nil {
-			annotations = map[string]string{}
-		}
-		annotations[common.CreatorIDAnn] = request.UserInfo.Username
-		cluster.SetAnnotations(annotations)
+		common.SetCreatorIDAnnotation(request, cluster)
 	}
 
 	response, err := m.handlePSACT(request, cluster)

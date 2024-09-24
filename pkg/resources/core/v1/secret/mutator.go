@@ -110,11 +110,8 @@ func (m *Mutator) admitCreate(secret *corev1.Secret, request *admission.Request)
 	logrus.Debugf("[secret-mutation] adding creatorID %v to secret: %v", request.UserInfo.Username, secret.Name)
 	newSecret := secret.DeepCopy()
 
-	if newSecret.Annotations == nil {
-		newSecret.Annotations = make(map[string]string)
-	}
+	common.SetCreatorIDAnnotation(request, newSecret)
 
-	newSecret.Annotations[common.CreatorIDAnn] = request.UserInfo.Username
 	response := &admissionv1.AdmissionResponse{}
 	if err := patch.CreatePatch(request.Object.Raw, newSecret, response); err != nil {
 		return nil, fmt.Errorf("failed to create patch: %w", err)
