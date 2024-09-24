@@ -9,12 +9,8 @@ jobs:
   build:
     name: build and package
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch:
-        - amd64
-        - arm64
     steps:
     - name: Checkout repository
       run: |
+          sleep 15
           true

@@ -25,6 +25,9 @@ jobs:
     name: dostuff
     runs-on: ubuntu-latest
     steps:
+      - name: Bumping to ${{ github.event.inputs.new_webhook }}
+        run: |
+          echo ID is ${{ github.event.inputs.new_webhook }}
       - name: Checkout charts repository
         uses: actions/checkout@v4
         with:
@@ -35,11 +38,17 @@ jobs:
           persist-credentials: true
 
       - run: |
-          branch="test-slack-bot-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if [ $GITHUB_RUN_ATTEMPT -lt 1 ]; then
+            echo "fake error"
+            exit 1
+          fi
+          set -e
+          sleep 15
+          branch="test-slack-bot-$NEW_WEBHOOK"
           git checkout -b $branch
           git config --global user.email "you@example.com"
           git config --global user.name "Your Name"
-          git commit --allow-empty -m "Bumping to rancher-webhook v$NEW_WEBHOOK"
+          git commit --allow-empty -m "Bumping to rancher-webhook $NEW_WEBHOOK"
           git push -f origin $branch
           pr_link=$(gh pr create \
               --title "Bump rancher-webhook to v$NEW_WEBHOOK" \
@@ -47,6 +56,7 @@ jobs:
               --repo ${{ github.repository_owner }}/rancher-charts \
               --head "${{ github.repository_owner }}:$branch" \
               --base "$CHARTS_REF")
+          echo $pr_link
           mkdir -p dist
           echo $pr_link >> dist/pr_link
         env:
