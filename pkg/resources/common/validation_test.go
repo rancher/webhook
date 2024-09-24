@@ -6,7 +6,6 @@ import (
 
 	"github.com/golang/mock/gomock"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-	"github.com/rancher/webhook/pkg/auth"
 	"github.com/rancher/wrangler/v3/pkg/generic/fake"
 	"github.com/stretchr/testify/require"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -164,10 +163,10 @@ func TestCheckCreatorPrincipalName(t *testing.T) {
 
 			annotations := map[string]string{}
 			if test.creatorID != "" {
-				annotations[auth.CreatorIDAnn] = test.creatorID
+				annotations[CreatorIDAnn] = test.creatorID
 			}
 			if test.principalName != "" {
-				annotations[auth.CreatorPrincipalNameAnn] = test.principalName
+				annotations[CreatorPrincipalNameAnn] = test.principalName
 			}
 
 			fieldErr, err := CheckCreatorPrincipalName(userCache, &v3.Project{
@@ -200,16 +199,16 @@ func TestCheckCreatorAnnotationsOnUpdate(t *testing.T) {
 			oldObj: &v3.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						auth.CreatorIDAnn:            "u-12345",
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+						CreatorIDAnn:            "u-12345",
+						CreatorPrincipalNameAnn: "keycloak_user://12345",
 					},
 				},
 			},
 			newObj: &v3.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						auth.CreatorIDAnn:            "u-12345",
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+						CreatorIDAnn:            "u-12345",
+						CreatorPrincipalNameAnn: "keycloak_user://12345",
 					},
 				},
 			},
@@ -219,8 +218,8 @@ func TestCheckCreatorAnnotationsOnUpdate(t *testing.T) {
 			oldObj: &v3.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						auth.CreatorIDAnn:            "u-12345",
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+						CreatorIDAnn:            "u-12345",
+						CreatorPrincipalNameAnn: "keycloak_user://12345",
 					},
 				},
 			},
@@ -231,14 +230,14 @@ func TestCheckCreatorAnnotationsOnUpdate(t *testing.T) {
 			oldObj: &v3.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						auth.CreatorIDAnn: "u-12345",
+						CreatorIDAnn: "u-12345",
 					},
 				},
 			},
 			newObj: &v3.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						auth.CreatorIDAnn: "u-12346",
+						CreatorIDAnn: "u-12346",
 					},
 				},
 			},
@@ -249,14 +248,14 @@ func TestCheckCreatorAnnotationsOnUpdate(t *testing.T) {
 			oldObj: &v3.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+						CreatorPrincipalNameAnn: "keycloak_user://12345",
 					},
 				},
 			},
 			newObj: &v3.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12346",
+						CreatorPrincipalNameAnn: "keycloak_user://12346",
 					},
 				},
 			},

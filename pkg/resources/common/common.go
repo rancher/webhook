@@ -12,6 +12,13 @@ import (
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
 
+const (
+	// CreatorIDAnn is an annotation key for the id of the creator.
+	CreatorIDAnn = "field.cattle.io/creatorId"
+	// CreatorPrincipalNameAnn is an annotation key for the principal name of the creator.
+	CreatorPrincipalNameAnn = "field.cattle.io/creator-principal-name"
+)
+
 // ConvertAuthnExtras converts authnv1 type extras to authzv1 extras. Technically these are both
 // type alias to string, so the conversion is straightforward
 func ConvertAuthnExtras(extra map[string]authnv1.ExtraValue) map[string]authzv1.ExtraValue {

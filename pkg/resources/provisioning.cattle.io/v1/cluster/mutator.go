@@ -14,11 +14,11 @@ import (
 	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/webhook/pkg/admission"
-	"github.com/rancher/webhook/pkg/auth"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv1 "github.com/rancher/webhook/pkg/generated/objects/provisioning.cattle.io/v1"
 	"github.com/rancher/webhook/pkg/patch"
 	psa "github.com/rancher/webhook/pkg/podsecurityadmission"
+	"github.com/rancher/webhook/pkg/resources/common"
 	"github.com/rancher/wrangler/v3/pkg/data/convert"
 	corecontroller "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
 	"github.com/sirupsen/logrus"
@@ -122,7 +122,7 @@ func (m *ProvisioningClusterMutator) Admit(request *admission.Request) (*admissi
 		if annotations == nil {
 			annotations = map[string]string{}
 		}
-		annotations[auth.CreatorIDAnn] = request.UserInfo.Username
+		annotations[common.CreatorIDAnn] = request.UserInfo.Username
 		cluster.SetAnnotations(annotations)
 	}
 

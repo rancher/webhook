@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/rancher/webhook/pkg/auth"
+	"github.com/rancher/webhook/pkg/resources/common"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -30,7 +30,7 @@ func (m *IntegrationSuite) TestSecret() {
 	defer cancel()
 	err = client.Create(ctx, validCreateObj.Namespace, validCreateObj, result, metav1.CreateOptions{})
 	m.NoError(err, "Error returned during the creation of a valid Object")
-	m.Contains(result.Annotations, auth.CreatorIDAnn)
+	m.Contains(result.Annotations, common.CreatorIDAnn)
 	err = client.Delete(ctx, validCreateObj.Namespace, validCreateObj.Name, metav1.DeleteOptions{})
 	m.NoError(err, "Error returned during the deletion of a valid Object")
 }

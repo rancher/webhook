@@ -2,7 +2,7 @@ package integration_test
 
 import (
 	provisioningv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
-	"github.com/rancher/webhook/pkg/auth"
+	"github.com/rancher/webhook/pkg/resources/common"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -21,7 +21,7 @@ func (m *IntegrationSuite) TestProvisioningCluster() {
 	}
 	invalidUpdate := func(created *provisioningv1.Cluster) *provisioningv1.Cluster {
 		invalidUpdateObj := created.DeepCopy()
-		invalidUpdateObj.Annotations = map[string]string{auth.CreatorIDAnn: "foobar"}
+		invalidUpdateObj.Annotations = map[string]string{common.CreatorIDAnn: "foobar"}
 		return invalidUpdateObj
 	}
 	validUpdate := func(created *provisioningv1.Cluster) *provisioningv1.Cluster {

@@ -4,7 +4,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/rancher/webhook/pkg/auth"
+	"github.com/rancher/webhook/pkg/resources/common"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -27,7 +27,7 @@ func (m *IntegrationSuite) TestRKEMachineConfig() {
 	validCreateObj.SetGroupVersionKind(objGVK)
 	invalidUpdate := func(_ *unstructured.Unstructured) *unstructured.Unstructured {
 		invalidUpdateObj := validCreateObj.DeepCopy()
-		invalidUpdateObj.SetAnnotations(map[string]string{auth.CreatorIDAnn: "foobar"})
+		invalidUpdateObj.SetAnnotations(map[string]string{common.CreatorIDAnn: "foobar"})
 		return invalidUpdateObj
 	}
 	validUpdate := func(created *unstructured.Unstructured) *unstructured.Unstructured {
