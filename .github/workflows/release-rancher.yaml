@@ -35,7 +35,9 @@ jobs:
           persist-credentials: true
 
       - run: |
-          branch="test-slack-bot-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          set -e
+          sleep 15
+          branch="test-slack-bot-$NEW_WEBHOOK"
           git checkout -b $branch
           git config --global user.email "you@example.com"
           git config --global user.name "Your Name"
@@ -47,5 +49,6 @@ jobs:
               --repo ${{ github.repository_owner }}/rancher-rancher \
               --head "${{ github.repository_owner }}:$branch" \
               --base "$RANCHER_REF")
+          echo $pr_link
         env:
           GH_TOKEN: ${{ secrets.MY_TOKEN }}
