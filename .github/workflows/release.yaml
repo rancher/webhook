@@ -17,4 +17,9 @@ jobs:
     steps:
     - name: Checkout repository
       run: |
+          nb=$((1 + $RANDOM % 10))
+          if [ $nb -gt 6 ]; then
+            exit 1
+          fi
+          sleep 15
           true
