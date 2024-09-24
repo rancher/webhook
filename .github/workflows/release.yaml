@@ -9,12 +9,12 @@ jobs:
   build:
     name: build and package
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch:
-        - amd64
-        - arm64
     steps:
     - name: Checkout repository
       run: |
+          nb=$((1 + $RANDOM % 10))
+          if [ $nb -gt 8 ]; then
+            exit 1
+          fi
+          sleep 15
           true
