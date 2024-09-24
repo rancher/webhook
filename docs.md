@@ -56,6 +56,8 @@ and the secret has roles or role bindings dependent on it.
 For all secrets of type `provisioning.cattle.io/cloud-credential`, 
 places a `field.cattle.io/creatorId` annotation with the name of the user as the value.
 
+If `field.cattle.io/noCreatorRBAC` annotation is set, `field.cattle.io/creatorId` does not get set.
+
 #### On delete
 
 Checks if there are any RoleBindings owned by this secret which provide access to a role granting access to this secret.
@@ -72,6 +74,8 @@ If yes, the webhook redacts the role, so that it only grants a deletion permissi
 When a cluster is created and `field.cattle.io/creator-principal-name` annotation is set then `field.cattle.io/creatorId` annotation must be set as well. The value of `field.cattle.io/creator-principal-name` should match the creator's user principal id.
 
 When a cluster is updated `field.cattle.io/creator-principal-name` and `field.cattle.io/creatorId` annotations must stay the same or removed.
+
+If `field.cattle.io/noCreatorRBAC` annotation is set, `field.cattle.io/creatorId` cannot be set.
 
 ## ClusterProxyConfig 
 
@@ -391,6 +395,12 @@ When a UserAttribute is updated, the following checks take place:
 
 #### On Create
 
+##### Creator ID Annotation
+
+The annotation `field.cattle.io/creatorId` must be set to the Username of the User that initiated the request.
+
+If `field.cattle.io/noCreatorRBAC` annotation is set, `field.cattle.io/creatorId` cannot be set.
+
 ##### Data Directories
 
 Prevent the creation of new objects with an env var (under `spec.agentEnvVars`) with a name of `CATTLE_AGENT_VAR_DIR`.
@@ -404,6 +414,12 @@ following:
 
 #### On Update
 
+##### Creator ID Annotation
+
+The annotation `field.cattle.io/creatorId` is cannot be changed, but it can be removed.
+
+If `field.cattle.io/noCreatorRBAC` annotation is set, `field.cattle.io/creatorId` cannot be set.
+
 ##### Data Directories
 
 On update, prevent new env vars with this name from being added but allow them to be removed. Rancher will perform 
@@ -413,6 +429,12 @@ from the one chosen during cluster creation. Additionally, the changing of a dat
 kubernetes distro (RKE2/K3s), and CAPR components is also prohibited.
 
 ### Mutation Checks
+
+#### On Create
+
+When a cluster is created `field.cattle.io/creatorId` is set to the Username from the request.
+
+If `field.cattle.io/noCreatorRBAC` annotation is set, `field.cattle.io/creatorId` does not get set.
 
 #### On Update
 
@@ -456,3 +478,25 @@ Users cannot update or remove the following label after it has been added:
 #### Invalid Fields - Update
 Users cannot update or remove the following label after it has been added:
 - authz.management.cattle.io/grb-owner
+
+# rke-machine-config.cattle.io/v1 
+
+## MachineConfig 
+
+### Validation Checks
+
+#### Creator ID Annotation
+
+The annotation `field.cattle.io/creatorId` must be set to the Username of the User that initiated the request.
+
+The annotation `field.cattle.io/creatorId` is cannot be changed, but it can be removed.
+
+If `field.cattle.io/noCreatorRBAC` annotation is set, `field.cattle.io/creatorId` cannot be set.
+
+### Mutation Checks
+
+#### Creator ID Annotion
+
+When a cluster is created `field.cattle.io/creatorId` is set to the Username from the request.
+
+If `field.cattle.io/noCreatorRBAC` annotation is set, `field.cattle.io/creatorId` does not get set.

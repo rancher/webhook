@@ -1,19 +1,210 @@
 package common
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
+	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/wrangler/v3/pkg/generic/fake"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	admissionv1 "k8s.io/api/admission/v1"
+	authenticationv1 "k8s.io/api/authentication/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
+
+var (
+	failureStatus = &metav1.Status{
+		Status: "Failure",
+		Reason: metav1.StatusReasonInvalid,
+		Code:   http.StatusUnprocessableEntity,
+	}
+)
+
+func TestCheckCreatorID(t *testing.T) {
+	tests := []struct {
+		name        string
+		username    string
+		operation   admissionv1.Operation
+		newCluster  v1.Cluster
+		oldCluster  v1.Cluster
+		errExpected bool
+	}{
+		{
+			name:        "create operation doesn't have creatorID",
+			username:    "testUser",
+			operation:   admissionv1.Create,
+			newCluster:  v1.Cluster{},
+			errExpected: true,
+		},
+		{
+			name:      "create operation doesn't have matching creatorID",
+			username:  "testUser",
+			operation: admissionv1.Create,
+			newCluster: v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						CreatorIDAnn: "testUser2",
+					},
+				},
+			},
+			errExpected: true,
+		},
+		{
+			name:      "create operation has matching creatorID",
+			username:  "testUser",
+			operation: admissionv1.Create,
+			newCluster: v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						CreatorIDAnn: "testUser",
+					},
+				},
+			},
+		},
+		{
+			name:      "create operation has noCreatorRBAC anno and creatorID anno",
+			username:  "testUser",
+			operation: admissionv1.Create,
+			newCluster: v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						CreatorIDAnn:     "testUser",
+						NoCreatorRBACAnn: "true",
+					},
+				},
+			},
+			errExpected: true,
+		},
+		{
+			name:      "create operation has noCreatorRBAC anno and no creatorID anno",
+			username:  "testUser",
+			operation: admissionv1.Create,
+			newCluster: v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						NoCreatorRBACAnn: "true",
+					},
+				},
+			},
+		},
+		{
+			name:      "update operation has noCreatorRBAC anno and creatorID anno",
+			username:  "testUser",
+			operation: admissionv1.Update,
+			newCluster: v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						CreatorIDAnn:     "testUser",
+						NoCreatorRBACAnn: "true",
+					},
+				},
+			},
+			errExpected: true,
+		},
+		{
+			name:      "update operation has noCreatorRBAC anno and no creatorID anno",
+			username:  "testUser",
+			operation: admissionv1.Update,
+			newCluster: v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						NoCreatorRBACAnn: "true",
+					},
+				},
+			},
+		},
+		{
+			name:       "update operation removes creatorID",
+			username:   "testUser",
+			operation:  admissionv1.Update,
+			newCluster: v1.Cluster{},
+		},
+		{
+			name:      "update operation changes creatorID",
+			username:  "testUser",
+			operation: admissionv1.Update,
+			oldCluster: v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						CreatorIDAnn: "testUser",
+					},
+				},
+			},
+			newCluster: v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						CreatorIDAnn: "testUser2",
+					},
+				},
+			},
+			errExpected: true,
+		},
+		{
+			name:      "update operation doesn't change creatorID",
+			username:  "testUser",
+			operation: admissionv1.Update,
+			oldCluster: v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						CreatorIDAnn: "testUser",
+					},
+				},
+			},
+			newCluster: v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						CreatorIDAnn: "testUser",
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			oldClusterBytes, err := json.Marshal(test.oldCluster)
+			assert.NoError(t, err)
+			newClusterBytes, err := json.Marshal(test.newCluster)
+			assert.NoError(t, err)
+			req := admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					OldObject: runtime.RawExtension{
+						Raw: oldClusterBytes,
+					},
+					Object: runtime.RawExtension{
+						Raw: newClusterBytes,
+					},
+					UserInfo: authenticationv1.UserInfo{
+						Username: test.username,
+					},
+					Operation: test.operation,
+				},
+			}
+
+			s := CheckCreatorID(&req, &test.oldCluster, &test.newCluster)
+			if test.errExpected {
+				assert.Equal(t, failureStatus.Status, s.Status)
+				assert.Equal(t, failureStatus.Code, s.Code)
+				assert.Equal(t, failureStatus.Reason, s.Reason)
+			} else {
+				assert.Nil(t, s)
+			}
+		})
+	}
+}
 
 func TestValidateRules(t *testing.T) {
 	t.Parallel()

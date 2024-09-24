@@ -2,6 +2,12 @@
 
 ### On Create
 
+#### Creator ID Annotation
+
+The annotation `field.cattle.io/creatorId` must be set to the Username of the User that initiated the request.
+
+If `field.cattle.io/noCreatorRBAC` annotation is set, `field.cattle.io/creatorId` cannot be set.
+
 #### Data Directories
 
 Prevent the creation of new objects with an env var (under `spec.agentEnvVars`) with a name of `CATTLE_AGENT_VAR_DIR`.
@@ -15,6 +21,12 @@ following:
 
 ### On Update
 
+#### Creator ID Annotation
+
+The annotation `field.cattle.io/creatorId` is cannot be changed, but it can be removed.
+
+If `field.cattle.io/noCreatorRBAC` annotation is set, `field.cattle.io/creatorId` cannot be set.
+
 #### Data Directories
 
 On update, prevent new env vars with this name from being added but allow them to be removed. Rancher will perform 
@@ -24,6 +36,12 @@ from the one chosen during cluster creation. Additionally, the changing of a dat
 kubernetes distro (RKE2/K3s), and CAPR components is also prohibited.
 
 ## Mutation Checks
+
+### On Create
+
+When a cluster is created `field.cattle.io/creatorId` is set to the Username from the request.
+
+If `field.cattle.io/noCreatorRBAC` annotation is set, `field.cattle.io/creatorId` does not get set.
 
 ### On Update
 

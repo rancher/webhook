@@ -7,8 +7,8 @@ import (
 
 // SetCreatorIDAnnotation sets the creatorID Annotation on the newObj based  on the user specified in the request.
 // If the noCreatorRBAC annotation is set, don't set the creator
-func SetCreatorIDAnnotation(request *admission.Request, newObj metav1.Object) {
-	annotations := newObj.GetAnnotations()
+func SetCreatorIDAnnotation(request *admission.Request, obj metav1.Object) {
+	annotations := obj.GetAnnotations()
 	if annotations == nil {
 		annotations = map[string]string{}
 	}
@@ -19,5 +19,5 @@ func SetCreatorIDAnnotation(request *admission.Request, newObj metav1.Object) {
 	}
 
 	annotations[CreatorIDAnn] = request.UserInfo.Username
-	newObj.SetAnnotations(annotations)
+	obj.SetAnnotations(annotations)
 }
