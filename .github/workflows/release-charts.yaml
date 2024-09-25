@@ -38,7 +38,7 @@ jobs:
           persist-credentials: true
 
       - run: |
-          if [ $GITHUB_RUN_ATTEMPT -lt 1 ]; then
+          if [ $GITHUB_RUN_ATTEMPT -lt 2 ]; then
             echo "fake error"
             exit 1
           fi
