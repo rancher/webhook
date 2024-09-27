@@ -49,10 +49,10 @@ func (m *Mutator) Admit(request *admission.Request) (*admissionv1.AdmissionRespo
 		return nil, fmt.Errorf("failed to get object from request: %w", err)
 	}
 
-	common.SetCreatorIDAnnotation(request, config.DeepCopy())
+	common.SetCreatorIDAnnotation(request, config)
 
 	response := &admissionv1.AdmissionResponse{}
-	if err := patch.CreatePatch(request.Object.Raw, config.DeepCopy(), response); err != nil {
+	if err := patch.CreatePatch(request.Object.Raw, config, response); err != nil {
 		return nil, fmt.Errorf("failed to create patch: %w", err)
 	}
 	response.Allowed = true
