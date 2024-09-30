@@ -1,4 +1,4 @@
-package token
+package clusterauthtoken
 
 import (
 	"encoding/json"
@@ -14,12 +14,12 @@ import (
 )
 
 var gvr = schema.GroupVersionResource{
-	Group:    "management.cattle.io",
+	Group:    "cluster.cattle.io",
 	Version:  "v3",
-	Resource: "tokens",
+	Resource: "clusterauthtokens",
 }
 
-// Validator validates tokens.
+// Validator validates clusterauthtokens.
 type Validator struct {
 	admitter admitter
 }
@@ -57,7 +57,7 @@ type admitter struct{}
 
 // Admit handles the webhook admission requests.
 func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
-	listTrace := trace.New("tokenValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
+	listTrace := trace.New("clusterAuthTokenValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
 	if request.Operation == admissionv1.Create || request.Operation == admissionv1.Update {
@@ -70,17 +70,17 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	return admission.ResponseAllowed(), nil
 }
 
-// PartialToken represents raw values of Token fields.
-type PartialToken struct {
+// PartialClusterAuthToken represents raw values of ClusterAuthToken fields.
+type PartialClusterAuthToken struct {
 	LastUsedAt *string `json:"lastUsedAt"`
 }
 
 func (a *admitter) validateTokenFields(request *admission.Request) error {
-	var partial PartialToken
+	var partial PartialClusterAuthToken
 
 	err := json.Unmarshal(request.Object.Raw, &partial)
 	if err != nil {
-		return fmt.Errorf("failed to get PartialToken from request: %w", err)
+		return fmt.Errorf("failed to get PartialClusterAuthToken from request: %w", err)
 	}
 
 	if partial.LastUsedAt != nil {
