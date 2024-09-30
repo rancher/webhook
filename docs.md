@@ -56,7 +56,7 @@ and the secret has roles or role bindings dependent on it.
 For all secrets of type `provisioning.cattle.io/cloud-credential`, 
 places a `field.cattle.io/creatorId` annotation with the name of the user as the value.
 
-If `field.cattle.io/noCreatorRBAC` annotation is set, `field.cattle.io/creatorId` does not get set.
+If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` does not get set.
 
 #### On delete
 
@@ -75,7 +75,7 @@ When a cluster is created and `field.cattle.io/creator-principal-name` annotatio
 
 When a cluster is updated `field.cattle.io/creator-principal-name` and `field.cattle.io/creatorId` annotations must stay the same or removed.
 
-If `field.cattle.io/noCreatorRBAC` annotation is set, `field.cattle.io/creatorId` cannot be set.
+If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` cannot be set.
 
 ## ClusterProxyConfig 
 
@@ -399,7 +399,7 @@ When a UserAttribute is updated, the following checks take place:
 
 The annotation `field.cattle.io/creatorId` must be set to the Username of the User that initiated the request.
 
-If `field.cattle.io/noCreatorRBAC` annotation is set, `field.cattle.io/creatorId` cannot be set.
+If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` cannot be set.
 
 ##### Data Directories
 
@@ -418,7 +418,7 @@ following:
 
 The annotation `field.cattle.io/creatorId` is cannot be changed, but it can be removed.
 
-If `field.cattle.io/noCreatorRBAC` annotation is set, `field.cattle.io/creatorId` cannot be set.
+If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` cannot be set.
 
 ##### Data Directories
 
@@ -434,7 +434,7 @@ kubernetes distro (RKE2/K3s), and CAPR components is also prohibited.
 
 When a cluster is created `field.cattle.io/creatorId` is set to the Username from the request.
 
-If `field.cattle.io/noCreatorRBAC` annotation is set, `field.cattle.io/creatorId` does not get set.
+If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` does not get set.
 
 #### On Update
 
@@ -491,7 +491,7 @@ The annotation `field.cattle.io/creatorId` must be set to the Username of the Us
 
 The annotation `field.cattle.io/creatorId` is cannot be changed, but it can be removed.
 
-If `field.cattle.io/noCreatorRBAC` annotation is set, `field.cattle.io/creatorId` cannot be set.
+If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` cannot be set.
 
 ### Mutation Checks
 
@@ -499,4 +499,4 @@ If `field.cattle.io/noCreatorRBAC` annotation is set, `field.cattle.io/creatorId
 
 When a cluster is created `field.cattle.io/creatorId` is set to the Username from the request.
 
-If `field.cattle.io/noCreatorRBAC` annotation is set, `field.cattle.io/creatorId` does not get set.
+If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` does not get set.

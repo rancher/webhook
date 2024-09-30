@@ -18,7 +18,7 @@ const (
 	// CreatorPrincipalNameAnn is an annotation key for the principal name of the creator.
 	CreatorPrincipalNameAnn = "field.cattle.io/creator-principal-name"
 	// NoCreatorRBACAnn is an annotation key to indicate that a cluster doesn't need
-	NoCreatorRBACAnn = "field.cattle.io/noCreatorRBAC"
+	NoCreatorRBACAnn = "field.cattle.io/no-creator-rbac"
 )
 
 // ConvertAuthnExtras converts authnv1 type extras to authzv1 extras. Technically these are both
