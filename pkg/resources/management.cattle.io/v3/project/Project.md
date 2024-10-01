@@ -25,6 +25,8 @@ When a project is created and `field.cattle.io/creator-principal-name` annotatio
 
 When a project is updated `field.cattle.io/creator-principal-name` and `field.cattle.io/creatorId` annotations must stay the same or removed.
 
+If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` cannot be set.
+
 ## Mutations
 
 ### On create

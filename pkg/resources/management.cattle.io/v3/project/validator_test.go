@@ -408,6 +408,111 @@ func TestProjectValidation(t *testing.T) {
 			wantAllowed: false,
 		},
 		{
+			name:      "create with no-creator-rbac annotation",
+			operation: admissionv1.Create,
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			stateSetup: func(state *testState) {
+				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "testcluster",
+					},
+				}, nil)
+			},
+			wantAllowed: true,
+		},
+		{
+			name:      "create with no-creator-rbac and creatorID annotation",
+			operation: admissionv1.Create,
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+						common.CreatorIDAnn:     "u-12345",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			stateSetup: func(state *testState) {
+				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "testcluster",
+					},
+				}, nil)
+			},
+			wantAllowed: false,
+		},
+		{
+			name:      "update with no-creator-rbac annotation",
+			operation: admissionv1.Update,
+			oldProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			wantAllowed: true,
+		},
+		{
+			name:      "update with no-creator-rbac and creatorID annotation",
+			operation: admissionv1.Update,
+			oldProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						common.CreatorIDAnn: "u-12345",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+						common.CreatorIDAnn:     "u-12345",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			wantAllowed: false,
+		},
+		{
 			name:      "create with principal name annotation",
 			operation: admissionv1.Create,
 			newProject: &v3.Project{

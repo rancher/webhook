@@ -23,7 +23,7 @@ following:
 
 #### Creator ID Annotation
 
-The annotation `field.cattle.io/creatorId` is cannot be changed, but it can be removed.
+The annotation `field.cattle.io/creatorId` cannot be changed, but it can be removed.
 
 If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` cannot be set.
 

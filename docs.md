@@ -253,6 +253,8 @@ When a project is created and `field.cattle.io/creator-principal-name` annotatio
 
 When a project is updated `field.cattle.io/creator-principal-name` and `field.cattle.io/creatorId` annotations must stay the same or removed.
 
+If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` cannot be set.
+
 ### Mutations
 
 #### On create
@@ -416,7 +418,7 @@ following:
 
 ##### Creator ID Annotation
 
-The annotation `field.cattle.io/creatorId` is cannot be changed, but it can be removed.
+The annotation `field.cattle.io/creatorId` cannot be changed, but it can be removed.
 
 If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` cannot be set.
 
@@ -489,7 +491,7 @@ Users cannot update or remove the following label after it has been added:
 
 The annotation `field.cattle.io/creatorId` must be set to the Username of the User that initiated the request.
 
-The annotation `field.cattle.io/creatorId` is cannot be changed, but it can be removed.
+The annotation `field.cattle.io/creatorId` cannot be changed, but it can be removed.
 
 If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` cannot be set.
 

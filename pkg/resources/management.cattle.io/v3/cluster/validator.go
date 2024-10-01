@@ -107,7 +107,12 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	}
 
 	if request.Operation == admissionv1.Create || request.Operation == admissionv1.Update {
-		// no need to validate the local cluster, or imported cluster which represents a KEv2 cluster (GKE/EKS/AKS) or v1 Provisioning Cluster
+		if fieldErr := common.CheckCreatorIDAndNoCreatorRBAC(newCluster); fieldErr != nil {
+			return admission.ResponseBadRequest(fieldErr.Error()), nil
+		}
+
+		// no need to validate the PodSecurityAdmissionConfigurationTemplate on a local cluster,
+		// or imported cluster which represents a KEv2 cluster (GKE/EKS/AKS) or v1 Provisioning Cluster
 		if newCluster.Name == "local" || newCluster.Spec.RancherKubernetesEngineConfig == nil {
 			return admission.ResponseAllowed(), nil
 		}

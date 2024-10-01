@@ -223,6 +223,75 @@ func TestAdmit(t *testing.T) {
 			operation:     admissionv1.Delete,
 			expectAllowed: true,
 		},
+		{
+			name:      "Create with no-creator-rbac annotation",
+			operation: admissionv1.Create,
+			newCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "c-2bmj5",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+					},
+				},
+			},
+			expectAllowed: true,
+		},
+		{
+			name:      "Create with no-creator-rbac and creatorID annotation",
+			operation: admissionv1.Create,
+			newCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "c-2bmj5",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+						common.CreatorIDAnn:     "u-12345",
+					},
+				},
+			},
+			expectAllowed:  false,
+			expectedReason: metav1.StatusReasonBadRequest,
+		},
+		{
+			name:      "Update with no-creator-rbac annotation",
+			operation: admissionv1.Create,
+			oldCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "c-2bmj5",
+				},
+			},
+			newCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "c-2bmj5",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+					},
+				},
+			},
+			expectAllowed: true,
+		},
+		{
+			name:      "Update with no-creator-rbac and creatorID annotation",
+			operation: admissionv1.Create,
+			oldCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "c-2bmj5",
+					Annotations: map[string]string{
+						common.CreatorIDAnn: "u-12345",
+					},
+				},
+			},
+			newCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "c-2bmj5",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+						common.CreatorIDAnn:     "u-12345",
+					},
+				},
+			},
+			expectAllowed:  false,
+			expectedReason: metav1.StatusReasonBadRequest,
+		},
 	}
 
 	for _, tt := range tests {

@@ -32,6 +32,7 @@ var (
 )
 
 func TestCheckCreatorID(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		username    string
@@ -461,6 +462,63 @@ func TestCheckCreatorAnnotationsOnUpdate(t *testing.T) {
 
 			fieldErr := CheckCreatorAnnotationsOnUpdate(test.oldObj, test.newObj)
 			require.Equal(t, test.fieldErr, fieldErr != nil)
+		})
+	}
+}
+
+func TestCheckCreatorIDAndNoCreatorRBAC(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		obj       *v3.Cluster
+		wantError bool
+	}{
+		{
+			name:      "no annotations",
+			obj:       &v3.Cluster{},
+			wantError: false,
+		},
+		{
+			name: "just creatorID annotation",
+			obj: &v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						CreatorIDAnn: "u-12345",
+					},
+				},
+			},
+			wantError: false,
+		},
+		{
+			name: "just no-creator-rbac annotation",
+			obj: &v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						NoCreatorRBACAnn: "true",
+					},
+				},
+			},
+			wantError: false,
+		},
+		{
+			name: "both creatorID and no-creator-rbac annotation",
+			obj: &v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						CreatorIDAnn:     "u-12345",
+						NoCreatorRBACAnn: "true",
+					},
+				},
+			},
+			wantError: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			fieldErr := CheckCreatorIDAndNoCreatorRBAC(test.obj)
+			require.Equal(t, test.wantError, fieldErr != nil)
 		})
 	}
 }

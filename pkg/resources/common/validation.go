@@ -27,9 +27,9 @@ func CheckCreatorID(request *admission.Request, oldObj, newObj metav1.Object) *m
 	newAnnotations := newObj.GetAnnotations()
 
 	if _, ok := newAnnotations[NoCreatorRBACAnn]; ok {
-		// if the NoCreatorRBAC annotation exists, the creatorID annotation must not exist
+		// if the no-creator-rbac annotation exists, the creatorID annotation must not exist
 		if _, ok := newAnnotations[CreatorIDAnn]; ok {
-			status.Message = "cannot have creatorID annotation when noCreatorRBAC is set"
+			status.Message = "cannot have creatorID annotation when no-creator-rbac is set"
 			return status
 		}
 		return nil
@@ -121,5 +121,18 @@ func CheckCreatorAnnotationsOnUpdate(oldObj, newObj metav1.Object) *field.Error 
 		}
 	}
 
+	return nil
+}
+
+// CheckCreatorIDAndNoCreatorRBAC checks that only one of no-creator-rbac or creatorID annotation is set
+func CheckCreatorIDAndNoCreatorRBAC(obj metav1.Object) *field.Error {
+	annotations := obj.GetAnnotations()
+
+	if _, ok := annotations[NoCreatorRBACAnn]; ok {
+		// if the no-creator-rbac annotation exists, the creatorID annotation must not exist
+		if _, ok := annotations[CreatorIDAnn]; ok {
+			return field.Forbidden(annotationsFieldPath, fmt.Sprintf("cannot have both %s and %s annotation set", NoCreatorRBACAnn, CreatorIDAnn))
+		}
+	}
 	return nil
 }
