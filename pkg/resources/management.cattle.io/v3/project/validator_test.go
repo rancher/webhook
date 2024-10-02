@@ -463,6 +463,9 @@ func TestProjectValidation(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test",
 					Namespace: "testcluster",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+					},
 				},
 				Spec: v3.ProjectSpec{
 					ClusterName: "testcluster",
@@ -483,15 +486,12 @@ func TestProjectValidation(t *testing.T) {
 			wantAllowed: true,
 		},
 		{
-			name:      "update with no-creator-rbac and creatorID annotation",
+			name:      "update adding no-creator-rbac",
 			operation: admissionv1.Update,
 			oldProject: &v3.Project{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test",
 					Namespace: "testcluster",
-					Annotations: map[string]string{
-						common.CreatorIDAnn: "u-12345",
-					},
 				},
 				Spec: v3.ProjectSpec{
 					ClusterName: "testcluster",
@@ -503,7 +503,6 @@ func TestProjectValidation(t *testing.T) {
 					Namespace: "testcluster",
 					Annotations: map[string]string{
 						common.NoCreatorRBACAnn: "true",
-						common.CreatorIDAnn:     "u-12345",
 					},
 				},
 				Spec: v3.ProjectSpec{
@@ -511,6 +510,61 @@ func TestProjectValidation(t *testing.T) {
 				},
 			},
 			wantAllowed: false,
+		},
+		{
+			name:      "update modifying no-creator-rbac",
+			operation: admissionv1.Update,
+			oldProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "false",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			wantAllowed: false,
+		},
+		{
+			name:      "update removing no-creator-rbac",
+			operation: admissionv1.Update,
+			oldProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			wantAllowed: true,
 		},
 		{
 			name:      "create with principal name annotation",

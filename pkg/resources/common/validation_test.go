@@ -393,6 +393,7 @@ func TestCheckCreatorAnnotationsOnUpdate(t *testing.T) {
 					Annotations: map[string]string{
 						CreatorIDAnn:            "u-12345",
 						CreatorPrincipalNameAnn: "keycloak_user://12345",
+						NoCreatorRBACAnn:        "true",
 					},
 				},
 			},
@@ -401,6 +402,7 @@ func TestCheckCreatorAnnotationsOnUpdate(t *testing.T) {
 					Annotations: map[string]string{
 						CreatorIDAnn:            "u-12345",
 						CreatorPrincipalNameAnn: "keycloak_user://12345",
+						NoCreatorRBACAnn:        "true",
 					},
 				},
 			},
@@ -412,6 +414,7 @@ func TestCheckCreatorAnnotationsOnUpdate(t *testing.T) {
 					Annotations: map[string]string{
 						CreatorIDAnn:            "u-12345",
 						CreatorPrincipalNameAnn: "keycloak_user://12345",
+						NoCreatorRBACAnn:        "true",
 					},
 				},
 			},
@@ -448,6 +451,24 @@ func TestCheckCreatorAnnotationsOnUpdate(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Annotations: map[string]string{
 						CreatorPrincipalNameAnn: "keycloak_user://12346",
+					},
+				},
+			},
+			fieldErr: true,
+		},
+		{
+			desc: "no creator rbac changed",
+			oldObj: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						NoCreatorRBACAnn: "true",
+					},
+				},
+			},
+			newObj: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						NoCreatorRBACAnn: "false",
 					},
 				},
 			},
