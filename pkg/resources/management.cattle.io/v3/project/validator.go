@@ -114,7 +114,9 @@ func (a *admitter) admitCreate(project *v3.Project) (*admissionv1.AdmissionRespo
 	if fieldErr != nil {
 		return admission.ResponseBadRequest(fieldErr.Error()), nil
 	}
-
+	if fieldErr := common.CheckCreatorIDAndNoCreatorRBAC(project); fieldErr != nil {
+		return admission.ResponseBadRequest(fieldErr.Error()), nil
+	}
 	fieldErr, err = common.CheckCreatorPrincipalName(a.userCache, project)
 	if err != nil {
 		return nil, fmt.Errorf("error checking creator principal: %w", err)
@@ -141,10 +143,6 @@ func (a *admitter) admitUpdate(oldProject, newProject *v3.Project) (*admissionv1
 }
 
 func (a *admitter) admitCommonCreateUpdate(oldProject, newProject *v3.Project) (*admissionv1.AdmissionResponse, error) {
-	if fieldErr := common.CheckCreatorIDAndNoCreatorRBAC(newProject); fieldErr != nil {
-		return admission.ResponseBadRequest(fieldErr.Error()), nil
-	}
-
 	projectQuota := newProject.Spec.ResourceQuota
 	nsQuota := newProject.Spec.NamespaceDefaultResourceQuota
 	containerLimit := newProject.Spec.ContainerDefaultResourceLimit

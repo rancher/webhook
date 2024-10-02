@@ -105,14 +105,14 @@ func CheckCreatorPrincipalName(userCache controllerv3.UserCache, obj metav1.Obje
 	return field.Invalid(annotationsFieldPath, CreatorPrincipalNameAnn, fmt.Sprintf("creator user %s doesn't have principal %s", creatorID, principalName)), nil
 }
 
-// CheckCreatorAnnotationsOnUpdate checks that the creatorId and creator-principal-name annotations are immutable.
+// CheckCreatorAnnotationsOnUpdate checks that the creatorId, creator-principal-name, and no-creator-rbac annotations are immutable.
 // The only allowed update is removing the annotations.
 // This function should only be called for the update operation.
 func CheckCreatorAnnotationsOnUpdate(oldObj, newObj metav1.Object) *field.Error {
 	oldAnnotations := oldObj.GetAnnotations()
 	newAnnotations := newObj.GetAnnotations()
 
-	for _, annotation := range []string{CreatorIDAnn, CreatorPrincipalNameAnn} {
+	for _, annotation := range []string{CreatorIDAnn, CreatorPrincipalNameAnn, NoCreatorRBACAnn} {
 		if _, ok := newAnnotations[annotation]; ok {
 			// If the annotation exists on the new object it must be the same as on the old object.
 			if oldAnnotations[annotation] != newAnnotations[annotation] {
