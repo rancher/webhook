@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 
@@ -59,6 +60,10 @@ func (m *ManagementClusterMutator) Admit(request *admission.Request) (*admission
 	if err != nil {
 		return nil, fmt.Errorf("failed to get old and new clusters from request: %w", err)
 	}
+	newClusterRaw, err := json.Marshal(newCluster)
+	if err != nil {
+		return nil, fmt.Errorf("unable to re-marshal new cluster: %w", err)
+	}
 	// no need to mutate the local cluster, or imported cluster which represents a KEv2 cluster (GKE/EKS/AKS) or v1 Provisioning Cluster
 	if newCluster.Name == "local" || newCluster.Spec.RancherKubernetesEngineConfig == nil {
 		return admission.ResponseAllowed(), nil
@@ -94,7 +99,9 @@ func (m *ManagementClusterMutator) Admit(request *admission.Request) (*admission
 	}
 
 	response := &admissionv1.AdmissionResponse{}
-	if err := patch.CreatePatch(request.Object.Raw, newCluster, response); err != nil {
+	// we use the re-marshalled new cluster to make sure that the patch doesn't drop "unknown" fields which were
+	// in the json, but not in the cluster struct. This can occur due to out of date RKE versions
+	if err := patch.CreatePatch(newClusterRaw, newCluster, response); err != nil {
 		return response, fmt.Errorf("failed to create patch: %w", err)
 	}
 	response.Allowed = true
