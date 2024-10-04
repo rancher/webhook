@@ -114,7 +114,9 @@ func (a *admitter) admitCreate(project *v3.Project) (*admissionv1.AdmissionRespo
 	if fieldErr != nil {
 		return admission.ResponseBadRequest(fieldErr.Error()), nil
 	}
-
+	if fieldErr := common.CheckCreatorIDAndNoCreatorRBAC(project); fieldErr != nil {
+		return admission.ResponseBadRequest(fieldErr.Error()), nil
+	}
 	fieldErr, err = common.CheckCreatorPrincipalName(a.userCache, project)
 	if err != nil {
 		return nil, fmt.Errorf("error checking creator principal: %w", err)

@@ -8,7 +8,7 @@ import (
 	"github.com/golang/mock/gomock"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
-	"github.com/rancher/webhook/pkg/auth"
+	"github.com/rancher/webhook/pkg/resources/common"
 	"github.com/rancher/wrangler/v3/pkg/generic/fake"
 	"github.com/stretchr/testify/assert"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -71,8 +71,8 @@ func TestAdmit(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "c-2bmj5",
 					Annotations: map[string]string{
-						auth.CreatorIDAnn:            "u-12345",
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+						common.CreatorIDAnn:            "u-12345",
+						common.CreatorPrincipalNameAnn: "keycloak_user://12345",
 					},
 				},
 			},
@@ -85,7 +85,7 @@ func TestAdmit(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "c-2bmj5",
 					Annotations: map[string]string{
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+						common.CreatorPrincipalNameAnn: "keycloak_user://12345",
 					},
 				},
 			},
@@ -99,8 +99,8 @@ func TestAdmit(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "c-2bmj5",
 					Annotations: map[string]string{
-						auth.CreatorIDAnn:            "u-12346",
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+						common.CreatorIDAnn:            "u-12346",
+						common.CreatorPrincipalNameAnn: "keycloak_user://12345",
 					},
 				},
 			},
@@ -135,7 +135,7 @@ func TestAdmit(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "c-2bmj5",
 					Annotations: map[string]string{
-						auth.CreatorIDAnn: "u-12345",
+						common.CreatorIDAnn: "u-12345",
 					},
 				},
 			},
@@ -143,7 +143,7 @@ func TestAdmit(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "c-2bmj5",
 					Annotations: map[string]string{
-						auth.CreatorIDAnn: "u-12346",
+						common.CreatorIDAnn: "u-12346",
 					},
 				},
 			},
@@ -157,7 +157,7 @@ func TestAdmit(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "c-2bmj5",
 					Annotations: map[string]string{
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+						common.CreatorPrincipalNameAnn: "keycloak_user://12345",
 					},
 				},
 			},
@@ -165,7 +165,7 @@ func TestAdmit(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "c-2bmj5",
 					Annotations: map[string]string{
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12346",
+						common.CreatorPrincipalNameAnn: "keycloak_user://12346",
 					},
 				},
 			},
@@ -179,8 +179,8 @@ func TestAdmit(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "c-2bmj5",
 					Annotations: map[string]string{
-						auth.CreatorIDAnn:            "u-12345",
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+						common.CreatorIDAnn:            "u-12345",
+						common.CreatorPrincipalNameAnn: "keycloak_user://12345",
 					},
 				},
 			},
@@ -199,8 +199,8 @@ func TestAdmit(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "c-2bmj5",
 					Annotations: map[string]string{
-						auth.CreatorIDAnn:            "u-12345",
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+						common.CreatorIDAnn:            "u-12345",
+						common.CreatorPrincipalNameAnn: "keycloak_user://12345",
 					},
 				},
 			},
@@ -208,8 +208,8 @@ func TestAdmit(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "c-2bmj5",
 					Annotations: map[string]string{
-						auth.CreatorIDAnn:            "u-12345",
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+						common.CreatorIDAnn:            "u-12345",
+						common.CreatorPrincipalNameAnn: "keycloak_user://12345",
 					},
 				},
 			},
@@ -222,6 +222,92 @@ func TestAdmit(t *testing.T) {
 			oldCluster:    v3.Cluster{Spec: v3.ClusterSpec{FleetWorkspaceName: "fleet-default"}},
 			operation:     admissionv1.Delete,
 			expectAllowed: true,
+		},
+		{
+			name:      "Create with no-creator-rbac annotation",
+			operation: admissionv1.Create,
+			newCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "c-2bmj5",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+					},
+				},
+			},
+			expectAllowed: true,
+		},
+		{
+			name:      "Create with no-creator-rbac and creatorID annotation",
+			operation: admissionv1.Create,
+			newCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "c-2bmj5",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+						common.CreatorIDAnn:     "u-12345",
+					},
+				},
+			},
+			expectAllowed:  false,
+			expectedReason: metav1.StatusReasonBadRequest,
+		},
+		{
+			name:      "Update with no-creator-rbac annotation",
+			operation: admissionv1.Update,
+			oldCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "c-2bmj5",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+					},
+				},
+			},
+			newCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "c-2bmj5",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+					},
+				},
+			},
+			expectAllowed: true,
+		},
+		{
+			name:      "Update modifying no-creator-rbac annotation",
+			operation: admissionv1.Update,
+			oldCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "c-2bmj5",
+				},
+			},
+			newCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "c-2bmj5",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+					},
+				},
+			},
+			expectAllowed: false,
+		},
+		{
+			name:      "Update removing no-creator-rbac",
+			operation: admissionv1.Create,
+			oldCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "c-2bmj5",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+					},
+				},
+			},
+			newCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "c-2bmj5",
+				},
+			},
+			expectAllowed:  true,
+			expectedReason: metav1.StatusReasonBadRequest,
 		},
 	}
 

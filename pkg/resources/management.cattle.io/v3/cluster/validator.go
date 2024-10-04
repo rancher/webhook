@@ -92,6 +92,9 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	if a.userCache != nil {
 		// The following checks don't make sense for downstream clusters (userCache == nil)
 		if request.Operation == admissionv1.Create {
+			if fieldErr := common.CheckCreatorIDAndNoCreatorRBAC(newCluster); fieldErr != nil {
+				return admission.ResponseBadRequest(fieldErr.Error()), nil
+			}
 			fieldErr, err := common.CheckCreatorPrincipalName(a.userCache, newCluster)
 			if err != nil {
 				return nil, fmt.Errorf("error checking creator principal: %w", err)
@@ -107,7 +110,8 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	}
 
 	if request.Operation == admissionv1.Create || request.Operation == admissionv1.Update {
-		// no need to validate the local cluster, or imported cluster which represents a KEv2 cluster (GKE/EKS/AKS) or v1 Provisioning Cluster
+		// no need to validate the PodSecurityAdmissionConfigurationTemplate on a local cluster,
+		// or imported cluster which represents a KEv2 cluster (GKE/EKS/AKS) or v1 Provisioning Cluster
 		if newCluster.Name == "local" || newCluster.Spec.RancherKubernetesEngineConfig == nil {
 			return admission.ResponseAllowed(), nil
 		}

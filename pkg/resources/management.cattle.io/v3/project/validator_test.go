@@ -10,7 +10,7 @@ import (
 	"github.com/golang/mock/gomock"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
-	"github.com/rancher/webhook/pkg/auth"
+	"github.com/rancher/webhook/pkg/resources/common"
 	"github.com/rancher/wrangler/v3/pkg/generic/fake"
 	"github.com/stretchr/testify/assert"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -408,6 +408,165 @@ func TestProjectValidation(t *testing.T) {
 			wantAllowed: false,
 		},
 		{
+			name:      "create with no-creator-rbac annotation",
+			operation: admissionv1.Create,
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			stateSetup: func(state *testState) {
+				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "testcluster",
+					},
+				}, nil)
+			},
+			wantAllowed: true,
+		},
+		{
+			name:      "create with no-creator-rbac and creatorID annotation",
+			operation: admissionv1.Create,
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+						common.CreatorIDAnn:     "u-12345",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			stateSetup: func(state *testState) {
+				state.clusterCache.EXPECT().Get("testcluster").Return(&v3.Cluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "testcluster",
+					},
+				}, nil)
+			},
+			wantAllowed: false,
+		},
+		{
+			name:      "update with no-creator-rbac annotation",
+			operation: admissionv1.Update,
+			oldProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			wantAllowed: true,
+		},
+		{
+			name:      "update adding no-creator-rbac",
+			operation: admissionv1.Update,
+			oldProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			wantAllowed: false,
+		},
+		{
+			name:      "update modifying no-creator-rbac",
+			operation: admissionv1.Update,
+			oldProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "false",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			wantAllowed: false,
+		},
+		{
+			name:      "update removing no-creator-rbac",
+			operation: admissionv1.Update,
+			oldProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+					Annotations: map[string]string{
+						common.NoCreatorRBACAnn: "true",
+					},
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+				},
+			},
+			wantAllowed: true,
+		},
+		{
 			name:      "create with principal name annotation",
 			operation: admissionv1.Create,
 			newProject: &v3.Project{
@@ -415,8 +574,8 @@ func TestProjectValidation(t *testing.T) {
 					Name:      "test",
 					Namespace: "testcluster",
 					Annotations: map[string]string{
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
-						auth.CreatorIDAnn:            "u-12345",
+						common.CreatorPrincipalNameAnn: "keycloak_user://12345",
+						common.CreatorIDAnn:            "u-12345",
 					},
 				},
 				Spec: v3.ProjectSpec{
@@ -446,7 +605,7 @@ func TestProjectValidation(t *testing.T) {
 					Name:      "test",
 					Namespace: "testcluster",
 					Annotations: map[string]string{
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+						common.CreatorPrincipalNameAnn: "keycloak_user://12345",
 					},
 				},
 				Spec: v3.ProjectSpec{
@@ -471,8 +630,8 @@ func TestProjectValidation(t *testing.T) {
 					Name:      "test",
 					Namespace: "testcluster",
 					Annotations: map[string]string{
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12346",
-						auth.CreatorIDAnn:            "u-12345",
+						common.CreatorPrincipalNameAnn: "keycloak_user://12346",
+						common.CreatorIDAnn:            "u-12345",
 					},
 				},
 				Spec: v3.ProjectSpec{
@@ -502,8 +661,8 @@ func TestProjectValidation(t *testing.T) {
 					Name:      "test",
 					Namespace: "testcluster",
 					Annotations: map[string]string{
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12346",
-						auth.CreatorIDAnn:            "u-12345",
+						common.CreatorPrincipalNameAnn: "keycloak_user://12346",
+						common.CreatorIDAnn:            "u-12345",
 					},
 				},
 				Spec: v3.ProjectSpec{
@@ -528,8 +687,8 @@ func TestProjectValidation(t *testing.T) {
 					Name:      "test",
 					Namespace: "testcluster",
 					Annotations: map[string]string{
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12346",
-						auth.CreatorIDAnn:            "u-12345",
+						common.CreatorPrincipalNameAnn: "keycloak_user://12346",
+						common.CreatorIDAnn:            "u-12345",
 					},
 				},
 				Spec: v3.ProjectSpec{
@@ -1027,7 +1186,7 @@ func TestProjectValidation(t *testing.T) {
 					Name:      "test",
 					Namespace: "testcluster",
 					Annotations: map[string]string{
-						auth.CreatorIDAnn: "u-12345",
+						common.CreatorIDAnn: "u-12345",
 					},
 				},
 				Spec: v3.ProjectSpec{
@@ -1039,7 +1198,7 @@ func TestProjectValidation(t *testing.T) {
 					Name:      "test",
 					Namespace: "tescluster",
 					Annotations: map[string]string{
-						auth.CreatorIDAnn: "u-12346",
+						common.CreatorIDAnn: "u-12346",
 					},
 				},
 				Spec: v3.ProjectSpec{
@@ -1056,7 +1215,7 @@ func TestProjectValidation(t *testing.T) {
 					Name:      "test",
 					Namespace: "testcluster",
 					Annotations: map[string]string{
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+						common.CreatorPrincipalNameAnn: "keycloak_user://12345",
 					},
 				},
 				Spec: v3.ProjectSpec{
@@ -1068,7 +1227,7 @@ func TestProjectValidation(t *testing.T) {
 					Name:      "test",
 					Namespace: "tescluster",
 					Annotations: map[string]string{
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12346",
+						common.CreatorPrincipalNameAnn: "keycloak_user://12346",
 					},
 				},
 				Spec: v3.ProjectSpec{
@@ -1085,8 +1244,8 @@ func TestProjectValidation(t *testing.T) {
 					Name:      "test",
 					Namespace: "testcluster",
 					Annotations: map[string]string{
-						auth.CreatorIDAnn:            "u-12345",
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+						common.CreatorIDAnn:            "u-12345",
+						common.CreatorPrincipalNameAnn: "keycloak_user://12345",
 					},
 				},
 				Spec: v3.ProjectSpec{
@@ -1112,8 +1271,8 @@ func TestProjectValidation(t *testing.T) {
 					Name:      "test",
 					Namespace: "testcluster",
 					Annotations: map[string]string{
-						auth.CreatorIDAnn:            "u-12345",
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+						common.CreatorIDAnn:            "u-12345",
+						common.CreatorPrincipalNameAnn: "keycloak_user://12345",
 					},
 				},
 				Spec: v3.ProjectSpec{
@@ -1125,8 +1284,8 @@ func TestProjectValidation(t *testing.T) {
 					Name:      "test",
 					Namespace: "tescluster",
 					Annotations: map[string]string{
-						auth.CreatorIDAnn:            "u-12345",
-						auth.CreatorPrincipalNameAnn: "keycloak_user://12345",
+						common.CreatorIDAnn:            "u-12345",
+						common.CreatorPrincipalNameAnn: "keycloak_user://12345",
 					},
 				},
 				Spec: v3.ProjectSpec{

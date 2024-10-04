@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	"github.com/rancher/webhook/pkg/admission"
-	"github.com/rancher/webhook/pkg/auth"
 	objectsv1 "github.com/rancher/webhook/pkg/generated/objects/core/v1"
 	"github.com/rancher/webhook/pkg/patch"
+	"github.com/rancher/webhook/pkg/resources/common"
 	v1 "github.com/rancher/wrangler/v3/pkg/generated/controllers/rbac/v1"
 	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -110,11 +110,8 @@ func (m *Mutator) admitCreate(secret *corev1.Secret, request *admission.Request)
 	logrus.Debugf("[secret-mutation] adding creatorID %v to secret: %v", request.UserInfo.Username, secret.Name)
 	newSecret := secret.DeepCopy()
 
-	if newSecret.Annotations == nil {
-		newSecret.Annotations = make(map[string]string)
-	}
+	common.SetCreatorIDAnnotation(request, newSecret)
 
-	newSecret.Annotations[auth.CreatorIDAnn] = request.UserInfo.Username
 	response := &admissionv1.AdmissionResponse{}
 	if err := patch.CreatePatch(request.Object.Raw, newSecret, response); err != nil {
 		return nil, fmt.Errorf("failed to create patch: %w", err)

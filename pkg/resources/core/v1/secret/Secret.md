@@ -10,6 +10,8 @@ and the secret has roles or role bindings dependent on it.
 For all secrets of type `provisioning.cattle.io/cloud-credential`, 
 places a `field.cattle.io/creatorId` annotation with the name of the user as the value.
 
+If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` does not get set.
+
 ### On delete
 
 Checks if there are any RoleBindings owned by this secret which provide access to a role granting access to this secret.

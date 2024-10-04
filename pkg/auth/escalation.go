@@ -19,13 +19,6 @@ import (
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
 
-const (
-	// CreatorIDAnn is an annotation key for the id of the creator.
-	CreatorIDAnn = "field.cattle.io/creatorId"
-	// CreatorPrincipalNameAnn is an annotation key for the principal name of the creator.
-	CreatorPrincipalNameAnn = "field.cattle.io/creator-principal-name"
-)
-
 // RequestUserHasVerb checks if the user associated with the context has a given verb on a given gvr for a specified name/namespace
 func RequestUserHasVerb(request *admission.Request, gvr schema.GroupVersionResource, sar authorizationv1.SubjectAccessReviewInterface, verb, name, namespace string) (bool, error) {
 	extras := map[string]v1.ExtraValue{}
