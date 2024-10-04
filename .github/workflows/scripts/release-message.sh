@@ -1,4 +1,13 @@
 #!/bin/sh
+#
+# Automatically generates a message for a new release of webhook with some useful
+# links and embedded release notes.
+#
+# Usage:
+#   ./release-message.sh <prev webhook release> <new webhook release>
+#
+# Example:
+# ./release-message.sh "v0.5.2-rc.3" "v0.5.2-rc.4"
 
 PREV_WEBHOOK_VERSION=$1   # e.g. v0.5.2-rc.3
 NEW_WEBHOOK_VERSION=$2    # e.g. v0.5.2-rc.4
