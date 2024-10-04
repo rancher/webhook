@@ -24,6 +24,11 @@ if [ -z "$CHARTS_DIR" ] || [ -z "$PREV_WEBHOOK_VERSION" ] || [ -z "$NEW_WEBHOOK_
     exit 1
 fi
 
+if [ "$PREV_WEBHOOK_VERSION" = "$NEW_WEBHOOK_VERSION" ]; then
+    echo "Previous and new webhook version are the same: $NEW_WEBHOOK_VERSION, but must be different"
+    exit 1
+fi
+
 # Remove the prefix v because the chart version doesn't contain it
 PREV_WEBHOOK_VERSION_SHORT=$(echo "$PREV_WEBHOOK_VERSION" | sed 's|^v||')  # e.g. 0.5.2-rc.3
 NEW_WEBHOOK_VERSION_SHORT=$(echo "$NEW_WEBHOOK_VERSION" | sed 's|^v||')  # e.g. 0.5.2-rc.4
