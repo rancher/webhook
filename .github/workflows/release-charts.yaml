@@ -7,11 +7,11 @@ on:
         required: true
         default: "dev-v2.10"
       prev_webhook:
-        description: "Previous Webhook version (eg: 0.5.0-rc.13)"
+        description: "Previous Webhook version (eg: v0.5.0-rc.13)"
         required: true
         default: ""
       new_webhook:
-        description: "New Webhook version (eg: 0.5.0-rc.14)"
+        description: "New Webhook version (eg: v0.5.0-rc.14)"
         required: true
         default: ""
 
@@ -88,7 +88,7 @@ jobs:
           body=$(../webhook/.github/workflows/scripts/release-message.sh "$PREV_WEBHOOK" "$NEW_WEBHOOK")
 
           gh pr create \
-            --title "[$CHARTS_REF] Bump rancher-webhook to v$NEW_WEBHOOK" \
+            --title "[$CHARTS_REF] Bump rancher-webhook to $NEW_WEBHOOK" \
             --body "$body" \
             --repo ${{ github.repository_owner }}/charts \
             --head "${{ github.repository_owner }}:$BRANCH" \
