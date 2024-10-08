@@ -4,7 +4,6 @@ import (
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/clients"
 	"github.com/rancher/webhook/pkg/resolvers"
-	"github.com/rancher/webhook/pkg/resources/cluster.cattle.io/v3/clusterauthtoken"
 	nshandler "github.com/rancher/webhook/pkg/resources/core/v1/namespace"
 	"github.com/rancher/webhook/pkg/resources/core/v1/secret"
 	managementCluster "github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/cluster"
@@ -20,7 +19,6 @@ import (
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/projectroletemplatebinding"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/roletemplate"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/setting"
-	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/token"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/userattribute"
 	provisioningCluster "github.com/rancher/webhook/pkg/resources/provisioning.cattle.io/v1/cluster"
 	"github.com/rancher/webhook/pkg/resources/rbac.authorization.k8s.io/v1/clusterrole"
@@ -57,17 +55,12 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		roles := role.NewValidator()
 		rolebindings := rolebinding.NewValidator()
 		setting := setting.NewValidator(clients.Management.Cluster().Cache())
-		token := token.NewValidator()
 		userAttribute := userattribute.NewValidator()
 		clusterRoles := clusterrole.NewValidator()
 		clusterRoleBindings := clusterrolebinding.NewValidator()
 
-		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, nodeDriver, projects, roles, rolebindings, clusterRoles, clusterRoleBindings, clusterProxyConfigs, userAttribute, setting, token)
-	} else {
-		clusterAuthTokens := clusterauthtoken.NewValidator()
-		handlers = append(handlers, clusterAuthTokens)
+		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, nodeDriver, projects, roles, rolebindings, clusterRoles, clusterRoleBindings, clusterProxyConfigs, userAttribute, setting)
 	}
-
 	return handlers, nil
 }
 

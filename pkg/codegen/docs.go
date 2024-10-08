@@ -39,18 +39,16 @@ func generateDocs(resourcesBaseDir, outputFilePath string) (err error) {
 	if err != nil {
 		return err
 	}
-
 	docFiles, err := getDocFiles(resourcesBaseDir)
 	if err != nil {
 		return fmt.Errorf("unable to create documentation: %w", err)
 	}
-
 	currentGroup := ""
 	for _, docFile := range docFiles {
 		newGroup := docFile.group
 		if newGroup != currentGroup {
 			// our group has changed, output a new group header
-			groupFormatString := "# %s/%s\n"
+			groupFormatString := "# %s/%s \n"
 			if currentGroup != "" {
 				groupFormatString = "\n" + groupFormatString
 			}
@@ -61,11 +59,10 @@ func generateDocs(resourcesBaseDir, outputFilePath string) (err error) {
 			currentGroup = newGroup
 		}
 
-		_, err = fmt.Fprintf(outputFile, "\n## %s\n\n", docFile.resource)
+		_, err = fmt.Fprintf(outputFile, "\n## %s \n\n", docFile.resource)
 		if err != nil {
 			return fmt.Errorf("unable to write resource header for %s: %w", docFile.resource, err)
 		}
-
 		scanner := bufio.NewScanner(bytes.NewReader(docFile.content))
 		for scanner.Scan() {
 			line := scanner.Bytes()
@@ -84,7 +81,6 @@ func generateDocs(resourcesBaseDir, outputFilePath string) (err error) {
 			return fmt.Errorf("got an error scanning content for %s/%s.%s: %w", docFile.group, docFile.version, docFile.resource, err)
 		}
 	}
-
 	return nil
 }
 
@@ -95,7 +91,6 @@ func getDocFiles(baseDir string) ([]docFile, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to list entries in directory %s: %w", baseDir, err)
 	}
-
 	var docFiles []docFile
 	for _, entry := range entries {
 		entryPath := filepath.Join(baseDir, entry.Name())
