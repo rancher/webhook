@@ -70,13 +70,13 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		projects := project.NewValidator(clients.Management.Cluster().Cache(), clients.Management.User().Cache())
 		roles := role.NewValidator()
 		rolebindings := rolebinding.NewValidator()
-		setting := setting.NewValidator(clients.Management.Cluster().Cache(), clients.Management.Setting().Cache())
+		settings := setting.NewValidator(clients.Management.Cluster().Cache(), clients.Management.Setting().Cache())
 		token := token.NewValidator()
 		userAttribute := userattribute.NewValidator()
 		clusterRoles := clusterrole.NewValidator()
 		clusterRoleBindings := clusterrolebinding.NewValidator()
 
-		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, nodeDriver, projects, roles, rolebindings, clusterRoles, clusterRoleBindings, clusterProxyConfigs, userAttribute, setting, token)
+		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, nodeDriver, projects, roles, rolebindings, clusterRoles, clusterRoleBindings, clusterProxyConfigs, userAttribute, settings, token)
 	} else {
 		clusterAuthTokens := clusterauthtoken.NewValidator()
 		handlers = append(handlers, clusterAuthTokens)
