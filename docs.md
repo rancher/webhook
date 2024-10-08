@@ -1,24 +1,6 @@
-# cluster.cattle.io/v3
+# core/v1 
 
-## ClusterAuthToken
-
-### Validation Checks
-
-#### Invalid Fields - Create
-
-When a ClusterAuthToken is created, the following checks take place:
-
-- If set, `lastUsedAt` must be a valid date time according to RFC3339 (e.g. `2023-11-29T00:00:00Z`).
-
-#### Invalid Fields - Update
-
-When a ClusterAuthToken is updated, the following checks take place:
-
-- If set, `lastUsedAt` must be a valid date time according to RFC3339 (e.g. `2023-11-29T00:00:00Z`).
-
-# core/v1
-
-## Namespace
+## Namespace 
 
 ### Validation Checks
 
@@ -42,7 +24,7 @@ The following labels are considered relevant for PSA enforcement:
 - pod-security.kubernetes.io/warn
 - pod-security.kubernetes.io/warn-version
 
-## Secret
+## Secret 
 
 ### Validation Checks
 
@@ -61,9 +43,9 @@ places a `field.cattle.io/creatorId` annotation with the name of the user as the
 Checks if there are any RoleBindings owned by this secret which provide access to a role granting access to this secret.
 If yes, the webhook redacts the role, so that it only grants a deletion permission.
 
-# management.cattle.io/v3
+# management.cattle.io/v3 
 
-## ClusterProxyConfig
+## ClusterProxyConfig 
 
 ### Validation Checks
 
@@ -72,7 +54,7 @@ If yes, the webhook redacts the role, so that it only grants a deletion permissi
 When creating a clusterproxyconfig, we check to make sure that one does not already exist for the given cluster.
 Only 1 clusterproxyconfig per downstream cluster is ever permitted.
 
-## ClusterRoleTemplateBinding
+## ClusterRoleTemplateBinding 
 
 ### Validation Checks
 
@@ -112,7 +94,7 @@ Users can update the following fields if they have not been set, but after they 
 
 In addition, as in the create validation, both a user subject and a group subject cannot be specified.
 
-## Feature
+## Feature 
 
 ### Validation Checks
 
@@ -121,7 +103,7 @@ In addition, as in the create validation, both a user subject and a group subjec
 The desired value must not change on new spec unless it's equal to the `lockedValue` or `lockedValue` is nil.
 Due to the security impact of the `external-rules` feature flag, only users with admin permissions (`*` verbs on `*` resources in `*` APIGroups in all namespaces) can enable or disable this feature flag.
 
-## FleetWorkspace
+## FleetWorkspace 
 
 ### Validation Checks
 
@@ -136,7 +118,7 @@ When a `FleetWorkspace` is created, it will create the following resources:
 2. `ClusterRole`. It will create the cluster role that has * permission only to the current workspace.
 3. Two `RoleBindings` to bind the current user to fleet-admin roles and `FleetWorkspace` roles.
 
-## GlobalRole
+## GlobalRole 
 
 ### Validation Checks
 
@@ -167,7 +149,7 @@ The `globalroles.builtin` field is immutable, and new builtIn GlobalRoles cannot
 If `globalroles.builtin` is true then all fields are immutable except  `metadata` and `newUserDefault`.
 If `globalroles.builtin` is true then the GlobalRole can not be deleted.
 
-## GlobalRoleBinding
+## GlobalRoleBinding 
 
 ### Validation Checks
 
@@ -200,7 +182,7 @@ All RoleTemplates which are referred to in the `inheritedClusterRoles` field mus
 
 When a GlobalRoleBinding is created an owner reference is created on the binding referring to the backing GlobalRole defined by `globalRoleName`.
 
-## NodeDriver
+## NodeDriver 
 
 ### Validation Checks
 
@@ -210,7 +192,7 @@ Note: checks only run if a node driver is being disabled or deleted
 
 This admission webhook prevents the disabling or deletion of a NodeDriver if there are any Nodes that are under management by said driver. If there are _any_ nodes that use the driver the request will be denied.
 
-## Project
+## Project 
 
 ### Validation Checks
 
@@ -239,7 +221,7 @@ Limits for any resource must not be less than requests.
 
 Adds the authz.management.cattle.io/creator-role-bindings annotation.
 
-## ProjectRoleTemplateBinding
+## ProjectRoleTemplateBinding 
 
 ### Validation Checks
 
@@ -286,7 +268,7 @@ changed:
 
 In addition, as in the create validation, both a user subject and a group subject cannot be specified.
 
-## RoleTemplate
+## RoleTemplate 
 
 ### Validation Checks
 
@@ -325,7 +307,7 @@ If `roletemplates.builtin` is true then all fields are immutable except:
 
 RoleTemplate can not be deleted if they are referenced by other RoleTemplates via `roletemplates.roleTemplateNames` or by GlobalRoles via `globalRoles.inheritedClusterRoles`
 
-## Setting
+## Setting 
 
 ### Validation Checks
 
@@ -353,23 +335,7 @@ When a Setting is updated, the following checks take place:
   have a status condition `AgentTlsStrictCheck` set to `True`, unless the new setting has an overriding
   annotation `cattle.io/force=true`.
 
-## Token
-
-### Validation Checks
-
-#### Invalid Fields - Create
-
-When a Token is created, the following checks take place:
-
-- If set, `lastUsedAt` must be a valid date time according to RFC3339 (e.g. `2023-11-29T00:00:00Z`).
-
-#### Invalid Fields - Update
-
-When a Token is updated, the following checks take place:
-
-- If set, `lastUsedAt` must be a valid date time according to RFC3339 (e.g. `2023-11-29T00:00:00Z`).
-
-## UserAttribute
+## UserAttribute 
 
 ### Validation Checks
 
@@ -389,9 +355,9 @@ When a UserAttribute is updated, the following checks take place:
 - If set, `disableAfter` must be zero or a positive duration (e.g. `240h`).
 - If set, `deleteAfter` must be zero or a positive duration (e.g. `240h`).
 
-# provisioning.cattle.io/v1
+# provisioning.cattle.io/v1 
 
-## Cluster
+## Cluster 
 
 ### Validation Checks
 
@@ -444,9 +410,9 @@ perform no mutations. If the value is not present or not `"true"`, compare the v
 for each `machinePool`, to its' previous value. If the values are not identical, revert the value for the
 `dynamicSchemaSpec` for the specific `machinePool`, but do not reject the request.
 
-# rbac.authorization.k8s.io/v1
+# rbac.authorization.k8s.io/v1 
 
-## ClusterRole
+## ClusterRole 
 
 ### Validation Checks
 
@@ -454,7 +420,7 @@ for each `machinePool`, to its' previous value. If the values are not identical,
 Users cannot update or remove the following label after it has been added:
 - authz.management.cattle.io/gr-owner
 
-## ClusterRoleBinding
+## ClusterRoleBinding 
 
 ### Validation Checks
 
@@ -462,7 +428,7 @@ Users cannot update or remove the following label after it has been added:
 Users cannot update or remove the following label after it has been added:
 - authz.management.cattle.io/grb-owner
 
-## Role
+## Role 
 
 ### Validation Checks
 
@@ -470,7 +436,7 @@ Users cannot update or remove the following label after it has been added:
 Users cannot update or remove the following label after it has been added:
 - authz.management.cattle.io/gr-owner
 
-## RoleBinding
+## RoleBinding 
 
 ### Validation Checks
 
