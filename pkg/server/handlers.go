@@ -6,6 +6,7 @@ import (
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/resolvers"
 	"github.com/rancher/webhook/pkg/resources/catalog.cattle.io/v1/clusterrepo"
+	"github.com/rancher/webhook/pkg/resources/cluster.cattle.io/v3/clusterauthtoken"
 	nshandler "github.com/rancher/webhook/pkg/resources/core/v1/namespace"
 	"github.com/rancher/webhook/pkg/resources/core/v1/secret"
 	managementCluster "github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/cluster"
@@ -21,6 +22,7 @@ import (
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/projectroletemplatebinding"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/roletemplate"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/setting"
+	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/token"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/userattribute"
 	provisioningCluster "github.com/rancher/webhook/pkg/resources/provisioning.cattle.io/v1/cluster"
 	"github.com/rancher/webhook/pkg/resources/rbac.authorization.k8s.io/v1/clusterrole"
@@ -32,11 +34,11 @@ import (
 
 // Validation returns a list of all ValidatingAdmissionHandlers used by the webhook.
 func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandler, error) {
-
 	var userCache v3.UserCache
 	if clients.MultiClusterManagement {
 		userCache = clients.Management.User().Cache()
 	}
+
 	clusters := managementCluster.NewValidator(
 		clients.K8s.AuthorizationV1().SubjectAccessReviews(),
 		clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache(),
@@ -49,6 +51,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		provisioningCluster.NewProvisioningClusterValidator(clients),
 		machineconfig.NewValidator(),
 		nshandler.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews()),
+		clusterrepo.NewValidator(),
 	}
 
 	if clients.MultiClusterManagement {
@@ -68,15 +71,16 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		roles := role.NewValidator()
 		rolebindings := rolebinding.NewValidator()
 		setting := setting.NewValidator(clients.Management.Cluster().Cache(), clients.Management.Setting().Cache())
+		token := token.NewValidator()
 		userAttribute := userattribute.NewValidator()
 		clusterRoles := clusterrole.NewValidator()
 		clusterRoleBindings := clusterrolebinding.NewValidator()
 
-		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, nodeDriver, projects, roles, rolebindings, clusterRoles, clusterRoleBindings, clusterProxyConfigs, userAttribute, setting)
+		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, nodeDriver, projects, roles, rolebindings, clusterRoles, clusterRoleBindings, clusterProxyConfigs, userAttribute, setting, token)
+	} else {
+		clusterAuthTokens := clusterauthtoken.NewValidator()
+		handlers = append(handlers, clusterAuthTokens)
 	}
-
-	clusterrepo := clusterrepo.NewValidator()
-	handlers = append(handlers, clusterrepo)
 
 	return handlers, nil
 }
@@ -96,5 +100,6 @@ func Mutation(clients *clients.Clients) ([]admission.MutatingAdmissionHandler, e
 		grbs := globalrolebinding.NewMutator(clients.Management.GlobalRole().Cache())
 		mutators = append(mutators, secrets, projects, grbs)
 	}
+
 	return mutators, nil
 }
