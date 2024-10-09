@@ -6,6 +6,7 @@ import (
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/resolvers"
 	"github.com/rancher/webhook/pkg/resources/catalog.cattle.io/v1/clusterrepo"
+	"github.com/rancher/webhook/pkg/resources/cluster.cattle.io/v3/clusterauthtoken"
 	nshandler "github.com/rancher/webhook/pkg/resources/core/v1/namespace"
 	"github.com/rancher/webhook/pkg/resources/core/v1/secret"
 	managementCluster "github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/cluster"
@@ -21,6 +22,7 @@ import (
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/projectroletemplatebinding"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/roletemplate"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/setting"
+	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/token"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/userattribute"
 	provisioningCluster "github.com/rancher/webhook/pkg/resources/provisioning.cattle.io/v1/cluster"
 	"github.com/rancher/webhook/pkg/resources/rbac.authorization.k8s.io/v1/clusterrole"
@@ -32,11 +34,11 @@ import (
 
 // Validation returns a list of all ValidatingAdmissionHandlers used by the webhook.
 func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandler, error) {
-
 	var userCache v3.UserCache
 	if clients.MultiClusterManagement {
 		userCache = clients.Management.User().Cache()
 	}
+
 	clusters := managementCluster.NewValidator(
 		clients.K8s.AuthorizationV1().SubjectAccessReviews(),
 		clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache(),
@@ -49,34 +51,37 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		provisioningCluster.NewProvisioningClusterValidator(clients),
 		machineconfig.NewValidator(),
 		nshandler.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews()),
+		clusterrepo.NewValidator(),
 	}
 
 	if clients.MultiClusterManagement {
-		clusterProxyConfigs := clusterproxyconfig.NewValidator(clients.Management.ClusterProxyConfig().Cache())
 		crtbResolver := resolvers.NewCRTBRuleResolver(clients.Management.ClusterRoleTemplateBinding().Cache(), clients.RoleTemplateResolver)
 		prtbResolver := resolvers.NewPRTBRuleResolver(clients.Management.ProjectRoleTemplateBinding().Cache(), clients.RoleTemplateResolver)
 		grbResolvers := resolvers.NewGRBRuleResolvers(clients.Management.GlobalRoleBinding().Cache(), clients.GlobalRoleResolver)
-		psact := podsecurityadmissionconfigurationtemplate.NewValidator(clients.Management.Cluster().Cache(), clients.Provisioning.Cluster().Cache())
-		globalRoles := globalrole.NewValidator(clients.DefaultResolver, grbResolvers, clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.GlobalRoleResolver)
-		globalRoleBindings := globalrolebinding.NewValidator(clients.DefaultResolver, grbResolvers, clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.GlobalRoleResolver)
-		prtbs := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver, clients.Management.Cluster().Cache(), clients.Management.Project().Cache())
-		crtbs := clusterroletemplatebinding.NewValidator(crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver, clients.Management.GlobalRoleBinding().Cache(), clients.Management.Cluster().Cache())
-		roleTemplates := roletemplate.NewValidator(clients.DefaultResolver, clients.RoleTemplateResolver, clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.Management.GlobalRole().Cache())
-		secrets := secret.NewValidator(clients.RBAC.Role().Cache(), clients.RBAC.RoleBinding().Cache())
-		nodeDriver := nodedriver.NewValidator(clients.Management.Node().Cache(), clients.Dynamic)
-		projects := project.NewValidator(clients.Management.Cluster().Cache(), clients.Management.User().Cache())
-		roles := role.NewValidator()
-		rolebindings := rolebinding.NewValidator()
-		setting := setting.NewValidator(clients.Management.Cluster().Cache(), clients.Management.Setting().Cache())
-		userAttribute := userattribute.NewValidator()
-		clusterRoles := clusterrole.NewValidator()
-		clusterRoleBindings := clusterrolebinding.NewValidator()
 
-		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, nodeDriver, projects, roles, rolebindings, clusterRoles, clusterRoleBindings, clusterProxyConfigs, userAttribute, setting)
+		handlers = append(
+			handlers,
+			clusterproxyconfig.NewValidator(clients.Management.ClusterProxyConfig().Cache()),
+			podsecurityadmissionconfigurationtemplate.NewValidator(clients.Management.Cluster().Cache(), clients.Provisioning.Cluster().Cache()),
+			globalrole.NewValidator(clients.DefaultResolver, grbResolvers, clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.GlobalRoleResolver),
+			globalrolebinding.NewValidator(clients.DefaultResolver, grbResolvers, clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.GlobalRoleResolver),
+			projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver, clients.Management.Cluster().Cache(), clients.Management.Project().Cache()),
+			clusterroletemplatebinding.NewValidator(crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver, clients.Management.GlobalRoleBinding().Cache(), clients.Management.Cluster().Cache()),
+			roletemplate.NewValidator(clients.DefaultResolver, clients.RoleTemplateResolver, clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.Management.GlobalRole().Cache()),
+			secret.NewValidator(clients.RBAC.Role().Cache(), clients.RBAC.RoleBinding().Cache()),
+			nodedriver.NewValidator(clients.Management.Node().Cache(), clients.Dynamic),
+			project.NewValidator(clients.Management.Cluster().Cache(), clients.Management.User().Cache()),
+			role.NewValidator(),
+			rolebinding.NewValidator(),
+			setting.NewValidator(clients.Management.Cluster().Cache(), clients.Management.Setting().Cache()),
+			token.NewValidator(),
+			userattribute.NewValidator(),
+			clusterrole.NewValidator(),
+			clusterrolebinding.NewValidator(),
+		)
+	} else {
+		handlers = append(handlers, clusterauthtoken.NewValidator())
 	}
-
-	clusterrepo := clusterrepo.NewValidator()
-	handlers = append(handlers, clusterrepo)
 
 	return handlers, nil
 }
@@ -96,5 +101,6 @@ func Mutation(clients *clients.Clients) ([]admission.MutatingAdmissionHandler, e
 		grbs := globalrolebinding.NewMutator(clients.Management.GlobalRole().Cache())
 		mutators = append(mutators, secrets, projects, grbs)
 	}
+
 	return mutators, nil
 }
