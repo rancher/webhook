@@ -40,7 +40,7 @@ require (
 	github.com/evanphx/json-patch v5.9.0+incompatible
 	github.com/golang/mock v1.6.0
 	github.com/gorilla/mux v1.8.1
-	github.com/rancher/dynamiclistener v0.6.1-rc.1
+	github.com/rancher/dynamiclistener v1.27.5
 	github.com/rancher/lasso v0.0.0-20240705194423-b2a060d103c1
 	github.com/rancher/rancher/pkg/apis v0.0.0-20240903164338-21e4787cd0b3
 	github.com/rancher/rke v1.6.0
@@ -113,6 +113,7 @@ require (
 	github.com/rancher/fleet/pkg/apis v0.10.0 // indirect
 	github.com/rancher/gke-operator v1.9.1 // indirect
 	github.com/rancher/norman v0.0.0-20240822182819-60ccfabc4ac5 // indirect
+	github.com/rancher/wrangler v1.1.1 // indirect
 	github.com/spf13/cobra v1.8.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
