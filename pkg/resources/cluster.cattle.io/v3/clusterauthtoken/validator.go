@@ -44,7 +44,7 @@ func (v *Validator) Operations() []admissionregistrationv1.OperationType {
 // ValidatingWebhook returns the ValidatingWebhook.
 func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.WebhookClientConfig) []admissionregistrationv1.ValidatingWebhook {
 	return []admissionregistrationv1.ValidatingWebhook{
-		*admission.NewDefaultValidatingWebhook(v, clientConfig, admissionregistrationv1.ClusterScope, v.Operations()),
+		*admission.NewDefaultValidatingWebhook(v, clientConfig, admissionregistrationv1.NamespacedScope, v.Operations()),
 	}
 }
 
