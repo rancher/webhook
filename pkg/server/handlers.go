@@ -6,7 +6,6 @@ import (
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/resolvers"
 	"github.com/rancher/webhook/pkg/resources/catalog.cattle.io/v1/clusterrepo"
-	"github.com/rancher/webhook/pkg/resources/cluster.cattle.io/v3/clusterauthtoken"
 	nshandler "github.com/rancher/webhook/pkg/resources/core/v1/namespace"
 	"github.com/rancher/webhook/pkg/resources/core/v1/secret"
 	managementCluster "github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/cluster"
@@ -79,8 +78,6 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			clusterrole.NewValidator(),
 			clusterrolebinding.NewValidator(),
 		)
-	} else {
-		handlers = append(handlers, clusterauthtoken.NewValidator())
 	}
 
 	return handlers, nil
