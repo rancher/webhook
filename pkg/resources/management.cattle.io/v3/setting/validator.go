@@ -22,12 +22,13 @@ import (
 )
 
 const (
-	DeleteInactiveUserAfter   = "delete-inactive-user-after"
-	DisableInactiveUserAfter  = "disable-inactive-user-after"
-	AuthUserSessionTTLMinutes = "auth-user-session-ttl-minutes"
-	UserLastLoginDefault      = "user-last-login-default"
-	UserRetentionCron         = "user-retention-cron"
-	AgentTLSMode              = "agent-tls-mode"
+	DeleteInactiveUserAfter       = "delete-inactive-user-after"
+	DisableInactiveUserAfter      = "disable-inactive-user-after"
+	AuthUserSessionTTLMinutes     = "auth-user-session-ttl-minutes"
+	AuthUserSessionIdleTTLMinutes = "auth-user-session-idle-ttl-minutes"
+	UserLastLoginDefault          = "user-last-login-default"
+	UserRetentionCron             = "user-retention-cron"
+	AgentTLSMode                  = "agent-tls-mode"
 )
 
 // MinDeleteInactiveUserAfter is the minimum duration for delete-inactive-user-after setting.
@@ -139,6 +140,8 @@ func (a *admitter) admitCommonCreateUpdate(_, newSetting *v3.Setting) (*admissio
 		err = a.validateUserRetentionCron(newSetting)
 	case AuthUserSessionTTLMinutes:
 		err = a.validateAuthUserSessionTTLMinutes(newSetting)
+	case AuthUserSessionIdleTTLMinutes:
+		err = a.validateAuthUserSessionIdleTTLMinutes(newSetting)
 	default:
 	}
 
@@ -189,6 +192,51 @@ func (a *admitter) validateAuthUserSessionTTLMinutes(s *v3.Setting) error {
 		if isGreaterThanSetting(name) {
 			return field.Forbidden(valuePath, "can't be greater than "+name)
 		}
+	}
+
+	return nil
+}
+
+// validateAuthUserSessionIdleTTLMinutes validates the auth-user-session-idle-ttl-minutes setting
+// to make sure it's a positive integer and that duration is not greater than
+// auth-user-session-ttl-minutes settings if they are set.
+// If it encounters an error fetching or parsing auth-user-session-ttl-minutes settings
+// it logs but doesn't return the error to avoid rejecting the request.
+func (a *admitter) validateAuthUserSessionIdleTTLMinutes(s *v3.Setting) error {
+	if s.Value == "" {
+		return nil
+	}
+
+	userSessionIdleDuration, err := parseMinutes(s.Value)
+	if err != nil {
+		return field.TypeInvalid(valuePath, s.Value, err.Error())
+	}
+	if userSessionIdleDuration < 0 {
+		return field.TypeInvalid(valuePath, s.Value, "negative value")
+	}
+
+	isGreaterThanSetting := func(name string) bool {
+		setting, err := a.settingCache.Get(name)
+		if err != nil {
+			logrus.Warnf("[settingValidator] Failed to get %s: %s", name, err)
+			return false // Deliberately allow to proceed.
+		}
+
+		// auth-user-session-ttl-minutes is expressed as minutes,
+		// so we use parseMinutes to compare it with the new
+		// auth-user-session-idle-ttl-minutes setting.
+		settingDur, err := parseMinutes(effectiveValue(setting))
+		if err != nil {
+			logrus.Warnf("[settingValidator] Failed to parse %s: %s", name, err)
+			return false // Deliberately allow to proceed.
+		}
+
+		return settingDur > 0 && userSessionIdleDuration > settingDur
+	}
+
+	// if auth-user-session-idle-ttl-minutes > auth-user-usesison-ttl-minutes
+	if isGreaterThanSetting(AuthUserSessionTTLMinutes) {
+		return field.Forbidden(valuePath, "can't be greater than "+AuthUserSessionTTLMinutes)
 	}
 
 	return nil
