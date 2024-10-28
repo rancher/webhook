@@ -15,7 +15,7 @@ RUN if [ "${ARCH}" = "amd64" ]; then \
         helm plugin install https://github.com/helm-unittest/helm-unittest.git --version ${HELM_UNITTEST_VERSION}>/out.txt 2>&1; \
     fi
 
-RUN GOBIN=/usr/local/bin go install github.com/golang/mock/mockgen@v1.6.0
+RUN GOBIN=/usr/local/bin go install github.com/uber-go/mock@v0.5.0
 
 ENV DAPPER_ENV REPO TAG CROSS
 ENV DAPPER_SOURCE /go/src/github.com/rancher/webhook/
