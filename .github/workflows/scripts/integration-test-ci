@@ -1,0 +1,82 @@
+#!/bin/bash
+set -eu
+
+cd $(dirname $0)/../../..
+DIST_DIR="$PWD"/dist
+
+source ./scripts/version
+# Source tags file to get the last built tags
+source ./dist/tags
+
+set -o pipefail
+
+source ./.github/workflows/scripts/try.sh
+
+set +e
+
+# Wait for rancher to start up
+try --waitmsg "Waiting for rancher to start" --failmsg "No rancher here" kubectl rollout status --watch=true --timeout=10s -n cattle-system deploy/rancher
+echo "Rancher deployed"
+
+# Wait for the system to spawn a rancher-webhook deployment
+webhook_deployment_created() {
+    kubectl get deployments -n cattle-system | grep rancher-webhook
+}
+try --max 48 --delay 5 --waitmsg "Waiting for a rancher-webhook deployment to be created" --failmsg "Deployment creation failed" webhook_deployment_created
+
+try --waitmsg "Waiting for rancher/webhook to be deployed" --failmsg "No rancher/webhook here" kubectl rollout status --watch=true --timeout=10s -n cattle-system deploy/rancher-webhook
+echo "Rancher deployed"
+
+webhook_deployed() {
+    status=$(kubectl get apps.catalog.cattle.io -n cattle-system rancher-webhook -o jsonpath="{@.status.summary.state}") && [[ "$status" == "deployed" ]]
+}
+
+# Wait for Rancher to deploy rancher-webhook.
+try --waitmsg "Waiting for webhook to be deployed (2)" webhook_deployed
+echo "Webhook deployed"
+
+# Shut down the core rancher part, but leave the rest of the rancher environment running
+set -e
+echo "Shutting down core rancher"
+kubectl scale deploy rancher -n cattle-system --replicas=0
+kubectl wait pods -l app=rancher --for=delete -n cattle-system
+
+echo "Uploading new webhook image"
+
+# Install the webhook chart we just built.
+upgrade_rancher_webhook() {
+   helm upgrade rancher-webhook ./dist/artifacts/rancher-webhook-${HELM_CHART_VERSION}.tgz -n cattle-system \
+    --wait --timeout=120s --set image.repository="${IMAGE_REPO}" --set image.tag="${IMAGE_TAG}" --reuse-values
+}
+
+set +e
+
+try --max 3 --delay 2 --waitmsg "Upgrading Webhook" --failmsg "Failed to upgrade webhook" upgrade_rancher_webhook
+
+x=$(kubectl get pods -n cattle-system -l app=rancher-webhook --no-headers --field-selector='status.phase!=RUNNING' --output custom-columns=NODE:.metadata.name | head -n 1)
+if [ -n "$x" ] ; then
+  echo "Logs for failed rancher-webhook $x ":
+  kubectl get pods -n cattle-system -l app=rancher-webhook
+  kubectl get pod "$x" -n cattle-system
+  kubectl logs pod/"$x" -n cattle-system
+  kubectl describe pod/"$x" -n cattle-system
+  try --max 4 --failmsg "Couldn't helm upgrade rancher-webhook" upgrade_rancher_webhook
+fi
+
+# Done trying things, so reinstate 'set -e'
+set -e
+
+./bin/rancher-webhook-integration.test -test.v -test.run IntegrationTest
+
+# Install the webhook chart with new ports.
+helm upgrade rancher-webhook ./dist/artifacts/rancher-webhook-${HELM_CHART_VERSION}.tgz -n cattle-system \
+    --wait --reuse-values --set port=443 --set capi.port=2319
+
+# Test that the ports are set as expected and run a single integration test to verify the webhook is still accessible.
+./bin/rancher-webhook-integration.test -test.v -test.run PortTest
+./bin/rancher-webhook-integration.test -test.v -test.run IntegrationTest -testify.m TestGlobalRole
+
+# Scale down rancher-webhook so that we can run tests on the FailurePolicy.
+kubectl scale deploy rancher-webhook -n cattle-system --replicas=0
+kubectl wait pods -l app=rancher-webhook --for=delete -n cattle-system
+./bin/rancher-webhook-integration.test -test.v -test.run FailurePolicyTest
