@@ -40,7 +40,7 @@ require (
 	github.com/evanphx/json-patch v5.9.0+incompatible
 	github.com/golang/mock v1.6.0
 	github.com/gorilla/mux v1.8.1
-	github.com/rancher/dynamiclistener v0.6.0
+	github.com/rancher/dynamiclistener v0.6.1-rc.1
 	github.com/rancher/lasso v0.0.0-20240809125800-8da6f11865d5
 	github.com/rancher/rancher/pkg/apis v0.0.0-20240918011937-2f9a7509687f
 	github.com/rancher/rke v1.6.2
