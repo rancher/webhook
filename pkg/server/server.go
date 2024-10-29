@@ -163,6 +163,7 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, validators []
 			FilterCN:  dynamiclistener.OnlyAllow(tlsName),
 			TLSConfig: tlsConfig,
 		},
+		DisplayServerLogs: true,
 	})
 }
 
