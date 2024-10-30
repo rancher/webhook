@@ -358,7 +358,7 @@ func Test_MutatorAdmit(t *testing.T) {
 
 				gotObj := &apisv3.GlobalRoleBinding{}
 				err = json.Unmarshal(patchedJS, gotObj)
-				require.NoError(t, err, "failed to unmarshall patched Object")
+				require.NoError(t, err, "failed to unmarshal patched Object")
 
 				require.True(t, equality.Semantic.DeepEqual(test.wantGRB(), gotObj), "patched object and desired object are not equivalent wanted=%#v got=%#v", test.wantGRB(), gotObj)
 			} else {
