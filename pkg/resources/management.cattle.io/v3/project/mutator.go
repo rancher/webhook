@@ -127,8 +127,8 @@ func (m *Mutator) createProjectNamespace(project *v3.Project) (*v3.Project, erro
 	if project.Name == "" {
 		// If err is nil, (meaning "project exists", see below) we need to repeat the generation process to find a project name and backing namespace that isn't taken
 		for err == nil {
-			newName := names.SimpleNameGenerator.GenerateName(project.GenerateName)
-			_, err = m.projectClient.Get(newProject.Spec.ClusterName, newName, v1.GetOptions{})
+			newProject.Name = names.SimpleNameGenerator.GenerateName(project.GenerateName)
+			_, err = m.projectClient.Get(newProject.Spec.ClusterName, newProject.Name, v1.GetOptions{})
 			if err == nil {
 				// A project with this name already exists. Generate a new name.
 				continue
@@ -136,7 +136,7 @@ func (m *Mutator) createProjectNamespace(project *v3.Project) (*v3.Project, erro
 				return nil, err
 			}
 
-			backingNamespace = name.SafeConcatName(newProject.Spec.ClusterName, strings.ToLower(newName))
+			backingNamespace = name.SafeConcatName(newProject.Spec.ClusterName, strings.ToLower(newProject.Name))
 			_, err = m.namespaceClient.Get(backingNamespace, v1.GetOptions{})
 
 			// If the backing namespace already exists, generate a new project name

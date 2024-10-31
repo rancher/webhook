@@ -3,6 +3,7 @@ package project
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	jsonpatch "github.com/evanphx/json-patch"
@@ -39,14 +40,15 @@ var (
 func TestAdmit(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name        string
-		operation   admissionv1.Operation
-		dryRun      bool
-		oldProject  func() *v3.Project
-		newProject  func() *v3.Project
-		indexer     func() ([]*v3.RoleTemplate, error)
-		wantProject func() *v3.Project
-		wantErr     bool
+		name         string
+		operation    admissionv1.Operation
+		dryRun       bool
+		oldProject   func() *v3.Project
+		newProject   func() *v3.Project
+		indexer      func() ([]*v3.RoleTemplate, error)
+		wantProject  func() *v3.Project
+		wantErr      bool
+		generateName bool
 	}{
 		{
 			name:       "dry run returns allowed",
@@ -158,6 +160,45 @@ func TestAdmit(t *testing.T) {
 				return p
 			},
 		},
+		{
+			name:      "create with generated name",
+			operation: admissionv1.Create,
+			newProject: func() *v3.Project {
+				p := defaultProject.DeepCopy()
+				p.Name = ""
+				p.GenerateName = "p-"
+				return p
+			},
+			wantProject: func() *v3.Project {
+				p := defaultProject.DeepCopy()
+				p.Name = "p-"
+				p.GenerateName = "p-"
+				p.Annotations = map[string]string{
+					"authz.management.cattle.io/creator-role-bindings": "{\"required\":[\"project-owner\"]}",
+				}
+				p.Status.BackingNamespace = "testcluster-p-"
+				return p
+			},
+			generateName: true,
+		},
+		{
+			name:      "when creating with generated name and name, prioritize name",
+			operation: admissionv1.Create,
+			newProject: func() *v3.Project {
+				p := defaultProject.DeepCopy()
+				p.GenerateName = "p-"
+				return p
+			},
+			wantProject: func() *v3.Project {
+				p := defaultProject.DeepCopy()
+				p.GenerateName = "p-"
+				p.Annotations = map[string]string{
+					"authz.management.cattle.io/creator-role-bindings": "{\"required\":[\"project-owner\"]}",
+				}
+				p.Status.BackingNamespace = "testcluster-testproject"
+				return p
+			},
+		},
 	}
 
 	roleTemplates := []*v3.RoleTemplate{
@@ -223,6 +264,14 @@ func TestAdmit(t *testing.T) {
 				err = json.Unmarshal(patchedJS, gotObj)
 				assert.NoError(t, err, "failed to unmarshal patched Object")
 
+				if test.generateName {
+					// Since the name is a random string, confirm it has the right prefix and set it back to p- before checking equality.
+					assert.True(t, strings.HasPrefix(gotObj.Name, newProject.GenerateName))
+					gotObj.Name = newProject.GenerateName
+					// The backing namespace will also have a random string. Confirm that it has the prefix "ClusterName-GenerateName" and reset it before checking equality.
+					assert.True(t, strings.HasPrefix(gotObj.Status.BackingNamespace, fmt.Sprintf("%s-%s", newProject.Spec.ClusterName, newProject.GenerateName)))
+					gotObj.Status.BackingNamespace = fmt.Sprintf("%s-%s", newProject.Spec.ClusterName, newProject.GenerateName)
+				}
 				assert.Equal(t, test.wantProject(), gotObj)
 			} else {
 				assert.Nil(t, resp.Patch, "unexpected patch request received")
