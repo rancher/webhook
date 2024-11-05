@@ -4,9 +4,6 @@
 
 ClusterName must be equal to the namespace, and must refer to an existing management.cattle.io/v3.Cluster object. In addition, users cannot update the field after creation. 
 
-### BackingNamespace validation
-The `BackingNamespace` field cannot be changed once set. Projects without the `BackingNamespace` field can have it added.
-
 ### Protects system project
 
 The system project cannot be deleted.
@@ -26,13 +23,4 @@ Limits for any resource must not be less than requests.
 
 ### On create
 
-Populates the `BackingNamespace` field by concatenating `Project.ClusterName` and `Project.Name`.
-
-If the project is using a generated name (ie `GenerateName` is not empty), the generation happens within the mutating webhook.
-The reason for this is that the BackingNamespace is made up of the `Project.Name`, and name generation happens after mutating webhooks and before validating webhooks.
-
 Adds the authz.management.cattle.io/creator-role-bindings annotation.
-
-### On update
-
-If the `BackingNamespace` field is empty, it's populated with the project name.
