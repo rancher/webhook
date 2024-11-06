@@ -39,7 +39,7 @@ require (
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/evanphx/json-patch v5.9.0+incompatible
 	github.com/gorilla/mux v1.8.1
-	github.com/rancher/dynamiclistener v0.6.1-rc.1
+	github.com/rancher/dynamiclistener v0.6.1-rc.2
 	github.com/rancher/lasso v0.0.0-20240924233157-8f384efc8813
 	github.com/rancher/rancher/pkg/apis v0.0.0-20240903164338-21e4787cd0b3
 	github.com/rancher/rke v1.6.0
