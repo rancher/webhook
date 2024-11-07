@@ -41,15 +41,15 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/rancher/dynamiclistener v0.6.0
-	github.com/rancher/lasso v0.0.0-20240809125800-8da6f11865d5
-	github.com/rancher/rancher/pkg/apis v0.0.0-20240918011937-2f9a7509687f
-	github.com/rancher/rke v1.6.2
+	github.com/rancher/lasso v0.0.0-20240923125127-ae858d002589
+	github.com/rancher/rancher/pkg/apis v0.0.0-20241106193223-d5c00c4ce801
+	github.com/rancher/rke v1.6.4-rc.2
 	github.com/rancher/wrangler/v3 v3.0.0
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
-	golang.org/x/text v0.18.0
+	golang.org/x/text v0.19.0
 	golang.org/x/tools v0.24.0
 	k8s.io/api v0.30.2
 	k8s.io/apimachinery v0.30.2
@@ -69,7 +69,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
-	github.com/cespare/xxhash/v2 v2.2.0 // indirect
+	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -108,10 +108,10 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.47.0 // indirect
 	github.com/prometheus/procfs v0.14.0 // indirect
-	github.com/rancher/aks-operator v1.9.2 // indirect
-	github.com/rancher/eks-operator v1.9.2 // indirect
+	github.com/rancher/aks-operator v1.9.4-rc.2 // indirect
+	github.com/rancher/eks-operator v1.9.4-rc.2 // indirect
 	github.com/rancher/fleet/pkg/apis v0.10.0 // indirect
-	github.com/rancher/gke-operator v1.9.2 // indirect
+	github.com/rancher/gke-operator v1.9.4-rc.1 // indirect
 	github.com/rancher/norman v0.0.0-20240708202514-a0127673d1b9 // indirect
 	github.com/spf13/cobra v1.8.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
@@ -130,13 +130,13 @@ require (
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	golang.org/x/crypto v0.27.0 // indirect
+	golang.org/x/crypto v0.28.0 // indirect
 	golang.org/x/mod v0.20.0 // indirect
-	golang.org/x/net v0.29.0 // indirect
+	golang.org/x/net v0.30.0 // indirect
 	golang.org/x/oauth2 v0.23.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/sys v0.25.0 // indirect
-	golang.org/x/term v0.24.0 // indirect
+	golang.org/x/sys v0.26.0 // indirect
+	golang.org/x/term v0.25.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/genproto v0.0.0-20231106174013-bbf56f31fb17 // indirect
