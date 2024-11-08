@@ -39,7 +39,7 @@ require (
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/evanphx/json-patch v5.9.0+incompatible
 	github.com/gorilla/mux v1.8.1
-	github.com/rancher/dynamiclistener v0.6.1-rc.2
+	github.com/rancher/dynamiclistener v1.27.5
 	github.com/rancher/lasso v0.0.0-20240924233157-8f384efc8813
 	github.com/rancher/rancher/pkg/apis v0.0.0-20241107131222-66a20d10897a
 	github.com/rancher/rke v1.7.0-rc.5
@@ -114,6 +114,7 @@ require (
 	github.com/rancher/fleet/pkg/apis v0.11.0-rc.2 // indirect
 	github.com/rancher/gke-operator v1.10.0-rc.2 // indirect
 	github.com/rancher/norman v0.0.0-20241001183610-78a520c160ab // indirect
+	github.com/rancher/wrangler v1.1.1 // indirect
 	github.com/spf13/cobra v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
