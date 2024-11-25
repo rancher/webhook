@@ -272,11 +272,6 @@ var (
 			},
 		},
 	}
-	restrictedAdminGR = v3.GlobalRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "restricted-admin",
-		},
-	}
 	fwResourceRules = []rbacv1.PolicyRule{
 		{
 			APIGroups: []string{"fleet.cattle.io"},
@@ -390,7 +385,6 @@ func newDefaultState(t *testing.T) testState {
 
 	grbCacheMock.EXPECT().AddIndexer(gomock.Any(), gomock.Any()).AnyTimes()
 	grCacheMock.EXPECT().Get(baseGR.Name).Return(&baseGR, nil).AnyTimes()
-	grCacheMock.EXPECT().Get(restrictedAdminGR.Name).Return(&restrictedAdminGR, nil).AnyTimes()
 	grCacheMock.EXPECT().Get(adminGR.Name).Return(adminGR, nil).AnyTimes()
 	grCacheMock.EXPECT().Get(notFoundName).Return(nil, newNotFound(notFoundName)).AnyTimes()
 	grCacheMock.EXPECT().Get("").Return(nil, newNotFound("")).AnyTimes()
