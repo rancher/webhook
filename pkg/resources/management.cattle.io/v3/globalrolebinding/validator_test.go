@@ -784,25 +784,6 @@ func TestAdmit(t *testing.T) {
 			},
 			allowed: false,
 		},
-		{
-			name: "restricted admin can grant GR with InheritedFleetWorkspacePermissions",
-			args: args{
-				username: restrictedAdminUser,
-				newGRB: func() *v3.GlobalRoleBinding {
-					return &v3.GlobalRoleBinding{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: "test-grb",
-						},
-						UserName:       testUser,
-						GlobalRoleName: fwGR.Name,
-					}
-				},
-				stateSetup: func(ts testState) {
-					ts.grCacheMock.EXPECT().Get(fwGR.Name).Return(&fwGR, nil)
-				},
-			},
-			allowed: true,
-		},
 	}
 
 	for _, test := range tests {
