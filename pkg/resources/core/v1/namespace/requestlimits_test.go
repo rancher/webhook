@@ -59,22 +59,46 @@ func TestRequestLimitAdmitter(t *testing.T) {
 			wantAllowed:      false,
 		},
 		{
-			name:             "create ns within incomplete resource limits",
+			name:             "create ns within only cpu req and limit",
 			operationType:    v1.Create,
 			limitsAnnotation: `{"limitsCpu": "500m", "requestsCpu": "100m"}`,
+			wantAllowed:      true,
+		},
+		{
+			name:             "create ns within invalid cpu req and limit",
+			operationType:    v1.Create,
+			limitsAnnotation: `{"limitsCpu": "100m", "requestsCpu": "500m"}`,
 			wantAllowed:      false,
 		},
 		{
-			name:             "update ns within incomplete resource limits",
-			operationType:    v1.Create,
+			name:             "update ns within only memory resource req and limit",
+			operationType:    v1.Update,
 			limitsAnnotation: `{"limitsCpu": "500m", "requestsCpu": "100m"}`,
-			wantAllowed:      false,
+			wantAllowed:      true,
+		},
+		{
+			name:             "create ns within only memory req and cpu limit",
+			operationType:    v1.Create,
+			limitsAnnotation: `{"limitsMemory": "256Mi", "limitssCpu": "100m"}`,
+			wantAllowed:      true,
 		},
 		{
 			name:             "create ns within empty resource limits",
 			operationType:    v1.Create,
 			limitsAnnotation: `{}`,
 			wantAllowed:      true,
+		},
+		{
+			name:             "create ns within invalid cpu limits",
+			operationType:    v1.Create,
+			limitsAnnotation: `{"limitsCpu": "25invalid"}`,
+			wantAllowed:      false,
+		},
+		{
+			name:             "update ns within invalid memory limits",
+			operationType:    v1.Update,
+			limitsAnnotation: `{"limitsMemory": "77foobar"}`,
+			wantAllowed:      false,
 		},
 	}
 

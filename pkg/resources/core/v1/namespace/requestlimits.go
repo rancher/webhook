@@ -70,35 +70,53 @@ func (r *requestLimitAdmitter) admitCommonCreateUpdate(_, newNamespace *v1.Names
 	return admission.ResponseAllowed(), nil
 }
 
-// validateResourceLimitsWithUnits takes a set of cpu/memory requests/limits and will return an error if the requests are
-// malformed or greater than the limits.
+// validateResourceLimitsWithUnits takes a set of CPU/memory requests/limits and validates them.
+// It parses all provided values. If both a request and a limit exist for CPU or memory, it ensures
+// that the request is not greater than the limit. Missing values are parsed but ignored in comparison.
 func validateResourceLimitsWithUnits(limits ResourceLimits) error {
-	requestsCPU, err := resource.ParseQuantity(limits.RequestsCPU)
-	if err != nil {
-		return fmt.Errorf("invalid requestsCpu value: %v", err)
+	var requestsCPU, limitsCPU resource.Quantity
+	var err error
+	if limits.RequestsCPU != "" {
+		requestsCPU, err = resource.ParseQuantity(limits.RequestsCPU)
+		if err != nil {
+			return fmt.Errorf("invalid requestsCpu value: %v", err)
+		}
 	}
 
-	limitsCPU, err := resource.ParseQuantity(limits.LimitsCPU)
-	if err != nil {
-		return fmt.Errorf("invalid limitsCpu value: %v", err)
+	if limits.LimitsCPU != "" {
+		limitsCPU, err = resource.ParseQuantity(limits.LimitsCPU)
+		if err != nil {
+			return fmt.Errorf("invalid limitsCpu value: %v", err)
+		}
 	}
 
-	if requestsCPU.Cmp(limitsCPU) > 0 {
-		return fmt.Errorf("requestsCpu (%s) cannot be greater than limitsCpu (%s)", requestsCPU.String(), limitsCPU.String())
+	// Compare CPU requests and limits if both are provided
+	if limits.RequestsCPU != "" && limits.LimitsCPU != "" {
+		if requestsCPU.Cmp(limitsCPU) > 0 {
+			return fmt.Errorf("requestsCpu (%s) cannot be greater than limitsCpu (%s)", requestsCPU.String(), limitsCPU.String())
+		}
 	}
 
-	requestsMemory, err := resource.ParseQuantity(limits.RequestsMemory)
-	if err != nil {
-		return fmt.Errorf("invalid requestsMemory value: %v", err)
+	var requestsMemory, limitsMemory resource.Quantity
+	if limits.RequestsMemory != "" {
+		requestsMemory, err = resource.ParseQuantity(limits.RequestsMemory)
+		if err != nil {
+			return fmt.Errorf("invalid requestsMemory value: %v", err)
+		}
 	}
 
-	limitsMemory, err := resource.ParseQuantity(limits.LimitsMemory)
-	if err != nil {
-		return fmt.Errorf("invalid limitsMemory value: %v", err)
+	if limits.LimitsMemory != "" {
+		limitsMemory, err = resource.ParseQuantity(limits.LimitsMemory)
+		if err != nil {
+			return fmt.Errorf("invalid limitsMemory value: %v", err)
+		}
 	}
 
-	if requestsMemory.Cmp(limitsMemory) > 0 {
-		return fmt.Errorf("requestsMemory (%s) cannot be greater than limitsMemory (%s)", requestsMemory.String(), limitsMemory.String())
+	// Compare memory requests and limits if both are provided
+	if limits.RequestsMemory != "" && limits.LimitsMemory != "" {
+		if requestsMemory.Cmp(limitsMemory) > 0 {
+			return fmt.Errorf("requestsMemory (%s) cannot be greater than limitsMemory (%s)", requestsMemory.String(), limitsMemory.String())
+		}
 	}
 
 	return nil
