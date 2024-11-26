@@ -3,6 +3,7 @@ package namespace
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/rancher/webhook/pkg/admission"
 	objectsv1 "github.com/rancher/webhook/pkg/generated/objects/core/v1"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -38,9 +39,9 @@ func (r *requestLimitAdmitter) Admit(request *admission.Request) (*admissionv1.A
 }
 
 type ResourceLimits struct {
-	LimitsCpu      string `json:"limitsCpu"`
+	LimitsCPU      string `json:"limitsCpu"`
 	LimitsMemory   string `json:"limitsMemory"`
-	RequestsCpu    string `json:"requestsCpu"`
+	RequestsCPU    string `json:"requestsCpu"`
 	RequestsMemory string `json:"requestsMemory"`
 }
 
@@ -72,18 +73,18 @@ func (r *requestLimitAdmitter) admitCommonCreateUpdate(_, newNamespace *v1.Names
 // validateResourceLimitsWithUnits takes a set of cpu/memory requests/limits and will return an error if the requests are
 // malformed or greater than the limits.
 func validateResourceLimitsWithUnits(limits ResourceLimits) error {
-	requestsCpu, err := resource.ParseQuantity(limits.RequestsCpu)
+	requestsCPU, err := resource.ParseQuantity(limits.RequestsCPU)
 	if err != nil {
 		return fmt.Errorf("invalid requestsCpu value: %v", err)
 	}
 
-	limitsCpu, err := resource.ParseQuantity(limits.LimitsCpu)
+	limitsCPU, err := resource.ParseQuantity(limits.LimitsCPU)
 	if err != nil {
 		return fmt.Errorf("invalid limitsCpu value: %v", err)
 	}
 
-	if requestsCpu.Cmp(limitsCpu) > 0 {
-		return fmt.Errorf("requestsCpu (%s) cannot be greater than limitsCpu (%s)", requestsCpu.String(), limitsCpu.String())
+	if requestsCPU.Cmp(limitsCPU) > 0 {
+		return fmt.Errorf("requestsCpu (%s) cannot be greater than limitsCpu (%s)", requestsCPU.String(), limitsCPU.String())
 	}
 
 	requestsMemory, err := resource.ParseQuantity(limits.RequestsMemory)
