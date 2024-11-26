@@ -216,21 +216,6 @@ func TestClusterRulesFromRole(t *testing.T) {
 			wantRules: append(append(noInheritRules, firstRTRules...), secondRTRules...),
 		},
 		{
-			name: "test restricted admin gr",
-			globalRole: &v3.GlobalRole{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "restricted-admin",
-				},
-				Rules:                 globalRules,
-				InheritedClusterRoles: []string{},
-			},
-			stateSetup: func(state testState) {
-				state.rtCacheMock.EXPECT().Get("cluster-owner").Return(adminRT, nil)
-			},
-			wantRules: adminRTRules,
-		},
-
-		{
 			name: "test rt resolver error",
 			globalRole: &v3.GlobalRole{
 				ObjectMeta: metav1.ObjectMeta{

@@ -25,15 +25,14 @@ import (
 )
 
 const (
-	adminUser           = "admin-user"
-	restrictedAdminUser = "restricted-admin-user"
-	testUser            = "test-user"
-	noPrivUser          = "no-priv-user"
-	newUser             = "newUser-user"
-	newGroupPrinc       = "local://group"
-	testGroup           = "testGroup"
-	notFoundName        = "not-found"
-	errName             = "error-Name"
+	adminUser     = "admin-user"
+	testUser      = "test-user"
+	noPrivUser    = "no-priv-user"
+	newUser       = "newUser-user"
+	newGroupPrinc = "local://group"
+	testGroup     = "testGroup"
+	notFoundName  = "not-found"
+	errName       = "error-Name"
 )
 
 type testCase struct {
@@ -173,13 +172,6 @@ var (
 		GlobalRoleName: baseGR.Name,
 		UserName:       testUser,
 	}
-	restrictedAdminGRB = v3.GlobalRoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "res-grb",
-		},
-		GlobalRoleName: restrictedAdminGR.Name,
-		UserName:       restrictedAdminUser,
-	}
 	adminRT = v3.RoleTemplate{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "escalation-rt",
@@ -278,11 +270,6 @@ var (
 					Verbs:     []string{"*"},
 				},
 			},
-		},
-	}
-	restrictedAdminGR = v3.GlobalRole{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "restricted-admin",
 		},
 	}
 	fwResourceRules = []rbacv1.PolicyRule{
@@ -395,11 +382,9 @@ func newDefaultState(t *testing.T) testState {
 	grbs := []*v3.GlobalRoleBinding{&baseGRB}
 	grbCacheMock.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(testUser, "")).Return(grbs, nil).AnyTimes()
 	grbCacheMock.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(adminUser, "")).Return(grbs, nil).AnyTimes()
-	grbCacheMock.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(restrictedAdminUser, "")).Return([]*v3.GlobalRoleBinding{&restrictedAdminGRB}, nil).AnyTimes()
 
 	grbCacheMock.EXPECT().AddIndexer(gomock.Any(), gomock.Any()).AnyTimes()
 	grCacheMock.EXPECT().Get(baseGR.Name).Return(&baseGR, nil).AnyTimes()
-	grCacheMock.EXPECT().Get(restrictedAdminGR.Name).Return(&restrictedAdminGR, nil).AnyTimes()
 	grCacheMock.EXPECT().Get(adminGR.Name).Return(adminGR, nil).AnyTimes()
 	grCacheMock.EXPECT().Get(notFoundName).Return(nil, newNotFound(notFoundName)).AnyTimes()
 	grCacheMock.EXPECT().Get("").Return(nil, newNotFound("")).AnyTimes()
