@@ -28,7 +28,7 @@ func TestOperations(t *testing.T) {
 func TestAdmitters(t *testing.T) {
 	validator := NewValidator(nil)
 	admitters := validator.Admitters()
-	assert.Len(t, admitters, 2)
+	assert.Len(t, admitters, 3)
 	hasPSAAdmitter := false
 	hasProjectNamespaceAdmitter := false
 	for i := range admitters {
