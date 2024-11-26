@@ -18,8 +18,9 @@ var projectsGVR = schema.GroupVersionResource{
 
 // Validator validates the namespace admission request.
 type Validator struct {
-	psaAdmitter              psaLabelAdmitter
-	projectNamespaceAdmitter projectNamespaceAdmitter
+	psaAdmitter                psaLabelAdmitter
+	projectNamespaceAdmitter   projectNamespaceAdmitter
+	requestWithinLimitAdmitter requestLimitAdmitter
 }
 
 // NewValidator returns a new validator used for validation of namespace requests.
@@ -31,6 +32,7 @@ func NewValidator(sar authorizationv1.SubjectAccessReviewInterface) *Validator {
 		projectNamespaceAdmitter: projectNamespaceAdmitter{
 			sar: sar,
 		},
+		requestWithinLimitAdmitter: requestLimitAdmitter{},
 	}
 }
 
@@ -90,5 +92,5 @@ func (v *Validator) ValidatingWebhook(clientConfig admissionv1.WebhookClientConf
 
 // Admitters returns the psaAdmitter and the projectNamespaceAdmitter for namespaces.
 func (v *Validator) Admitters() []admission.Admitter {
-	return []admission.Admitter{&v.psaAdmitter, &v.projectNamespaceAdmitter}
+	return []admission.Admitter{&v.psaAdmitter, &v.projectNamespaceAdmitter, &v.requestWithinLimitAdmitter}
 }

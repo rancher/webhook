@@ -60,6 +60,10 @@ The following labels are considered relevant for PSA enforcement:
 - pod-security.kubernetes.io/warn
 - pod-security.kubernetes.io/warn-version
 
+#### Namespace resource limit validation
+
+Validation ensures that the limits for cpu/memory must not be less than the requests for cpu/memory.
+
 ## Secret
 
 ### Validation Checks
