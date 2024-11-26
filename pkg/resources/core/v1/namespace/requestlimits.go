@@ -54,7 +54,7 @@ func (r *requestLimitAdmitter) admitCommonCreateUpdate(_, newNamespace *v1.Names
 	}
 
 	resourceLimitJSON, exists := annotations[resourceLimitAnnotation]
-	if !exists {
+	if !exists || resourceLimitJSON == "{}" {
 		return admission.ResponseAllowed(), nil
 	}
 

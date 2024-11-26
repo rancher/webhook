@@ -58,6 +58,24 @@ func TestRequestLimitAdmitter(t *testing.T) {
 			limitsAnnotation: `{"limitsCpu": "200m", "limitsMemory": "256Mi", "requestsCpu": "1", "requestsMemory": "1Gi"}`,
 			wantAllowed:      false,
 		},
+		{
+			name:             "create ns within incomplete resource limits",
+			operationType:    v1.Create,
+			limitsAnnotation: `{"limitsCpu": "500m", "requestsCpu": "100m"}`,
+			wantAllowed:      false,
+		},
+		{
+			name:             "update ns within incomplete resource limits",
+			operationType:    v1.Create,
+			limitsAnnotation: `{"limitsCpu": "500m", "requestsCpu": "100m"}`,
+			wantAllowed:      false,
+		},
+		{
+			name:             "create ns within empty resource limits",
+			operationType:    v1.Create,
+			limitsAnnotation: `{}`,
+			wantAllowed:      true,
+		},
 	}
 
 	for _, test := range tests {
