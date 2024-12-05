@@ -81,6 +81,10 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, fmt.Errorf("failed get old and new clusters from request: %w", err)
 	}
 
+	if request.Operation == admissionv1.Delete && request.Name == "local" {
+		return admission.ResponseBadRequest("bad idea; nope, nope"), nil
+	}
+
 	response, err := a.validateFleetPermissions(request, oldCluster, newCluster)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate fleet permissions: %w", err)
