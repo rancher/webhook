@@ -33,7 +33,7 @@ update_dep() {
 
   echo "Version mismatch for $module (rancher=$new_version, webhook=$old_version) detected"
   go mod edit -require="$module@$new_version"
-  echo "Updated $module ($old_version => $new_version)" >> "$CHANGES_FILE"
+  printf '**%s**\n`%s` => `%s`' "$module" "$old_version" "$new_version" >> "$CHANGES_FILE"
 }
 
 rancher_deps=$(cd "$RANCHER_REPO_DIR" && go mod graph)
