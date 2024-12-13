@@ -53,16 +53,23 @@ jobs:
           BRANCH="sync-deps-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           echo "BRANCH=${BRANCH}" >> $GITHUB_ENV
           git checkout -b "$BRANCH"
-          ./.github/workflows/scripts/sync-deps.sh ../rancher 
-          git add go.mod go.sum
-          git commit -m "Sync dependencies"
-          git push origin "$BRANCH"
+          ./.github/workflows/scripts/sync-deps.sh ../rancher "changes.txt"
+          if [ -f changes.txt ]; then
+            git add go.mod go.sum
+            git commit -m "Sync dependencies"
+            git push origin "$BRANCH"
+          fi
 
       - name: Create PR
+        # Only create the PR if changes were detected
+        if: ${{ hashFiles('webhook/changes.txt') != '' }}
         run: |
           cd webhook
+          changes=$(cat changes.txt)
           body=$(cat <<EOF
           # Sync with Rancher
+
+          $changes
 
           The workflow was triggered by $GITHUB_TRIGGERING_ACTOR.
           EOF
