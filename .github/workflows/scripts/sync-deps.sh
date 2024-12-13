@@ -1,4 +1,6 @@
 #!/bin/sh
+#
+# 
 
 set -e
 
@@ -15,6 +17,15 @@ DEPS_TO_SYNC="
   github.com/rancher/wrangler/v3
 "
 
+if [ -z "$RANCHER_REPO_DIR" ]; then
+  usage
+  exit 1
+fi
+
+usage() {
+  echo "$0 <path to rancher repository> [<path to write dependency changes to>]"
+}
+
 update_dep() {
   module=$1
   old_version=$2
@@ -29,7 +40,10 @@ rancher_deps=$(cd "$RANCHER_REPO_DIR" && go mod graph)
 webhook_deps=$(go mod graph)
 
 rancher_ref=$(cd "$RANCHER_REPO_DIR" && git rev-parse HEAD)
-rancher_pkg_apis_version=$(go mod download -json "github.com/rancher/rancher/pkg/apis@$rancher_ref" | jq -r '.Version')
+if ! rancher_pkg_apis_version=$(go mod download -json "github.com/rancher/rancher/pkg/apis@$rancher_ref" | jq -r '.Version'); then
+  echo "Unable to get version of $PKG_APIS"
+  exit 1
+fi
 webhook_pkg_apis_version=$(echo "$webhook_deps" | grep "^$PKG_APIS@\w*\S" | head -n 1 | cut -d' ' -f1 | cut -d@ -f2)
 
 if [ "$rancher_pkg_apis_version" != "$webhook_pkg_apis_version" ]; then
