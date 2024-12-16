@@ -45,20 +45,20 @@ require (
 	github.com/gorilla/mux v1.8.0
 	github.com/rancher/dynamiclistener v0.4.0
 	github.com/rancher/lasso v0.0.0-20240705194423-b2a060d103c1
-	github.com/rancher/rancher/pkg/apis v0.0.0-20241106152309-5d16cb2481b1
-	github.com/rancher/rke v1.5.15-rc.2
+	github.com/rancher/rancher/pkg/apis v0.0.0-20241216141324-3339dff5e48f
+	github.com/rancher/rke v1.5.15
 	github.com/rancher/wrangler/v2 v2.1.4
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.3
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
-	golang.org/x/text v0.18.0
-	golang.org/x/tools v0.24.0
+	golang.org/x/text v0.21.0
+	golang.org/x/tools v0.26.0
 	k8s.io/api v0.30.0
 	k8s.io/apimachinery v0.30.0
 	k8s.io/apiserver v0.28.9
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/kubernetes v1.28.8
+	k8s.io/kubernetes v1.28.9
 	k8s.io/pod-security-admission v0.28.6
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
 	sigs.k8s.io/controller-runtime v0.16.6
@@ -113,10 +113,10 @@ require (
 	github.com/prometheus/client_model v0.4.1-0.20230718164431-9a2bf3000d16 // indirect
 	github.com/prometheus/common v0.44.0 // indirect
 	github.com/prometheus/procfs v0.11.1 // indirect
-	github.com/rancher/aks-operator v1.2.5 // indirect
-	github.com/rancher/eks-operator v1.3.5 // indirect
-	github.com/rancher/fleet/pkg/apis v0.9.6 // indirect
-	github.com/rancher/gke-operator v1.2.5 // indirect
+	github.com/rancher/aks-operator v1.2.6 // indirect
+	github.com/rancher/eks-operator v1.3.6 // indirect
+	github.com/rancher/fleet/pkg/apis v0.9.12 // indirect
+	github.com/rancher/gke-operator v1.2.6 // indirect
 	github.com/rancher/norman v0.0.0-20240206180703-6eda4bc94b4c // indirect
 	github.com/spf13/cobra v1.7.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
@@ -136,20 +136,20 @@ require (
 	go.opentelemetry.io/proto/otlp v0.19.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.25.0 // indirect
-	golang.org/x/crypto v0.27.0 // indirect
-	golang.org/x/mod v0.20.0 // indirect
-	golang.org/x/net v0.29.0 // indirect
-	golang.org/x/oauth2 v0.23.0 // indirect
-	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/sys v0.25.0 // indirect
-	golang.org/x/term v0.24.0 // indirect
+	golang.org/x/crypto v0.30.0 // indirect
+	golang.org/x/mod v0.21.0 // indirect
+	golang.org/x/net v0.32.0 // indirect
+	golang.org/x/oauth2 v0.24.0 // indirect
+	golang.org/x/sync v0.10.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/term v0.27.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/genproto v0.0.0-20231106174013-bbf56f31fb17 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20231030173426-d783a09b4405 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231120223509-83a465c0220f // indirect
 	google.golang.org/grpc v1.59.0 // indirect
-	google.golang.org/protobuf v1.34.2 // indirect
+	google.golang.org/protobuf v1.35.1 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
