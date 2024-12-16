@@ -25,11 +25,29 @@ jobs:
     name: Sync dependencies
     runs-on: ubuntu-latest
     steps:
+      - uses: rancher-eio/read-vault-secrets@main
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials appId | APP_ID ;
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATE_KEY
+
+      # Fetch github token just for the webhook repository
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ env.APP_ID }}
+          private-key: ${{ env.PRIVATE_KEY }}
+          repositories: |
+            webhook
+
       - name : Checkout webhook repository
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           ref: "${{ env.WEBHOOK_REF }}"
           path: webhook
+          token: ${{ steps.app-token.outputs.token }}
+          # Allow making git push request later on
+          persist-credentials: true
 
       - name : Checkout rancher repository
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
@@ -44,8 +62,12 @@ jobs:
       - name: Configure the committer
         run: |
           cd webhook
-          git config --global user.name "Webhook Sync Bot"
-          git config --global user.email "webhooksyncbot@users.noreply.github.com"
+          user_id=$(gh api "/users/$APP_USER" --jq .id)"
+          git config --global user.name "$APP_USER"
+          git config --global user.email "${user_id}+${APP_USER}@users.noreply.github.com>"
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_USER: "${{ steps.app-token.outputs.app-slug }}[bot]"
 
       - name: Run sync-deps script
         run: |
@@ -82,4 +104,4 @@ jobs:
             --head "${{ github.repository_owner }}:$BRANCH" \
             --base "$WEBHOOK_REF"
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
