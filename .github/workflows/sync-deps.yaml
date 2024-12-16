@@ -1,0 +1,85 @@
+name: Sync dependencies
+
+on:
+  workflow_dispatch:
+    inputs:
+      rancher_ref:
+        description: "Version of rancher/rancher to compare"
+        required: true
+        default: "release/v2.10"
+      rancher_repository:
+        description: "Repository for rancher/rancher"
+        required: true
+        default: "rancher/rancher"
+
+env:
+  RANCHER_REF: "${{ github.event.inputs.rancher_ref }}"
+  WEBHOOK_REF: "${{ github.ref_name }}"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    name: Sync dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name : Checkout webhook repository
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          ref: "${{ env.WEBHOOK_REF }}"
+          path: webhook
+
+      - name : Checkout rancher repository
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          repository: "${{ github.event.inputs.rancher_repository }}"
+          ref: "${{ env.RANCHER_REF }}"
+          path: rancher
+
+      - name: Install dependencies
+        run: sudo snap install yq --channel=v4/stable
+
+      - name: Configure the committer
+        run: |
+          cd webhook
+          git config --global user.name "Webhook Sync Bot"
+          git config --global user.email "webhooksyncbot@users.noreply.github.com"
+
+      - name: Run sync-deps script
+        run: |
+          cd webhook
+          BRANCH="sync-deps-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "BRANCH=${BRANCH}" >> $GITHUB_ENV
+          git checkout -b "$BRANCH"
+          ./.github/workflows/scripts/sync-deps.sh ../rancher "changes.md"
+          if [ -f changes.md ]; then
+            git add go.mod go.sum
+            git commit -m "Sync dependencies"
+            git push origin "$BRANCH"
+          fi
+
+      - name: Create PR
+        # Only create the PR if changes were detected
+        if: ${{ hashFiles('webhook/changes.md') != '' }}
+        run: |
+          cd webhook
+          changes=$(cat changes.md)
+          body=$(cat <<EOF
+          # Sync with Rancher
+
+          $changes
+
+          The workflow was triggered by $GITHUB_TRIGGERING_ACTOR.
+          EOF
+          )
+          gh pr create \
+            --title "[$WEBHOOK_REF] Sync webhook dependencies" \
+            --body "$body" \
+            --reviewer "$GITHUB_TRIGGERING_ACTOR" \
+            --repo "${{ github.repository }}" \
+            --head "${{ github.repository_owner }}:$BRANCH" \
+            --base "$WEBHOOK_REF"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
