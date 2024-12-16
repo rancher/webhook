@@ -37,7 +37,7 @@ replace (
 	k8s.io/mount-utils => k8s.io/mount-utils v0.30.1
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.30.1
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.30.1
-	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.18.6
+	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.18.5
 )
 
 require (
@@ -136,7 +136,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	go.uber.org/mock v0.5.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.27.0 // indirect
+	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/crypto v0.30.0 // indirect
 	golang.org/x/mod v0.21.0 // indirect
 	golang.org/x/net v0.32.0 // indirect
@@ -155,7 +155,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.31.1 // indirect
-	k8s.io/cloud-provider v0.29.3 // indirect
+	k8s.io/cloud-provider v0.0.0 // indirect
 	k8s.io/code-generator v0.31.1 // indirect
 	k8s.io/component-base v0.31.1 // indirect
 	k8s.io/component-helpers v0.30.1 // indirect
@@ -166,8 +166,8 @@ require (
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kms v0.30.1 // indirect
 	k8s.io/kube-aggregator v0.31.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20240430033511-f0e62f92d13f // indirect
-	k8s.io/kubelet v0.29.3 // indirect
+	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 // indirect
+	k8s.io/kubelet v0.0.0 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.30.3 // indirect
 	sigs.k8s.io/cli-utils v0.37.2 // indirect
 	sigs.k8s.io/cluster-api v1.7.3 // indirect
