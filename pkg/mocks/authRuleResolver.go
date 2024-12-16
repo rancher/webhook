@@ -8,7 +8,7 @@ import (
 	fmt "fmt"
 	reflect "reflect"
 
-	gomock "github.com/golang/mock/gomock"
+	gomock "go.uber.org/mock/gomock"
 	v1 "k8s.io/api/rbac/v1"
 	user "k8s.io/apiserver/pkg/authentication/user"
 )
