@@ -63,9 +63,9 @@ jobs:
       - name: Configure the committer
         run: |
           cd webhook
-          user_id=$(gh api "/users/$APP_USER" --jq .id)"
+          user_id=$(gh api "/users/$APP_USER" --jq .id)
           git config --global user.name "$APP_USER"
-          git config --global user.email "${user_id}+${APP_USER}@users.noreply.github.com>"
+          git config --global user.email "${user_id}+${APP_USER}@users.noreply.github.com"
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           APP_USER: "${{ steps.app-token.outputs.app-slug }}[bot]"
