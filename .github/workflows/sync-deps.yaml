@@ -17,8 +17,9 @@ env:
   WEBHOOK_REF: "${{ github.ref_name }}"
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+  # Needed to access to vault
+  id-token: write
 
 jobs:
   sync:
