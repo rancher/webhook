@@ -5,6 +5,7 @@ go 1.22.0
 toolchain go1.22.7
 
 replace (
+	github.com/google/cel-go => github.com/google/cel-go v0.17.8
 	github.com/prometheus/client_golang => github.com/prometheus/client_golang v1.16.0
 	github.com/prometheus/client_model => github.com/prometheus/client_model v0.4.0
 	github.com/prometheus/common => github.com/prometheus/common v0.44.0
@@ -69,7 +70,7 @@ require (
 
 require (
 	github.com/NYTimes/gziphandler v1.1.1 // indirect
-	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
+	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230305170008-8188dc5388df // indirect
 	github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
