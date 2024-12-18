@@ -47,9 +47,9 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/rancher/dynamiclistener v0.6.0
 	github.com/rancher/lasso v0.0.0-20240924233157-8f384efc8813
-	github.com/rancher/rancher/pkg/apis v0.0.0-20241217204836-d8f2c4ab3efc
+	github.com/rancher/rancher/pkg/apis v0.0.0-20241218145205-acbf42524d03
 	github.com/rancher/rke v1.6.5
-	github.com/rancher/wrangler/v3 v3.0.1-rc.4
+	github.com/rancher/wrangler/v3 v3.0.1
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
