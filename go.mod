@@ -9,7 +9,7 @@ replace (
 	github.com/prometheus/client_golang => github.com/prometheus/client_golang v1.16.0
 	github.com/prometheus/client_model => github.com/prometheus/client_model v0.4.0
 	github.com/prometheus/common => github.com/prometheus/common v0.44.0
-	github.com/rancher/rke => github.com/rancher/rke v1.6.2
+	github.com/rancher/rke => github.com/rancher/rke v1.6.4
 	k8s.io/api => k8s.io/api v0.30.1
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.30.1
 	k8s.io/apimachinery => k8s.io/apimachinery v0.30.1
@@ -47,9 +47,9 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/rancher/dynamiclistener v0.6.0
 	github.com/rancher/lasso v0.0.0-20240924233157-8f384efc8813
-	github.com/rancher/rancher/pkg/apis v0.0.0-20241216141306-7668e56e894a
-	github.com/rancher/rke v1.6.4
-	github.com/rancher/wrangler/v3 v3.1.0
+	github.com/rancher/rancher/pkg/apis v0.0.0-20241217204836-d8f2c4ab3efc
+	github.com/rancher/rke v1.6.5
+	github.com/rancher/wrangler/v3 v3.0.1-rc.4
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
