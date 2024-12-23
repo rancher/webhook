@@ -51,8 +51,8 @@ jobs:
       - name: Checkout rancher repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           repository: ${{ github.repository_owner }}/rancher
+          ref: "${{ env.RANCHER_REF }}"
           token: ${{ steps.app-token.outputs.token }}
           path: rancher
           # Allow making git push request later on
