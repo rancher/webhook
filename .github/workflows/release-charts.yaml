@@ -5,7 +5,7 @@ on:
       charts_ref:
         description: "Submit PR against the following rancher/charts branch (eg: dev-v2.10)"
         required: true
-        default: "dev-v2.10"
+        default: "dev-v2.11"
       prev_webhook:
         description: "Previous Webhook version (eg: v0.5.0-rc.13)"
         required: true
@@ -17,6 +17,7 @@ on:
 
 env:
   CHARTS_REF: ${{ github.event.inputs.charts_ref }}
+  WEBHOOK_REF: "${{ github.ref_name }}"
   PREV_WEBHOOK: ${{ github.event.inputs.prev_webhook }}
   NEW_WEBHOOK: ${{ github.event.inputs.new_webhook }}
 
@@ -30,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.ref }}
+          ref: "${{ env.WEBHOOK_REF }}"
           path: webhook
 
       - uses: rancher-eio/read-vault-secrets@main
@@ -51,8 +52,8 @@ jobs:
       - name: Checkout charts repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           repository: ${{ github.repository_owner }}/charts
+          ref: "${{ env.CHARTS_REF }}"
           token: ${{ steps.app-token.outputs.token }}
           path: charts
           # Allow making git push request later on

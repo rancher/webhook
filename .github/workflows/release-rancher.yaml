@@ -17,6 +17,7 @@ on:
 
 env:
   RANCHER_REF: ${{ github.event.inputs.rancher_ref }}
+  WEBHOOK_REF: "${{ github.ref_name }}"
   PREV_WEBHOOK: ${{ github.event.inputs.prev_webhook }}
   NEW_WEBHOOK: ${{ github.event.inputs.new_webhook }}
 
@@ -30,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.ref }}
+          ref: "${{ env.WEBHOOK_REF }}"
           path: webhook
 
       - uses: rancher-eio/read-vault-secrets@main
@@ -51,8 +52,8 @@ jobs:
       - name: Checkout rancher repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           repository: ${{ github.repository_owner }}/rancher
+          ref: "${{ env.RANCHER_REF }}"
           token: ${{ steps.app-token.outputs.token }}
           path: rancher
           # Allow making git push request later on
