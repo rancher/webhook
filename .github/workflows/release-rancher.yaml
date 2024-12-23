@@ -78,7 +78,7 @@ jobs:
           BRANCH="bump-webhook-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           echo "BRANCH=${BRANCH}" >> $GITHUB_ENV
           git checkout -b "$BRANCH" "$RANCHER_REF"
-          ./webhook/.github/workflows/scripts/release-against-rancher.sh . "$NEW_WEBHOOK"
+          ../webhook/.github/workflows/scripts/release-against-rancher.sh . "$NEW_WEBHOOK"
 
       - name: Push and create pull request
         env:
