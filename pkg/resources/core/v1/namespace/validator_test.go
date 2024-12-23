@@ -20,7 +20,7 @@ func TestGVR(t *testing.T) {
 func TestOperations(t *testing.T) {
 	validator := NewValidator(nil)
 	operations := validator.Operations()
-	assert.Len(t, operations, 2)
+	assert.Len(t, operations, 3)
 	assert.Contains(t, operations, v1.Update)
 	assert.Contains(t, operations, v1.Create)
 }
@@ -56,7 +56,7 @@ func TestValidatingWebhook(t *testing.T) {
 	wantURL := "test.cattle.io/namespaces"
 	validator := NewValidator(nil)
 	webhooks := validator.ValidatingWebhook(clientConfig)
-	assert.Len(t, webhooks, 3)
+	assert.Len(t, webhooks, 4)
 	hasAllUpdateWebhook := false
 	hasCreateNonKubeSystemWebhook := false
 	hasCreateKubeSystemWebhook := false
@@ -71,7 +71,7 @@ func TestValidatingWebhook(t *testing.T) {
 		operation := operations[0]
 		assert.Equal(t, v1.ClusterScope, *rule.Scope)
 
-		assert.Contains(t, []v1.OperationType{v1.Create, v1.Update}, operation, "only expected webhooks for create and update")
+		assert.Contains(t, []v1.OperationType{v1.Create, v1.Update, v1.Delete}, operation, "only expected webhooks for create, update and delete")
 		if operation == v1.Update {
 			assert.False(t, hasAllUpdateWebhook, "had more than one webhook validating update calls, exepcted only one")
 			hasAllUpdateWebhook = true
@@ -81,7 +81,7 @@ func TestValidatingWebhook(t *testing.T) {
 				// failure policy defaults to fail, but if we specify one it needs to be fail
 				assert.Equal(t, v1.Fail, *webhook.FailurePolicy)
 			}
-		} else {
+		} else if operation == v1.Create {
 			assert.NotNil(t, webhook.NamespaceSelector)
 			matchExpressions := webhook.NamespaceSelector.MatchExpressions
 			assert.Len(t, matchExpressions, 1)
