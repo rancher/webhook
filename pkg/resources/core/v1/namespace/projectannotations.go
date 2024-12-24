@@ -87,10 +87,13 @@ func (p *projectNamespaceAdmitter) Admit(request *admission.Request) (*admission
 		return response, nil
 	}
 
+	constructedReason := fmt.Sprintf("User %q does not have permission %q on project %q",
+		request.UserInfo.Username, manageNSVerb, projectName)
+
 	response.Allowed = false
 	response.Result = &metav1.Status{
 		Status:  "Failure",
-		Message: sarResponse.Status.Reason,
+		Message: constructedReason,
 		Reason:  metav1.StatusReasonUnauthorized,
 		Code:    http.StatusForbidden,
 	}
