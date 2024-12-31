@@ -16,6 +16,7 @@ import (
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/fleetworkspace"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/globalrole"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/globalrolebinding"
+	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/node"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/nodedriver"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/podsecurityadmissionconfigurationtemplate"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/project"
@@ -78,6 +79,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			userattribute.NewValidator(),
 			clusterrole.NewValidator(),
 			clusterrolebinding.NewValidator(),
+			node.NewValidator(),
 		)
 	} else {
 		handlers = append(handlers, clusterauthtoken.NewValidator())
