@@ -1,8 +1,8 @@
 module github.com/rancher/webhook
 
-go 1.22.0
+go 1.23.0
 
-toolchain go1.22.7
+toolchain go1.23.4
 
 replace (
 	github.com/google/cel-go => github.com/google/cel-go v0.17.8
