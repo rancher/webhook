@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"strconv"
 
 	"github.com/blang/semver"
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -17,6 +18,7 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	v1 "k8s.io/api/authorization/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,13 +38,15 @@ func NewValidator(
 	sar authorizationv1.SubjectAccessReviewInterface,
 	cache v3.PodSecurityAdmissionConfigurationTemplateCache,
 	userCache v3.UserCache,
+	featureCache v3.FeatureCache,
 	settingCache v3.SettingCache,
 ) *Validator {
 	return &Validator{
 		admitter: admitter{
 			sar:          sar,
 			psact:        cache,
-			userCache:    userCache,    // userCache is nil for downstream clusters.
+			userCache:    userCache, // userCache is nil for downstream clusters.
+			featureCache: featureCache,
 			settingCache: settingCache, // settingCache is nil for downstream clusters
 		},
 	}
@@ -79,6 +83,7 @@ type admitter struct {
 	sar          authorizationv1.SubjectAccessReviewInterface
 	psact        v3.PodSecurityAdmissionConfigurationTemplateCache
 	userCache    v3.UserCache
+	featureCache v3.FeatureCache
 	settingCache v3.SettingCache
 }
 
@@ -115,6 +120,14 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 				return admission.ResponseBadRequest(fieldErr.Error()), nil
 			}
 		}
+	}
+
+	if response, err = a.validatePodDisruptionBudget(oldCluster, newCluster, request.Operation); err != nil || !response.Allowed {
+		return response, err
+	}
+
+	if response, err = a.validatePriorityClass(oldCluster, newCluster, request.Operation); err != nil || !response.Allowed {
+		return response, err
 	}
 
 	response, err = a.validatePSACT(oldCluster, newCluster, request.Operation)
@@ -265,6 +278,155 @@ func (a *admitter) validatePSACT(oldCluster, newCluster *apisv3.Cluster, op admi
 	return admission.ResponseAllowed(), nil
 }
 
+// validatePriorityClass validates that the Priority Class defined in the cluster SchedulingCustomization field is properly
+// configured. The cluster-agent-scheduling-customization feature must be enabled to configure a Priority Class, however an existing
+// Priority Class may be deleted even if the feature is disabled.
+func (a *admitter) validatePriorityClass(oldCluster, newCluster *apisv3.Cluster, op admissionv1.Operation) (*admissionv1.AdmissionResponse, error) {
+	if op != admissionv1.Create && op != admissionv1.Update {
+		return admission.ResponseAllowed(), nil
+	}
+
+	newClusterScheduling := getSchedulingCustomization(newCluster)
+	oldClusterScheduling := getSchedulingCustomization(oldCluster)
+
+	var newPC, oldPC *apisv3.PriorityClassSpec
+	if newClusterScheduling != nil {
+		newPC = newClusterScheduling.PriorityClass
+	}
+
+	if oldClusterScheduling != nil {
+		oldPC = oldClusterScheduling.PriorityClass
+	}
+
+	if newPC == nil {
+		return admission.ResponseAllowed(), nil
+	}
+
+	featuredEnabled, err := a.featureCache.Get(common.SchedulingCustomizationFeatureName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine status of '%s' feature", common.SchedulingCustomizationFeatureName)
+	}
+
+	enabled := featuredEnabled.Status.Default
+	if featuredEnabled.Spec.Value != nil {
+		enabled = *featuredEnabled.Spec.Value
+	}
+
+	// if the feature is disabled then we should not permit any changes between the old and new clusters other than deletion
+	if !enabled && oldPC != nil {
+		if reflect.DeepEqual(*oldPC, *newPC) {
+			return admission.ResponseAllowed(), nil
+		}
+
+		return admission.ResponseBadRequest(fmt.Sprintf("'%s' feature is disabled, will only permit removal of Scheduling Customization fields until reenabled", common.SchedulingCustomizationFeatureName)), nil
+	}
+
+	if !enabled && oldPC == nil {
+		return admission.ResponseBadRequest(fmt.Sprintf("the '%s' feature must be enabled in order to configure a Priority Class or Pod Disruption Budget", common.SchedulingCustomizationFeatureName)), nil
+	}
+
+	if newPC.Preemption != nil && *newPC.Preemption != corev1.PreemptNever && *newPC.Preemption != corev1.PreemptLowerPriority && *newPC.Preemption != "" {
+		return admission.ResponseBadRequest("Priority Class Preemption value must be 'Never', 'PreemptLowerPriority', or empty"), nil
+	}
+
+	if newPC.Value > 1000000000 {
+		return admission.ResponseBadRequest("Priority Class value cannot be greater than 1 billion"), nil
+	}
+
+	if newPC.Value < -1000000000 {
+		return admission.ResponseBadRequest("Priority Class value cannot be less than negative 1 billion"), nil
+	}
+
+	return admission.ResponseAllowed(), nil
+}
+
+// validatePodDisruptionBudget validates that the Pod Disruption Budget defined in the cluster SchedulingCustomization field is properly
+// configured. The cluster-agent-scheduling-customization feature must be enabled to configure a Pod Disruption Budget, however an existing
+// Pod Disruption Budget may be deleted even if the feature is disabled.
+func (a *admitter) validatePodDisruptionBudget(oldCluster, newCluster *apisv3.Cluster, op admissionv1.Operation) (*admissionv1.AdmissionResponse, error) {
+	if op != admissionv1.Create && op != admissionv1.Update {
+		return admission.ResponseAllowed(), nil
+	}
+	newClusterScheduling := getSchedulingCustomization(newCluster)
+	oldClusterScheduling := getSchedulingCustomization(oldCluster)
+
+	var newPDB, oldPDB *apisv3.PodDisruptionBudgetSpec
+	if newClusterScheduling != nil {
+		newPDB = newClusterScheduling.PodDisruptionBudget
+	}
+
+	if oldClusterScheduling != nil {
+		oldPDB = oldClusterScheduling.PodDisruptionBudget
+	}
+
+	if newPDB == nil {
+		return admission.ResponseAllowed(), nil
+	}
+
+	featuredEnabled, err := a.featureCache.Get(common.SchedulingCustomizationFeatureName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine status of '%s' feature", common.SchedulingCustomizationFeatureName)
+	}
+
+	enabled := featuredEnabled.Status.Default
+	if featuredEnabled.Spec.Value != nil {
+		enabled = *featuredEnabled.Spec.Value
+	}
+
+	// if the feature is disabled then we should not permit any changes between the old and new clusters other than deletion
+	if !enabled && oldPDB != nil {
+		if reflect.DeepEqual(*oldPDB, *newPDB) {
+			return admission.ResponseAllowed(), nil
+		}
+
+		return admission.ResponseBadRequest(fmt.Sprintf("'%s' feature is disabled, will only permit removal of Scheduling Customization fields until reenabled", common.SchedulingCustomizationFeatureName)), nil
+	}
+
+	if !enabled && oldPDB == nil {
+		return admission.ResponseBadRequest(fmt.Sprintf("the '%s' feature must be enabled in order to configure a Priority Class or Pod Disruption Budget", common.SchedulingCustomizationFeatureName)), nil
+	}
+
+	minAvailStr := newPDB.MinAvailable
+	maxUnavailStr := newPDB.MaxUnavailable
+
+	if (minAvailStr == "" && maxUnavailStr == "") ||
+		(minAvailStr == "0" && maxUnavailStr == "0") ||
+		(minAvailStr != "" && minAvailStr != "0") && (maxUnavailStr != "" && maxUnavailStr != "0") {
+		return admission.ResponseBadRequest("both minAvailable and maxUnavailable cannot be set to a non zero value, at least one must be omitted or set to zero"), nil
+	}
+
+	minAvailIsString := false
+	maxUnavailIsString := false
+
+	minAvailInt, err := strconv.Atoi(minAvailStr)
+	if err != nil {
+		minAvailIsString = minAvailStr != ""
+	}
+
+	maxUnavailInt, err := strconv.Atoi(maxUnavailStr)
+	if err != nil {
+		maxUnavailIsString = maxUnavailStr != ""
+	}
+
+	if !minAvailIsString && minAvailInt < 0 {
+		return admission.ResponseBadRequest("minAvailable cannot be set to a negative integer"), nil
+	}
+
+	if !maxUnavailIsString && maxUnavailInt < 0 {
+		return admission.ResponseBadRequest("maxUnavailable cannot be set to a negative integer"), nil
+	}
+
+	if minAvailIsString && !common.PdbPercentageRegex.Match([]byte(minAvailStr)) {
+		return admission.ResponseBadRequest(fmt.Sprintf("minAvailable must be a non-negative whole integer or a percentage value between 0 and 100, regex used is '%s'", common.PdbPercentageRegex.String())), nil
+	}
+
+	if maxUnavailIsString && maxUnavailStr != "" && !common.PdbPercentageRegex.Match([]byte(maxUnavailStr)) {
+		return admission.ResponseBadRequest(fmt.Sprintf("minAvailable must be a non-negative whole integer or a percentage value between 0 and 100, regex used is '%s'", common.PdbPercentageRegex.String())), nil
+	}
+
+	return admission.ResponseAllowed(), nil
+}
+
 // checkPSAConfigOnCluster validates the cluster spec when DefaultPodSecurityAdmissionConfigurationTemplateName is set.
 func (a *admitter) checkPSAConfigOnCluster(cluster *apisv3.Cluster) (*admissionv1.AdmissionResponse, error) {
 	// validate that extra_args.admission-control-config-file is not set at the same time
@@ -308,6 +470,22 @@ func (a *admitter) checkPSAConfigOnCluster(cluster *apisv3.Cluster) (*admissionv
 	}
 
 	return admission.ResponseAllowed(), nil
+}
+
+func getSchedulingCustomization(cluster *apisv3.Cluster) *apisv3.AgentSchedulingCustomization {
+	if cluster == nil {
+		return nil
+	}
+
+	if cluster.Spec.ClusterAgentDeploymentCustomization == nil {
+		return nil
+	}
+
+	if cluster.Spec.ClusterAgentDeploymentCustomization.SchedulingCustomization == nil {
+		return nil
+	}
+
+	return cluster.Spec.ClusterAgentDeploymentCustomization.SchedulingCustomization
 }
 
 // validateVersionManagementFeature validates the annotation for the version management feature is set with valid value on the imported RKE2/K3s cluster,

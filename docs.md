@@ -115,6 +115,26 @@ If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creator
  - If version management is determined to be disabled, and the `.spec.rke2Config` or `.spec.k3sConfig` field exists in the new cluster object with a value different from the old one, the webhook will permit the update with a warning indicating that these changes will not take effect until version management is enabled for the cluster.
  - If version management is determined to be disabled, and the `.spec.rke2Config` or `.spec.k3sConfig` field is missing, the webhook will permit the request to allow users to remove the unused fields via API or Terraform.
 
+
+##### Feature: Cluster Agent Scheduling Customization
+
+The `SchedulingCustomization` subfield of the `DeploymentCustomization` field defines the properties of a Pod Disruption Budget and Priority Class which will be automatically deployed by Rancher for the cattle-cluster-agent.
+
+The `schedulingCustomization.PriorityClass` field contains two attributes
+
++ `value`: This must be an integer value equal to or between negative 1 billion and 1 billion.
++ `preemption`: This must be a string value which indicates the desired preemption behavior, its value can be either `PreemptLowerPriority` or `Never`. Any other value must be rejected.
+
+The `schedulingCustomization.PodDisruptionBudget` field contains two attributes
+
++ `minAvailable`: This is a string value that indicates the minimum number of agent replicas that must be running at a given time.
++ `maxUnavailable`: This is a string value that indicates the maximum number of agent replicas that can be unavailable at a given time.
+
+Both `minAvailable` and `maxUnavailable` must be a string which represents a non-negative whole number, or a whole number percentage greater than or equal to `0%` and less than or equal to `100%`. Only one of the two fields can have a non-zero or empty value at a given time. These fields use the following regex when assessing if a given percentage value is valid:
+```regex
+^([0-9]|[1-9][0-9]|100)%$
+```
+
 ## ClusterProxyConfig
 
 ### Validation Checks
@@ -407,6 +427,12 @@ When settings are updated, the following additional checks take place:
   have a status condition `AgentTlsStrictCheck` set to `True`, unless the new setting has an overriding
   annotation `cattle.io/force=true`.
 
+
+- `cluster-agent-default-priority-class` must contain a valid JSON object which matches the format of a `v1.PriorityClassSpec` object. The Value field must be greater than or equal to negative 1 billion and less than or equal to 1 billion. The Preemption field must be a string value set to either `PreemptLowerPriority` or `Never`.
+
+
+- `cluster-agent-default-pod-disruption-budget` must contain a valid JSON object which matches the format of a `v1.PodDisruptionBudgetSpec` object. The `minAvailable` and `maxUnavailable` fields must have a string value that is either a non-negative whole number, or a non-negative whole number percentage value less than or equal to `100%`.
+
 ## Token
 
 ### Validation Checks
@@ -498,6 +524,25 @@ A `Toleration` is matched to a regex which is provided by upstream [apimachinery
 ```
 
 For the `Affinity` based rules, the `podAffinity`/`podAntiAffinity` are validated via label selectors via [this apimachinery function](https://github.com/kubernetes/apimachinery/blob/02a41040d88da08de6765573ae2b1a51f424e1ca/pkg/apis/meta/v1/validation/validation.go#L56) whereas the `nodeAffinity` `nodeSelectorTerms` are validated via the same `Toleration` function.
+
+#### cluster.spec.clusterAgentDeploymentCustomization.schedulingCustomization
+
+The `SchedulingCustomization` subfield of the `DeploymentCustomization` field defines the properties of a Pod Disruption Budget and Priority Class which will be automatically deployed by Rancher for the cattle-cluster-agent.
+
+The `schedulingCustomization.PriorityClass` field contains two attributes
+
++ `value`: This must be an integer value equal to or between negative 1 billion and 1 billion.
++ `preemption`: This must be a string value which indicates the desired preemption behavior, its value can be either `PreemptLowerPriority` or `Never`. Any other value must be rejected.
+
+The `schedulingCustomization.PodDisruptionBudget` field contains two attributes
+
++ `minAvailable`: This is a string value that indicates the minimum number of agent replicas that must be running at a given time.
++ `maxUnavailable`: This is a string value that indicates the maximum number of agent replicas that can be unavailable at a given time.
+
+Both `minAvailable` and `maxUnavailable` must be a string which represents a non-negative whole number, or a whole number percentage greater than or equal to `0%` and less than or equal to `100%`. Only one of the two fields can have a non-zero or empty value at a given time. These fields use the following regex when assessing if a given percentage value is valid:
+```regex
+^([0-9]|[1-9][0-9]|100)%$
+```
 
 ### Mutation Checks
 
