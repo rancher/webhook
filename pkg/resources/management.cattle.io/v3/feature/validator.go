@@ -88,20 +88,20 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 
 // isUpdateAllowed checks that the new value does not change on spec unless it's equal to the lockedValue,
 // or lockedValue is nil.
-func isUpdateAllowed(old, new *v3.Feature) bool {
-	if old == nil || new == nil {
+func isUpdateAllowed(oldFeature, newFeature *v3.Feature) bool {
+	if oldFeature == nil || newFeature == nil {
 		return false
 	}
-	if new.Status.LockedValue == nil {
+	if newFeature.Status.LockedValue == nil {
 		return true
 	}
-	if old.Spec.Value == nil && new.Spec.Value == nil {
+	if oldFeature.Spec.Value == nil && newFeature.Spec.Value == nil {
 		return true
 	}
-	if old.Spec.Value != nil && new.Spec.Value != nil && *old.Spec.Value == *new.Spec.Value {
+	if oldFeature.Spec.Value != nil && newFeature.Spec.Value != nil && *oldFeature.Spec.Value == *newFeature.Spec.Value {
 		return true
 	}
-	if new.Spec.Value != nil && *new.Spec.Value == *new.Status.LockedValue {
+	if newFeature.Spec.Value != nil && *newFeature.Spec.Value == *newFeature.Status.LockedValue {
 		return true
 	}
 	return false
