@@ -23,9 +23,9 @@ var psaLabels = []string{
 
 // IsUpdatingPSAConfig will indicate whether or not the labels being passed in
 // are attempting to update PSA-related configuration.
-func IsUpdatingPSAConfig(old map[string]string, new map[string]string) bool {
+func IsUpdatingPSAConfig(oldLabels map[string]string, newLabels map[string]string) bool {
 	for _, label := range psaLabels {
-		if old[label] != new[label] {
+		if oldLabels[label] != newLabels[label] {
 			return true
 		}
 	}
@@ -34,8 +34,8 @@ func IsUpdatingPSAConfig(old map[string]string, new map[string]string) bool {
 
 // IsCreatingPSAConfig will indicate whether or not the labels being passed in
 // are attempting to create PSA-related configuration.
-func IsCreatingPSAConfig(new map[string]string) bool {
-	for label := range new {
+func IsCreatingPSAConfig(newLabels map[string]string) bool {
+	for label := range newLabels {
 		if slices.Contains(psaLabels, label) {
 			return true
 		}
