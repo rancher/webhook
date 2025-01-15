@@ -47,6 +47,7 @@ func (v *Validator) Operations() []admissionv1.OperationType {
 	return []admissionv1.OperationType{
 		admissionv1.Update,
 		admissionv1.Create,
+		admissionv1.Delete,
 	}
 }
 
@@ -85,7 +86,10 @@ func (v *Validator) ValidatingWebhook(clientConfig admissionv1.WebhookClientConf
 	}
 	kubeSystemCreateWebhook.FailurePolicy = admission.Ptr(admissionv1.Ignore)
 
-	return []admissionv1.ValidatingWebhook{*standardWebhook, *createWebhook, *kubeSystemCreateWebhook}
+	deleteWebhook := admission.NewDefaultValidatingWebhook(v, clientConfig, admissionv1.ClusterScope, []admissionv1.OperationType{admissionv1.Delete})
+	deleteWebhook.Name = admission.CreateWebhookName(v, "delete-only")
+
+	return []admissionv1.ValidatingWebhook{*standardWebhook, *createWebhook, *kubeSystemCreateWebhook, *deleteWebhook}
 }
 
 // Admitters returns the psaAdmitter and the projectNamespaceAdmitter for namespaces.
