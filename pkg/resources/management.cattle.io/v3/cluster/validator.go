@@ -26,6 +26,8 @@ import (
 
 var parsedRangeLessThan123 = semver.MustParseRange("< 1.23.0-rancher0")
 
+const localCluster = "local"
+
 // NewValidator returns a new validator for management clusters.
 func NewValidator(
 	sar authorizationv1.SubjectAccessReviewInterface,
@@ -81,6 +83,11 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, fmt.Errorf("failed get old and new clusters from request: %w", err)
 	}
 
+	if request.Operation == admissionv1.Delete && oldCluster.Name == localCluster {
+		// deleting "local" cluster could corrupt the cluster Rancher is deployed in
+		return admission.ResponseBadRequest("cannot delete the local cluster"), nil
+	}
+
 	response, err := a.validateFleetPermissions(request, oldCluster, newCluster)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate fleet permissions: %w", err)
@@ -112,7 +119,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	if request.Operation == admissionv1.Create || request.Operation == admissionv1.Update {
 		// no need to validate the PodSecurityAdmissionConfigurationTemplate on a local cluster,
 		// or imported cluster which represents a KEv2 cluster (GKE/EKS/AKS) or v1 Provisioning Cluster
-		if newCluster.Name == "local" || newCluster.Spec.RancherKubernetesEngineConfig == nil {
+		if newCluster.Name == localCluster || newCluster.Spec.RancherKubernetesEngineConfig == nil {
 			return admission.ResponseAllowed(), nil
 		}
 

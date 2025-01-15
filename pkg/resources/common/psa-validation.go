@@ -23,7 +23,7 @@ var psaLabels = []string{
 
 // IsUpdatingPSAConfig will indicate whether or not the labels being passed in
 // are attempting to update PSA-related configuration.
-func IsUpdatingPSAConfig(old map[string]string, new map[string]string) bool {
+func IsUpdatingPSAConfig(old, new map[string]string) bool {
 	for _, label := range psaLabels {
 		if old[label] != new[label] {
 			return true
