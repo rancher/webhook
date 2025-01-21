@@ -26,6 +26,8 @@ import (
 var parsedRangeLessThan125 = semver.MustParseRange("< 1.25.0-rancher0")
 var parsedRangeLessThan123 = semver.MustParseRange("< 1.23.0-rancher0")
 
+const localCluster = "local"
+
 // NewValidator returns a new validator for management clusters.
 func NewValidator(sar authorizationv1.SubjectAccessReviewInterface, cache v3.PodSecurityAdmissionConfigurationTemplateCache) *Validator {
 	return &Validator{
@@ -70,6 +72,16 @@ type admitter struct {
 
 // Admit handles the webhook admission request sent to this webhook.
 func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+	oldCluster, newCluster, err := objectsv3.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed get old and new clusters from request: %w", err)
+	}
+
+	if request.Operation == admissionv1.Delete && oldCluster.Name == localCluster {
+		// deleting "local" cluster could corrupt the cluster Rancher is deployed in
+		return admission.ResponseBadRequest("cannot delete the local cluster"), nil
+	}
+
 	response, err := a.validateFleetPermissions(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate fleet permissions: %w", err)
@@ -79,12 +91,9 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	}
 
 	if request.Operation == admissionv1.Create || request.Operation == admissionv1.Update {
-		cluster, err := objectsv3.ClusterFromRequest(&request.AdmissionRequest)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get cluster from request: %w", err)
-		}
-		// no need to validate the local cluster, or imported cluster which represents a KEv2 cluster (GKE/EKS/AKS) or v1 Provisioning Cluster
-		if cluster.Name == "local" || cluster.Spec.RancherKubernetesEngineConfig == nil {
+		// no need to validate the PodSecurityAdmissionConfigurationTemplate on a local cluster,
+		// or imported cluster which represents a KEv2 cluster (GKE/EKS/AKS) or v1 Provisioning Cluster
+		if newCluster.Name == localCluster || newCluster.Spec.RancherKubernetesEngineConfig == nil {
 			return admission.ResponseAllowed(), nil
 		}
 		response, err = a.validatePSACT(request)
