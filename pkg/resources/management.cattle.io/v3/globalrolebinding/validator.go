@@ -102,7 +102,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	globalRole, err := a.grResolver.GlobalRoleCache().Get(newGRB.GlobalRoleName)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
-			return nil, fmt.Errorf("failed to get GlobalRole '%s': %w", newGRB.Name, err)
+			return nil, fmt.Errorf("failed to get GlobalRole '%s': %w", newGRB.GlobalRoleName, err)
 		}
 		fieldErr := field.NotFound(fldPath.Child("globalRoleName"), newGRB.GlobalRoleName)
 		return admission.ResponseBadRequest(fieldErr.Error()), nil
