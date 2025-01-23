@@ -29,7 +29,7 @@ jobs:
         archBox:
         - { arch: amd64, vmArch: x64 }
         - { arch: arm64, vmArch: arm64 }
-    runs-on: runs-on,runner=1cpu-linux-${{ matrix.archBox.vmArch }},run-id=${{ github.run_id }}
+    runs-on: runs-on,runner=2cpu-linux-${{ matrix.archBox.vmArch }},run-id=${{ github.run_id }}
     steps:
       - name : Checkout repository
         # https://github.com/actions/checkout/releases/tag/v4.1.1
