@@ -27,6 +27,7 @@ func TestValidateProjectNamespaceAnnotations(t *testing.T) {
 		includeProjectAnnotation  bool
 		targetProject             string
 		userCanAccessProject      bool
+		rejectMessage             string
 		sarError                  bool
 		wantError                 bool
 		wantAllowed               bool
@@ -73,6 +74,7 @@ func TestValidateProjectNamespaceAnnotations(t *testing.T) {
 			includeProjectAnnotation: true,
 			targetProject:            "p-123xyz",
 			userCanAccessProject:     false,
+			rejectMessage:            "User \"test-user\" does not have permission \"manage-namespaces\" on project \"p-123xyz\"",
 			sarError:                 false,
 			wantError:                false,
 			wantAllowed:              false,
@@ -241,6 +243,9 @@ func TestValidateProjectNamespaceAnnotations(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, test.wantAllowed, response.Allowed)
+				if test.rejectMessage != "" {
+					assert.Equal(t, test.rejectMessage, response.Result.Message)
+				}
 			}
 		})
 	}
