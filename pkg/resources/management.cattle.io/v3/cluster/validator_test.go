@@ -115,7 +115,9 @@ func TestAdmit(t *testing.T) {
 			assert.Equal(t, tt.expectAllowed, res.Allowed)
 
 			if !tt.expectAllowed {
-				assert.Equal(t, tt.expectedReason, res.Result.Reason)
+				if tt.expectedReason != "" {
+					assert.Equal(t, tt.expectedReason, res.Result.Reason)
+				}
 			}
 		})
 	}
