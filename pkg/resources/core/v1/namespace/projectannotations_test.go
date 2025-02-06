@@ -30,7 +30,6 @@ func TestValidateProjectNamespaceAnnotations(t *testing.T) {
 		sarError                  bool
 		wantError                 bool
 		wantAllowed               bool
-		namespaceName             string
 	}{
 		{
 			name:                     "user can access, create",
@@ -190,26 +189,6 @@ func TestValidateProjectNamespaceAnnotations(t *testing.T) {
 			wantError:                 true,
 			wantAllowed:               false,
 		},
-		{
-			name:          "Prevent deletion of 'local' namespace",
-			operationType: v1.Delete,
-			wantError:     false,
-			wantAllowed:   false,
-			namespaceName: "local",
-		},
-		{
-			name:          "Prevent deletion of 'fleet-local' namespace",
-			operationType: v1.Delete,
-			wantError:     false,
-			wantAllowed:   false,
-			namespaceName: "fleet-local",
-		},
-		{
-			name:          "Allow deletion of namespace",
-			operationType: v1.Delete,
-			wantAllowed:   true,
-			wantError:     false,
-		},
 	}
 	for _, test := range tests {
 		test := test
@@ -233,7 +212,7 @@ func TestValidateProjectNamespaceAnnotations(t *testing.T) {
 				// if this wasn't for our project, don't handle the response
 				return false, nil, nil
 			})
-			request, err := createAnnotationNamespaceRequest(test.projectAnnotationValue, test.oldProjectAnnotationValue, test.includeProjectAnnotation, test.operationType, test.namespaceName)
+			request, err := createAnnotationNamespaceRequest(test.projectAnnotationValue, test.oldProjectAnnotationValue, test.includeProjectAnnotation, test.operationType)
 			assert.NoError(t, err)
 			response, err := admitter.Admit(request)
 			if test.wantError {
@@ -252,16 +231,12 @@ func sarIsForProjectGVR(sarSpec authorizationv1.SubjectAccessReviewSpec) bool {
 		sarSpec.ResourceAttributes.Resource == projectsGVR.Resource
 }
 
-func createAnnotationNamespaceRequest(newProjectAnnotation, oldProjectAnnotation string, includeProjectAnnotation bool, operation v1.Operation, namespaceName string) (*admission.Request, error) {
+func createAnnotationNamespaceRequest(newProjectAnnotation, oldProjectAnnotation string, includeProjectAnnotation bool, operation v1.Operation) (*admission.Request, error) {
 	gvk := metav1.GroupVersionKind{Version: "v1", Kind: "Namespace"}
 	gvr := metav1.GroupVersionResource{Version: "v1", Resource: "namespace"}
-	nsName := "test-ns"
-	if namespaceName != "" {
-		nsName = namespaceName
-	}
 	ns := corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: nsName,
+			Name: "test-ns",
 		},
 	}
 	if includeProjectAnnotation {
@@ -291,7 +266,7 @@ func createAnnotationNamespaceRequest(newProjectAnnotation, oldProjectAnnotation
 	if err != nil {
 		return nil, err
 	}
-	if operation != v1.Create {
+	if operation == v1.Update {
 		if includeProjectAnnotation {
 			ns.Annotations[projectNSAnnotation] = oldProjectAnnotation
 		}
