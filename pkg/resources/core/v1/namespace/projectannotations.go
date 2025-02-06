@@ -15,8 +15,6 @@ import (
 )
 
 const (
-	fleetLocalNs        = "fleet-local"
-	localNs             = "local"
 	manageNSVerb        = "manage-namespaces"
 	projectNSAnnotation = "field.cattle.io/projectId"
 )
@@ -25,10 +23,8 @@ type projectNamespaceAdmitter struct {
 	sar authorizationv1.SubjectAccessReviewInterface
 }
 
-// Admit ensures that the:
-//   - user has permission to change the namespace annotation for project membership, effectively moving a project from
-//     one namespace to another.
-//   - deletion of `local` and `fleet-local` namespace is not allowed
+// Admit ensures that the user has permission to change the namespace annotation for
+// project membership, effectively moving a project from one namespace to another.
 func (p *projectNamespaceAdmitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	listTrace := trace.New("Namespace Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
@@ -40,11 +36,6 @@ func (p *projectNamespaceAdmitter) Admit(request *admission.Request) (*admission
 		return nil, fmt.Errorf("failed to decode namespace from request: %w", err)
 	}
 
-	if request.Operation == admissionv1.Delete {
-		if oldNs.Name == localNs || oldNs.Name == fleetLocalNs {
-			return admission.ResponseBadRequest(fmt.Sprintf("deletion of namespace %q is not allowed\n", request.Name)), nil
-		}
-	}
 	projectAnnoValue, ok := newNs.Annotations[projectNSAnnotation]
 	if !ok {
 		// this namespace doesn't belong to a project, let standard RBAC handle it
