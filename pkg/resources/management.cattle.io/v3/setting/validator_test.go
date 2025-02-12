@@ -1275,6 +1275,12 @@ func (s *SettingSuite) validateAuthUserSessionTTLIdleMinutes(op v1.Operation, t 
 			allowed:   false,
 		},
 		{
+			name:      "value cannot be 0.5",
+			value:     "0.5",
+			mockSetup: func() {},
+			allowed:   false,
+		},
+		{
 			name:      "value cannot be a char",
 			value:     "A",
 			mockSetup: func() {},
