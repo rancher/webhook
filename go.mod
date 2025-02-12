@@ -46,7 +46,7 @@ require (
 	github.com/evanphx/json-patch v5.9.0+incompatible
 	github.com/gorilla/mux v1.8.1
 	github.com/rancher/dynamiclistener v0.6.0
-	github.com/rancher/lasso v0.0.0-20240924233157-8f384efc8813
+	github.com/rancher/lasso v0.2.0
 	github.com/rancher/rancher/pkg/apis v0.0.0-20250121135736-f569628e5282
 	github.com/rancher/rke v1.6.6-rc.1
 	github.com/rancher/wrangler/v3 v3.0.1
