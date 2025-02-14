@@ -121,6 +121,23 @@ func TestAdmit(t *testing.T) {
 			allowed: false,
 		},
 		{
+			name: "create gr with user principal name",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					gr := newDefaultGRB()
+					gr.GlobalRoleName = baseGR.Name
+					gr.UserName = ""
+					gr.GroupPrincipalName = ""
+					gr.UserPrincipalName = "activedirectory_user://CN=test,CN=Users,DC=ad,DC=ians,DC=farm"
+
+					return gr
+				},
+				stateSetup: func(ts testState) {
+				},
+			},
+			allowed: true,
+		},
+		{
 			name: "create gr refers to RT misc error",
 			args: args{
 				newGRB: func() *v3.GlobalRoleBinding {

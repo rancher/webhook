@@ -188,11 +188,14 @@ func validateUpdateFields(oldBinding, newBinding *v3.GlobalRoleBinding, fldPath 
 
 // validateCreateFields checks if all required fields are present and valid.
 func (a *admitter) validateCreate(newBinding *v3.GlobalRoleBinding, globalRole *v3.GlobalRole, fldPath *field.Path) error {
+	hasUserTarget := newBinding.UserName != "" || newBinding.UserPrincipalName != ""
+	hasGroupTarget := newBinding.GroupPrincipalName != ""
+
 	switch {
-	case newBinding.UserName != "" && newBinding.GroupPrincipalName != "":
-		return field.Forbidden(fldPath, "bindings can not set both userName and groupPrincipalName")
-	case newBinding.UserName == "" && newBinding.GroupPrincipalName == "":
-		return field.Required(fldPath, "bindings must have either userName or groupPrincipalName set")
+	case hasUserTarget && hasGroupTarget:
+		return field.Forbidden(fldPath, "bindings can not set both userName/userPrincipalName and groupPrincipalName")
+	case (!hasUserTarget && !hasGroupTarget):
+		return field.Required(fldPath, "bindings must have either userName/userPrincipalName or groupPrincipalName set")
 	}
 
 	return a.validateGlobalRole(globalRole, fldPath)
