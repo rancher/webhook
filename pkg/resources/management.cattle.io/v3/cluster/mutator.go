@@ -64,9 +64,34 @@ func (m *ManagementClusterMutator) Admit(request *admission.Request) (*admission
 	if err != nil {
 		return nil, fmt.Errorf("unable to re-marshal new cluster: %w", err)
 	}
+
+	err = m.mutatePSACT(oldCluster, newCluster, request.Operation)
+	if err != nil {
+		return nil, fmt.Errorf("failed to mutate PSACT: %w", err)
+	}
+
+	m.mutateVersionManagement(newCluster, request.Operation)
+
+	response := &admissionv1.AdmissionResponse{}
+	// we use the re-marshalled new cluster to make sure that the patch doesn't drop "unknown" fields which were
+	// in the json, but not in the cluster struct. This can occur due to out of date RKE versions
+	if err := patch.CreatePatch(newClusterRaw, newCluster, response); err != nil {
+		return nil, fmt.Errorf("failed to create patch: %w", err)
+	}
+	response.Allowed = true
+	return response, nil
+}
+
+// mutatePSACT updates the newCluster's Pod Security Admission (PSA) configuration based on changes to
+// the cluster's `DefaultPodSecurityAdmissionConfigurationTemplateName`.
+// It applies or removes the PSA plugin configuration depending on the operation and the current cluster state.
+func (m *ManagementClusterMutator) mutatePSACT(oldCluster, newCluster *apisv3.Cluster, operation admissionv1.Operation) error {
 	// no need to mutate the local cluster, or imported cluster which represents a KEv2 cluster (GKE/EKS/AKS) or v1 Provisioning Cluster
 	if newCluster.Name == "local" || newCluster.Spec.RancherKubernetesEngineConfig == nil {
-		return admission.ResponseAllowed(), nil
+		return nil
+	}
+	if operation != admissionv1.Update && operation != admissionv1.Create {
+		return nil
 	}
 	newTemplateName := newCluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName
 	oldTemplateName := oldCluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName
@@ -75,13 +100,11 @@ func (m *ManagementClusterMutator) Admit(request *admission.Request) (*admission
 	if newTemplateName != "" {
 		err := m.setPSAConfig(newCluster)
 		if err != nil && !apierrors.IsNotFound(err) {
-			return nil, fmt.Errorf("failed to set PSAconfig: %w", err)
+			return fmt.Errorf("failed to set PSAconfig: %w", err)
 		}
 	} else {
-		switch request.Operation {
-		case admissionv1.Create:
-			return admission.ResponseAllowed(), nil
-		case admissionv1.Update:
+		if operation == admissionv1.Update {
+			// The case of dropping the PSACT in the UPDATE operation:
 			// It is a valid use case where user switches from using PSACT to putting a PluginConfig for PSA under kube-api.AdmissionConfiguration,
 			// but it is not a valid use case where the PluginConfig for PSA has the same content as the one in the previous-set PSACT,
 			// so we need to drop it in this case.
@@ -97,15 +120,7 @@ func (m *ManagementClusterMutator) Admit(request *admission.Request) (*admission
 			}
 		}
 	}
-
-	response := &admissionv1.AdmissionResponse{}
-	// we use the re-marshalled new cluster to make sure that the patch doesn't drop "unknown" fields which were
-	// in the json, but not in the cluster struct. This can occur due to out of date RKE versions
-	if err := patch.CreatePatch(newClusterRaw, newCluster, response); err != nil {
-		return response, fmt.Errorf("failed to create patch: %w", err)
-	}
-	response.Allowed = true
-	return response, nil
+	return nil
 }
 
 // setPSAConfig makes sure that the PodSecurity config under the admission_configuration section matches the
@@ -134,4 +149,23 @@ func (m *ManagementClusterMutator) setPSAConfig(cluster *apisv3.Cluster) error {
 	// now put the new admissionConfig back to the Cluster object
 	cluster.Spec.RancherKubernetesEngineConfig.Services.KubeAPI.AdmissionConfiguration = admissionConfig
 	return nil
+}
+
+// mutateVersionManagement set the annotation for version management if it is missing or has empty value on an imported RKE2/K3s cluster
+func (m *ManagementClusterMutator) mutateVersionManagement(cluster *apisv3.Cluster, operation admissionv1.Operation) {
+	if operation != admissionv1.Update && operation != admissionv1.Create {
+		return
+	}
+	if cluster.Status.Driver != apisv3.ClusterDriverRke2 && cluster.Status.Driver != apisv3.ClusterDriverK3s {
+		return
+	}
+
+	val, ok := cluster.Annotations[VersionManagementAnno]
+	if !ok || val == "" {
+		if cluster.Annotations == nil {
+			cluster.Annotations = make(map[string]string)
+		}
+		cluster.Annotations[VersionManagementAnno] = "system-default"
+	}
+	return
 }

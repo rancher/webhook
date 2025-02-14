@@ -35,14 +35,17 @@ import (
 // Validation returns a list of all ValidatingAdmissionHandlers used by the webhook.
 func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandler, error) {
 	var userCache v3.UserCache
+	var settingCache v3.SettingCache
 	if clients.MultiClusterManagement {
 		userCache = clients.Management.User().Cache()
+		settingCache = clients.Management.Setting().Cache()
 	}
 
 	clusters := managementCluster.NewValidator(
 		clients.K8s.AuthorizationV1().SubjectAccessReviews(),
 		clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache(),
 		userCache,
+		settingCache,
 	)
 
 	handlers := []admission.ValidatingAdmissionHandler{
