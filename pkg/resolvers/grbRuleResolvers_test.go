@@ -1,6 +1,7 @@
 package resolvers
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -327,7 +328,7 @@ func (g *GRBClusterRuleResolverSuite) TestGRBClusterRuleResolver() {
 			grResolver := auth.NewGlobalRoleResolver(auth.NewRoleTemplateResolver(state.rtCache, nil), state.grCache)
 			grbResolvers := NewGRBRuleResolvers(state.grbCache, grResolver)
 
-			rules, err := grbResolvers.ICRResolver.RulesFor(g.userInfo, test.namespace)
+			rules, err := grbResolvers.ICRResolver.RulesFor(context.Background(), g.userInfo, test.namespace)
 			g.Require().Len(rules, len(test.wantRules))
 			for _, rule := range test.wantRules {
 				g.Require().Contains(rules, rule)

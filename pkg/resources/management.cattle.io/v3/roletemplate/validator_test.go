@@ -63,7 +63,8 @@ func (r *RoleTemplateSuite) Test_PrivilegeEscalation() {
 	grCache.EXPECT().AddIndexer(expectedGlobalRefIndex, gomock.Any()).AnyTimes()
 
 	k8Fake := &k8testing.Fake{}
-	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
+	fakeAuth := &k8fake.FakeAuthorizationV1{Fake: k8Fake}
+	fakeSAR := fakeAuth.SubjectAccessReviews()
 	k8Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (handled bool, ret runtime.Object, err error) {
 		createAction := action.(k8testing.CreateActionImpl)
 		review := createAction.GetObject().(*authorizationv1.SubjectAccessReview)
@@ -269,7 +270,8 @@ func (r *RoleTemplateSuite) Test_UpdateValidation() {
 	grCache.EXPECT().AddIndexer(expectedGlobalRefIndex, gomock.Any())
 
 	k8Fake := &k8testing.Fake{}
-	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
+	fakeAuth := &k8fake.FakeAuthorizationV1{Fake: k8Fake}
+	fakeSAR := fakeAuth.SubjectAccessReviews()
 	k8Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (handled bool, ret runtime.Object, err error) {
 		createAction := action.(k8testing.CreateActionImpl)
 		review := createAction.GetObject().(*authorizationv1.SubjectAccessReview)
@@ -572,8 +574,8 @@ func (r *RoleTemplateSuite) Test_Create() {
 	grCache.EXPECT().AddIndexer(expectedGlobalRefIndex, gomock.Any()).AnyTimes()
 
 	k8Fake := &k8testing.Fake{}
-	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
-
+	fakeAuth := &k8fake.FakeAuthorizationV1{Fake: k8Fake}
+	fakeSAR := fakeAuth.SubjectAccessReviews()
 	tests := []tableTest{
 		{
 			name: "base test valid RT",
@@ -757,7 +759,8 @@ func (r *RoleTemplateSuite) Test_Delete() {
 	resolver, _ := validation.NewTestRuleResolver(nil, nil, nil, nil)
 
 	k8Fake := &k8testing.Fake{}
-	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
+	fakeAuth := &k8fake.FakeAuthorizationV1{Fake: k8Fake}
+	fakeSAR := fakeAuth.SubjectAccessReviews()
 	type testMocks struct {
 		rtResolver *auth.RoleTemplateResolver
 		grCache    controllerv3.GlobalRoleCache
@@ -929,7 +932,8 @@ func (r *RoleTemplateSuite) Test_ErrorHandling() {
 	grCache.EXPECT().AddIndexer(expectedGlobalRefIndex, gomock.Any())
 
 	k8Fake := &k8testing.Fake{}
-	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
+	fakeAuth := &k8fake.FakeAuthorizationV1{Fake: k8Fake}
+	fakeSAR := fakeAuth.SubjectAccessReviews()
 	validator := roletemplate.NewValidator(resolver, roleResolver, fakeSAR, grCache)
 	admitters := validator.Admitters()
 	r.Len(admitters, 1, "wanted only one admitter")
@@ -967,7 +971,8 @@ func (r *RoleTemplateSuite) Test_CheckCircularRef() {
 	resolver, _ := validation.NewTestRuleResolver(nil, nil, clusterRoles, clusterRoleBindings)
 
 	k8Fake := &k8testing.Fake{}
-	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
+	fakeAuth := &k8fake.FakeAuthorizationV1{Fake: k8Fake}
+	fakeSAR := fakeAuth.SubjectAccessReviews()
 
 	tests := []struct {
 		name           string

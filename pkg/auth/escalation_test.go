@@ -178,7 +178,8 @@ func (e *EscalationSuite) TestRequestUserHasVerb() {
 	const errorUser = "errorUser"
 	goodRequest := e.newDefaultRequest(testUser)
 	k8Fake := &k8testing.Fake{}
-	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
+	fakeAuth := &k8fake.FakeAuthorizationV1{Fake: k8Fake}
+	fakeSAR := fakeAuth.SubjectAccessReviews()
 	k8Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (handled bool, ret runtime.Object, err error) {
 		createAction := action.(k8testing.CreateActionImpl)
 		review := createAction.GetObject().(*authorizationv1.SubjectAccessReview)

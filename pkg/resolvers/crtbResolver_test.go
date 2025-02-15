@@ -1,6 +1,7 @@
 package resolvers
 
 import (
+	"context"
 	"testing"
 
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -250,7 +251,7 @@ func (c *CRTBResolverSuite) TestCRTBRuleResolver() {
 	}
 	for _, tt := range tests {
 		c.Run(tt.name, func() {
-			gotRules, err := resolver.RulesFor(tt.user, tt.clusterName)
+			gotRules, err := resolver.RulesFor(context.Background(), tt.user, tt.clusterName)
 			if tt.wantErr {
 				c.Errorf(err, "CRTBRuleResolver.RulesFor() error = %v, wantErr %v", err, tt.wantErr)
 				// still check result because function is suppose to return partial results.

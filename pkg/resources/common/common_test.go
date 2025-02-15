@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -11,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/authentication/user"
+	v1Authorization "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	k8fake "k8s.io/client-go/kubernetes/typed/authorization/v1/fake"
 	k8testing "k8s.io/client-go/testing"
 )
@@ -132,15 +134,15 @@ type testRuleResolver struct {
 	returnRules []v1.PolicyRule
 }
 
-func (t testRuleResolver) GetRoleReferenceRules(v1.RoleRef, string) ([]v1.PolicyRule, error) {
+func (t testRuleResolver) GetRoleReferenceRules(context.Context, v1.RoleRef, string) ([]v1.PolicyRule, error) {
 	return nil, nil
 }
 
-func (t testRuleResolver) RulesFor(user.Info, string) ([]v1.PolicyRule, error) {
+func (t testRuleResolver) RulesFor(context.Context, user.Info, string) ([]v1.PolicyRule, error) {
 	return t.returnRules, nil
 }
 
-func (t testRuleResolver) VisitRulesFor(user.Info, string, func(fmt.Stringer, *v1.PolicyRule, error) bool) {
+func (t testRuleResolver) VisitRulesFor(context.Context, user.Info, string, func(fmt.Stringer, *v1.PolicyRule, error) bool) {
 }
 
 var (
@@ -155,7 +157,7 @@ func TestIsRulesAllowed(t *testing.T) {
 	request := &admission.Request{}
 	gvr := schema.GroupVersionResource{}
 	type stateSnapshot struct {
-		sar                func() *k8fake.FakeSubjectAccessReviews
+		sar                func() v1Authorization.SubjectAccessReviewInterface
 		resolver           testRuleResolver
 		wantError          bool
 		hasVerbBeenChecked bool
@@ -172,7 +174,7 @@ func TestIsRulesAllowed(t *testing.T) {
 			rules: []v1.PolicyRule{adminRule},
 			states: []stateSnapshot{
 				{
-					sar: func() *k8fake.FakeSubjectAccessReviews {
+					sar: func() v1Authorization.SubjectAccessReviewInterface {
 						return nil
 					},
 					resolver:  testRuleResolver{returnRules: []v1.PolicyRule{adminRule}},
@@ -185,10 +187,11 @@ func TestIsRulesAllowed(t *testing.T) {
 			rules: []v1.PolicyRule{adminRule},
 			states: []stateSnapshot{
 				{
-					sar: func() *k8fake.FakeSubjectAccessReviews {
+					sar: func() v1Authorization.SubjectAccessReviewInterface {
 						k8Fake := &k8testing.Fake{}
-						fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
-						fakeSAR.Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (bool, runtime.Object, error) {
+						fakeAuth := &k8fake.FakeAuthorizationV1{Fake: k8Fake}
+						fakeSAR := fakeAuth.SubjectAccessReviews()
+						k8Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (bool, runtime.Object, error) {
 							createAction := action.(k8testing.CreateActionImpl)
 							review := createAction.GetObject().(*authorizationv1.SubjectAccessReview)
 							review.Status.Allowed = false
@@ -209,10 +212,11 @@ func TestIsRulesAllowed(t *testing.T) {
 			rules: []v1.PolicyRule{adminRule},
 			states: []stateSnapshot{
 				{
-					sar: func() *k8fake.FakeSubjectAccessReviews {
+					sar: func() v1Authorization.SubjectAccessReviewInterface {
 						k8Fake := &k8testing.Fake{}
-						fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
-						fakeSAR.Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (handled bool, ret runtime.Object, err error) {
+						fakeAuth := &k8fake.FakeAuthorizationV1{Fake: k8Fake}
+						fakeSAR := fakeAuth.SubjectAccessReviews()
+						k8Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (handled bool, ret runtime.Object, err error) {
 							createAction := action.(k8testing.CreateActionImpl)
 							review := createAction.GetObject().(*authorizationv1.SubjectAccessReview)
 							review.Status.Allowed = true
@@ -233,10 +237,11 @@ func TestIsRulesAllowed(t *testing.T) {
 			rules: []v1.PolicyRule{adminRule},
 			states: []stateSnapshot{
 				{
-					sar: func() *k8fake.FakeSubjectAccessReviews {
+					sar: func() v1Authorization.SubjectAccessReviewInterface {
 						k8Fake := &k8testing.Fake{}
-						fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
-						fakeSAR.Fake.AddReactor("create", "subjectaccessreviews", func(_ k8testing.Action) (handled bool, ret runtime.Object, err error) {
+						fakeAuth := &k8fake.FakeAuthorizationV1{Fake: k8Fake}
+						fakeSAR := fakeAuth.SubjectAccessReviews()
+						k8Fake.AddReactor("create", "subjectaccessreviews", func(_ k8testing.Action) (handled bool, ret runtime.Object, err error) {
 							return true, nil, fmt.Errorf("error")
 						})
 						return fakeSAR
@@ -253,7 +258,7 @@ func TestIsRulesAllowed(t *testing.T) {
 			rules: []v1.PolicyRule{adminRule},
 			states: []stateSnapshot{
 				{
-					sar: func() *k8fake.FakeSubjectAccessReviews {
+					sar: func() v1Authorization.SubjectAccessReviewInterface {
 						return nil
 					},
 					resolver:           testRuleResolver{returnRules: []v1.PolicyRule{adminRule}},
@@ -262,10 +267,11 @@ func TestIsRulesAllowed(t *testing.T) {
 					hasVerb:            false,
 				},
 				{
-					sar: func() *k8fake.FakeSubjectAccessReviews {
+					sar: func() v1Authorization.SubjectAccessReviewInterface {
 						k8Fake := &k8testing.Fake{}
-						fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
-						fakeSAR.Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (bool, runtime.Object, error) {
+						fakeAuth := &k8fake.FakeAuthorizationV1{Fake: k8Fake}
+						fakeSAR := fakeAuth.SubjectAccessReviews()
+						k8Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (bool, runtime.Object, error) {
 							createAction := action.(k8testing.CreateActionImpl)
 							review := createAction.GetObject().(*authorizationv1.SubjectAccessReview)
 							review.Status.Allowed = false
@@ -285,10 +291,11 @@ func TestIsRulesAllowed(t *testing.T) {
 			rules: []v1.PolicyRule{adminRule},
 			states: []stateSnapshot{
 				{
-					sar: func() *k8fake.FakeSubjectAccessReviews {
+					sar: func() v1Authorization.SubjectAccessReviewInterface {
 						k8Fake := &k8testing.Fake{}
-						fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
-						fakeSAR.Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (handled bool, ret runtime.Object, err error) {
+						fakeAuth := &k8fake.FakeAuthorizationV1{Fake: k8Fake}
+						fakeSAR := fakeAuth.SubjectAccessReviews()
+						k8Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (handled bool, ret runtime.Object, err error) {
 							createAction := action.(k8testing.CreateActionImpl)
 							review := createAction.GetObject().(*authorizationv1.SubjectAccessReview)
 							review.Status.Allowed = true
@@ -302,12 +309,13 @@ func TestIsRulesAllowed(t *testing.T) {
 					hasVerb:            true,
 				},
 				{
-					sar: func() *k8fake.FakeSubjectAccessReviews {
+					sar: func() v1Authorization.SubjectAccessReviewInterface {
 						// this would return false if it gets called
 						// since we already checked for the verb, it gets bypassed
 						k8Fake := &k8testing.Fake{}
-						fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
-						fakeSAR.Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (bool, runtime.Object, error) {
+						fakeAuth := &k8fake.FakeAuthorizationV1{Fake: k8Fake}
+						fakeSAR := fakeAuth.SubjectAccessReviews()
+						k8Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (bool, runtime.Object, error) {
 							createAction := action.(k8testing.CreateActionImpl)
 							review := createAction.GetObject().(*authorizationv1.SubjectAccessReview)
 							review.Status.Allowed = false
@@ -327,10 +335,11 @@ func TestIsRulesAllowed(t *testing.T) {
 			rules: []v1.PolicyRule{adminRule},
 			states: []stateSnapshot{
 				{
-					sar: func() *k8fake.FakeSubjectAccessReviews {
+					sar: func() v1Authorization.SubjectAccessReviewInterface {
 						k8Fake := &k8testing.Fake{}
-						fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
-						fakeSAR.Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (bool, runtime.Object, error) {
+						fakeAuth := &k8fake.FakeAuthorizationV1{Fake: k8Fake}
+						fakeSAR := fakeAuth.SubjectAccessReviews()
+						k8Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (bool, runtime.Object, error) {
 							createAction := action.(k8testing.CreateActionImpl)
 							review := createAction.GetObject().(*authorizationv1.SubjectAccessReview)
 							review.Status.Allowed = false
@@ -345,12 +354,13 @@ func TestIsRulesAllowed(t *testing.T) {
 					hasVerb:            false,
 				},
 				{
-					sar: func() *k8fake.FakeSubjectAccessReviews {
+					sar: func() v1Authorization.SubjectAccessReviewInterface {
 						// this would return false if it gets called
 						// since we already checked for the verb, it gets bypassed
 						k8Fake := &k8testing.Fake{}
-						fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
-						fakeSAR.Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (bool, runtime.Object, error) {
+						fakeAuth := &k8fake.FakeAuthorizationV1{Fake: k8Fake}
+						fakeSAR := fakeAuth.SubjectAccessReviews()
+						k8Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (bool, runtime.Object, error) {
 							createAction := action.(k8testing.CreateActionImpl)
 							review := createAction.GetObject().(*authorizationv1.SubjectAccessReview)
 							review.Status.Allowed = false
@@ -370,10 +380,11 @@ func TestIsRulesAllowed(t *testing.T) {
 			rules: []v1.PolicyRule{adminRule},
 			states: []stateSnapshot{
 				{
-					sar: func() *k8fake.FakeSubjectAccessReviews {
+					sar: func() v1Authorization.SubjectAccessReviewInterface {
 						k8Fake := &k8testing.Fake{}
-						fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
-						fakeSAR.Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (bool, runtime.Object, error) {
+						fakeAuth := &k8fake.FakeAuthorizationV1{Fake: k8Fake}
+						fakeSAR := fakeAuth.SubjectAccessReviews()
+						k8Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (bool, runtime.Object, error) {
 							createAction := action.(k8testing.CreateActionImpl)
 							review := createAction.GetObject().(*authorizationv1.SubjectAccessReview)
 							review.Status.Allowed = false
@@ -387,7 +398,7 @@ func TestIsRulesAllowed(t *testing.T) {
 					hasVerb:            false,
 				},
 				{
-					sar: func() *k8fake.FakeSubjectAccessReviews {
+					sar: func() v1Authorization.SubjectAccessReviewInterface {
 						return nil
 					},
 					resolver:           testRuleResolver{returnRules: []v1.PolicyRule{adminRule}},
