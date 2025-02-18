@@ -196,7 +196,8 @@ func TestValidateProjectNamespaceAnnotations(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			k8Fake := &k8testing.Fake{}
-			fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
+			fakeAuth := &k8fake.FakeAuthorizationV1{Fake: k8Fake}
+			fakeSAR := fakeAuth.SubjectAccessReviews()
 			admitter := projectNamespaceAdmitter{
 				sar: fakeSAR,
 			}

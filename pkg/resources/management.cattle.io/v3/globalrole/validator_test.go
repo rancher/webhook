@@ -16,7 +16,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	k8fake "k8s.io/client-go/kubernetes/typed/authorization/v1/fake"
 	k8testing "k8s.io/client-go/testing"
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
@@ -189,7 +188,7 @@ func TestAdmit(t *testing.T) {
 					return baseGR
 				},
 				stateSetup: func(state testState) {
-					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.fakeClient)
 				},
 			},
 			allowed: false,
@@ -204,7 +203,7 @@ func TestAdmit(t *testing.T) {
 					return baseGR
 				},
 				stateSetup: func(state testState) {
-					setSarResponse(true, nil, testUser, newDefaultGR().Name, state.sarMock)
+					setSarResponse(true, nil, testUser, newDefaultGR().Name, state.fakeClient)
 				},
 			},
 			allowed: true,
@@ -219,7 +218,7 @@ func TestAdmit(t *testing.T) {
 					return baseGR
 				},
 				stateSetup: func(state testState) {
-					setSarResponse(false, fmt.Errorf("server not available"), testUser, newDefaultGR().Name, state.sarMock)
+					setSarResponse(false, fmt.Errorf("server not available"), testUser, newDefaultGR().Name, state.fakeClient)
 				},
 			},
 			allowed: false,
@@ -239,7 +238,7 @@ func TestAdmit(t *testing.T) {
 					return baseGR
 				},
 				stateSetup: func(state testState) {
-					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.fakeClient)
 				},
 			},
 			allowed: false,
@@ -259,7 +258,7 @@ func TestAdmit(t *testing.T) {
 					return baseGR
 				},
 				stateSetup: func(state testState) {
-					setSarResponse(true, nil, testUser, newDefaultGR().Name, state.sarMock)
+					setSarResponse(true, nil, testUser, newDefaultGR().Name, state.fakeClient)
 				},
 			},
 			allowed: true,
@@ -275,7 +274,7 @@ func TestAdmit(t *testing.T) {
 				},
 				stateSetup: func(state testState) {
 					state.rtCacheMock.EXPECT().Get(roleTemplate.Name).Return(&roleTemplate, nil).AnyTimes()
-					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.fakeClient)
 				},
 			},
 			allowed: false,
@@ -291,7 +290,7 @@ func TestAdmit(t *testing.T) {
 				},
 				stateSetup: func(state testState) {
 					state.rtCacheMock.EXPECT().Get(roleTemplate.Name).Return(&roleTemplate, nil).AnyTimes()
-					setSarResponse(true, nil, testUser, newDefaultGR().Name, state.sarMock)
+					setSarResponse(true, nil, testUser, newDefaultGR().Name, state.fakeClient)
 				},
 			},
 			allowed: true,
@@ -307,7 +306,7 @@ func TestAdmit(t *testing.T) {
 				},
 				stateSetup: func(state testState) {
 					state.rtCacheMock.EXPECT().Get(roleTemplate.Name).Return(&roleTemplate, nil).AnyTimes()
-					setSarResponse(false, fmt.Errorf("server not available"), testUser, newDefaultGR().Name, state.sarMock)
+					setSarResponse(false, fmt.Errorf("server not available"), testUser, newDefaultGR().Name, state.fakeClient)
 				},
 			},
 			allowed: false,
@@ -336,7 +335,7 @@ func TestAdmit(t *testing.T) {
 						Context: "cluster",
 					}, nil)
 					state.rtCacheMock.EXPECT().Get("error").Return(nil, errServer)
-					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.fakeClient)
 				},
 			},
 			wantErr: true,
@@ -558,7 +557,7 @@ func TestAdmit(t *testing.T) {
 					return baseGR
 				},
 				stateSetup: func(state testState) {
-					setSarResponse(false, nil, adminUser, newDefaultGR().Name, state.sarMock)
+					setSarResponse(false, nil, adminUser, newDefaultGR().Name, state.fakeClient)
 				},
 			},
 			allowed: false,
@@ -576,7 +575,7 @@ func TestAdmit(t *testing.T) {
 					return baseGR
 				},
 				stateSetup: func(state testState) {
-					setSarResponse(true, nil, testUser, newDefaultGR().Name, state.sarMock)
+					setSarResponse(true, nil, testUser, newDefaultGR().Name, state.fakeClient)
 				},
 			},
 			allowed: true,
@@ -593,7 +592,7 @@ func TestAdmit(t *testing.T) {
 					return baseGR
 				},
 				stateSetup: func(state testState) {
-					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.fakeClient)
 				},
 			},
 
@@ -612,7 +611,7 @@ func TestAdmit(t *testing.T) {
 					return baseGR
 				},
 				stateSetup: func(state testState) {
-					setSarResponse(false, nil, adminUser, newDefaultGR().Name, state.sarMock)
+					setSarResponse(false, nil, adminUser, newDefaultGR().Name, state.fakeClient)
 				},
 			},
 			allowed: true,
@@ -629,7 +628,7 @@ func TestAdmit(t *testing.T) {
 					return baseGR
 				},
 				stateSetup: func(state testState) {
-					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.fakeClient)
 				},
 			},
 			allowed: true,
@@ -653,7 +652,7 @@ func TestAdmit(t *testing.T) {
 					return baseGR
 				},
 				stateSetup: func(state testState) {
-					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.fakeClient)
 				},
 			},
 			allowed: false,
@@ -677,7 +676,7 @@ func TestAdmit(t *testing.T) {
 					return baseGR
 				},
 				stateSetup: func(state testState) {
-					setSarResponse(true, nil, testUser, newDefaultGR().Name, state.sarMock)
+					setSarResponse(true, nil, testUser, newDefaultGR().Name, state.fakeClient)
 				},
 			},
 			allowed: true,
@@ -734,7 +733,7 @@ func TestAdmit(t *testing.T) {
 					return baseGR
 				},
 				stateSetup: func(state testState) {
-					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.fakeClient)
 				},
 			},
 
@@ -757,7 +756,7 @@ func TestAdmit(t *testing.T) {
 					return baseGR
 				},
 				stateSetup: func(state testState) {
-					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.fakeClient)
 				},
 			},
 
@@ -780,7 +779,7 @@ func TestAdmit(t *testing.T) {
 					return baseGR
 				},
 				stateSetup: func(state testState) {
-					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.fakeClient)
 				},
 			},
 
@@ -837,7 +836,7 @@ func TestAdmit(t *testing.T) {
 					return baseGR
 				},
 				stateSetup: func(state testState) {
-					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.sarMock)
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.fakeClient)
 				},
 			},
 			allowed: false,
@@ -865,7 +864,7 @@ func TestAdmit(t *testing.T) {
 					return baseGR
 				},
 				stateSetup: func(state testState) {
-					setSarResponse(true, nil, testUser, newDefaultGR().Name, state.sarMock)
+					setSarResponse(true, nil, testUser, newDefaultGR().Name, state.fakeClient)
 				},
 			},
 			allowed: true,
@@ -882,7 +881,7 @@ func TestAdmit(t *testing.T) {
 			}
 			grResolver := state.createBaseGRResolver()
 			grbResolvers := state.createBaseGRBResolvers(grResolver)
-			admitters := globalrole.NewValidator(state.resolver, grbResolvers, state.sarMock, grResolver).Admitters()
+			admitters := globalrole.NewValidator(state.resolver, grbResolvers, *state.sar, grResolver).Admitters()
 			assert.Len(t, admitters, 1)
 
 			req := createGRRequest(t, test)
@@ -920,8 +919,8 @@ func Test_UnexpectedErrors(t *testing.T) {
 	require.Error(t, err, "Admit should fail on unhandled operations")
 }
 
-func setSarResponse(allowed bool, testErr error, targetUser string, targetGrName string, sarMock *k8fake.FakeSubjectAccessReviews) {
-	sarMock.Fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (handled bool, ret runtime.Object, err error) {
+func setSarResponse(allowed bool, testErr error, targetUser string, targetGrName string, fake *k8testing.Fake) {
+	fake.AddReactor("create", "subjectaccessreviews", func(action k8testing.Action) (handled bool, ret runtime.Object, err error) {
 		createAction := action.(k8testing.CreateActionImpl)
 		review := createAction.GetObject().(*authorizationv1.SubjectAccessReview)
 		spec := review.Spec

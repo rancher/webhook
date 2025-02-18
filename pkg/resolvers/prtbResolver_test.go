@@ -1,6 +1,7 @@
 package resolvers
 
 import (
+	"context"
 	"testing"
 
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -252,7 +253,7 @@ func (p *PRTBResolverSuite) TestPRTBRuleResolver() {
 		p.Run(tt.name, func() {
 			namespace, ok := namespaceFromProject(tt.projectName)
 			p.Require().True(ok, "failed to split project namespace from project name")
-			gotRules, err := resolver.RulesFor(tt.user, namespace)
+			gotRules, err := resolver.RulesFor(context.Background(), tt.user, namespace)
 			if tt.wantErr {
 				p.Errorf(err, "PRTBRuleResolver.RulesFor() error = %v, wantErr %v", err, tt.wantErr)
 				// still check result because function is suppose to return partial results.

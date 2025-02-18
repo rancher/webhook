@@ -1,6 +1,7 @@
 package resolvers
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -34,22 +35,22 @@ func NewPRTBRuleResolver(prtbCache v3.ProjectRoleTemplateBindingCache, roleTempl
 
 // GetRoleReferenceRules is used to find which roles are granted by a rolebinding/clusterrolebinding. Since we don't
 // use these primitives to refer to role templates return empty list.
-func (p *PRTBRuleResolver) GetRoleReferenceRules(rbacv1.RoleRef, string) ([]rbacv1.PolicyRule, error) {
+func (p *PRTBRuleResolver) GetRoleReferenceRules(context.Context, rbacv1.RoleRef, string) ([]rbacv1.PolicyRule, error) {
 	return []rbacv1.PolicyRule{}, nil
 }
 
 // RulesFor returns the list of rules that apply to a given user in a given namespace and error. If an error is returned, the slice of
 // PolicyRules may not be complete, but it contains all retrievable rules. This is done because policy rules are purely additive and policy determinations
 // can be made on the basis of those rules that are found.
-func (p *PRTBRuleResolver) RulesFor(user user.Info, namespace string) ([]rbacv1.PolicyRule, error) {
+func (p *PRTBRuleResolver) RulesFor(ctx context.Context, user user.Info, namespace string) ([]rbacv1.PolicyRule, error) {
 	visitor := &ruleAccumulator{}
-	p.VisitRulesFor(user, namespace, visitor.visit)
+	p.VisitRulesFor(ctx, user, namespace, visitor.visit)
 	return visitor.rules, visitor.getError()
 }
 
 // VisitRulesFor invokes visitor() with each rule that applies to a given user in a given namespace, and each error encountered resolving those rules.
 // If visitor() returns false, visiting is short-circuited.
-func (p *PRTBRuleResolver) VisitRulesFor(user user.Info, namespace string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) {
+func (p *PRTBRuleResolver) VisitRulesFor(_ context.Context, user user.Info, namespace string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) {
 	// for each group check if there are any PRTBs that match subject and namespace using the indexer.
 	// For each returned binding get a list of it's rules with the RoleTemplateResolver and call visit for each rule.
 	for _, group := range user.GetGroups() {

@@ -18,6 +18,7 @@ import (
 	v1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	v1Authorization "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	k8fake "k8s.io/client-go/kubernetes/typed/authorization/v1/fake"
 	k8testing "k8s.io/client-go/testing"
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
@@ -197,7 +198,8 @@ type testState struct {
 	rtCacheMock  *fake.MockNonNamespacedCacheInterface[*v3.RoleTemplate]
 	grCacheMock  *fake.MockNonNamespacedCacheInterface[*v3.GlobalRole]
 	grbCacheMock *fake.MockNonNamespacedCacheInterface[*v3.GlobalRoleBinding]
-	sarMock      *k8fake.FakeSubjectAccessReviews
+	sar          *v1Authorization.SubjectAccessReviewInterface
+	fakeClient   *k8testing.Fake
 	resolver     validation.AuthorizationRuleResolver
 }
 
@@ -296,15 +298,17 @@ func newDefaultState(t *testing.T) testState {
 	rtCacheMock.EXPECT().Get(clusterOwnerRT.Name).Return(&clusterOwnerRT, nil).AnyTimes()
 	rtCacheMock.EXPECT().Get(baseRT.Name).Return(&baseRT, nil).AnyTimes()
 	rtCacheMock.EXPECT().Get(clusterOwnerRT.Name).Return(&clusterOwnerRT, nil).AnyTimes()
-	k8Fake := &k8testing.Fake{}
-	fakeSAR := &k8fake.FakeSubjectAccessReviews{Fake: &k8fake.FakeAuthorizationV1{Fake: k8Fake}}
+	fakeTesting := &k8testing.Fake{}
+	fakeAuth := &k8fake.FakeAuthorizationV1{Fake: fakeTesting}
+	fakeSAR := fakeAuth.SubjectAccessReviews()
 
 	resolver, _ := validation.NewTestRuleResolver(nil, nil, clusterRoles, clusterRoleBindings)
 	return testState{
 		rtCacheMock:  rtCacheMock,
 		grCacheMock:  grCacheMock,
 		grbCacheMock: grbCacheMock,
-		sarMock:      fakeSAR,
+		sar:          &fakeSAR,
+		fakeClient:   fakeTesting,
 		resolver:     resolver,
 	}
 }
