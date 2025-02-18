@@ -24,6 +24,11 @@ import (
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 )
 
+const (
+	VersionManagementAnno    = "rancher.io/imported-cluster-version-management"
+	VersionManagementSetting = "imported-cluster-version-management"
+)
+
 var parsedRangeLessThan123 = semver.MustParseRange("< 1.23.0-rancher0")
 
 // NewValidator returns a new validator for management clusters.
@@ -31,12 +36,14 @@ func NewValidator(
 	sar authorizationv1.SubjectAccessReviewInterface,
 	cache v3.PodSecurityAdmissionConfigurationTemplateCache,
 	userCache v3.UserCache,
+	settingCache v3.SettingCache,
 ) *Validator {
 	return &Validator{
 		admitter: admitter{
-			sar:       sar,
-			psact:     cache,
-			userCache: userCache, // userCache is nil for downstream clusters.
+			sar:          sar,
+			psact:        cache,
+			userCache:    userCache,    // userCache is nil for downstream clusters.
+			settingCache: settingCache, // settingCache is nil for downstream clusters
 		},
 	}
 }
@@ -69,9 +76,10 @@ func (v *Validator) Admitters() []admission.Admitter {
 }
 
 type admitter struct {
-	sar       authorizationv1.SubjectAccessReviewInterface
-	psact     v3.PodSecurityAdmissionConfigurationTemplateCache
-	userCache v3.UserCache
+	sar          authorizationv1.SubjectAccessReviewInterface
+	psact        v3.PodSecurityAdmissionConfigurationTemplateCache
+	userCache    v3.UserCache
+	settingCache v3.SettingCache
 }
 
 // Admit handles the webhook admission request sent to this webhook.
@@ -109,23 +117,26 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		}
 	}
 
-	if request.Operation == admissionv1.Create || request.Operation == admissionv1.Update {
-		// no need to validate the PodSecurityAdmissionConfigurationTemplate on a local cluster,
-		// or imported cluster which represents a KEv2 cluster (GKE/EKS/AKS) or v1 Provisioning Cluster
-		if newCluster.Name == "local" || newCluster.Spec.RancherKubernetesEngineConfig == nil {
-			return admission.ResponseAllowed(), nil
-		}
+	response, err = a.validatePSACT(oldCluster, newCluster, request.Operation)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate PodSecurityAdmissionConfigurationTemplate(PSACT): %w", err)
+	}
+	if !response.Allowed {
+		return response, nil
+	}
 
-		response, err = a.validatePSACT(oldCluster, newCluster, request.Operation)
+	if a.settingCache != nil {
+		// The following checks don't make sense for downstream clusters (settingCache == nil)
+		response, err = a.validateVersionManagementFeature(oldCluster, newCluster, request.Operation)
 		if err != nil {
-			return nil, fmt.Errorf("failed to validate PodSecurityAdmissionConfigurationTemplate(PSACT): %w", err)
+			return nil, fmt.Errorf("failed to validate version management feature: %w", err)
 		}
 		if !response.Allowed {
 			return response, nil
 		}
 	}
 
-	return admission.ResponseAllowed(), nil
+	return response, nil
 }
 
 func toExtra(extra map[string]authenticationv1.ExtraValue) map[string]v1.ExtraValue {
@@ -197,6 +208,15 @@ func (a *admitter) validateFleetPermissions(request *admission.Request, oldClust
 
 // validatePSACT validates the cluster spec when PodSecurityAdmissionConfigurationTemplate is used.
 func (a *admitter) validatePSACT(oldCluster, newCluster *apisv3.Cluster, op admissionv1.Operation) (*admissionv1.AdmissionResponse, error) {
+	if op != admissionv1.Create && op != admissionv1.Update {
+		return admission.ResponseAllowed(), nil
+	}
+	// no need to validate the PodSecurityAdmissionConfigurationTemplate on a local cluster,
+	// or imported cluster which represents a KEv2 cluster (GKE/EKS/AKS) or v1 Provisioning Cluster
+	if newCluster.Name == "local" || newCluster.Spec.RancherKubernetesEngineConfig == nil {
+		return admission.ResponseAllowed(), nil
+	}
+
 	newTemplateName := newCluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName
 	oldTemplateName := oldCluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName
 
@@ -288,4 +308,90 @@ func (a *admitter) checkPSAConfigOnCluster(cluster *apisv3.Cluster) (*admissionv
 	}
 
 	return admission.ResponseAllowed(), nil
+}
+
+// validateVersionManagementFeature validates the annotation for the version management feature is set with valid value on the imported RKE2/K3s cluster,
+// additionally, it permits but include a warning to the response if either of the following is true:
+//   - the annotation is found on a cluster rather than imported RKE2/K3s cluster;
+//   - the spec.rke2Config or spec.k3sConfig is changed when the version management feature is disabled for the cluster.
+func (a *admitter) validateVersionManagementFeature(oldCluster, newCluster *apisv3.Cluster, op admissionv1.Operation) (*admissionv1.AdmissionResponse, error) {
+	if op != admissionv1.Create && op != admissionv1.Update {
+		return admission.ResponseAllowed(), nil
+	}
+
+	val, exist := newCluster.Annotations[VersionManagementAnno]
+	driver := newCluster.Status.Driver
+
+	if driver != apisv3.ClusterDriverRke2 && driver != apisv3.ClusterDriverK3s {
+		response := admission.ResponseAllowed()
+		if exist {
+			msg := fmt.Sprintf("The annotation [%s] takes effect only on imported RKE2/K3s cluster, please consider removing it from cluster [%s]", VersionManagementAnno, newCluster.Name)
+			response.Warnings = append(response.Warnings, msg)
+		}
+		return response, nil
+	}
+
+	// reaching this point indicates the cluster is an imported RKE2/K3s cluster
+	if !exist {
+		message := fmt.Sprintf("the %s annotation is missing", VersionManagementAnno)
+		return admission.ResponseBadRequest(message), nil
+	}
+	if val != "true" && val != "false" && val != "system-default" {
+		message := fmt.Sprintf("the value of the %s annotation must be one of the following: true, false, system-default", VersionManagementAnno)
+		return admission.ResponseBadRequest(message), nil
+	}
+	enabled, err := a.versionManagementEnabled(newCluster)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check the version management feature: %w", err)
+	}
+	response := admission.ResponseAllowed()
+	if !enabled && op == admissionv1.Update {
+		if driver == apisv3.ClusterDriverRke2 {
+			if !reflect.DeepEqual(oldCluster.Spec.Rke2Config, newCluster.Spec.Rke2Config) && newCluster.Spec.Rke2Config != nil {
+				msg := fmt.Sprintf("Cluster [%s]: changes to the Rke2Config field will take effect after the version management is enabled on the cluster", newCluster.Name)
+				response.Warnings = append(response.Warnings, msg)
+			}
+		}
+		if driver == apisv3.ClusterDriverK3s {
+			if !reflect.DeepEqual(oldCluster.Spec.K3sConfig, newCluster.Spec.K3sConfig) && newCluster.Spec.K3sConfig != nil {
+				msg := fmt.Sprintf("Cluster [%s]: changes to the K3sConfig field will take effect after the version management is enabled on the cluster", newCluster.Name)
+				response.Warnings = append(response.Warnings, msg)
+			}
+		}
+	}
+	return response, nil
+}
+
+func (a *admitter) versionManagementEnabled(cluster *apisv3.Cluster) (bool, error) {
+	if cluster == nil {
+		return false, fmt.Errorf("cluster is nil")
+	}
+	val, ok := cluster.Annotations[VersionManagementAnno]
+	if !ok {
+		return false, fmt.Errorf("the %s annotation is missing from the cluster", VersionManagementAnno)
+	}
+	if val == "true" {
+		return true, nil
+	}
+	if val == "false" {
+		return false, nil
+	}
+	if val == "system-default" {
+		s, err := a.settingCache.Get(VersionManagementSetting)
+		if err != nil {
+			return false, err
+		}
+		actual := s.Value
+		if actual == "" {
+			actual = s.Default
+		}
+		if actual == "true" {
+			return true, nil
+		}
+		if actual == "false" {
+			return false, nil
+		}
+		return false, fmt.Errorf("the value (%s) of the %s setting is invalid", actual, VersionManagementSetting)
+	}
+	return false, fmt.Errorf("the value of the %s annotation is invalid", VersionManagementAnno)
 }
