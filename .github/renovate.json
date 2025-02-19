@@ -13,5 +13,17 @@
     "helm-values",
     "regex",
     "gomod"
+  ],
+  "packageRules": [
+    {
+      "matchPackageNames": [
+        "k8s.io/**",
+        "sigs.k8s.io/**",
+        "go.opentelemetry.io/**",
+        "github.com/prometheus/**",
+        "github.com/rancher/rancher/pkg/apis"
+      ],
+      "enabled": false
+    }
   ]
 }
