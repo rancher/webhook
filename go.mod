@@ -5,6 +5,9 @@ go 1.23.0
 toolchain go1.23.6
 
 replace (
+	// Remove and bump github.com/rancher/rancher/pkg/apis once the corresponding rancher PR is merged.
+	github.com/rancher/rancher/pkg/apis => github.com/pmatseykanets/rancher/pkg/apis v0.0.0-20250218142204-0faa2dd1e363
+
 	github.com/rancher/rke => github.com/rancher/rke v1.7.2
 	k8s.io/api => k8s.io/api v0.32.1
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.32.1
@@ -40,6 +43,7 @@ replace (
 require (
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/evanphx/json-patch v5.9.11+incompatible
+	github.com/go-ldap/ldap/v3 v3.4.1
 	github.com/gorilla/mux v1.8.1
 	github.com/rancher/dynamiclistener v0.6.1
 	github.com/rancher/lasso v0.2.1
@@ -65,6 +69,7 @@ require (
 
 require (
 	cel.dev/expr v0.18.0 // indirect
+	github.com/Azure/go-ntlmssp v0.0.0-20200615164410-66371956d46c // indirect
 	github.com/NYTimes/gziphandler v1.1.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a // indirect
@@ -81,6 +86,7 @@ require (
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
+	github.com/go-asn1-ber/asn1-ber v1.5.1 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
