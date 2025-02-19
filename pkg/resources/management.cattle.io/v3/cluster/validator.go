@@ -25,6 +25,7 @@ import (
 )
 
 const (
+	localCluster             = "local"
 	VersionManagementAnno    = "rancher.io/imported-cluster-version-management"
 	VersionManagementSetting = "imported-cluster-version-management"
 )
@@ -87,6 +88,11 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	oldCluster, newCluster, err := objectsv3.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed get old and new clusters from request: %w", err)
+	}
+
+	if request.Operation == admissionv1.Delete && oldCluster.Name == localCluster {
+		// deleting "local" cluster could corrupt the cluster Rancher is deployed in
+		return admission.ResponseBadRequest("local cluster may not be deleted"), nil
 	}
 
 	response, err := a.validateFleetPermissions(request, oldCluster, newCluster)
@@ -213,7 +219,7 @@ func (a *admitter) validatePSACT(oldCluster, newCluster *apisv3.Cluster, op admi
 	}
 	// no need to validate the PodSecurityAdmissionConfigurationTemplate on a local cluster,
 	// or imported cluster which represents a KEv2 cluster (GKE/EKS/AKS) or v1 Provisioning Cluster
-	if newCluster.Name == "local" || newCluster.Spec.RancherKubernetesEngineConfig == nil {
+	if newCluster.Name == localCluster || newCluster.Spec.RancherKubernetesEngineConfig == nil {
 		return admission.ResponseAllowed(), nil
 	}
 
