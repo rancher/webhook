@@ -94,7 +94,7 @@ If yes, the webhook redacts the role, so that it only grants a deletion permissi
 
 #### Create and Update
 
-When an LDAP (`openldap`, `freeipa`) or AD (`activedirectory`) authconfig is are created or updated, the following common checks take place:
+When an LDAP (`openldap`, `freeipa`) or ActiveDirectory (`activedirectory`) authconfig is created or updated, the following checks take place:
 
 - The field `servers` is required.
 - If the field `tls` is set to true, the field `certificate` is required.
@@ -111,7 +111,7 @@ When an LDAP (`openldap`, `freeipa`) or AD (`activedirectory`) authconfig is are
   - `groupDNAttribute`
   - `groupMemberUserAttribute`
   - `groupMemberMappingAttribute`
-- If set, the following fields should have a valid LDAP filter expression
+- If set, the following fields should have a valid LDAP filter expression according to RFC4515
   - `userLoginFilter`
   - `userSearchFilter`
   - `groupSearchFilter`
