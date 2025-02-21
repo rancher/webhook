@@ -126,42 +126,42 @@ func validateLDAPConfig(request *admission.Request) error {
 
 	if config.UserSearchAttribute != "" {
 		for _, attr := range strings.Split(config.UserSearchAttribute, "|") {
-			if !IsValidAttr(attr) {
+			if !IsValidLdapAttr(attr) {
 				err = errors.Join(err, field.Forbidden(field.NewPath("userSearchAttribute"), "invalid value"))
 			}
 		}
 	}
-	if config.UserLoginAttribute != "" && !IsValidAttr(config.UserLoginAttribute) {
+	if config.UserLoginAttribute != "" && !IsValidLdapAttr(config.UserLoginAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("userLoginAttribute"), "invalid value"))
 	}
-	if config.UserObjectClass != "" && !IsValidAttr(config.UserObjectClass) {
+	if config.UserObjectClass != "" && !IsValidLdapAttr(config.UserObjectClass) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("userObjectClass"), "invalid value"))
 	}
-	if config.UserNameAttribute != "" && !IsValidAttr(config.UserNameAttribute) {
+	if config.UserNameAttribute != "" && !IsValidLdapAttr(config.UserNameAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("userNameAttribute"), "invalid value"))
 	}
-	if config.UserMemberAttribute != "" && !IsValidAttr(config.UserMemberAttribute) {
+	if config.UserMemberAttribute != "" && !IsValidLdapAttr(config.UserMemberAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("userMemberAttribute"), "invalid value"))
 	}
-	if config.UserEnabledAttribute != "" && !IsValidAttr(config.UserEnabledAttribute) {
+	if config.UserEnabledAttribute != "" && !IsValidLdapAttr(config.UserEnabledAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("userEnabledAttribute"), "invalid value"))
 	}
-	if config.GroupSearchAttribute != "" && !IsValidAttr(config.GroupSearchAttribute) {
+	if config.GroupSearchAttribute != "" && !IsValidLdapAttr(config.GroupSearchAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupSearchAttribute"), "invalid value"))
 	}
-	if config.GroupObjectClass != "" && !IsValidAttr(config.GroupObjectClass) {
+	if config.GroupObjectClass != "" && !IsValidLdapAttr(config.GroupObjectClass) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupObjectClass"), "invalid value"))
 	}
-	if config.GroupNameAttribute != "" && !IsValidAttr(config.GroupNameAttribute) {
+	if config.GroupNameAttribute != "" && !IsValidLdapAttr(config.GroupNameAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupNameAttribute"), "invalid value"))
 	}
-	if config.GroupDNAttribute != "" && !IsValidAttr(config.GroupDNAttribute) {
+	if config.GroupDNAttribute != "" && !IsValidLdapAttr(config.GroupDNAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupDNAttribute"), "invalid value"))
 	}
-	if config.GroupMemberUserAttribute != "" && !IsValidAttr(config.GroupMemberUserAttribute) {
+	if config.GroupMemberUserAttribute != "" && !IsValidLdapAttr(config.GroupMemberUserAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupMemberUserAttribute"), "invalid value"))
 	}
-	if config.GroupMemberMappingAttribute != "" && !IsValidAttr(config.GroupMemberMappingAttribute) {
+	if config.GroupMemberMappingAttribute != "" && !IsValidLdapAttr(config.GroupMemberMappingAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupMemberMappingAttribute"), "invalid value"))
 	}
 
@@ -203,39 +203,39 @@ func validateActiveDirectoryConfig(request *admission.Request) error {
 
 	if config.UserSearchAttribute != "" {
 		for _, attr := range strings.Split(config.UserSearchAttribute, "|") {
-			if !IsValidAttr(attr) {
+			if !IsValidLdapAttr(attr) {
 				err = errors.Join(err, field.Forbidden(field.NewPath("userSearchAttribute"), "invalid value "+attr))
 			}
 		}
 	}
-	if config.UserLoginAttribute != "" && !IsValidAttr(config.UserLoginAttribute) {
+	if config.UserLoginAttribute != "" && !IsValidLdapAttr(config.UserLoginAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("userLoginAttribute"), "invalid value"))
 	}
-	if config.UserObjectClass != "" && !IsValidAttr(config.UserObjectClass) {
+	if config.UserObjectClass != "" && !IsValidLdapAttr(config.UserObjectClass) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("userObjectClass"), "invalid value"))
 	}
-	if config.UserNameAttribute != "" && !IsValidAttr(config.UserNameAttribute) {
+	if config.UserNameAttribute != "" && !IsValidLdapAttr(config.UserNameAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("userNameAttribute"), "invalid value"))
 	}
-	if config.UserEnabledAttribute != "" && !IsValidAttr(config.UserEnabledAttribute) {
+	if config.UserEnabledAttribute != "" && !IsValidLdapAttr(config.UserEnabledAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("userEnabledAttribute"), "invalid value"))
 	}
-	if config.GroupSearchAttribute != "" && !IsValidAttr(config.GroupSearchAttribute) {
+	if config.GroupSearchAttribute != "" && !IsValidLdapAttr(config.GroupSearchAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupSearchAttribute"), "invalid value"))
 	}
-	if config.GroupObjectClass != "" && !IsValidAttr(config.GroupObjectClass) {
+	if config.GroupObjectClass != "" && !IsValidLdapAttr(config.GroupObjectClass) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupObjectClass"), "invalid value"))
 	}
-	if config.GroupNameAttribute != "" && !IsValidAttr(config.GroupNameAttribute) {
+	if config.GroupNameAttribute != "" && !IsValidLdapAttr(config.GroupNameAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupNameAttribute"), "invalid value"))
 	}
-	if config.GroupDNAttribute != "" && !IsValidAttr(config.GroupDNAttribute) {
+	if config.GroupDNAttribute != "" && !IsValidLdapAttr(config.GroupDNAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupDNAttribute"), "invalid value"))
 	}
-	if config.GroupMemberUserAttribute != "" && !IsValidAttr(config.GroupMemberUserAttribute) {
+	if config.GroupMemberUserAttribute != "" && !IsValidLdapAttr(config.GroupMemberUserAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupMemberUserAttribute"), "invalid value"))
 	}
-	if config.GroupMemberMappingAttribute != "" && !IsValidAttr(config.GroupMemberMappingAttribute) {
+	if config.GroupMemberMappingAttribute != "" && !IsValidLdapAttr(config.GroupMemberMappingAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupMemberMappingAttribute"), "invalid value"))
 	}
 
@@ -258,15 +258,50 @@ func validateActiveDirectoryConfig(request *admission.Request) error {
 	return err
 }
 
-// According to RFC4512, attribute names (descriptors) should adhere to the following syntax
-// descr = keystring
-// keystring = leadkeychar *keychar
-// leadkeychar = ALPHA
-// keychar = ALPHA / DIGIT / HYPHEN
-// See https://datatracker.ietf.org/doc/html/rfc4512#section-1.4
-var validAttr = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9\-]*$`)
+// According to RFC4512 https://datatracker.ietf.org/doc/html/rfc4512#section-1.4
+// Object identifiers (OIDs) [X.680] are represented in LDAP using a
+// dot-decimal format conforming to the ABNF:
+//
+//	numericoid = number 1*( DOT number )
+//
+// Short names, also known as descriptors, are used as more readable
+// aliases for object identifiers.  Short names are case insensitive and
+// conform to the ABNF:
+//
+//	descr = keystring
+//
+// Where either an object identifier or a short name may be specified,
+// the following production is used:
+//
+//	oid = descr / numericoid
+//
+// Where
+//
+//	descr = keystring
+//	keystring = leadkeychar *keychar
+//	leadkeychar = ALPHA
+//	keychar = ALPHA / DIGIT / HYPHEN
+//	number  = DIGIT / ( LDIGIT 1*DIGIT )
+//
+//	ALPHA   = %x41-5A / %x61-7A   ; "A"-"Z" / "a"-"z"
+//	DIGIT   = %x30 / LDIGIT       ; "0"-"9"
+//	LDIGIT  = %x31-39             ; "1"-"9"
+//	HYPHEN  = %x2D ; hyphen ("-")
+//	DOT     = %x2E ; period (".")
+var (
+	shortNameRegex = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9\-]*$`)
+	oidRegex       = regexp.MustCompile(`^(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))*$`)
+)
 
-// IsValidAttr returns true is the given attribute name conforms with the syntax defined in RFC4512.
-func IsValidAttr(attr string) bool {
-	return validAttr.MatchString(attr)
+// IsValidLdapAttr returns true is the given attribute name conforms with
+// either numeric OID or short name format.
+// Note: this must match the corresponding validation logic in rancher/rancher.
+func IsValidLdapAttr(attr string) bool {
+	if shortNameRegex.MatchString(attr) {
+		return true
+	}
+	if oidRegex.MatchString(attr) {
+		return true
+	}
+	return false
 }

@@ -392,29 +392,45 @@ func TestValidateActiveDirectoryConfig(t *testing.T) {
 	}
 }
 
-func TestIsValidAttribute(t *testing.T) {
+func TestIsValidLdapAttr(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		in    string
+		attr  string
 		valid bool
 	}{
+		{"", false},
+		// Short names.
 		{"a", true},
 		{"a1", true},
 		{"a1-", true},
 		{"a-b", true},
 		{"a1-b2", true},
-		{"", false},
 		{"1a", false},
 		{"-a", false},
 		{"-1a", false},
 		{"1-a", false},
+		// Numeric OIDs.
+		{"0", true},
+		{"1", true},
+		{"0.1", true},
+		{"1.2", true},
+		{"0.0.0", true},
+		{"1.2.3", true},
+		{"123.456.789", true},
+		{"12345678901234567890", true},
+		{"1.2.3.4.5.6.7.8.9.10.11.12.13.14.15.16.17.18.19.20", true},
+		{".", false},
+		{"1.", false},
+		{"1..1", false},
+		{"1.-1", false},
+		{"01", false},
+		{"1.02", false},
 	}
 
 	for _, test := range tests {
-		t.Run(test.in, func(t *testing.T) {
-			t.Parallel()
-			assert.Equal(t, test.valid, authconfig.IsValidAttr(test.in))
+		t.Run(test.attr, func(t *testing.T) {
+			assert.Equal(t, test.valid, authconfig.IsValidLdapAttr(test.attr))
 		})
 	}
 }
