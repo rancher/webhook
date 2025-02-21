@@ -126,42 +126,42 @@ func validateLDAPConfig(request *admission.Request) error {
 
 	if config.UserSearchAttribute != "" {
 		for _, attr := range strings.Split(config.UserSearchAttribute, "|") {
-			if !isValidAttr(attr) {
+			if !IsValidAttr(attr) {
 				err = errors.Join(err, field.Forbidden(field.NewPath("userSearchAttribute"), "invalid value"))
 			}
 		}
 	}
-	if config.UserLoginAttribute != "" && !isValidAttr(config.UserLoginAttribute) {
+	if config.UserLoginAttribute != "" && !IsValidAttr(config.UserLoginAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("userLoginAttribute"), "invalid value"))
 	}
-	if config.UserObjectClass != "" && !isValidAttr(config.UserObjectClass) {
+	if config.UserObjectClass != "" && !IsValidAttr(config.UserObjectClass) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("userObjectClass"), "invalid value"))
 	}
-	if config.UserNameAttribute != "" && !isValidAttr(config.UserNameAttribute) {
+	if config.UserNameAttribute != "" && !IsValidAttr(config.UserNameAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("userNameAttribute"), "invalid value"))
 	}
-	if config.UserMemberAttribute != "" && !isValidAttr(config.UserMemberAttribute) {
+	if config.UserMemberAttribute != "" && !IsValidAttr(config.UserMemberAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("userMemberAttribute"), "invalid value"))
 	}
-	if config.UserEnabledAttribute != "" && !isValidAttr(config.UserEnabledAttribute) {
+	if config.UserEnabledAttribute != "" && !IsValidAttr(config.UserEnabledAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("userEnabledAttribute"), "invalid value"))
 	}
-	if config.GroupSearchAttribute != "" && !isValidAttr(config.GroupSearchAttribute) {
+	if config.GroupSearchAttribute != "" && !IsValidAttr(config.GroupSearchAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupSearchAttribute"), "invalid value"))
 	}
-	if config.GroupObjectClass != "" && !isValidAttr(config.GroupObjectClass) {
+	if config.GroupObjectClass != "" && !IsValidAttr(config.GroupObjectClass) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupObjectClass"), "invalid value"))
 	}
-	if config.GroupNameAttribute != "" && !isValidAttr(config.GroupNameAttribute) {
+	if config.GroupNameAttribute != "" && !IsValidAttr(config.GroupNameAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupNameAttribute"), "invalid value"))
 	}
-	if config.GroupDNAttribute != "" && !isValidAttr(config.GroupDNAttribute) {
+	if config.GroupDNAttribute != "" && !IsValidAttr(config.GroupDNAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupDNAttribute"), "invalid value"))
 	}
-	if config.GroupMemberUserAttribute != "" && !isValidAttr(config.GroupMemberUserAttribute) {
+	if config.GroupMemberUserAttribute != "" && !IsValidAttr(config.GroupMemberUserAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupMemberUserAttribute"), "invalid value"))
 	}
-	if config.GroupMemberMappingAttribute != "" && !isValidAttr(config.GroupMemberMappingAttribute) {
+	if config.GroupMemberMappingAttribute != "" && !IsValidAttr(config.GroupMemberMappingAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupMemberMappingAttribute"), "invalid value"))
 	}
 
@@ -203,39 +203,39 @@ func validateActiveDirectoryConfig(request *admission.Request) error {
 
 	if config.UserSearchAttribute != "" {
 		for _, attr := range strings.Split(config.UserSearchAttribute, "|") {
-			if !isValidAttr(attr) {
-				err = errors.Join(err, field.Forbidden(field.NewPath("userSearchAttribute"), "invalid value"))
+			if !IsValidAttr(attr) {
+				err = errors.Join(err, field.Forbidden(field.NewPath("userSearchAttribute"), "invalid value "+attr))
 			}
 		}
 	}
-	if config.UserLoginAttribute != "" && !isValidAttr(config.UserLoginAttribute) {
+	if config.UserLoginAttribute != "" && !IsValidAttr(config.UserLoginAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("userLoginAttribute"), "invalid value"))
 	}
-	if config.UserObjectClass != "" && !isValidAttr(config.UserObjectClass) {
+	if config.UserObjectClass != "" && !IsValidAttr(config.UserObjectClass) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("userObjectClass"), "invalid value"))
 	}
-	if config.UserNameAttribute != "" && !isValidAttr(config.UserNameAttribute) {
+	if config.UserNameAttribute != "" && !IsValidAttr(config.UserNameAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("userNameAttribute"), "invalid value"))
 	}
-	if config.UserEnabledAttribute != "" && !isValidAttr(config.UserEnabledAttribute) {
+	if config.UserEnabledAttribute != "" && !IsValidAttr(config.UserEnabledAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("userEnabledAttribute"), "invalid value"))
 	}
-	if config.GroupSearchAttribute != "" && !isValidAttr(config.GroupSearchAttribute) {
+	if config.GroupSearchAttribute != "" && !IsValidAttr(config.GroupSearchAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupSearchAttribute"), "invalid value"))
 	}
-	if config.GroupObjectClass != "" && !isValidAttr(config.GroupObjectClass) {
+	if config.GroupObjectClass != "" && !IsValidAttr(config.GroupObjectClass) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupObjectClass"), "invalid value"))
 	}
-	if config.GroupNameAttribute != "" && !isValidAttr(config.GroupNameAttribute) {
+	if config.GroupNameAttribute != "" && !IsValidAttr(config.GroupNameAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupNameAttribute"), "invalid value"))
 	}
-	if config.GroupDNAttribute != "" && !isValidAttr(config.GroupDNAttribute) {
+	if config.GroupDNAttribute != "" && !IsValidAttr(config.GroupDNAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupDNAttribute"), "invalid value"))
 	}
-	if config.GroupMemberUserAttribute != "" && !isValidAttr(config.GroupMemberUserAttribute) {
+	if config.GroupMemberUserAttribute != "" && !IsValidAttr(config.GroupMemberUserAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupMemberUserAttribute"), "invalid value"))
 	}
-	if config.GroupMemberMappingAttribute != "" && !isValidAttr(config.GroupMemberMappingAttribute) {
+	if config.GroupMemberMappingAttribute != "" && !IsValidAttr(config.GroupMemberMappingAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupMemberMappingAttribute"), "invalid value"))
 	}
 
@@ -267,6 +267,6 @@ func validateActiveDirectoryConfig(request *admission.Request) error {
 var validAttr = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9\-]*$`)
 
 // IsValidAttr returns true is the given attribute name conforms with the syntax defined in RFC4512.
-func isValidAttr(attr string) bool {
+func IsValidAttr(attr string) bool {
 	return validAttr.MatchString(attr)
 }
