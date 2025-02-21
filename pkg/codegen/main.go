@@ -85,6 +85,7 @@ func main() {
 				&v3.NodeDriver{},
 				&v3.Project{},
 				&v3.Setting{},
+				&v3.AuthConfig{},
 			},
 		},
 		"provisioning.cattle.io": {
