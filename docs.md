@@ -258,12 +258,13 @@ This escalation check is bypassed if a user has the `bind` verb on the GlobalRol
 #### Invalid Fields - Update
 Users cannot update the following fields after creation:
 - `userName`
+- `userPrincipalName`
 - `groupPrincipalName`
 - `globalRoleName`
 
 
 #### Invalid Fields - Create
-GlobalRoleBindings must have either `userName` or `groupPrincipalName`, but not both.
+GlobalRoleBindings must have one of `userName`, `userPrincipalName` or `groupPrincipalName` but not all.
 All RoleTemplates which are referred to in the `inheritedClusterRoles` field must exist and not be locked. 
 
 ### Mutation Checks
