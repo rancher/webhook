@@ -1,20 +1,23 @@
 package setting
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
+	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/webhook/pkg/admission"
 	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/resources/common"
 	"github.com/robfig/cron"
 	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -22,12 +25,14 @@ import (
 )
 
 const (
-	DeleteInactiveUserAfter   = "delete-inactive-user-after"
-	DisableInactiveUserAfter  = "disable-inactive-user-after"
-	AuthUserSessionTTLMinutes = "auth-user-session-ttl-minutes"
-	UserLastLoginDefault      = "user-last-login-default"
-	UserRetentionCron         = "user-retention-cron"
-	AgentTLSMode              = "agent-tls-mode"
+	DeleteInactiveUserAfter               = "delete-inactive-user-after"
+	DisableInactiveUserAfter              = "disable-inactive-user-after"
+	AuthUserSessionTTLMinutes             = "auth-user-session-ttl-minutes"
+	UserLastLoginDefault                  = "user-last-login-default"
+	UserRetentionCron                     = "user-retention-cron"
+	AgentTLSMode                          = "agent-tls-mode"
+	CattleClusterAgentPriorityClass       = "cluster-agent-default-priority-class"
+	CattleClusterAgentPodDisruptionBudget = "cluster-agent-default-pod-disruption-budget"
 )
 
 // MinDeleteInactiveUserAfter is the minimum duration for delete-inactive-user-after setting.
@@ -115,6 +120,10 @@ func (a *admitter) admitUpdate(oldSetting, newSetting *v3.Setting) (*admissionv1
 	switch newSetting.Name {
 	case AgentTLSMode:
 		err = a.validateAgentTLSMode(oldSetting, newSetting)
+	case CattleClusterAgentPriorityClass:
+		err = a.validateClusterAgentPriorityClass(newSetting)
+	case CattleClusterAgentPodDisruptionBudget:
+		err = a.validateClusterAgentPodDisruptionBudget(newSetting)
 	default:
 	}
 
@@ -340,7 +349,78 @@ func (a *admitter) validateAgentTLSMode(oldSetting, newSetting *v3.Setting) erro
 	return nil
 }
 
-func clusterConditionMatches(cluster *v3.Cluster, t v3.ClusterConditionType, status v1.ConditionStatus) bool {
+func (a *admitter) validateClusterAgentPriorityClass(newSetting *v3.Setting) error {
+	pc := provv1.PriorityClassSpec{}
+
+	err := json.Unmarshal([]byte(newSetting.Value), &pc)
+	if err != nil {
+		return err
+	}
+
+	if pc.Value > 1000000000 {
+		return fmt.Errorf("value must be less than 1 billion and greater than negative 1 billion")
+	}
+
+	if pc.Value < -1000000000 {
+		return fmt.Errorf("value must be less than 1 billion and greater than negative 1 billion")
+	}
+
+	if pc.Preemption != nil && *pc.Preemption != corev1.PreemptNever && *pc.Preemption != corev1.PreemptLowerPriority && *pc.Preemption != "" {
+		return fmt.Errorf("preemption policy must be set to either 'Never' or 'PreemptLowerPriority'")
+	}
+
+	return nil
+}
+
+func (a *admitter) validateClusterAgentPodDisruptionBudget(newSetting *v3.Setting) error {
+	pdb := provv1.PodDisruptionBudgetSpec{}
+
+	err := json.Unmarshal([]byte(newSetting.Value), &pdb)
+	if err != nil {
+		return err
+	}
+
+	minAvailIsString := false
+	maxUnavailIsString := false
+	minAvailStr := pdb.MinAvailable
+	maxUnavailStr := pdb.MaxUnavailable
+
+	minAvailInt, err := strconv.Atoi(pdb.MinAvailable)
+	if err != nil {
+		minAvailIsString = true
+	}
+
+	maxUnavailInt, err := strconv.Atoi(pdb.MaxUnavailable)
+	if err != nil {
+		maxUnavailIsString = true
+	}
+
+	// can't set a non-zero value on both fields at the same time
+	if (minAvailStr == "" && maxUnavailStr == "") ||
+		(minAvailStr != "" && minAvailStr != "0") && (maxUnavailStr != "" && maxUnavailStr != "0") {
+		return fmt.Errorf("both minAvailable and maxUnavailable cannot be set to a non zero value, at least one must be set to zero")
+	}
+
+	if minAvailInt < 0 {
+		return fmt.Errorf("minAvailable cannot be set to a negative integer")
+	}
+
+	if maxUnavailInt < 0 {
+		return fmt.Errorf("maxUnavailable cannot be set to a negative integer")
+	}
+
+	if minAvailIsString && !common.PdbPercentageRegex.Match([]byte(minAvailStr)) {
+		return fmt.Errorf("minAvailable must be a non-negative whole integer or a percentage value between 0 and 100, regex used is '%s'", common.PdbPercentageRegex.String())
+	}
+
+	if maxUnavailIsString && !common.PdbPercentageRegex.Match([]byte(maxUnavailStr)) {
+		return fmt.Errorf("minAvailable must be a non-negative whole integer or a percentage value between 0 and 100, regex used is '%s'", common.PdbPercentageRegex.String())
+	}
+
+	return nil
+}
+
+func clusterConditionMatches(cluster *v3.Cluster, t v3.ClusterConditionType, status corev1.ConditionStatus) bool {
 	for _, cond := range cluster.Status.Conditions {
 		if cond.Type == t && cond.Status == status {
 			return true

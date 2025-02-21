@@ -1,6 +1,8 @@
 package common
 
 import (
+	"regexp"
+
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
 	"github.com/sirupsen/logrus"
@@ -19,7 +21,14 @@ const (
 	CreatorPrincipalNameAnn = "field.cattle.io/creator-principal-name"
 	// NoCreatorRBACAnn is an annotation key to indicate that a cluster doesn't need
 	NoCreatorRBACAnn = "field.cattle.io/no-creator-rbac"
+	// SchedulingCustomizationFeatureName is the feature name for enabling customization of PDBs and PCs for the
+	// cattle-cluster-agent
+	SchedulingCustomizationFeatureName = "cluster-agent-scheduling-customization"
 )
+
+// PdbPercentageRegex ensures that a given string is a properly formatted percentage value
+// between 0% and 100% so that it can be used in a Pod Disruption Budget
+var PdbPercentageRegex = regexp.MustCompile("^([0-9]|[1-9][0-9]|100)%$")
 
 // ConvertAuthnExtras converts authnv1 type extras to authzv1 extras. Technically these are both
 // type alias to string, so the conversion is straightforward

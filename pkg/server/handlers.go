@@ -45,6 +45,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		clients.K8s.AuthorizationV1().SubjectAccessReviews(),
 		clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache(),
 		userCache,
+		clients.Management.Feature().Cache(),
 		settingCache,
 	)
 

@@ -349,6 +349,211 @@ func (s *SettingSuite) validateUserLastLoginDefault(op v1.Operation) {
 	}
 }
 
+func (s *SettingSuite) TestValidateClusterAgentSchedulingPriorityClass() {
+	tests := []struct {
+		name     string
+		newValue string
+		allowed  bool
+	}{
+		{
+			name:    "valid update to PC - value",
+			allowed: true,
+			newValue: `
+{
+	"value": 1356,
+	"preemption": "PreemptLowerPriority"
+}
+`,
+		},
+		{
+			name:    "valid update to PC - preemption",
+			allowed: true,
+			newValue: `
+{
+	"value": 10000000,
+	"preemption": "Never"
+}
+`,
+		},
+		{
+			name:    "valid update to PC - both",
+			allowed: true,
+			newValue: `
+{
+	"value": 1000,
+	"preemption": "Never"
+}
+`,
+		},
+		{
+			name:    "invalid update to PC - value lower than 1 billion",
+			allowed: false,
+			newValue: `
+{
+	"value": -1000000001,
+	"preemption": "PreemptLowerPriority"
+}
+`,
+		},
+		{
+			name:    "invalid update to PC - value greater than 1 billion",
+			allowed: false,
+			newValue: `
+{
+	"value": 1000000001,
+	"preemption": "PreemptLowerPriority"
+}
+`,
+		},
+		{
+			name:    "invalid update to PC - invalid preemption string",
+			allowed: false,
+			newValue: `
+{
+	"value": 100000000,
+	"preemption": "invalid"
+}
+`,
+		},
+		{
+			name:    "invalid update to PC - invalid object",
+			allowed: false,
+			newValue: `
+{
+	"invalid": 100000000,
+}
+`,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		s.T().Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			validator := setting.NewValidator(nil, nil)
+			s.testAdmit(t, validator, nil, &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: setting.CattleClusterAgentPriorityClass,
+				},
+				Value: test.newValue,
+			}, v1.Update, test.allowed)
+		})
+	}
+}
+
+func (s *SettingSuite) TestValidateClusterAgentSchedulingPodDisruptionBudget() {
+	tests := []struct {
+		name     string
+		newValue string
+		allowed  bool
+	}{
+		{
+			name:    "valid update to PDB - integer",
+			allowed: true,
+			newValue: `
+{
+	"minAvailable": "0",
+	"maxUnavailable": "1"
+}`,
+		},
+		{
+			name:    "valid update to PDB - percent",
+			allowed: true,
+			newValue: `
+{
+	"minAvailable": "0",
+	"maxUnavailable": "50%"
+}`,
+		},
+		{
+			name:    "valid update to PDB - both set to zero",
+			allowed: true,
+			newValue: `
+{
+	"minAvailable": "0",
+	"maxUnavailable": "0"
+}`,
+		},
+		{
+			name:    "invalid update to PDB - both fields set",
+			allowed: false,
+			newValue: `
+{
+	"minAvailable": "1",
+	"maxUnavailable": "1"
+}`,
+		},
+		{
+			name:    "invalid update to PDB - field set to negative value",
+			allowed: false,
+			newValue: `
+{
+	"minAvailable": "-1",
+	"maxUnavailable": "0"
+}`,
+		},
+		{
+			name:    "invalid update to PDB - field set to negative value",
+			allowed: false,
+			newValue: `
+{
+	"minAvailable": "0",
+	"maxUnavailable": "-1"
+}`,
+		},
+		{
+			name:    "invalid update to PDB - field set to invalid percentage value",
+			allowed: false,
+			newValue: `
+{
+	"minAvailable": "50.5%",
+	"maxUnavailable": "0"
+}`,
+		},
+		{
+			name:    "invalid update to PDB - field set to non-number string",
+			allowed: false,
+			newValue: `
+{
+	"minAvailable": "five",
+	"maxUnavailable": "0"
+}`,
+		},
+		{
+			name:    "invalid update to PDB - field set to non-number string",
+			allowed: false,
+			newValue: `
+{
+	"minAvailable": "0",
+	"maxUnavailable": "five"
+}`,
+		},
+		{
+			name:    "invalid update to PDB - bad object",
+			allowed: false,
+			newValue: `
+{
+	"fake": "0",
+}`,
+		},
+	}
+	for _, test := range tests {
+		test := test
+		s.T().Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			validator := setting.NewValidator(nil, nil)
+			s.testAdmit(t, validator, nil, &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: setting.CattleClusterAgentPodDisruptionBudget,
+				},
+				Value: test.newValue,
+			}, v1.Update, test.allowed)
+		})
+	}
+}
+
 func (s *SettingSuite) TestValidateAuthUserSessionTTLMinutesOnUpdate() {
 	s.validateAuthUserSessionTTLMinutes(v1.Update)
 }
