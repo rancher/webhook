@@ -39,6 +39,7 @@ const (
 	globalNamespace         = "cattle-global-data"
 	systemAgentVarDirEnvVar = "CATTLE_AGENT_VAR_DIR"
 	failureStatus           = "Failure"
+	localCluster            = "local"
 )
 
 var (
@@ -99,6 +100,11 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 	oldCluster, cluster, err := objectsv1.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return nil, err
+	}
+
+	if request.Operation == admissionv1.Delete && oldCluster.Name == localCluster {
+		// deleting "local" cluster could corrupt the cluster Rancher is deployed in
+		return admission.ResponseBadRequest("local cluster may not be deleted"), nil
 	}
 
 	response := &admissionv1.AdmissionResponse{}
@@ -428,7 +434,7 @@ func (p *provisioningAdmitter) validateMachinePoolNames(request *admission.Reque
 
 // validatePSACT validate if the cluster and underlying secret are configured properly when PSACT is enabled or disabled
 func (p *provisioningAdmitter) validatePSACT(request *admission.Request, response *admissionv1.AdmissionResponse, cluster *v1.Cluster) error {
-	if cluster.Name == "local" || cluster.Spec.RKEConfig == nil {
+	if cluster.Name == localCluster || cluster.Spec.RKEConfig == nil {
 		return nil
 	}
 
@@ -834,7 +840,7 @@ func validateACEConfig(cluster *v1.Cluster) *metav1.Status {
 
 func isValidName(clusterName, clusterNamespace string, clusterExists bool) bool {
 	// A provisioning cluster with name "local" is only expected to be created in the "fleet-local" namespace.
-	if clusterName == "local" {
+	if clusterName == localCluster {
 		return clusterNamespace == "fleet-local"
 	}
 

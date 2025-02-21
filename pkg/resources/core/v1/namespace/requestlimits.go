@@ -18,6 +18,9 @@ type requestLimitAdmitter struct{}
 
 // Admit ensures that the resource requests are within the limits.
 func (r *requestLimitAdmitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+	if request.Operation == admissionv1.Delete {
+		return admission.ResponseAllowed(), nil
+	}
 	listTrace := trace.New("Namespace Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 

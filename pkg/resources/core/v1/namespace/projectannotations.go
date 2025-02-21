@@ -26,6 +26,10 @@ type projectNamespaceAdmitter struct {
 // Admit ensures that the user has permission to change the namespace annotation for
 // project membership, effectively moving a project from one namespace to another.
 func (p *projectNamespaceAdmitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+	if request.Operation == admissionv1.Delete {
+		return admission.ResponseAllowed(), nil
+	}
+
 	listTrace := trace.New("Namespace Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
