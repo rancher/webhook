@@ -18,6 +18,7 @@ var projectsGVR = schema.GroupVersionResource{
 
 // Validator validates the namespace admission request.
 type Validator struct {
+	deleteNamespaceAdmitter  deleteNamespaceAdmitter
 	psaAdmitter              psaLabelAdmitter
 	projectNamespaceAdmitter projectNamespaceAdmitter
 }
@@ -25,6 +26,7 @@ type Validator struct {
 // NewValidator returns a new validator used for validation of namespace requests.
 func NewValidator(sar authorizationv1.SubjectAccessReviewInterface) *Validator {
 	return &Validator{
+		deleteNamespaceAdmitter: deleteNamespaceAdmitter{},
 		psaAdmitter: psaLabelAdmitter{
 			sar: sar,
 		},
@@ -47,6 +49,7 @@ func (v *Validator) Operations() []admissionv1.OperationType {
 	return []admissionv1.OperationType{
 		admissionv1.Update,
 		admissionv1.Create,
+		admissionv1.Delete,
 	}
 }
 
@@ -85,10 +88,22 @@ func (v *Validator) ValidatingWebhook(clientConfig admissionv1.WebhookClientConf
 	}
 	kubeSystemCreateWebhook.FailurePolicy = admission.Ptr(admissionv1.Ignore)
 
-	return []admissionv1.ValidatingWebhook{*standardWebhook, *createWebhook, *kubeSystemCreateWebhook}
+	deleteNamespaceWebhook := admission.NewDefaultValidatingWebhook(v, clientConfig, admissionv1.ClusterScope, []admissionv1.OperationType{admissionv1.Delete})
+	deleteNamespaceWebhook.Name = admission.CreateWebhookName(v, "delete-namespace")
+	deleteNamespaceWebhook.NamespaceSelector = &metav1.LabelSelector{
+		MatchExpressions: []metav1.LabelSelectorRequirement{
+			{
+				Key:      corev1.LabelMetadataName,
+				Operator: metav1.LabelSelectorOpIn,
+				Values:   []string{"fleet-local", "local"},
+			},
+		},
+	}
+
+	return []admissionv1.ValidatingWebhook{*deleteNamespaceWebhook, *standardWebhook, *createWebhook, *kubeSystemCreateWebhook}
 }
 
 // Admitters returns the psaAdmitter and the projectNamespaceAdmitter for namespaces.
 func (v *Validator) Admitters() []admission.Admitter {
-	return []admission.Admitter{&v.psaAdmitter, &v.projectNamespaceAdmitter}
+	return []admission.Admitter{&v.psaAdmitter, &v.projectNamespaceAdmitter, &v.deleteNamespaceAdmitter}
 }
