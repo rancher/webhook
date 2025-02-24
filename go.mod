@@ -39,6 +39,7 @@ replace (
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.30.1
 	k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.30.1
 	sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.18.5
+	sigs.k8s.io/structured-merge-diff/v4 => sigs.k8s.io/structured-merge-diff/v4 v4.4.1
 )
 
 require (
@@ -46,10 +47,10 @@ require (
 	github.com/evanphx/json-patch v5.9.0+incompatible
 	github.com/gorilla/mux v1.8.1
 	github.com/rancher/dynamiclistener v0.6.0
-	github.com/rancher/lasso v0.2.0
-	github.com/rancher/rancher/pkg/apis v0.0.0-20250121135736-f569628e5282
-	github.com/rancher/rke v1.6.6-rc.1
-	github.com/rancher/wrangler/v3 v3.0.1
+	github.com/rancher/lasso v0.2.1
+	github.com/rancher/rancher/pkg/apis v0.0.0-20250219214022-8a59146a5a59
+	github.com/rancher/rke v1.6.7
+	github.com/rancher/wrangler/v3 v3.1.0
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
@@ -57,13 +58,13 @@ require (
 	golang.org/x/exp v0.0.0-20250210185358-939b2ce775ac
 	golang.org/x/text v0.22.0
 	golang.org/x/tools v0.30.0
-	k8s.io/api v0.31.1
-	k8s.io/apimachinery v0.31.1
+	k8s.io/api v0.32.1
+	k8s.io/apimachinery v0.32.1
 	k8s.io/apiserver v0.31.1
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/kubernetes v1.30.1
 	k8s.io/pod-security-admission v0.30.1
-	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
+	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
 	sigs.k8s.io/controller-runtime v0.19.0
 	sigs.k8s.io/yaml v1.4.0
 )
@@ -111,7 +112,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/prometheus/client_golang v1.19.1 // indirect
+	github.com/prometheus/client_golang v1.20.5 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
@@ -119,7 +120,7 @@ require (
 	github.com/rancher/eks-operator v1.9.6 // indirect
 	github.com/rancher/fleet/pkg/apis v0.10.8 // indirect
 	github.com/rancher/gke-operator v1.9.6 // indirect
-	github.com/rancher/norman v0.0.0-20240708202514-a0127673d1b9 // indirect
+	github.com/rancher/norman v0.3.1 // indirect
 	github.com/spf13/cobra v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
@@ -144,7 +145,7 @@ require (
 	golang.org/x/sync v0.11.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/term v0.29.0 // indirect
-	golang.org/x/time v0.5.0 // indirect
+	golang.org/x/time v0.7.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240528184218-531527333157 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240701130421-f6361c86f094 // indirect
@@ -161,16 +162,15 @@ require (
 	k8s.io/component-helpers v0.30.1 // indirect
 	k8s.io/controller-manager v0.30.1 // indirect
 	k8s.io/gengo v0.0.0-20240826214909-a7b603a56eb7 // indirect
-	k8s.io/gengo/v2 v2.0.0-20240228010128-51d4e06bde70 // indirect
-	k8s.io/klog v1.0.0 // indirect
+	k8s.io/gengo/v2 v2.0.0-20240826214909-a7b603a56eb7 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kms v0.30.1 // indirect
 	k8s.io/kube-aggregator v0.31.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 // indirect
+	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f // indirect
 	k8s.io/kubelet v0.0.0 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.30.3 // indirect
 	sigs.k8s.io/cli-utils v0.37.2 // indirect
 	sigs.k8s.io/cluster-api v1.7.3 // indirect
-	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
+	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
+	sigs.k8s.io/structured-merge-diff/v4 v4.4.2 // indirect
 )
