@@ -5,9 +5,6 @@ go 1.23.4
 toolchain go1.23.6
 
 replace (
-	// Remove and bump github.com/rancher/rancher/pkg/apis once the corresponding rancher PR is merged.
-	github.com/rancher/rancher/pkg/apis => github.com/pmatseykanets/rancher/pkg/apis v0.0.0-20250221215727-1362fe8ff366
-
 	github.com/rancher/rke => github.com/rancher/rke v1.7.2
 	k8s.io/api => k8s.io/api v0.32.1
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.32.1
@@ -47,7 +44,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/rancher/dynamiclistener v0.6.1
 	github.com/rancher/lasso v0.2.1
-	github.com/rancher/rancher/pkg/apis v0.0.0-20250220153925-3abb578f42fe
+	github.com/rancher/rancher/pkg/apis v0.0.0-20250224123908-bff2809d433c
 	github.com/rancher/rke v1.8.0-rc.2
 	github.com/rancher/wrangler/v3 v3.2.0-rc.3
 	github.com/robfig/cron v1.2.0
