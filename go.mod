@@ -42,7 +42,7 @@ require (
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/evanphx/json-patch v5.6.0+incompatible
 	github.com/golang/mock v1.6.0
-	github.com/gorilla/mux v1.8.0
+	github.com/gorilla/mux v1.8.1
 	github.com/rancher/dynamiclistener v0.4.0
 	github.com/rancher/lasso v0.1.0
 	github.com/rancher/rancher/pkg/apis v0.0.0-20250121135817-bfaaf7d60643
