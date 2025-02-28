@@ -23,7 +23,12 @@ import (
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 )
 
-var parsedRangeLessThan125 = semver.MustParseRange("< 1.25.0-rancher0")
+const (
+	localCluster             = "local"
+	VersionManagementAnno    = "rancher.io/imported-cluster-version-management"
+	VersionManagementSetting = "imported-cluster-version-management"
+)
+
 var parsedRangeLessThan123 = semver.MustParseRange("< 1.23.0-rancher0")
 
 // NewValidator returns a new validator for management clusters.
@@ -70,6 +75,16 @@ type admitter struct {
 
 // Admit handles the webhook admission request sent to this webhook.
 func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+	oldCluster, _, err := objectsv3.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed get old and new clusters from request: %w", err)
+	}
+
+	if request.Operation == admissionv1.Delete && oldCluster.Name == localCluster {
+		// deleting "local" cluster could corrupt the cluster Rancher is deployed in
+		return admission.ResponseBadRequest("local cluster may not be deleted"), nil
+	}
+
 	response, err := a.validateFleetPermissions(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate fleet permissions: %w", err)

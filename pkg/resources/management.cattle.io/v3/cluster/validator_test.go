@@ -72,6 +72,16 @@ func TestAdmit(t *testing.T) {
 			operation:     admissionv1.Delete,
 			expectAllowed: true,
 		},
+		{
+			name:      "Delete local cluster where Rancher is deployed",
+			operation: admissionv1.Delete,
+			oldCluster: v3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "local",
+				},
+			},
+			expectAllowed: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -105,7 +115,9 @@ func TestAdmit(t *testing.T) {
 			assert.Equal(t, tt.expectAllowed, res.Allowed)
 
 			if !tt.expectAllowed {
-				assert.Equal(t, tt.expectedReason, res.Result.Reason)
+				if tt.expectedReason != "" {
+					assert.Equal(t, tt.expectedReason, res.Result.Reason)
+				}
 			}
 		})
 	}
