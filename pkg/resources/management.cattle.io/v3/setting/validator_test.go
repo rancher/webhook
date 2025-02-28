@@ -361,7 +361,7 @@ func (s *SettingSuite) TestValidateClusterAgentSchedulingPriorityClass() {
 			newValue: `
 {
 	"value": 1356,
-	"preemption": "PreemptLowerPriority"
+	"preemptionPolicy": "PreemptLowerPriority"
 }
 `,
 		},
@@ -371,7 +371,7 @@ func (s *SettingSuite) TestValidateClusterAgentSchedulingPriorityClass() {
 			newValue: `
 {
 	"value": 10000000,
-	"preemption": "Never"
+	"preemptionPolicy": "Never"
 }
 `,
 		},
@@ -381,7 +381,7 @@ func (s *SettingSuite) TestValidateClusterAgentSchedulingPriorityClass() {
 			newValue: `
 {
 	"value": 1000,
-	"preemption": "Never"
+	"preemptionPolicy": "Never"
 }
 `,
 		},
@@ -391,7 +391,7 @@ func (s *SettingSuite) TestValidateClusterAgentSchedulingPriorityClass() {
 			newValue: `
 {
 	"value": -1000000001,
-	"preemption": "PreemptLowerPriority"
+	"preemptionPolicy": "PreemptLowerPriority"
 }
 `,
 		},
@@ -401,7 +401,7 @@ func (s *SettingSuite) TestValidateClusterAgentSchedulingPriorityClass() {
 			newValue: `
 {
 	"value": 1000000001,
-	"preemption": "PreemptLowerPriority"
+	"preemptionPolicy": "PreemptLowerPriority"
 }
 `,
 		},
@@ -411,7 +411,7 @@ func (s *SettingSuite) TestValidateClusterAgentSchedulingPriorityClass() {
 			newValue: `
 {
 	"value": 100000000,
-	"preemption": "invalid"
+	"preemptionPolicy": "invalid"
 }
 `,
 		},

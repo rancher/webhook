@@ -331,7 +331,7 @@ func (a *admitter) validatePriorityClass(oldCluster, newCluster *apisv3.Cluster,
 		return admission.ResponseBadRequest(fmt.Sprintf("the '%s' feature must be enabled in order to configure a Priority Class or Pod Disruption Budget", common.SchedulingCustomizationFeatureName)), nil
 	}
 
-	if newPC.Preemption != nil && *newPC.Preemption != corev1.PreemptNever && *newPC.Preemption != corev1.PreemptLowerPriority && *newPC.Preemption != "" {
+	if newPC.PreemptionPolicy != nil && *newPC.PreemptionPolicy != corev1.PreemptNever && *newPC.PreemptionPolicy != corev1.PreemptLowerPriority && *newPC.PreemptionPolicy != "" {
 		return admission.ResponseBadRequest("Priority Class Preemption value must be 'Never', 'PreemptLowerPriority', or empty"), nil
 	}
 

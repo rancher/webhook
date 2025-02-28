@@ -1110,8 +1110,8 @@ func Test_validateAgentSchedulingCustomizationPriorityClass(t *testing.T) {
 						ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
 							SchedulingCustomization: &v3.AgentSchedulingCustomization{
 								PriorityClass: &v3.PriorityClassSpec{
-									Value:      123456,
-									Preemption: &preemptionNever,
+									Value:            123456,
+									PreemptionPolicy: &preemptionNever,
 								},
 							},
 						},
@@ -1165,8 +1165,8 @@ func Test_validateAgentSchedulingCustomizationPriorityClass(t *testing.T) {
 						ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
 							SchedulingCustomization: &v3.AgentSchedulingCustomization{
 								PriorityClass: &v3.PriorityClassSpec{
-									Value:      24321,
-									Preemption: &preemptionInvalid,
+									Value:            24321,
+									PreemptionPolicy: &preemptionInvalid,
 								},
 							},
 						},
@@ -1184,8 +1184,8 @@ func Test_validateAgentSchedulingCustomizationPriorityClass(t *testing.T) {
 						ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
 							SchedulingCustomization: &v3.AgentSchedulingCustomization{
 								PriorityClass: &v3.PriorityClassSpec{
-									Value:      24321,
-									Preemption: &preemptionInvalid,
+									Value:            24321,
+									PreemptionPolicy: &preemptionInvalid,
 								},
 							},
 						},
