@@ -2,8 +2,6 @@ module github.com/rancher/webhook
 
 go 1.23.0
 
-toolchain go1.24.0
-
 replace (
 	github.com/rancher/rke => github.com/rancher/rke v1.5.13
 	k8s.io/api => k8s.io/api v0.28.6
