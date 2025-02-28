@@ -37,4 +37,6 @@ helm upgrade \
     --set rancherImage=rancher/rancher \
     --set rancherImageTag="$RANCHER_IMAGE_TAG" \
     --set 'extraEnv[0].name=CATTLE_RANCHER_WEBHOOK_VERSION' \
-    --set "extraEnv[0].value="
+    --set "extraEnv[0].value=" \
+    --set features=imperative-api-extension=false
+
