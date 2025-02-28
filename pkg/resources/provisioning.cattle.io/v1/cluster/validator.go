@@ -564,7 +564,7 @@ func (p *provisioningAdmitter) validatePriorityClass(oldCluster, cluster *v1.Clu
 		return admission.ResponseBadRequest(fmt.Sprintf("the '%s' feature must be enabled in order to configure a Priority Class or Pod Disruption Budget", common.SchedulingCustomizationFeatureName)), nil
 	}
 
-	if newPC.Preemption != nil && *newPC.Preemption != k8sv1.PreemptNever && *newPC.Preemption != k8sv1.PreemptLowerPriority && *newPC.Preemption != "" {
+	if newPC.PreemptionPolicy != nil && *newPC.PreemptionPolicy != k8sv1.PreemptNever && *newPC.PreemptionPolicy != k8sv1.PreemptLowerPriority && *newPC.PreemptionPolicy != "" {
 		return admission.ResponseBadRequest("Priority Class Preemption value must be 'Never', 'PreemptLowerPriority', or omitted"), nil
 	}
 

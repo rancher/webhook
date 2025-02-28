@@ -415,7 +415,7 @@ func (a *admitter) validateClusterAgentPriorityClass(newSetting *v3.Setting) err
 		return fmt.Errorf("value must be less than 1 billion and greater than negative 1 billion")
 	}
 
-	if pc.Preemption != nil && *pc.Preemption != corev1.PreemptNever && *pc.Preemption != corev1.PreemptLowerPriority && *pc.Preemption != "" {
+	if pc.PreemptionPolicy != nil && *pc.PreemptionPolicy != corev1.PreemptNever && *pc.PreemptionPolicy != corev1.PreemptLowerPriority && *pc.PreemptionPolicy != "" {
 		return fmt.Errorf("preemption policy must be set to either 'Never' or 'PreemptLowerPriority'")
 	}
 

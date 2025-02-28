@@ -57,7 +57,7 @@ The `SchedulingCustomization` subfield of the `DeploymentCustomization` field de
 The `schedulingCustomization.PriorityClass` field contains two attributes
 
 + `value`: This must be an integer value equal to or between negative 1 billion and 1 billion.
-+ `preemption`: This must be a string value which indicates the desired preemption behavior, its value can be either `PreemptLowerPriority` or `Never`. Any other value must be rejected.
++ `preemptionPolicy`: This must be a string value which indicates the desired preemption behavior, its value can be either `PreemptLowerPriority` or `Never`. Any other value must be rejected.
 
 The `schedulingCustomization.PodDisruptionBudget` field contains two attributes
 
