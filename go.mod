@@ -40,7 +40,7 @@ replace (
 
 require (
 	github.com/blang/semver v3.5.1+incompatible
-	github.com/evanphx/json-patch v5.6.0+incompatible
+	github.com/evanphx/json-patch v5.9.11+incompatible
 	github.com/golang/mock v1.6.0
 	github.com/gorilla/mux v1.8.0
 	github.com/rancher/dynamiclistener v0.4.0
