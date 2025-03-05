@@ -424,6 +424,11 @@ func (s *SettingSuite) TestValidateClusterAgentSchedulingPriorityClass() {
 }
 `,
 		},
+		{
+			name:     "base case - no customization",
+			allowed:  true,
+			newValue: "",
+		},
 	}
 
 	for _, test := range tests {
@@ -537,7 +542,13 @@ func (s *SettingSuite) TestValidateClusterAgentSchedulingPodDisruptionBudget() {
 	"fake": "0",
 }`,
 		},
+		{
+			name:     "base case - no customization",
+			allowed:  true,
+			newValue: "",
+		},
 	}
+
 	for _, test := range tests {
 		test := test
 		s.T().Run(test.name, func(t *testing.T) {
