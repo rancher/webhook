@@ -22,6 +22,10 @@ type psaLabelAdmitter struct {
 
 // Admit ensures that users have sufficient permissions to add/remove PSAs to a namespace.
 func (p *psaLabelAdmitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+	if request.Operation == admissionv1.Delete {
+		return admission.ResponseAllowed(), nil
+	}
+
 	listTrace := trace.New("Namespace Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
