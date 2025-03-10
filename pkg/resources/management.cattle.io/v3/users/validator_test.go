@@ -103,7 +103,7 @@ func Test_Admit(t *testing.T) {
 			name:            "error getting rules for User",
 			oldUser:         defaultUser.DeepCopy(),
 			requestUserName: requesterUserName,
-			resolverRulesFor: func(s string) ([]rbacv1.PolicyRule, error) {
+			resolverRulesFor: func(_ string) ([]rbacv1.PolicyRule, error) {
 				return nil, fmt.Errorf("expected error")
 			},
 			allowed: false,
@@ -139,7 +139,7 @@ func Test_Admit(t *testing.T) {
 			allowed: true,
 		},
 		{
-			name:            "requester has more priveleges than user. delete operation",
+			name:            "requester has more privileges than user. delete operation",
 			oldUser:         defaultUser.DeepCopy(),
 			requestUserName: requesterUserName,
 			resolverRulesFor: func(s string) ([]rbacv1.PolicyRule, error) {
@@ -153,7 +153,7 @@ func Test_Admit(t *testing.T) {
 			allowed: true,
 		},
 		{
-			name:            "requester has more priveleges than user. update operation",
+			name:            "requester has more privileges than user. update operation",
 			oldUser:         defaultUser.DeepCopy(),
 			newUser:         defaultUser.DeepCopy(),
 			requestUserName: requesterUserName,
@@ -168,7 +168,7 @@ func Test_Admit(t *testing.T) {
 			allowed: true,
 		},
 		{
-			name:            "user has more priveleges than requester. delete operation",
+			name:            "user has more privileges than requester. delete operation",
 			oldUser:         defaultUser.DeepCopy(),
 			requestUserName: requesterUserName,
 			resolverRulesFor: func(s string) ([]rbacv1.PolicyRule, error) {
@@ -182,7 +182,7 @@ func Test_Admit(t *testing.T) {
 			allowed: false,
 		},
 		{
-			name:            "user has more priveleges than requester. update operation",
+			name:            "user has more privileges than requester. update operation",
 			oldUser:         defaultUser.DeepCopy(),
 			newUser:         defaultUser.DeepCopy(),
 			requestUserName: requesterUserName,
@@ -219,9 +219,8 @@ func Test_Admit(t *testing.T) {
 			if tt.wantErr {
 				assert.Error(t, err)
 				return
-			} else {
-				assert.NoError(t, err)
 			}
+			assert.NoError(t, err)
 			assert.Equal(t, tt.allowed, got.Allowed)
 		})
 	}
