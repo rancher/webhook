@@ -19,6 +19,7 @@ import (
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/roletemplate"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/setting"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/userattribute"
+	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/users"
 	provisioningCluster "github.com/rancher/webhook/pkg/resources/provisioning.cattle.io/v1/cluster"
 	"github.com/rancher/webhook/pkg/resources/rke-machine-config.cattle.io/v1/machineconfig"
 )
@@ -48,7 +49,9 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		projects := project.NewValidator(clients.Management.Cluster().Cache())
 		userAttribute := userattribute.NewValidator()
 		setting := setting.NewValidator(clients.Management.Cluster().Cache())
-		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, nodeDriver, projects, userAttribute, setting)
+		users := users.NewValidator(clients.Management.UserAttribute().Cache(), clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.DefaultResolver)
+
+		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, nodeDriver, projects, userAttribute, setting, users)
 	}
 	return handlers, nil
 }
