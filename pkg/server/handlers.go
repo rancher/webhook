@@ -25,6 +25,7 @@ import (
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/setting"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/token"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/userattribute"
+	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/users"
 	provisioningCluster "github.com/rancher/webhook/pkg/resources/provisioning.cattle.io/v1/cluster"
 	"github.com/rancher/webhook/pkg/resources/rbac.authorization.k8s.io/v1/clusterrole"
 	"github.com/rancher/webhook/pkg/resources/rbac.authorization.k8s.io/v1/clusterrolebinding"
@@ -84,6 +85,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			clusterrole.NewValidator(),
 			clusterrolebinding.NewValidator(),
 			authconfig.NewValidator(),
+			users.NewValidator(clients.Management.UserAttribute().Cache(), clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.DefaultResolver),
 		)
 	} else {
 		handlers = append(handlers, clusterauthtoken.NewValidator())
