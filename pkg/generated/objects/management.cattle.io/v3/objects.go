@@ -643,3 +643,56 @@ func SettingFromRequest(request *admissionv1.AdmissionRequest) (*v3.Setting, err
 
 	return object, nil
 }
+
+// UserOldAndNewFromRequest gets the old and new User objects, respectively, from the webhook request.
+// If the request is a Delete operation, then the new object is the zero value for User.
+// Similarly, if the request is a Create operation, then the old object is the zero value for User.
+func UserOldAndNewFromRequest(request *admissionv1.AdmissionRequest) (*v3.User, *v3.User, error) {
+	if request == nil {
+		return nil, nil, fmt.Errorf("nil request")
+	}
+
+	object := &v3.User{}
+	oldObject := &v3.User{}
+
+	if request.Operation != admissionv1.Delete {
+		err := json.Unmarshal(request.Object.Raw, object)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to unmarshal request object: %w", err)
+		}
+	}
+
+	if request.Operation == admissionv1.Create {
+		return oldObject, object, nil
+	}
+
+	err := json.Unmarshal(request.OldObject.Raw, oldObject)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal request oldObject: %w", err)
+	}
+
+	return oldObject, object, nil
+}
+
+// UserFromRequest returns a User object from the webhook request.
+// If the operation is a Delete operation, then the old object is returned.
+// Otherwise, the new object is returned.
+func UserFromRequest(request *admissionv1.AdmissionRequest) (*v3.User, error) {
+	if request == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	object := &v3.User{}
+	raw := request.Object.Raw
+
+	if request.Operation == admissionv1.Delete {
+		raw = request.OldObject.Raw
+	}
+
+	err := json.Unmarshal(raw, object)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal request object: %w", err)
+	}
+
+	return object, nil
+}
