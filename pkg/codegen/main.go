@@ -54,6 +54,7 @@ func main() {
 					v3.Feature{},
 					v3.Setting{},
 					v3.User{},
+					v3.UserAttribute{},
 				},
 			},
 			"provisioning.cattle.io": {
@@ -90,6 +91,7 @@ func main() {
 				&v3.NodeDriver{},
 				&v3.Project{},
 				&v3.Setting{},
+				&v3.User{},
 			},
 		},
 		"provisioning.cattle.io": {
