@@ -403,6 +403,16 @@ When a Token is updated, the following checks take place:
 
 - If set, `lastUsedAt` must be a valid date time according to RFC3339 (e.g. `2023-11-29T00:00:00Z`).
 
+## User
+
+### Validation Checks
+
+#### Update and Delete
+
+When a user is updated or deleted, a check occurs to ensure that the user making the request has permissions greater than or equal to the user being updated or deleted. To get the user's groups, the user's UserAttributes are checked. This is best effort, because UserAttributes are only updated when a User logs in, so it may not be perfectly up to date.
+
+If the user making the request has the verb `manage-users` for the resource `users`, then it is allowed to bypass the check. Note that the wildcard `*` includes the `manage-users` verb.
+
 ## UserAttribute
 
 ### Validation Checks
