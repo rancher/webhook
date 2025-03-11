@@ -20,6 +20,7 @@ import (
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/roletemplate"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/setting"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/userattribute"
+	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/users"
 	provisioningCluster "github.com/rancher/webhook/pkg/resources/provisioning.cattle.io/v1/cluster"
 	"github.com/rancher/webhook/pkg/resources/rbac.authorization.k8s.io/v1/clusterrole"
 	"github.com/rancher/webhook/pkg/resources/rbac.authorization.k8s.io/v1/clusterrolebinding"
@@ -58,8 +59,9 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		userAttribute := userattribute.NewValidator()
 		clusterRoles := clusterrole.NewValidator()
 		clusterRoleBindings := clusterrolebinding.NewValidator()
+		users := users.NewValidator(clients.Management.UserAttribute().Cache(), clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.DefaultResolver)
 
-		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, nodeDriver, projects, roles, rolebindings, clusterRoles, clusterRoleBindings, clusterProxyConfigs, userAttribute, setting)
+		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, nodeDriver, projects, roles, rolebindings, clusterRoles, clusterRoleBindings, clusterProxyConfigs, userAttribute, setting, users)
 	}
 	return handlers, nil
 }
