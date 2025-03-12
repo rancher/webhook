@@ -272,6 +272,25 @@ func TestValidatePSALabels(t *testing.T) {
 			allowed: false,
 		},
 		{
+			name:        "Create namespace with PSA for permitted user should be allowed",
+			userName:    allowSarUser,
+			clusterName: "validcluster",
+			operation:   admissionv1.Create,
+			namespace: v1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "anynamespace",
+					Labels: map[string]string{
+						common.EnforceLabel: "baseline",
+					},
+					Annotations: map[string]string{
+						projectId: "local:p-22n91",
+					},
+				},
+			},
+			wantErr: false,
+			allowed: true,
+		},
+		{
 			name:        "Delete update PSA for NON admin user-should not be allowed",
 			userName:    failSarUser,
 			clusterName: "validcluster",
