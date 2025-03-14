@@ -74,8 +74,8 @@ jobs:
         run: ./.github/workflows/scripts/start-rancher.sh
         env:
           CHART_PATH: "${{ runner.temp }}/rancher.tgz"
-          RANCHER_IMAGE_TAG: "head"
-          VERSION: "main"
+          RANCHER_IMAGE_TAG: "v2.11-head"                                                                                                                                  
+          VERSION: "2.11"
 
       - name: get vars
         run: cat dist/image_tag >> $GITHUB_ENV
