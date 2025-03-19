@@ -3,7 +3,12 @@
     "github>rancher/renovate-config#release"
   ],
   "baseBranches": [
-    "main", "release/v0.7", "release/v0.6", "release/v0.5", "release/v0.4", "release/v0.3"
+    "main",
+    "release/v0.7",
+    "release/v0.6",
+    "release/v0.5",
+    "release/v0.4",
+    "release/v0.3"
   ],
   "prHourlyLimit": 2,
   "enabledManagers": [
@@ -11,19 +16,19 @@
     "dockerfile",
     "github-actions",
     "helm-values",
-    "regex",
+    "custom.regex",
     "gomod"
   ],
   "packageRules": [
     {
-      "matchPackagePatterns": [
-        "k8s.io/*",
-        "sigs.k8s.io/*",
-        "go.opentelemetry.io/*",
-        "github.com/prometheus/*",
-        "github.com/rancher/rancher/pkg/apis"
-      ],
-      "enabled": false
+      "enabled": false,
+      "matchPackageNames": [
+        "/k8s.io/*/",
+        "/sigs.k8s.io/*/",
+        "/go.opentelemetry.io/*/",
+        "/github.com/prometheus/*/",
+        "/github.com/rancher/rancher/pkg/apis/"
+      ]
     }
   ]
 }
