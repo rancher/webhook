@@ -29,7 +29,7 @@ jobs:
       # Required for vault
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           ref: "${{ env.WEBHOOK_REF }}"
           path: webhook
@@ -41,7 +41,7 @@ jobs:
             secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATE_KEY
 
       # Fetch github token just for the rancher repository
-      - uses: actions/create-github-app-token@v1
+      - uses: actions/create-github-app-token@af35edadc00be37caa72ed9f3e6d5f7801bfdf09 # v1
         id: app-token
         with:
           app-id: ${{ env.APP_ID }}
@@ -50,7 +50,7 @@ jobs:
             rancher
 
       - name: Checkout rancher repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           repository: ${{ github.repository_owner }}/rancher
           ref: "${{ env.RANCHER_REF }}"
