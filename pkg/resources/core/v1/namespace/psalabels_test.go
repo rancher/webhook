@@ -283,7 +283,7 @@ func TestValidatePSALabels(t *testing.T) {
 						common.EnforceLabel: "baseline",
 					},
 					Annotations: map[string]string{
-						projectId: "local:p-22n91",
+						projectID: "local:p-22n91",
 					},
 				},
 			},

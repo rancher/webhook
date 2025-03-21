@@ -18,7 +18,7 @@ import (
 
 const (
 	updatePSAVerb = "updatepsa"
-	projectId     = "field.cattle.io/projectId"
+	projectID     = "field.cattle.io/projectId"
 )
 
 type psaLabelAdmitter struct {
@@ -72,8 +72,8 @@ func (p *psaLabelAdmitter) Admit(request *admission.Request) (*admissionv1.Admis
 	// here we are filling the variables above with the projectId,
 	// so that if we are not able to get them,
 	// the SAR request will be done in any case.
-	if ns.Annotations[projectId] != "" {
-		projectInfo := strings.Split(ns.Annotations[projectId], ":")
+	if ns.Annotations[projectID] != "" {
+		projectInfo := strings.Split(ns.Annotations[projectID], ":")
 		if len(projectInfo) == 2 {
 			projectNamespace = projectInfo[0]
 			projectName = projectInfo[1]
