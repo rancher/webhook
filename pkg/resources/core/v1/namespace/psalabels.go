@@ -80,19 +80,7 @@ func (p *psaLabelAdmitter) Admit(request *admission.Request) (*admissionv1.Admis
 		}
 	}
 
-	fmt.Println("SAR:")
-	fmt.Println("verb:", updatePSAVerb)
-	fmt.Println("group:", projectsGVR.Group)
-	fmt.Println("version:", projectsGVR.Version)
-	fmt.Println("resource:", projectsGVR.Resource)
-	fmt.Println("user:", request.UserInfo.Username)
-	fmt.Println("groups:", request.UserInfo.Groups)
-	fmt.Println("uid:", request.UserInfo.UID)
-	fmt.Println("extra:", request.UserInfo.Extra)
-	fmt.Println("ns:", projectNamespace)
-	fmt.Println("name:", projectName)
-	fmt.Println("===========>")
-	sarReq := &v1.SubjectAccessReview{
+	resp, err := p.sar.Create(request.Context, &v1.SubjectAccessReview{
 		Spec: v1.SubjectAccessReviewSpec{
 			ResourceAttributes: &v1.ResourceAttributes{
 				Verb:      updatePSAVerb,
@@ -107,20 +95,13 @@ func (p *psaLabelAdmitter) Admit(request *admission.Request) (*admissionv1.Admis
 			UID:    request.UserInfo.UID,
 			Extra:  extras,
 		},
-	}
-
-	resp, err := p.sar.Create(request.Context, sarReq, metav1.CreateOptions{})
+	}, metav1.CreateOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("SAR request creation failed: %w", err)
 	}
-	fmt.Println("allowed:", resp.Status.Allowed)
-	fmt.Println("denied:", resp.Status.Denied)
-	fmt.Println("err:", resp.Status.EvaluationError)
-	fmt.Println("reason:", resp.Status.Reason)
 
 	if resp.Status.Allowed {
 		response.Allowed = true
-		fmt.Println("allowed")
 	} else {
 		response.Result = &metav1.Status{
 			Status:  "Failure",
@@ -128,8 +109,6 @@ func (p *psaLabelAdmitter) Admit(request *admission.Request) (*admissionv1.Admis
 			Reason:  metav1.StatusReasonUnauthorized,
 			Code:    http.StatusForbidden,
 		}
-		fmt.Println("denied")
 	}
-	fmt.Println()
 	return response, nil
 }
