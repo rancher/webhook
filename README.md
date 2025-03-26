@@ -163,6 +163,10 @@ make
 
 ## Development
 
+You can choose your favourite method to test your webhook development:
+
+### Using an external webhook
+
 1. Get a new address that forwards to `https://localhost:9443` using ngrok.
 
     ```bash
@@ -177,6 +181,26 @@ make
     ./bin/webhook
     ```
 
+### Importing the built webhook
+
+1. Import the built image from your local registry into your `k3d` cluster:
+    
+    ```bash
+    k3d image import rancher/webhook:dev -c <cluster_name>
+    ```
+    
+2. Ensure the image was imported correctly:
+    
+    ```bash
+    docker exec -it <cluster_node_name> crictl images
+    ```
+    
+3. In the end, patch the webhook deployment on kubernetes:
+    
+    ```bash
+    kubectl patch deployment rancher-webhook -n cattle-system -p '{"spec": {"template": {"spec": {"containers": [{"image": "rancher/webhook:dev", "imagePullPolicy": "Never"}]}}}}'
+    ```
+    
 After 15 seconds the webhook will update the `ValidatingWebhookConfiguration` and `MutatingWebhookConfiguration` in the Kubernetes cluster to point at the locally running instance.
 
 > :warning: Kubernetes API server authentication will not work with ngrok.
