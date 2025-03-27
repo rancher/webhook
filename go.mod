@@ -44,9 +44,9 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/rancher/dynamiclistener v0.6.2
 	github.com/rancher/lasso v0.2.1
-	github.com/rancher/rancher/pkg/apis v0.0.0-20250227174106-7829dbe62d7f
-	github.com/rancher/rke v1.8.0-rc.2
-	github.com/rancher/wrangler/v3 v3.2.0-rc.3
+	github.com/rancher/rancher/pkg/apis v0.0.0-20250326185115-141b27026163
+	github.com/rancher/rke v1.8.1-rc.1
+	github.com/rancher/wrangler/v3 v3.2.0
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
@@ -115,10 +115,10 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/rancher/aks-operator v1.11.0-rc.4 // indirect
-	github.com/rancher/eks-operator v1.11.0-rc.3 // indirect
-	github.com/rancher/fleet/pkg/apis v0.12.0-alpha.2 // indirect
-	github.com/rancher/gke-operator v1.11.0-rc.2 // indirect
+	github.com/rancher/aks-operator v1.11.0 // indirect
+	github.com/rancher/eks-operator v1.11.0 // indirect
+	github.com/rancher/fleet/pkg/apis v0.12.0 // indirect
+	github.com/rancher/gke-operator v1.11.0 // indirect
 	github.com/rancher/norman v0.5.2 // indirect
 	github.com/spf13/cobra v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
@@ -139,10 +139,10 @@ require (
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	golang.org/x/crypto v0.33.0 // indirect
+	golang.org/x/crypto v0.35.0 // indirect
 	golang.org/x/exp v0.0.0-20250210185358-939b2ce775ac // indirect
 	golang.org/x/mod v0.23.0 // indirect
-	golang.org/x/net v0.35.0 // indirect
+	golang.org/x/net v0.36.0 // indirect
 	golang.org/x/oauth2 v0.26.0 // indirect
 	golang.org/x/sync v0.11.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
