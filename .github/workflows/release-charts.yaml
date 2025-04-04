@@ -3,15 +3,15 @@ on:
   workflow_dispatch:
     inputs:
       charts_ref:
-        description: "Submit PR against the following rancher/charts branch (eg: dev-v2.10)"
+        description: "Submit PR against the following rancher/charts branch (eg: dev-v2.9)"
         required: true
-        default: "dev-v2.10"
+        default: "dev-v2.9"
       prev_webhook:
-        description: "Previous Webhook version (eg: v0.6.0-rc.13)"
+        description: "Previous Webhook version (eg: v0.5.0-rc.13)"
         required: true
         default: ""
       new_webhook:
-        description: "New Webhook version (eg: v0.6.0-rc.14)"
+        description: "New Webhook version (eg: v0.5.0-rc.14)"
         required: true
         default: ""
 
