@@ -3,16 +3,22 @@ package project
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
 	ctrlv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/patch"
+	"github.com/rancher/wrangler/pkg/name"
+	corev1controller "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
 	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/storage/names"
 	"k8s.io/utils/trace"
 )
 
@@ -31,13 +37,17 @@ var gvr = schema.GroupVersionResource{
 // Mutator implements admission.MutatingAdmissionWebhook.
 type Mutator struct {
 	roleTemplateCache ctrlv3.RoleTemplateCache
+	namespaceClient   corev1controller.NamespaceController
+	projectClient     ctrlv3.ProjectClient
 }
 
 // NewMutator returns a new mutator which mutates projects
-func NewMutator(roleTemplateCache ctrlv3.RoleTemplateCache) *Mutator {
+func NewMutator(nsClient corev1controller.NamespaceController, roleTemplateCache ctrlv3.RoleTemplateCache, projectClient ctrlv3.ProjectClient) *Mutator {
 	roleTemplateCache.AddIndexer(mutatorCreatorRoleTemplateIndex, creatorRoleTemplateIndexer)
 	return &Mutator{
 		roleTemplateCache: roleTemplateCache,
+		namespaceClient:   nsClient,
+		projectClient:     projectClient,
 	}
 }
 
@@ -58,6 +68,7 @@ func (m *Mutator) GVR() schema.GroupVersionResource {
 func (m *Mutator) Operations() []admissionregistrationv1.OperationType {
 	return []admissionregistrationv1.OperationType{
 		admissionregistrationv1.Create,
+		admissionregistrationv1.Update,
 	}
 }
 
@@ -85,13 +96,24 @@ func (m *Mutator) Admit(request *admission.Request) (*admissionv1.AdmissionRespo
 	}
 	switch request.Operation {
 	case admissionv1.Create:
-		return m.admitCreate(project, request)
+		project, err = m.admitCreate(project)
+		if err != nil {
+			return nil, err
+		}
+	case admissionv1.Update:
+		project = m.updateProjectNamespace(project)
 	default:
 		return nil, fmt.Errorf("operation type %q not handled", request.Operation)
 	}
+	response := &admissionv1.AdmissionResponse{}
+	if err := patch.CreatePatch(request.Object.Raw, project, response); err != nil {
+		return nil, fmt.Errorf("failed to create patch: %w", err)
+	}
+	response.Allowed = true
+	return response, nil
 }
 
-func (m *Mutator) admitCreate(project *v3.Project, request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+func (m *Mutator) admitCreate(project *v3.Project) (*v3.Project, error) {
 	logrus.Debugf("[project-mutation] adding creator-role-bindings to project: %v", project.Name)
 	newProject := project.DeepCopy()
 
@@ -103,12 +125,11 @@ func (m *Mutator) admitCreate(project *v3.Project, request *admission.Request) (
 		return nil, fmt.Errorf("failed to add annotation to project %s: %w", project.Name, err)
 	}
 	newProject.Annotations[roleTemplatesRequired] = annotations
-	response := &admissionv1.AdmissionResponse{}
-	if err := patch.CreatePatch(request.Object.Raw, newProject, response); err != nil {
-		return nil, fmt.Errorf("failed to create patch: %w", err)
+	newProject, err = m.createProjectNamespace(newProject)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create project namespace %s: %w", project.Status.BackingNamespace, err)
 	}
-	response.Allowed = true
-	return response, nil
+	return newProject, nil
 }
 
 func (m *Mutator) getCreatorRoleTemplateAnnotations() (string, error) {
@@ -125,4 +146,56 @@ func (m *Mutator) getCreatorRoleTemplateAnnotations() (string, error) {
 		return "", err
 	}
 	return string(annotations), nil
+}
+func (m *Mutator) createProjectNamespace(project *v3.Project) (*v3.Project, error) {
+	newProject := project.DeepCopy()
+	backingNamespace := ""
+	var err error
+	// When the project name is empty, that means we want to generate a name for it
+	// Name generation happens after mutating webhooks, so in order to have access to the name early
+	// for the backing namespace, we need to generate it ourselves
+	if project.Name == "" {
+		// If err is nil, (meaning "project exists", see below) we need to repeat the generation process to find a project name and backing namespace that isn't taken
+		for err == nil {
+			newName := names.SimpleNameGenerator.GenerateName(project.GenerateName)
+			_, err = m.projectClient.Get(newProject.Spec.ClusterName, newName, metav1.GetOptions{})
+			if err == nil {
+				// A project with this name already exists. Generate a new name.
+				continue
+			} else if !apierrors.IsNotFound(err) {
+				return nil, err
+			}
+
+			backingNamespace = name.SafeConcatName(newProject.Spec.ClusterName, strings.ToLower(newName))
+			_, err = m.namespaceClient.Get(backingNamespace, metav1.GetOptions{})
+
+			// If the backing namespace already exists, generate a new project name
+			if err != nil && !apierrors.IsNotFound(err) {
+				return nil, err
+			}
+		}
+	} else {
+		backingNamespace = name.SafeConcatName(newProject.Spec.ClusterName, strings.ToLower(newProject.Name))
+		_, err = m.namespaceClient.Get(backingNamespace, metav1.GetOptions{})
+		if err == nil {
+			return nil, fmt.Errorf("failed to create project: namespace %v already exists", backingNamespace)
+		} else if !apierrors.IsNotFound(err) {
+			return nil, err
+		}
+	}
+
+	newProject.Status.BackingNamespace = backingNamespace
+	return newProject, nil
+}
+
+// updateProjectNamespace fills in BackingNamespace with the project name if it wasn't already set
+// this was the naming convention of project namespaces prior to using the BackingNamespace field. Filling
+// it here is just to maintain backwards compatibility
+func (m *Mutator) updateProjectNamespace(project *v3.Project) *v3.Project {
+	if project.Status.BackingNamespace != "" {
+		return project
+	}
+	newProject := project.DeepCopy()
+	newProject.Status.BackingNamespace = newProject.Name
+	return newProject
 }
