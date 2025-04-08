@@ -93,16 +93,6 @@ PACKAGE=rancher-webhook make charts
 git add ./assets/rancher-webhook ./charts/rancher-webhook index.yaml
 git commit -m "make charts"
 
-# When previous webhook version is an RC, then we want to remove that RC. We keep
-# non-RC version.
-if [ "$is_prev_rc" = "true" ]; then
-    CHART=rancher-webhook VERSION=${PREV_CHART_VERSION}+up${PREV_WEBHOOK_VERSION_SHORT} make remove
-    git add ./assets/rancher-webhook ./charts/rancher-webhook ./index.yaml
-    git commit -m "make remove"
-
-    yq --inplace "del(.rancher-webhook.[] | select(. == \"${PREV_CHART_VERSION}+up${PREV_WEBHOOK_VERSION_SHORT}\"))" release.yaml
-fi
-
 # Prepends to list
 yq --inplace ".rancher-webhook = [\"${NEW_CHART_VERSION}+up${NEW_WEBHOOK_VERSION_SHORT}\"] + .rancher-webhook" release.yaml
 
