@@ -36,8 +36,8 @@ var gvr = schema.GroupVersionResource{
 // Mutator implements admission.MutatingAdmissionWebhook.
 type Mutator struct {
 	roleTemplateCache ctrlv3.RoleTemplateCache
-	namespaceClient   corev1controller.NamespaceCache
-	projectClient     ctrlv3.ProjectCache
+	namespaceCache    corev1controller.NamespaceCache
+	projectCache      ctrlv3.ProjectCache
 }
 
 // NewMutator returns a new mutator which mutates projects
@@ -45,8 +45,8 @@ func NewMutator(nsCache corev1controller.NamespaceCache, roleTemplateCache ctrlv
 	roleTemplateCache.AddIndexer(mutatorCreatorRoleTemplateIndex, creatorRoleTemplateIndexer)
 	return &Mutator{
 		roleTemplateCache: roleTemplateCache,
-		namespaceClient:   nsCache,
-		projectClient:     projectCache,
+		namespaceCache:    nsCache,
+		projectCache:      projectCache,
 	}
 }
 
@@ -157,7 +157,7 @@ func (m *Mutator) createProjectNamespace(project *v3.Project) (*v3.Project, erro
 		// If err is nil, (meaning "project exists", see below) we need to repeat the generation process to find a project name and backing namespace that isn't taken
 		for err == nil {
 			newName := names.SimpleNameGenerator.GenerateName(project.GenerateName)
-			_, err = m.projectClient.Get(newProject.Spec.ClusterName, newName)
+			_, err = m.projectCache.Get(newProject.Spec.ClusterName, newName)
 			if err == nil {
 				// A project with this name already exists. Generate a new name.
 				continue
@@ -166,7 +166,7 @@ func (m *Mutator) createProjectNamespace(project *v3.Project) (*v3.Project, erro
 			}
 
 			backingNamespace = name.SafeConcatName(newProject.Spec.ClusterName, strings.ToLower(newName))
-			_, err = m.namespaceClient.Get(backingNamespace)
+			_, err = m.namespaceCache.Get(backingNamespace)
 
 			// If the backing namespace already exists, generate a new project name
 			if err != nil && !apierrors.IsNotFound(err) {
@@ -175,7 +175,7 @@ func (m *Mutator) createProjectNamespace(project *v3.Project) (*v3.Project, erro
 		}
 	} else {
 		backingNamespace = name.SafeConcatName(newProject.Spec.ClusterName, strings.ToLower(newProject.Name))
-		_, err = m.namespaceClient.Get(backingNamespace)
+		_, err = m.namespaceCache.Get(backingNamespace)
 		if err == nil {
 			return nil, fmt.Errorf("namespace %v already exists", backingNamespace)
 		} else if !apierrors.IsNotFound(err) {
