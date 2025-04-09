@@ -177,7 +177,7 @@ func (m *Mutator) createProjectNamespace(project *v3.Project) (*v3.Project, erro
 		backingNamespace = name.SafeConcatName(newProject.Spec.ClusterName, strings.ToLower(newProject.Name))
 		_, err = m.namespaceClient.Get(backingNamespace)
 		if err == nil {
-			return nil, fmt.Errorf("failed to create project: namespace %v already exists", backingNamespace)
+			return nil, fmt.Errorf("namespace %v already exists", backingNamespace)
 		} else if !apierrors.IsNotFound(err) {
 			return nil, err
 		}
