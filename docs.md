@@ -188,6 +188,9 @@ This admission webhook prevents the disabling or deletion of a NodeDriver if the
 
 ClusterName must be equal to the namespace, and must refer to an existing management.cattle.io/v3.Cluster object. In addition, users cannot update the field after creation. 
 
+#### BackingNamespace validation
+The BackingNamespace field cannot be changed once set. Projects without the BackingNamespace field can have it added.
+
 #### Protects system project
 
 The system project cannot be deleted.
@@ -200,7 +203,16 @@ Project quotas and default limits must be consistent with one another and must b
 
 #### On create
 
+Populates the BackingNamespace field by concatenating `Project.ClusterName` and `Project.Name`.
+
+If the project is using a generated name (ie `GenerateName` is not empty), the generation happens within the mutating webhook.
+The reason for this is that the BackingNamespace is made up of the `Project.Name`, and name generation happens after mutating webhooks and before validating webhooks.
+
 Adds the authz.management.cattle.io/creator-role-bindings annotation.
+
+#### On update
+
+If the BackingNamespace field is empty, populate the BackingNamespace field with the project name.
 
 ## ProjectRoleTemplateBinding 
 
@@ -220,7 +232,6 @@ Users cannot create ProjectRoleTemplateBindings that violate the following const
 - The `ProjectName` field must be:
     - Provided as a non-empty value
     - Specified using the format of `clusterName:projectName`; `clusterName` is the `metadata.name` of a cluster, and `projectName` is the `metadata.name` of a project
-    - The `projectName` part of the field must match the namespace of the ProjectRoleTemplateBinding
     - Refer to a valid project and cluster (both must exist and project.Spec.ClusterName must equal the cluster)
 - Either a user subject (through `UserName` or `UserPrincipalName`), or a group subject (through `GroupName`
   or `GroupPrincipalName`), or a service account subject (through `ServiceAccount`) must be specified. Exactly one

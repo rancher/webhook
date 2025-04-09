@@ -1000,22 +1000,6 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnCreate() {
 			allowed: false,
 		},
 		{
-			name: "namespace and the project id part of the project name differ",
-			args: args{
-				username: adminUser,
-				oldPRTB: func() *apisv3.ProjectRoleTemplateBinding {
-					return nil
-				},
-				newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
-					basePRTB := newBasePRTB()
-					basePRTB.ObjectMeta.Namespace = "default"
-					basePRTB.ProjectName = fmt.Sprintf("%s:%s", clusterID, "p-cgtq4")
-					return basePRTB
-				},
-			},
-			allowed: false,
-		},
-		{
 			name: "missing cluster name",
 			args: args{
 				username: adminUser,
