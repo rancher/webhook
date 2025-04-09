@@ -105,7 +105,7 @@ func Mutation(clients *clients.Clients) ([]admission.MutatingAdmissionHandler, e
 
 	if clients.MultiClusterManagement {
 		secrets := secret.NewMutator(clients.RBAC.Role(), clients.RBAC.RoleBinding())
-		projects := project.NewMutator(clients.Core.Namespace(), clients.Management.RoleTemplate().Cache(), clients.Management.Project())
+		projects := project.NewMutator(clients.Core.Namespace().Cache(), clients.Management.RoleTemplate().Cache(), clients.Management.Project().Cache())
 		grbs := globalrolebinding.NewMutator(clients.Management.GlobalRole().Cache())
 		mutators = append(mutators, secrets, projects, grbs)
 	}

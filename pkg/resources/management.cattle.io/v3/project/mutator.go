@@ -16,7 +16,6 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/names"
 	"k8s.io/utils/trace"
@@ -37,17 +36,17 @@ var gvr = schema.GroupVersionResource{
 // Mutator implements admission.MutatingAdmissionWebhook.
 type Mutator struct {
 	roleTemplateCache ctrlv3.RoleTemplateCache
-	namespaceClient   corev1controller.NamespaceController
-	projectClient     ctrlv3.ProjectClient
+	namespaceClient   corev1controller.NamespaceCache
+	projectClient     ctrlv3.ProjectCache
 }
 
 // NewMutator returns a new mutator which mutates projects
-func NewMutator(nsClient corev1controller.NamespaceController, roleTemplateCache ctrlv3.RoleTemplateCache, projectClient ctrlv3.ProjectClient) *Mutator {
+func NewMutator(nsCache corev1controller.NamespaceCache, roleTemplateCache ctrlv3.RoleTemplateCache, projectCache ctrlv3.ProjectCache) *Mutator {
 	roleTemplateCache.AddIndexer(mutatorCreatorRoleTemplateIndex, creatorRoleTemplateIndexer)
 	return &Mutator{
 		roleTemplateCache: roleTemplateCache,
-		namespaceClient:   nsClient,
-		projectClient:     projectClient,
+		namespaceClient:   nsCache,
+		projectClient:     projectCache,
 	}
 }
 
@@ -158,7 +157,7 @@ func (m *Mutator) createProjectNamespace(project *v3.Project) (*v3.Project, erro
 		// If err is nil, (meaning "project exists", see below) we need to repeat the generation process to find a project name and backing namespace that isn't taken
 		for err == nil {
 			newName := names.SimpleNameGenerator.GenerateName(project.GenerateName)
-			_, err = m.projectClient.Get(newProject.Spec.ClusterName, newName, metav1.GetOptions{})
+			_, err = m.projectClient.Get(newProject.Spec.ClusterName, newName)
 			if err == nil {
 				// A project with this name already exists. Generate a new name.
 				continue
@@ -167,7 +166,7 @@ func (m *Mutator) createProjectNamespace(project *v3.Project) (*v3.Project, erro
 			}
 
 			backingNamespace = name.SafeConcatName(newProject.Spec.ClusterName, strings.ToLower(newName))
-			_, err = m.namespaceClient.Get(backingNamespace, metav1.GetOptions{})
+			_, err = m.namespaceClient.Get(backingNamespace)
 
 			// If the backing namespace already exists, generate a new project name
 			if err != nil && !apierrors.IsNotFound(err) {
@@ -176,7 +175,7 @@ func (m *Mutator) createProjectNamespace(project *v3.Project) (*v3.Project, erro
 		}
 	} else {
 		backingNamespace = name.SafeConcatName(newProject.Spec.ClusterName, strings.ToLower(newProject.Name))
-		_, err = m.namespaceClient.Get(backingNamespace, metav1.GetOptions{})
+		_, err = m.namespaceClient.Get(backingNamespace)
 		if err == nil {
 			return nil, fmt.Errorf("failed to create project: namespace %v already exists", backingNamespace)
 		} else if !apierrors.IsNotFound(err) {

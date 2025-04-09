@@ -180,10 +180,10 @@ func TestAdmit(t *testing.T) {
 			t.Parallel()
 
 			ctrl := gomock.NewController(t)
-			nsMock := fake.NewMockNonNamespacedControllerInterface[*corev1.Namespace, *corev1.NamespaceList](ctrl)
-			nsMock.EXPECT().Get(gomock.Any(), metav1.GetOptions{}).Return(nil, apierrors.NewNotFound(schema.GroupResource{}, "")).AnyTimes()
-			projectMock := fake.NewMockClientInterface[*v3.Project, *v3.ProjectList](ctrl)
-			projectMock.EXPECT().Get(gomock.Any(), gomock.Any(), metav1.GetOptions{}).Return(nil, apierrors.NewNotFound(schema.GroupResource{}, "")).AnyTimes()
+			nsMock := fake.NewMockNonNamespacedCacheInterface[*corev1.Namespace](ctrl)
+			nsMock.EXPECT().Get(gomock.Any()).Return(nil, apierrors.NewNotFound(schema.GroupResource{}, "")).AnyTimes()
+			projectMock := fake.NewMockCacheInterface[*v3.Project](ctrl)
+			projectMock.EXPECT().Get(gomock.Any(), gomock.Any()).Return(nil, apierrors.NewNotFound(schema.GroupResource{}, "")).AnyTimes()
 			roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](gomock.NewController(t))
 			roleTemplateCache.EXPECT().AddIndexer(expectedIndexerName, gomock.Any())
 			indexer := defaultIndexer
