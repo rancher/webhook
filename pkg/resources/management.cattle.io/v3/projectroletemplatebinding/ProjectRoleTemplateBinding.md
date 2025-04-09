@@ -14,7 +14,6 @@ Users cannot create ProjectRoleTemplateBindings that violate the following const
 - The `ProjectName` field must be:
     - Provided as a non-empty value
     - Specified using the format of `clusterName:projectName`; `clusterName` is the `metadata.name` of a cluster, and `projectName` is the `metadata.name` of a project
-    - The `projectName` part of the field must match the namespace of the ProjectRoleTemplateBinding
     - Refer to a valid project and cluster (both must exist and project.Spec.ClusterName must equal the cluster)
 - Either a user subject (through `UserName` or `UserPrincipalName`), or a group subject (through `GroupName`
   or `GroupPrincipalName`), or a service account subject (through `ServiceAccount`) must be specified. Exactly one
