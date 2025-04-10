@@ -23,11 +23,12 @@ import (
 )
 
 const (
-	systemProjectLabel  = "authz.management.cattle.io/system-project"
-	projectQuotaField   = "resourceQuota"
-	clusterNameField    = "clusterName"
-	namespaceQuotaField = "namespaceDefaultResourceQuota"
-	containerLimitField = "containerDefaultResourceLimit"
+	systemProjectLabel    = "authz.management.cattle.io/system-project"
+	projectQuotaField     = "resourceQuota"
+	clusterNameField      = "clusterName"
+	backingNamespaceField = "backingNamespace"
+	namespaceQuotaField   = "namespaceDefaultResourceQuota"
+	containerLimitField   = "containerDefaultResourceLimit"
 )
 
 var projectSpecFieldPath = field.NewPath("project").Child("spec")
@@ -129,8 +130,13 @@ func (a *admitter) admitCreate(project *v3.Project) (*admissionv1.AdmissionRespo
 }
 
 func (a *admitter) admitUpdate(oldProject, newProject *v3.Project) (*admissionv1.AdmissionResponse, error) {
+	var fieldErr *field.Error
 	if oldProject.Spec.ClusterName != newProject.Spec.ClusterName {
-		fieldErr := field.Invalid(projectSpecFieldPath.Child(clusterNameField), newProject.Spec.ClusterName, "field is immutable")
+		fieldErr = field.Invalid(projectSpecFieldPath.Child(clusterNameField), newProject.Spec.ClusterName, "field is immutable")
+	} else if oldProject.Status.BackingNamespace != "" && oldProject.Status.BackingNamespace != newProject.Status.BackingNamespace {
+		fieldErr = field.Invalid(projectSpecFieldPath.Child(backingNamespaceField), newProject.Status.BackingNamespace, "field is immutable")
+	}
+	if fieldErr != nil {
 		return admission.ResponseBadRequest(fieldErr.Error()), nil
 	}
 
