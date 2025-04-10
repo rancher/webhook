@@ -210,9 +210,6 @@ func (a *admitter) validateCreateFields(newPRTB *apisv3.ProjectRoleTemplateBindi
 	if clusterName == "" || projectName == "" {
 		return field.Invalid(fieldPath.Child("projectName"), newPRTB.ProjectName, "projectName must be of the form cluster.metadata.name:project.metadata.name, and both must refer to an existing object")
 	}
-	if projectName != newPRTB.Namespace {
-		return field.Forbidden(fieldPath, "namespace and the projectName part of projectName must match")
-	}
 	cluster, err := a.clusterCache.Get(clusterName)
 	clusterNotFoundErr := field.Invalid(fieldPath.Child("projectName"), newPRTB.ProjectName, fmt.Sprintf("specified cluster %s not found", clusterName))
 	if err != nil {
