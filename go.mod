@@ -2,7 +2,7 @@ module github.com/rancher/webhook
 
 go 1.23.0
 
-toolchain go1.24.2
+toolchain go1.23.7
 
 replace (
 	github.com/rancher/rke => github.com/rancher/rke v1.5.13
@@ -47,7 +47,6 @@ require (
 	github.com/rancher/lasso v0.1.0
 	github.com/rancher/rancher/pkg/apis v0.0.0-20250411213817-1116d03f0676
 	github.com/rancher/rke v1.5.15
-	github.com/rancher/wrangler v1.1.1
 	github.com/rancher/wrangler/v2 v2.1.4
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.3
