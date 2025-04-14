@@ -6,7 +6,7 @@ on:
       rancher_ref:
         description: "Version of rancher/rancher to compare"
         required: true
-        default: "main"
+        default: "release/v2.11"
       rancher_repository:
         description: "Repository for rancher/rancher"
         required: true
