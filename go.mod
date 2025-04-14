@@ -48,9 +48,9 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/rancher/dynamiclistener v0.6.0
 	github.com/rancher/lasso v0.2.1
-	github.com/rancher/rancher/pkg/apis v0.0.0-20250409165850-9f36a9b1f842
+	github.com/rancher/rancher/pkg/apis v0.0.0-20250411113805-e6ac2228a443
 	github.com/rancher/rke v1.6.9
-	github.com/rancher/wrangler v1.1.1
+	github.com/rancher/wrangler v1.1.2
 	github.com/rancher/wrangler/v3 v3.1.0
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.3
@@ -119,7 +119,7 @@ require (
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/rancher/aks-operator v1.9.8-rc.1 // indirect
 	github.com/rancher/eks-operator v1.9.8-rc.1 // indirect
-	github.com/rancher/fleet/pkg/apis v0.10.11-beta.1 // indirect
+	github.com/rancher/fleet/pkg/apis v0.10.11-rc.1 // indirect
 	github.com/rancher/gke-operator v1.9.8-rc.1 // indirect
 	github.com/rancher/norman v0.3.1 // indirect
 	github.com/spf13/cobra v1.8.1 // indirect
