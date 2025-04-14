@@ -1,8 +1,8 @@
 module github.com/rancher/webhook
 
-go 1.23.4
+go 1.24.0
 
-toolchain go1.23.6
+toolchain go1.24.2
 
 replace (
 	github.com/rancher/rke => github.com/rancher/rke v1.7.2
@@ -42,9 +42,9 @@ require (
 	github.com/evanphx/json-patch v5.9.11+incompatible
 	github.com/go-ldap/ldap/v3 v3.4.10
 	github.com/gorilla/mux v1.8.1
-	github.com/rancher/dynamiclistener v0.6.2
+	github.com/rancher/dynamiclistener v0.6.2-rc.3
 	github.com/rancher/lasso v0.2.1
-	github.com/rancher/rancher/pkg/apis v0.0.0-20250326185115-141b27026163
+	github.com/rancher/rancher/pkg/apis v0.0.0-20250414140302-7f16b596120d
 	github.com/rancher/rke v1.8.1-rc.1
 	github.com/rancher/wrangler/v3 v3.2.0
 	github.com/robfig/cron v1.2.0
@@ -119,7 +119,7 @@ require (
 	github.com/rancher/eks-operator v1.11.0 // indirect
 	github.com/rancher/fleet/pkg/apis v0.12.0 // indirect
 	github.com/rancher/gke-operator v1.11.0 // indirect
-	github.com/rancher/norman v0.5.2 // indirect
+	github.com/rancher/norman v0.6.0 // indirect
 	github.com/spf13/cobra v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
