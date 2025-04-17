@@ -46,9 +46,9 @@ require (
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/evanphx/json-patch v5.9.0+incompatible
 	github.com/gorilla/mux v1.8.1
-	github.com/rancher/dynamiclistener v0.6.0
+	github.com/rancher/dynamiclistener v0.6.1
 	github.com/rancher/lasso v0.2.1
-	github.com/rancher/rancher/pkg/apis v0.0.0-20250411113805-e6ac2228a443
+	github.com/rancher/rancher/pkg/apis v0.0.0-20250417070417-fdd320b560ae
 	github.com/rancher/rke v1.6.9
 	github.com/rancher/wrangler/v3 v3.1.0
 	github.com/robfig/cron v1.2.0
@@ -116,10 +116,10 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/rancher/aks-operator v1.9.8-rc.1 // indirect
-	github.com/rancher/eks-operator v1.9.8-rc.1 // indirect
-	github.com/rancher/fleet/pkg/apis v0.10.11-rc.1 // indirect
-	github.com/rancher/gke-operator v1.9.8-rc.1 // indirect
+	github.com/rancher/aks-operator v1.9.8 // indirect
+	github.com/rancher/eks-operator v1.9.8 // indirect
+	github.com/rancher/fleet/pkg/apis v0.10.11 // indirect
+	github.com/rancher/gke-operator v1.9.8 // indirect
 	github.com/rancher/norman v0.3.1 // indirect
 	github.com/spf13/cobra v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
