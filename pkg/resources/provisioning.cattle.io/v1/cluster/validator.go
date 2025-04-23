@@ -399,7 +399,7 @@ func (p *provisioningAdmitter) validateClusterName(request *admission.Request, r
 	if !isValidName(cluster.Name, cluster.Namespace, err == nil) {
 		response.Result = &metav1.Status{
 			Status:  failureStatus,
-			Message: "cluster name must be 63 characters or fewer, must not begin with a hyphen, cannot be \"local\" nor of the form \"c-xxxxx\", and can only contain lowercase alphanumeric characters or ' - '",
+			Message: "cluster name must be between 2 and 63 characters, must not begin with a hyphen, cannot be \"local\" nor of the form \"c-xxxxx\", and can only contain lowercase alphanumeric characters or ' - '",
 			Reason:  metav1.StatusReasonInvalid,
 			Code:    http.StatusUnprocessableEntity,
 		}
