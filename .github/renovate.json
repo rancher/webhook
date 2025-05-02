@@ -17,13 +17,33 @@
   "packageRules": [
     {
       "matchPackagePatterns": [
-        "k8s.io/*",
-        "sigs.k8s.io/*",
         "go.opentelemetry.io/*",
         "github.com/prometheus/*",
         "github.com/rancher/rancher/pkg/apis"
       ],
       "enabled": false
+    },
+    {
+      "matchPackagePatterns": [
+        "k8s.io/*",
+        "sigs.k8s.io/*"
+      ],
+      "versioning": "semver",
+      "updateTypes": [
+        "patch"
+      ]
+    },
+    {
+      "matchPackagePatterns": [
+        "k8s.io/*",
+        "sigs.k8s.io/*"
+      ],
+      "excludePackagePatterns": [],
+      "enabled": false,
+      "updateTypes": [
+        "major",
+        "minor"
+      ]
     }
   ]
 }
