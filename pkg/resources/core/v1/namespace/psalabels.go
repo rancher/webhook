@@ -73,7 +73,10 @@ func (p *psaLabelAdmitter) Admit(request *admission.Request) (*admissionv1.Admis
 	// so that if we are not able to get them,
 	// the SAR request will be done in any case.
 	if ns.Annotations[projectID] != "" {
-		projectInfo := strings.Split(ns.Annotations[projectID], ":")
+		projectNamespace, projectName, found := strings.Cut(ns.Annotations[projectID], ":")
+		if found {
+		...
+		}
 		if len(projectInfo) == 2 {
 			projectNamespace = projectInfo[0]
 			projectName = projectInfo[1]
