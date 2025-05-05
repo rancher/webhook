@@ -69,18 +69,17 @@ func (p *psaLabelAdmitter) Admit(request *admission.Request) (*admissionv1.Admis
 	}
 
 	var projectNamespace, projectName string
+	var found bool
 	// here we are filling the variables above with the projectId,
 	// so that if we are not able to get them,
 	// the SAR request will be done in any case.
-	if ns.Annotations[projectID] != "" {
-		projectNamespace, projectName, found := strings.Cut(ns.Annotations[projectID], ":")
-		if found {
-		...
-		}
-		if len(projectInfo) == 2 {
-			projectNamespace = projectInfo[0]
-			projectName = projectInfo[1]
-		}
+	projectNamespace, projectName, found = strings.Cut(ns.Annotations[projectID], ":")
+	if !found {
+		// here we overwrite the projectNamespace variable
+		// with an empty string.
+		// This is because if the separator does not appear
+		// in the first argument (s), string.Cut returns: s, "", false
+		projectNamespace = ""
 	}
 
 	resp, err := p.sar.Create(request.Context, &v1.SubjectAccessReview{
