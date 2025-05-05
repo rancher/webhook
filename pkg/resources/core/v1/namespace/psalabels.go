@@ -3,18 +3,23 @@ package namespace
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/rancher/webhook/pkg/admission"
 	objectsv1 "github.com/rancher/webhook/pkg/generated/objects/core/v1"
 	"github.com/rancher/webhook/pkg/resources/common"
 	admissionv1 "k8s.io/api/admission/v1"
 	v1 "k8s.io/api/authorization/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/utils/trace"
 )
 
-const updatePSAVerb = "updatepsa"
+const (
+	updatePSAVerb = "updatepsa"
+	projectID     = "field.cattle.io/projectId"
+)
 
 type psaLabelAdmitter struct {
 	sar authorizationv1.SubjectAccessReviewInterface
@@ -22,6 +27,7 @@ type psaLabelAdmitter struct {
 
 // Admit ensures that users have sufficient permissions to add/remove PSAs to a namespace.
 func (p *psaLabelAdmitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+
 	if request.Operation == admissionv1.Delete {
 		return admission.ResponseAllowed(), nil
 	}
@@ -31,12 +37,14 @@ func (p *psaLabelAdmitter) Admit(request *admission.Request) (*admissionv1.Admis
 
 	response := &admissionv1.AdmissionResponse{}
 
+	var ns, oldns *corev1.Namespace
+	var err error
 	// Is the request attempting to modify the special PSA labels (enforce, warn, audit)?
 	// If it isn't, we're done.
 	// If it is, we then need to check to see if they should be allowed.
 	switch request.Operation {
 	case admissionv1.Create:
-		ns, err := objectsv1.NamespaceFromRequest(&request.AdmissionRequest)
+		ns, err = objectsv1.NamespaceFromRequest(&request.AdmissionRequest)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode namespace from request: %w", err)
 		}
@@ -45,7 +53,7 @@ func (p *psaLabelAdmitter) Admit(request *admission.Request) (*admissionv1.Admis
 			return response, nil
 		}
 	case admissionv1.Update:
-		oldns, ns, err := objectsv1.NamespaceOldAndNewFromRequest(&request.AdmissionRequest)
+		oldns, ns, err = objectsv1.NamespaceOldAndNewFromRequest(&request.AdmissionRequest)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode namespace from request: %w", err)
 		}
@@ -60,13 +68,29 @@ func (p *psaLabelAdmitter) Admit(request *admission.Request) (*admissionv1.Admis
 		extras[k] = v1.ExtraValue(v)
 	}
 
+	var projectNamespace, projectName string
+	var found bool
+	// here we are filling the variables above with the projectId,
+	// so that if we are not able to get them,
+	// the SAR request will be done in any case.
+	projectNamespace, projectName, found = strings.Cut(ns.Annotations[projectID], ":")
+	if !found {
+		// here we overwrite the projectNamespace variable
+		// with an empty string.
+		// This is because if the separator does not appear
+		// in the first argument (s), string.Cut returns: s, "", false
+		projectNamespace = ""
+	}
+
 	resp, err := p.sar.Create(request.Context, &v1.SubjectAccessReview{
 		Spec: v1.SubjectAccessReviewSpec{
 			ResourceAttributes: &v1.ResourceAttributes{
-				Verb:     updatePSAVerb,
-				Group:    projectsGVR.Group,
-				Version:  projectsGVR.Version,
-				Resource: projectsGVR.Resource,
+				Verb:      updatePSAVerb,
+				Group:     projectsGVR.Group,
+				Version:   projectsGVR.Version,
+				Resource:  projectsGVR.Resource,
+				Namespace: projectNamespace,
+				Name:      projectName,
 			},
 			User:   request.UserInfo.Username,
 			Groups: request.UserInfo.Groups,
