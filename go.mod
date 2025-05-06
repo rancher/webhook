@@ -59,7 +59,7 @@ require (
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/kubernetes v1.32.1
 	k8s.io/pod-security-admission v0.32.1
-	k8s.io/utils v0.0.0-20241210054802-24370beab758
+	k8s.io/utils v0.0.0-20250502105355-0f33e8f1c979
 	sigs.k8s.io/controller-runtime v0.19.6
 	sigs.k8s.io/yaml v1.4.0
 )
