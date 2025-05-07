@@ -24,7 +24,7 @@ replace (
 	k8s.io/endpointslice => k8s.io/endpointslice v0.28.6
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.28.6
 	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.28.6
-	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20230717233707-2695361300d9
+	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff
 	k8s.io/kube-proxy => k8s.io/kube-proxy v0.28.6
 	k8s.io/kube-scheduler => k8s.io/kube-scheduler v0.28.6
 	k8s.io/kubectl => k8s.io/kubectl v0.28.6
@@ -60,7 +60,7 @@ require (
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/kubernetes v1.28.9
 	k8s.io/pod-security-admission v0.28.6
-	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
+	k8s.io/utils v0.0.0-20250502105355-0f33e8f1c979
 	sigs.k8s.io/controller-runtime v0.16.6
 	sigs.k8s.io/yaml v1.4.0
 )
@@ -68,7 +68,6 @@ require (
 require (
 	github.com/NYTimes/gziphandler v1.1.1 // indirect
 	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230305170008-8188dc5388df // indirect
-	github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
@@ -91,7 +90,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/cel-go v0.16.1 // indirect
-	github.com/google/gnostic-models v0.6.8 // indirect
+	github.com/google/gnostic-models v0.6.9 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -171,5 +170,6 @@ require (
 	sigs.k8s.io/cli-utils v0.28.0 // indirect
 	sigs.k8s.io/cluster-api v1.5.5 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.4.2 // indirect
+	sigs.k8s.io/randfill v1.0.0 // indirect
+	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
 )
