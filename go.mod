@@ -54,7 +54,7 @@ require (
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
-	go.uber.org/mock v0.5.0
+	go.uber.org/mock v0.5.2
 	golang.org/x/text v0.23.0
 	golang.org/x/tools v0.30.0
 	k8s.io/api v0.32.1
