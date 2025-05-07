@@ -72,17 +72,18 @@ func (m *Mutator) MutatingWebhook(clientConfig admissionregistrationv1.WebhookCl
 	mutatingWebhook := admission.NewDefaultMutatingWebhook(m, clientConfig, admissionregistrationv1.NamespacedScope, m.Operations())
 	mutatingWebhook.SideEffects = admission.Ptr(admissionregistrationv1.SideEffectClassNoneOnDryRun)
 	mutatingWebhook.TimeoutSeconds = admission.Ptr(int32(15))
+	mutatingWebhook.MatchConditions = []admissionregistrationv1.MatchCondition{
+		{
+			Name:       "filter-by-secret-type-cloud-credential",
+			Expression: `object != null && object.type == "provisioning.cattle.io/cloud-credential"`,
+		},
+	}
+
 	return []admissionregistrationv1.MutatingWebhook{*mutatingWebhook}
 }
 
 // Admit is the entrypoint for the mutator. Admit will return an error if it unable to process the request.
 func (m *Mutator) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
-	if request.DryRun != nil && *request.DryRun {
-		return &admissionv1.AdmissionResponse{
-			Allowed: true,
-		}, nil
-	}
-
 	listTrace := trace.New("secret Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
