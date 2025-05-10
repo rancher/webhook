@@ -187,8 +187,8 @@ github.com/rancher/rancher/pkg/apis v0.0.0-20250417111333-96e9523f48ea h1:4FqYIF
 github.com/rancher/rancher/pkg/apis v0.0.0-20250417111333-96e9523f48ea/go.mod h1:D2xjmiJNEmx2ny7qRqter2JBoRZ/Oc1cQDgCzRPmfZI=
 github.com/rancher/rke v1.7.2 h1:+2fcl0gCjRHzf1ev9C9ptQ1pjYbDngC1Qv8V/0ki/dk=
 github.com/rancher/rke v1.7.2/go.mod h1:+x++Mvl0A3jIzNLiu8nkraqZXiHg6VPWv0Xl4iQCg+A=
-github.com/rancher/wrangler/v3 v3.2.1-rc.1 h1:HCiuALgl8C1EtL8iT06cDsLJZ5RycWRQc9XUKUo1WZs=
-github.com/rancher/wrangler/v3 v3.2.1-rc.1/go.mod h1:RV8kkv5br5HaxXWamIbr95pOjvVeoC5CeBldcdw5Fv0=
+github.com/rancher/wrangler/v3 v3.2.1-rc.4 h1:XTn2wynYeyKKVPKhJHzQ4VtEpKRJ4x2z79oUUoCXIGg=
+github.com/rancher/wrangler/v3 v3.2.1-rc.4/go.mod h1:RV8kkv5br5HaxXWamIbr95pOjvVeoC5CeBldcdw5Fv0=
 github.com/robfig/cron v1.2.0 h1:ZjScXvvxeQ63Dbyxy76Fj3AT3Ut0aKsyd2/tl3DTMuQ=
 github.com/robfig/cron v1.2.0/go.mod h1:JGuDeoQd7Z6yL4zQhZ3OPEVHB7fL6Ka6skscFHfmt2k=
 github.com/rogpeppe/go-internal v1.13.1 h1:KvO1DLK/DRN07sQ1LQKScxyZJuNnedQ5/wKSR38lUII=
