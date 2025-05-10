@@ -14,7 +14,7 @@ for i in bin/webhook-*; do
         cp $i dist/artifacts
     fi
 done
-REPO=rancher
+REPO="${REPO:-rancher}"
 
 IMAGE=${REPO}/webhook:${TAG}
 DOCKERFILE=./package/Dockerfile
