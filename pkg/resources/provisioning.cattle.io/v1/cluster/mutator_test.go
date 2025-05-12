@@ -20,12 +20,12 @@ func Test_GetKubeAPIServerArg(t *testing.T) {
 	tests := []struct {
 		name     string
 		cluster  *v1.Cluster
-		expected map[string]string
+		expected *keyValueArgs
 	}{
 		{
 			name:     "cluster without kube-apiserver-arg",
 			cluster:  clusterWithoutKubeAPIServerArg(),
-			expected: map[string]string{},
+			expected: &keyValueArgs{},
 		},
 		{
 			name: "cluster without MachineGlobalConfig",
@@ -34,30 +34,31 @@ func Test_GetKubeAPIServerArg(t *testing.T) {
 					RKEConfig: &v1.RKEConfig{},
 				},
 			},
-			expected: map[string]string{},
+			expected: &keyValueArgs{},
 		},
 		{
 			name:    "cluster with kube-apiserver-arg",
 			cluster: clusterWithKubeAPIServerArg(),
-			expected: map[string]string{
-				"foo":  "bar",
-				"foo2": "bar2",
+			expected: &keyValueArgs{
+				{key: "foo", value: "bar"},
+				{key: "foo2", value: "bar2"},
 			},
 		},
 		{
 			name:    "cluster with kube-apiserver-arg-2",
 			cluster: clusterWithKubeAPIServerArg2(),
-			expected: map[string]string{
-				"foo":  "bar",
-				"foo2": "bar2",
-				"foo3": "bar3=baz3",
+			expected: &keyValueArgs{
+				{key: "foo", value: "bar"},
+				{key: "foo2", value: "bar2"},
+				{key: "foo3", value: "bar3=baz3"},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := getKubeAPIServerArg(tt.cluster); !equality.Semantic.DeepEqual(got, tt.expected) {
-				t.Errorf("got: [%v], expected: [%v]", got, tt.expected)
+			got := getKubeAPIServerArg(tt.cluster)
+			if !reflect.DeepEqual(*tt.expected, *got) {
+				t.Errorf("got: [%v], expected: [%v]", *got, *tt.expected)
 			}
 		})
 	}
@@ -66,15 +67,15 @@ func Test_GetKubeAPIServerArg(t *testing.T) {
 func Test_SetKubeAPIServerArg(t *testing.T) {
 	tests := []struct {
 		name     string
-		arg      map[string]string
+		arg      keyValueArgs
 		cluster  *v1.Cluster
 		expected *v1.Cluster
 	}{
 		{
 			name: "cluster that already has kube-apiserver-arg",
-			arg: map[string]string{
-				"foo":  "bar",
-				"foo2": "bar2",
+			arg: keyValueArgs{
+				{key: "foo", value: "bar"},
+				{key: "foo2", value: "bar2"},
 			},
 			cluster: &v1.Cluster{
 				Spec: v1.ClusterSpec{
@@ -95,9 +96,9 @@ func Test_SetKubeAPIServerArg(t *testing.T) {
 		},
 		{
 			name: "cluster that does not have MachineGlobalConfig",
-			arg: map[string]string{
-				"foo":  "bar",
-				"foo2": "bar2",
+			arg: keyValueArgs{
+				{key: "foo", value: "bar"},
+				{key: "foo2", value: "bar2"},
 			},
 			cluster: &v1.Cluster{
 				Spec: v1.ClusterSpec{
@@ -108,9 +109,9 @@ func Test_SetKubeAPIServerArg(t *testing.T) {
 		},
 		{
 			name: "cluster does not have kube-apiserver-arg but other args",
-			arg: map[string]string{
-				"foo":  "bar",
-				"foo2": "bar2",
+			arg: keyValueArgs{
+				{key: "foo", value: "bar"},
+				{key: "foo2", value: "bar2"},
 			},
 			cluster: &v1.Cluster{
 				Spec: v1.ClusterSpec{
@@ -134,11 +135,13 @@ func Test_SetKubeAPIServerArg(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			got := newKeyValueArgs()
+			expected := newKeyValueArgs()
 			setKubeAPIServerArg(tt.arg, tt.cluster)
-			got := toMap(tt.cluster.Spec.RKEConfig.MachineGlobalConfig.Data["kube-apiserver-arg"])
-			expected := toMap(tt.expected.Spec.RKEConfig.MachineGlobalConfig.Data["kube-apiserver-arg"])
-			if !equality.Semantic.DeepEqual(got, expected) {
-				t.Errorf("got: %v, expected: %v", got, expected)
+			got.parseFromRawArgs(tt.cluster.Spec.RKEConfig.MachineGlobalConfig.Data["kube-apiserver-arg"])
+			expected.parseFromRawArgs(tt.expected.Spec.RKEConfig.MachineGlobalConfig.Data["kube-apiserver-arg"])
+			if !reflect.DeepEqual(*got, *expected) {
+				t.Errorf("got: %v, expected: %v", *got, *expected)
 			}
 		})
 	}

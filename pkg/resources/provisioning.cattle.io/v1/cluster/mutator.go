@@ -60,6 +60,59 @@ var gvr = schema.GroupVersionResource{
 	Resource: "clusters",
 }
 
+// keyValueArg represents a key-value pair configuration argument.
+type keyValueArg struct {
+	key   string
+	value string
+}
+
+type keyValueArgs []keyValueArg
+
+// newKeyValueArgs initializes and returns an empty keyValueArgs slice.
+func newKeyValueArgs() *keyValueArgs {
+	return &keyValueArgs{}
+}
+
+// parseFromRawArgs converts an interface representing a slice of "key=value" strings into a slice of keyValueArg.
+func (kv *keyValueArgs) parseFromRawArgs(input interface{}) {
+	var args keyValueArgs
+	parsed := convert.ToInterfaceSlice(input)
+	for _, arg := range parsed {
+		key, val, found := strings.Cut(convert.ToString(arg), "=")
+		if !found {
+			logrus.Warnf("skipping argument [%s] which does not have right format", arg)
+			continue
+		}
+		args = append(args, keyValueArg{key: key, value: val})
+	}
+	*kv = args
+}
+
+// update updates the value for the given key if it exists in the slice; otherwise it appends a new key-value pair.
+func (kv *keyValueArgs) update(key, val string) {
+	idx := slices.IndexFunc(*kv, func(arg keyValueArg) bool {
+		return arg.key == key
+	})
+	if idx != -1 {
+		(*kv)[idx].value = val
+	} else {
+		*kv = append(*kv, keyValueArg{key: key, value: val})
+	}
+}
+
+// deleteByPredicate removes all keyValueArg entries that match the given predicate.
+// It returns true if any elements were removed, otherwise false.
+func (kv *keyValueArgs) deleteByPredicate(predicate func(keyValueArg) bool) bool {
+	oldLen := len(*kv)
+	*kv = slices.DeleteFunc(*kv, predicate)
+	return oldLen != len(*kv)
+}
+
+// keyHasValue returns true if the given key-value pair exists in the slice of keyValueArg.
+func (kv *keyValueArgs) keyHasValue(key, val string) bool {
+	return slices.Contains(*kv, keyValueArg{key: key, value: val})
+}
+
 // ProvisioningClusterMutator implements admission.MutatingAdmissionWebhook.
 type ProvisioningClusterMutator struct {
 	secret corecontroller.SecretController
@@ -210,9 +263,10 @@ func (m *ProvisioningClusterMutator) handlePSACT(request *admission.Request, clu
 			// drop relevant fields if they exist in the cluster
 			dropMachineSelectorFile(machineSelectorFileForPSA(secretName, mountPath, ""), cluster, true)
 			args := getKubeAPIServerArg(cluster)
-			if args[kubeAPIAdmissionConfigOption] == mountPath {
-				delete(args, kubeAPIAdmissionConfigOption)
-				setKubeAPIServerArg(args, cluster)
+			if args.deleteByPredicate(func(arg keyValueArg) bool {
+				return arg.key == kubeAPIAdmissionConfigOption && arg.value == mountPath
+			}) {
+				setKubeAPIServerArg(*args, cluster)
 			}
 		} else {
 			// Now, handle the case of PSACT being set when creating or updating the cluster
@@ -242,8 +296,8 @@ func (m *ProvisioningClusterMutator) handlePSACT(request *admission.Request, clu
 			hash := sha256.Sum256(fileContent)
 			addMachineSelectorFile(machineSelectorFileForPSA(secretName, mountPath, base64.StdEncoding.EncodeToString(hash[:])), cluster)
 			args := getKubeAPIServerArg(cluster)
-			args[kubeAPIAdmissionConfigOption] = mountPath
-			setKubeAPIServerArg(args, cluster)
+			args.update(kubeAPIAdmissionConfigOption, mountPath)
+			setKubeAPIServerArg(*args, cluster)
 		}
 	}
 	return admission.ResponseAllowed(), nil
@@ -281,39 +335,27 @@ func (m *ProvisioningClusterMutator) ensureSecret(namespace, name string, data m
 	return nil
 }
 
-// getKubeAPIServerArg returns a map representation of the value of kube-apiserver-arg from the cluster's MachineGlobalConfig.
-// An empty map is returned if kube-apiserver-arg is not set in the cluster.
-func getKubeAPIServerArg(cluster *v1.Cluster) map[string]string {
-	if cluster.Spec.RKEConfig.MachineGlobalConfig.Data != nil {
-		return toMap(cluster.Spec.RKEConfig.MachineGlobalConfig.Data["kube-apiserver-arg"])
-	}
-	return map[string]string{}
-}
-
-func toMap(input interface{}) map[string]string {
-	args := map[string]string{}
-	parsed := convert.ToInterfaceSlice(input)
-	for _, arg := range parsed {
-		key, val, found := strings.Cut(convert.ToString(arg), "=")
-		if !found {
-			logrus.Debugf("skipping argument [%s] which does not have right format", arg)
-			continue
-		}
-		args[key] = val
+// getKubeAPIServerArg returns a slice of keyValueArg representing the parsed value of
+// "kube-apiserver-arg" from the cluster's MachineGlobalConfig.
+// An empty slice is returned if "kube-apiserver-arg" is not set in the cluster.
+func getKubeAPIServerArg(cluster *v1.Cluster) *keyValueArgs {
+	args := newKeyValueArgs()
+	if rawArgs, exists := cluster.Spec.RKEConfig.MachineGlobalConfig.Data["kube-apiserver-arg"]; exists {
+		args.parseFromRawArgs(rawArgs)
 	}
 	return args
 }
 
 // setKubeAPIServerArg uses the provided arg to overwrite the value of kube-apiserver-arg under the cluster's MachineGlobalConfig.
 // If the provided arg is an empty map, setKubeAPIServerArg removes the existing kube-apiserver-arg from the cluster's MachineGlobalConfig.
-func setKubeAPIServerArg(arg map[string]string, cluster *v1.Cluster) {
-	if len(arg) == 0 {
+func setKubeAPIServerArg(args []keyValueArg, cluster *v1.Cluster) {
+	if len(args) == 0 {
 		delete(cluster.Spec.RKEConfig.MachineGlobalConfig.Data, "kube-apiserver-arg")
 		return
 	}
-	parsed := make([]any, 0, len(arg))
-	for key, val := range arg {
-		parsed = append(parsed, fmt.Sprintf("%s=%s", key, val))
+	parsed := make([]any, len(args))
+	for i, arg := range args {
+		parsed[i] = fmt.Sprintf("%s=%s", arg.key, arg.value)
 	}
 	if cluster.Spec.RKEConfig.MachineGlobalConfig.Data == nil {
 		cluster.Spec.RKEConfig.MachineGlobalConfig.Data = make(map[string]interface{})
