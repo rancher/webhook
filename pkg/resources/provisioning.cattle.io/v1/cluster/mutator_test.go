@@ -53,6 +53,14 @@ func Test_GetKubeAPIServerArg(t *testing.T) {
 				{key: "foo3", value: "bar3=baz3"},
 			},
 		},
+		{
+			name:    "cluster with duplicate keys in kube-apiserver-arg",
+			cluster: clusterWithKubeAPIServerArg3(),
+			expected: &keyValueArgs{
+				{key: "foo", value: "bar"},
+				{key: "foo2", value: "bar2=baz2"},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -446,6 +454,16 @@ func clusterWithKubeAPIServerArg2() *v1.Cluster {
 	arg = append(arg, "foo=bar")
 	arg = append(arg, "foo2=bar2")
 	arg = append(arg, "foo3=bar3=baz3")
+	cluster.Spec.RKEConfig.MachineGlobalConfig.Data["kube-apiserver-arg"] = arg
+	return cluster
+}
+
+func clusterWithKubeAPIServerArg3() *v1.Cluster {
+	cluster := clusterWithoutKubeAPIServerArg()
+	var arg []interface{}
+	arg = append(arg, "foo=bar")
+	arg = append(arg, "foo2=bar2")
+	arg = append(arg, "foo2=bar2=baz2")
 	cluster.Spec.RKEConfig.MachineGlobalConfig.Data["kube-apiserver-arg"] = arg
 	return cluster
 }

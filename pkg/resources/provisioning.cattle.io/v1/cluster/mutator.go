@@ -75,17 +75,19 @@ func newKeyValueArgs() *keyValueArgs {
 
 // parseFromRawArgs converts an interface representing a slice of "key=value" strings into a slice of keyValueArg.
 func (kv *keyValueArgs) parseFromRawArgs(input interface{}) {
-	var args keyValueArgs
 	parsed := convert.ToInterfaceSlice(input)
+	if parsed == nil {
+		logrus.Errorf("failed to convert input into slice: invalid type: %v", input)
+		return
+	}
 	for _, arg := range parsed {
 		key, val, found := strings.Cut(convert.ToString(arg), "=")
 		if !found {
 			logrus.Warnf("skipping argument [%s] which does not have right format", arg)
 			continue
 		}
-		args = append(args, keyValueArg{key: key, value: val})
+		kv.update(key, val)
 	}
-	*kv = args
 }
 
 // update updates the value for the given key if it exists in the slice; otherwise it appends a new key-value pair.
@@ -100,17 +102,14 @@ func (kv *keyValueArgs) update(key, val string) {
 	}
 }
 
-// deleteByPredicate removes all keyValueArg entries that match the given predicate.
-// It returns true if any elements were removed, otherwise false.
-func (kv *keyValueArgs) deleteByPredicate(predicate func(keyValueArg) bool) bool {
-	oldLen := len(*kv)
-	*kv = slices.DeleteFunc(*kv, predicate)
-	return oldLen != len(*kv)
-}
-
 // keyHasValue returns true if the given key-value pair exists in the slice of keyValueArg.
 func (kv *keyValueArgs) keyHasValue(key, val string) bool {
-	return slices.Contains(*kv, keyValueArg{key: key, value: val})
+	for _, arg := range *kv {
+		if arg.key == key && arg.value == val {
+			return true
+		}
+	}
+	return false
 }
 
 // ProvisioningClusterMutator implements admission.MutatingAdmissionWebhook.
@@ -263,11 +262,10 @@ func (m *ProvisioningClusterMutator) handlePSACT(request *admission.Request, clu
 			// drop relevant fields if they exist in the cluster
 			dropMachineSelectorFile(machineSelectorFileForPSA(secretName, mountPath, ""), cluster, true)
 			args := getKubeAPIServerArg(cluster)
-			if args.deleteByPredicate(func(arg keyValueArg) bool {
+			newArgs := slices.DeleteFunc(*args, func(arg keyValueArg) bool {
 				return arg.key == kubeAPIAdmissionConfigOption && arg.value == mountPath
-			}) {
-				setKubeAPIServerArg(*args, cluster)
-			}
+			})
+			setKubeAPIServerArg(newArgs, cluster)
 		} else {
 			// Now, handle the case of PSACT being set when creating or updating the cluster
 			template, err := m.psact.Get(templateName)
@@ -355,7 +353,7 @@ func setKubeAPIServerArg(args []keyValueArg, cluster *v1.Cluster) {
 	}
 	parsed := make([]any, len(args))
 	for i, arg := range args {
-		parsed[i] = fmt.Sprintf("%s=%s", arg.key, arg.value)
+		parsed[i] = arg.key + "=" + arg.value
 	}
 	if cluster.Spec.RKEConfig.MachineGlobalConfig.Data == nil {
 		cluster.Spec.RKEConfig.MachineGlobalConfig.Data = make(map[string]interface{})
