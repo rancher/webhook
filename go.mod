@@ -44,9 +44,9 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/rancher/dynamiclistener v0.6.1
 	github.com/rancher/lasso v0.2.2
-	github.com/rancher/rancher/pkg/apis v0.0.0-20250514075052-c3262335e0c2
-	github.com/rancher/rke v1.7.7-rc.2
-	github.com/rancher/wrangler/v3 v3.2.1-rc.4
+	github.com/rancher/rancher/pkg/apis v0.0.0-20250516194248-6e33ccbc81f1
+	github.com/rancher/rke v1.7.7
+	github.com/rancher/wrangler/v3 v3.2.1
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
@@ -59,7 +59,7 @@ require (
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/kubernetes v1.31.1
 	k8s.io/pod-security-admission v0.31.1
-	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
+	k8s.io/utils v0.0.0-20250502105355-0f33e8f1c979
 	sigs.k8s.io/controller-runtime v0.19.7
 	sigs.k8s.io/yaml v1.4.0
 )
@@ -114,10 +114,10 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/rancher/aks-operator v1.10.5-rc.1 // indirect
-	github.com/rancher/eks-operator v1.10.5-rc.1 // indirect
-	github.com/rancher/fleet/pkg/apis v0.11.6 // indirect
-	github.com/rancher/gke-operator v1.10.5-rc.1 // indirect
+	github.com/rancher/aks-operator v1.10.5 // indirect
+	github.com/rancher/eks-operator v1.10.5 // indirect
+	github.com/rancher/fleet/pkg/apis v0.11.8 // indirect
+	github.com/rancher/gke-operator v1.10.5 // indirect
 	github.com/rancher/norman v0.4.2 // indirect
 	github.com/spf13/cobra v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
