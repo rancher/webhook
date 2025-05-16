@@ -46,7 +46,7 @@ require (
 	github.com/rancher/lasso v0.2.2
 	github.com/rancher/rancher/pkg/apis v0.0.0-20250514053446-f59ac8399215
 	github.com/rancher/rke v1.8.3-rc.2
-	github.com/rancher/wrangler/v3 v3.2.1-rc.4
+	github.com/rancher/wrangler/v3 v3.2.1
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
