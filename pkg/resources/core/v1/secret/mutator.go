@@ -72,6 +72,13 @@ func (m *Mutator) MutatingWebhook(clientConfig admissionregistrationv1.WebhookCl
 	mutatingWebhook := admission.NewDefaultMutatingWebhook(m, clientConfig, admissionregistrationv1.NamespacedScope, m.Operations())
 	mutatingWebhook.SideEffects = admission.Ptr(admissionregistrationv1.SideEffectClassNoneOnDryRun)
 	mutatingWebhook.TimeoutSeconds = admission.Ptr(int32(15))
+	mutatingWebhook.MatchConditions = []admissionregistrationv1.MatchCondition{
+		{
+			Name:       "filter-by-secret-type-cloud-credential",
+			Expression: `request.operation == 'DELETE' || (object != null && object.type == "provisioning.cattle.io/cloud-credential")`,
+		},
+	}
+
 	return []admissionregistrationv1.MutatingWebhook{*mutatingWebhook}
 }
 
@@ -82,7 +89,6 @@ func (m *Mutator) Admit(request *admission.Request) (*admissionv1.AdmissionRespo
 			Allowed: true,
 		}, nil
 	}
-
 	listTrace := trace.New("secret Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
@@ -101,12 +107,6 @@ func (m *Mutator) Admit(request *admission.Request) (*admissionv1.AdmissionRespo
 }
 
 func (m *Mutator) admitCreate(secret *corev1.Secret, request *admission.Request) (*admissionv1.AdmissionResponse, error) {
-	if secret.Type != "provisioning.cattle.io/cloud-credential" {
-		return &admissionv1.AdmissionResponse{
-			Allowed: true,
-		}, nil
-	}
-
 	logrus.Debugf("[secret-mutation] adding creatorID %v to secret: %v", request.UserInfo.Username, secret.Name)
 	newSecret := secret.DeepCopy()
 
