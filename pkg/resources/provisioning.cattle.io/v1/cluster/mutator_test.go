@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -16,16 +17,19 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-func Test_GetKubeAPIServerArg(t *testing.T) {
+func Test_GetKubeAPIServerArgs(t *testing.T) {
+	errInvalidType := errors.New("failed to convert input into slice: invalid type: []string, expected interface{}")
 	tests := []struct {
-		name     string
-		cluster  *v1.Cluster
-		expected *keyValueArgs
+		name        string
+		cluster     *v1.Cluster
+		expected    keyValueArgs
+		expectedErr error
 	}{
 		{
-			name:     "cluster without kube-apiserver-arg",
-			cluster:  clusterWithoutKubeAPIServerArg(),
-			expected: &keyValueArgs{},
+			name:        "cluster without kube-apiserver-arg",
+			cluster:     clusterWithoutKubeAPIServerArg(),
+			expected:    keyValueArgs{},
+			expectedErr: nil,
 		},
 		{
 			name: "cluster without MachineGlobalConfig",
@@ -34,45 +38,60 @@ func Test_GetKubeAPIServerArg(t *testing.T) {
 					RKEConfig: &v1.RKEConfig{},
 				},
 			},
-			expected: &keyValueArgs{},
+			expected:    keyValueArgs{},
+			expectedErr: nil,
 		},
 		{
 			name:    "cluster with kube-apiserver-arg",
 			cluster: clusterWithKubeAPIServerArg(),
-			expected: &keyValueArgs{
+			expected: keyValueArgs{
 				{key: "foo", value: "bar"},
 				{key: "foo2", value: "bar2"},
 			},
+			expectedErr: nil,
 		},
 		{
 			name:    "cluster with kube-apiserver-arg-2",
 			cluster: clusterWithKubeAPIServerArg2(),
-			expected: &keyValueArgs{
+			expected: keyValueArgs{
 				{key: "foo", value: "bar"},
 				{key: "foo2", value: "bar2"},
 				{key: "foo3", value: "bar3=baz3"},
 			},
+			expectedErr: nil,
 		},
 		{
 			name:    "cluster with duplicate keys in kube-apiserver-arg",
 			cluster: clusterWithKubeAPIServerArg3(),
-			expected: &keyValueArgs{
+			expected: keyValueArgs{
 				{key: "foo", value: "bar"},
 				{key: "foo2", value: "bar2=baz2"},
 			},
+			expectedErr: nil,
+		},
+		{
+			name:        "cluster with invalid data in kube-apiserver-arg",
+			cluster:     clusterWithInvalidKubeAPIServerArg(),
+			expected:    keyValueArgs{},
+			expectedErr: errInvalidType,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := getKubeAPIServerArg(tt.cluster)
-			if !reflect.DeepEqual(*tt.expected, *got) {
-				t.Errorf("got: [%v], expected: [%v]", *got, *tt.expected)
+			got, err := getKubeAPIServerArgs(tt.cluster)
+			if tt.expectedErr != nil {
+				if err == nil || err.Error() != tt.expectedErr.Error() {
+					t.Errorf("expected getKubeAPIServerArgs() error = %v, got %v", tt.expectedErr, err)
+				}
+			}
+			if !reflect.DeepEqual(tt.expected, got) {
+				t.Errorf("got: %v, expected: %v", got, tt.expected)
 			}
 		})
 	}
 }
 
-func Test_SetKubeAPIServerArg(t *testing.T) {
+func Test_SetKubeAPIServerArgs(t *testing.T) {
 	tests := []struct {
 		name     string
 		arg      keyValueArgs
@@ -143,13 +162,11 @@ func Test_SetKubeAPIServerArg(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := newKeyValueArgs()
-			expected := newKeyValueArgs()
-			setKubeAPIServerArg(tt.arg, tt.cluster)
-			got.parseFromRawArgs(tt.cluster.Spec.RKEConfig.MachineGlobalConfig.Data["kube-apiserver-arg"])
-			expected.parseFromRawArgs(tt.expected.Spec.RKEConfig.MachineGlobalConfig.Data["kube-apiserver-arg"])
-			if !reflect.DeepEqual(*got, *expected) {
-				t.Errorf("got: %v, expected: %v", *got, *expected)
+			setKubeAPIServerArgs(tt.arg, tt.cluster)
+			got, _ := parseFromRawArgs(tt.cluster.Spec.RKEConfig.MachineGlobalConfig.Data["kube-apiserver-arg"])
+			expected, _ := parseFromRawArgs(tt.expected.Spec.RKEConfig.MachineGlobalConfig.Data["kube-apiserver-arg"])
+			if !reflect.DeepEqual(got, expected) {
+				t.Errorf("got: %v, expected: %v", got, expected)
 			}
 		})
 	}
@@ -464,6 +481,15 @@ func clusterWithKubeAPIServerArg3() *v1.Cluster {
 	arg = append(arg, "foo=bar")
 	arg = append(arg, "foo2=bar2")
 	arg = append(arg, "foo2=bar2=baz2")
+	cluster.Spec.RKEConfig.MachineGlobalConfig.Data["kube-apiserver-arg"] = arg
+	return cluster
+}
+
+func clusterWithInvalidKubeAPIServerArg() *v1.Cluster {
+	cluster := clusterWithoutKubeAPIServerArg()
+	var arg []string
+	arg = append(arg, "foo=bar")
+	arg = append(arg, "foo2=bar2")
 	cluster.Spec.RKEConfig.MachineGlobalConfig.Data["kube-apiserver-arg"] = arg
 	return cluster
 }
