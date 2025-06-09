@@ -90,6 +90,23 @@ func TestAdmit(t *testing.T) {
 			req:         req,
 			expectedErr: errors.NewServerTimeout(schema.GroupResource{}, "", 2),
 		},
+		"existing namespace with the 'field.cattle.io/allow-fleetworkspace-creation-for-existing-namespace' annotation": {
+			m:                  existingNsWithAnnotationMutator,
+			req:                req,
+			expectAllowed:      true,
+			expectResultStatus: nil,
+		},
+		"existing namespace with the 'field.cattle.io/allow-fleetworkspace-creation-for-existing-namespace' annotation set to false": {
+			m:             existingNsWithAnnotationSetToFalseMutator,
+			req:           req,
+			expectAllowed: false,
+			expectResultStatus: &metav1.Status{
+				Status:  "Failure",
+				Message: "namespace 'test' already exists",
+				Reason:  metav1.StatusReasonBadRequest,
+				Code:    http.StatusBadRequest,
+			},
+		},
 	}
 
 	for name, test := range tests {
@@ -258,6 +275,121 @@ func newNsErrorMutator(t *testing.T) Mutator {
 
 	mockNamespaceController := fake.NewMockNonNamespacedControllerInterface[*v1.Namespace, *v1.NamespaceList](ctrl)
 	mockNamespaceController.EXPECT().Create(gomock.Any()).Return(nil, errors.NewServerTimeout(schema.GroupResource{}, "", 2))
+
+	return Mutator{
+		namespaces: mockNamespaceController,
+	}
+}
+
+func existingNsWithAnnotationMutator(t *testing.T) Mutator {
+	ctrl := gomock.NewController(t)
+
+	mockNamespaceController := fake.NewMockNonNamespacedControllerInterface[*v1.Namespace, *v1.NamespaceList](ctrl)
+	mockClusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
+	mockClusterRoleController := fake.NewMockNonNamespacedControllerInterface[*rbacv1.ClusterRole, *rbacv1.ClusterRoleList](ctrl)
+	mockRoleBindingController := fake.NewMockControllerInterface[*rbacv1.RoleBinding, *rbacv1.RoleBindingList](ctrl)
+	mockClusterRoleBindingController := fake.NewMockNonNamespacedControllerInterface[*rbacv1.ClusterRoleBinding, *rbacv1.ClusterRoleBindingList](ctrl)
+
+	// Namespace already exists
+	mockNamespaceController.EXPECT().Create(gomock.Any()).Return(nil, errors.NewAlreadyExists(gvr.GroupResource(), nsName))
+	// Get returns existing namespace with the annotation
+	mockNamespaceController.EXPECT().Get(gomock.Any(), gomock.Any()).Return(&v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        nsName,
+			Annotations: map[string]string{"field.cattle.io/allow-fleetworkspace-creation-for-existing-namespace": "true"},
+		},
+	}, nil)
+	// Get returns the `fleetworkspace-admin` cluster role
+	mockClusterRoleCache.EXPECT().Get(fleetAdminRole).Return(&rbacv1.ClusterRole{}, nil)
+	mockClusterRoleController.EXPECT().Cache().Return(mockClusterRoleCache)
+	// Create a role binding for the current user with the `fleetworkspace-admin` role
+	roleBinding := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fleetworkspace-admin-binding-" + nsName,
+			Namespace: nsName,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:     "User",
+				APIGroup: "rbac.authorization.k8s.io",
+				Name:     user,
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "ClusterRole",
+			Name:     fleetAdminRole,
+		},
+	}
+	mockRoleBindingController.EXPECT().Create(roleBinding)
+	// Create a cluster role and cluster role binding
+	clusterRole := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "fleetworkspace-own-test",
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{
+					management.GroupName,
+				},
+				Verbs: []string{
+					"*",
+				},
+				Resources: []string{
+					"fleetworkspaces",
+				},
+				ResourceNames: []string{
+					nsName,
+				},
+			},
+		},
+	}
+
+	clusterRoleBinding := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "fleetworkspace-own-binding-test",
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:     "User",
+				APIGroup: "rbac.authorization.k8s.io",
+				Name:     user,
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "ClusterRole",
+			Name:     "fleetworkspace-own-test",
+		},
+	}
+	mockClusterRoleController.EXPECT().Create(gomock.Any()).Return(clusterRole, nil)
+	mockClusterRoleBindingController.EXPECT().Create(clusterRoleBinding).Return(clusterRoleBinding, nil)
+
+	resolver, _ := validation.NewTestRuleResolver(nil, nil, []*rbacv1.ClusterRole{clusterRole}, []*rbacv1.ClusterRoleBinding{clusterRoleBinding})
+
+	return Mutator{
+		namespaces:          mockNamespaceController,
+		clusterroles:        mockClusterRoleController,
+		rolebindings:        mockRoleBindingController,
+		clusterrolebindings: mockClusterRoleBindingController,
+		resolver:            resolver,
+	}
+}
+
+func existingNsWithAnnotationSetToFalseMutator(t *testing.T) Mutator {
+	ctrl := gomock.NewController(t)
+
+	mockNamespaceController := fake.NewMockNonNamespacedControllerInterface[*v1.Namespace, *v1.NamespaceList](ctrl)
+
+	// Namespace already exists
+	mockNamespaceController.EXPECT().Create(gomock.Any()).Return(nil, errors.NewAlreadyExists(gvr.GroupResource(), nsName))
+	// Get returns existing namespace with the annotation
+	mockNamespaceController.EXPECT().Get(gomock.Any(), gomock.Any()).Return(&v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        nsName,
+			Annotations: map[string]string{"field.cattle.io/allow-fleetworkspace-creation-for-existing-namespace": "false"},
+		},
+	}, nil)
 
 	return Mutator{
 		namespaces: mockNamespaceController,

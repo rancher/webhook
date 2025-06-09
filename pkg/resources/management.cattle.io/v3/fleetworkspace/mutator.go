@@ -21,7 +21,13 @@ import (
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 )
 
-const k8sManagedLabel = "app.kubernetes.io/managed-by"
+const (
+	k8sManagedLabel = "app.kubernetes.io/managed-by"
+
+	// AllowFleetWorkspaceCreationForExistingNamespaceAnn is an annotation key to indicate that a fleet workspace may be created
+	// for a namespace that already exists.
+	AllowFleetWorkspaceCreationForExistingNamespaceAnn = "field.cattle.io/allow-fleetworkspace-creation-for-existing-namespace"
+)
 
 var (
 	fleetAdminRole = "fleetworkspace-admin"
@@ -101,7 +107,7 @@ func (m *Mutator) Admit(request *admission.Request) (*admissionv1.AdmissionRespo
 		if err != nil {
 			return nil, fmt.Errorf("failed to get fleetworkspace namespace '%s': %w", fw.Name, err)
 		}
-		if ns.Labels[k8sManagedLabel] != "rancher" {
+		if !(ns.Labels[k8sManagedLabel] == "rancher" || (ns.Annotations != nil && ns.Annotations[AllowFleetWorkspaceCreationForExistingNamespaceAnn] == "true")) {
 			return admission.ResponseBadRequest(fmt.Sprintf("namespace '%s' already exists", fw.Name)), nil
 		}
 		cr, err := m.clusterroles.Cache().Get(fleetAdminRole)
