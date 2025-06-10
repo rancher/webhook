@@ -34,7 +34,7 @@ helm upgrade \
     --version "$VERSION" \
     --set replicas=1 \
     --set hostname=localhost \
-    --set rancherImage=rancher/rancher \
-    --set rancherImageTag="$RANCHER_IMAGE_TAG" \
+    --set rancherImage=joshmeranda/rancher \
+    --set rancherImageTag=dev-head \
     --set 'extraEnv[0].name=CATTLE_RANCHER_WEBHOOK_VERSION' \
     --set "extraEnv[0].value="
