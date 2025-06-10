@@ -82,7 +82,7 @@ jobs:
         run: |
           kubectl get pods
           kubectl -n cattle-system get pods
-          kubectl -n cattle-system describes pods
+          kubectl -n cattle-system describe pods
           kubectl -n cattle-system logs -l app=rancher
         env:
           CHART_PATH: "${{ runner.temp }}/rancher.tgz"
