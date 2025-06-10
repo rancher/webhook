@@ -207,7 +207,7 @@ func Test_Admit(t *testing.T) {
 				Username: "new-username",
 			},
 			requestUserName: requesterUserName,
-			resolverRulesFor: func(s string) ([]rbacv1.PolicyRule, error) {
+			resolverRulesFor: func(string) ([]rbacv1.PolicyRule, error) {
 				return getPods, nil
 			},
 			allowed: false,
@@ -221,7 +221,7 @@ func Test_Admit(t *testing.T) {
 			},
 			newUser:         defaultUser.DeepCopy(),
 			requestUserName: requesterUserName,
-			resolverRulesFor: func(s string) ([]rbacv1.PolicyRule, error) {
+			resolverRulesFor: func(string) ([]rbacv1.PolicyRule, error) {
 				return getPods, nil
 			},
 			allowed: true,
@@ -235,7 +235,7 @@ func Test_Admit(t *testing.T) {
 				},
 			},
 			requestUserName: requesterUserName,
-			resolverRulesFor: func(s string) ([]rbacv1.PolicyRule, error) {
+			resolverRulesFor: func(string) ([]rbacv1.PolicyRule, error) {
 				return getPods, nil
 			},
 			allowed: false,
