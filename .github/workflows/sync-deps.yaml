@@ -33,7 +33,7 @@ jobs:
             secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATE_KEY
 
       # Fetch github token just for the webhook repository
-      - uses: actions/create-github-app-token@v1
+      - uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
         id: app-token
         with:
           app-id: ${{ env.APP_ID }}
