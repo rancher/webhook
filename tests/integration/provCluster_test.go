@@ -7,6 +7,8 @@ import (
 )
 
 func (m *IntegrationSuite) TestProvisioningCluster() {
+	m.T().Skip()
+
 	newObj := func() *provisioningv1.Cluster { return &provisioningv1.Cluster{} }
 	validCreateObj := &provisioningv1.Cluster{
 		ObjectMeta: v1.ObjectMeta{

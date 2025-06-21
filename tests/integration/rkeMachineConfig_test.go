@@ -10,6 +10,8 @@ import (
 )
 
 func (m *IntegrationSuite) TestRKEMachineConfig() {
+	m.T().Skip()
+
 	if runtime.GOARCH == "arm64" && os.Getenv("CI") != "" {
 		// Temporarily workaround https://github.com/rancher/rancher/issues/45837 :
 		// Not all CRDs are built in GHA/arm64

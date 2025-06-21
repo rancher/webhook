@@ -192,8 +192,7 @@ func (m *IntegrationSuite) deleteObj(obj Object, objGVK schema.GroupVersionKind)
 		err = client.Delete(context.TODO(), obj.GetNamespace(), obj.GetName(), v1.DeleteOptions{})
 		m.Require().NoError(err, "failed to delete obj")
 
-		namespaceResult := &corev1.Namespace{}
-		err := client.Get(context.TODO(), obj.GetNamespace(), obj.GetName(), namespaceResult, metav1.GetOptions{})
+		err := client.Get(context.TODO(), obj.GetNamespace(), obj.GetName(), nil, metav1.GetOptions{})
 		return apierrors.IsNotFound(err), nil
 	})
 

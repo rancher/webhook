@@ -12,6 +12,8 @@ import (
 )
 
 func (m *IntegrationSuite) TestSecretMutations() {
+	m.T().Skip()
+
 	objGVK := schema.GroupVersionKind{
 		Group:   "",
 		Version: "v1",

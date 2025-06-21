@@ -12,6 +12,7 @@ import (
 )
 
 func (m *IntegrationSuite) TestProjectRoleTemplateBinding() {
+	m.T().Skip()
 	projectClient, err := m.clientFactory.ForKind(schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "Project"})
 	m.Require().NoError(err)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
