@@ -20,10 +20,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -184,8 +187,17 @@ func (m *IntegrationSuite) deleteObj(obj Object, objGVK schema.GroupVersionKind)
 	}
 	client, err := m.clientFactory.ForKind(objGVK)
 	m.Require().NoError(err, "failed to create client")
-	err = client.Delete(context.Background(), obj.GetNamespace(), obj.GetName(), v1.DeleteOptions{})
-	m.Require().NoError(err, "failed to delete obj")
+
+	wait.PollUntilContextTimeout(context.Background(), 1*time.Second, 30*time.Second, true, func(context.Context) (bool, error) {
+		err = client.Delete(context.TODO(), obj.GetNamespace(), obj.GetName(), v1.DeleteOptions{})
+		m.Require().NoError(err, "failed to delete obj")
+
+		namespaceResult := &corev1.Namespace{}
+		err := client.Get(context.TODO(), obj.GetNamespace(), obj.GetName(), namespaceResult, metav1.GetOptions{})
+		return apierrors.IsNotFound(err), nil
+	})
+
+	logrus.Info("Deleted the namespace with error: ", err)
 }
 
 func (m *IntegrationSuite) createObj(obj Object, objGVK schema.GroupVersionKind) {
@@ -199,5 +211,6 @@ func (m *IntegrationSuite) createObj(obj Object, objGVK schema.GroupVersionKind)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancel()
 	err = client.Create(ctx, obj.GetNamespace(), obj, nil, v1.CreateOptions{})
+	logrus.Info("Created the namespace with error: ", err)
 	m.Require().NoError(err, "failed to create obj")
 }
