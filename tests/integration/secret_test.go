@@ -28,7 +28,7 @@ func (m *IntegrationSuite) TestSecretMutations() {
 			secret: &v1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cloud-credential-secret",
-					Namespace: testNamespace,
+					Namespace: m.testnamespace,
 				},
 				Type: v1.SecretType("provisioning.cattle.io/cloud-credential"),
 			},
@@ -39,7 +39,7 @@ func (m *IntegrationSuite) TestSecretMutations() {
 			secret: &v1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-opaque-secret",
-					Namespace: testNamespace,
+					Namespace: m.testnamespace,
 				},
 				Type: v1.SecretTypeOpaque,
 				StringData: map[string]string{
@@ -118,7 +118,7 @@ func (m *IntegrationSuite) TestSecretDeleteMutation() {
 	testSecret := &v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-delete-secret",
-			Namespace: testNamespace,
+			Namespace: m.testnamespace,
 		},
 		Type: v1.SecretTypeOpaque,
 		StringData: map[string]string{
@@ -135,7 +135,7 @@ func (m *IntegrationSuite) TestSecretDeleteMutation() {
 	testRole := &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-secret-role",
-			Namespace: testNamespace,
+			Namespace: m.testnamespace,
 		},
 		Rules: []rbacv1.PolicyRule{
 			{
@@ -155,7 +155,7 @@ func (m *IntegrationSuite) TestSecretDeleteMutation() {
 	testRoleBinding := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-secret-rolebinding",
-			Namespace: testNamespace,
+			Namespace: m.testnamespace,
 			OwnerReferences: []metav1.OwnerReference{
 				{
 					APIVersion: "v1",

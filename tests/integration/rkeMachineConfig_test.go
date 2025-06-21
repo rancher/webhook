@@ -23,7 +23,7 @@ func (m *IntegrationSuite) TestRKEMachineConfig() {
 	newObj := func() *unstructured.Unstructured { return &unstructured.Unstructured{} }
 	validCreateObj := &unstructured.Unstructured{}
 	validCreateObj.SetName("test-rke.machine")
-	validCreateObj.SetNamespace(testNamespace)
+	validCreateObj.SetNamespace(m.testnamespace)
 	validCreateObj.SetGroupVersionKind(objGVK)
 	invalidUpdate := func(_ *unstructured.Unstructured) *unstructured.Unstructured {
 		invalidUpdateObj := validCreateObj.DeepCopy()

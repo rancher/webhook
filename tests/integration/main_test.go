@@ -28,13 +28,13 @@ import (
 )
 
 const (
-	testNamespace = "foo"
-	testUser      = "test-user"
+	testUser = "test-user"
 )
 
 type IntegrationSuite struct {
 	suite.Suite
 	clientFactory client.SharedClientFactory
+	testnamespace string
 }
 
 func TestIntegrationTest(t *testing.T) {
@@ -54,9 +54,14 @@ func (m *IntegrationSuite) SetupSuite() {
 	schemes.Register(provisioningv1.AddToScheme)
 	schemes.Register(corev1.AddToScheme)
 
+}
+
+func (m *IntegrationSuite) SetupTest() {
+	m.testnamespace = fmt.Sprintf("test-ns-%d", time.Now().UnixNano())
+
 	ns := &corev1.Namespace{
 		ObjectMeta: v1.ObjectMeta{
-			Name: testNamespace,
+			Name: m.testnamespace,
 		},
 	}
 	m.createObj(ns, schema.GroupVersionKind{
@@ -66,10 +71,10 @@ func (m *IntegrationSuite) SetupSuite() {
 	})
 }
 
-func (m *IntegrationSuite) TearDownSuite() {
+func (m *IntegrationSuite) TearDownTest() {
 	ns := &corev1.Namespace{
 		ObjectMeta: v1.ObjectMeta{
-			Name: testNamespace,
+			Name: m.testnamespace,
 		},
 	}
 	m.deleteObj(ns, schema.GroupVersionKind{
