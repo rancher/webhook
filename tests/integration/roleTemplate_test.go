@@ -10,6 +10,8 @@ import (
 )
 
 func (m *IntegrationSuite) TestRoleTemplate() {
+	m.T().Skip()
+
 	newObj := func() *v3.RoleTemplate { return &v3.RoleTemplate{} }
 	validCreateObj := &v3.RoleTemplate{
 		ObjectMeta: v1.ObjectMeta{

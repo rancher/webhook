@@ -75,8 +75,13 @@ set -e
 helm upgrade rancher-webhook ./dist/artifacts/rancher-webhook-${HELM_CHART_VERSION}.tgz -n cattle-system \
     --wait --reuse-values --set port=443
 
+kubectl get ns
+
 # Test that the ports are set as expected and run a single integration test to verify the webhook is still accessible.
 ./bin/rancher-webhook-integration.test -test.v -test.run PortTest
+
+kubectl get ns
+
 ./bin/rancher-webhook-integration.test -test.v -test.run IntegrationTest -testify.m TestGlobalRole
 
 # Scale down rancher-webhook so that we can run tests on the FailurePolicy.
