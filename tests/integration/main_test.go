@@ -184,9 +184,7 @@ func (m *IntegrationSuite) deleteObj(obj Object, objGVK schema.GroupVersionKind)
 	}
 	client, err := m.clientFactory.ForKind(objGVK)
 	m.Require().NoError(err, "failed to create client")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
-	defer cancel()
-	err = client.Delete(ctx, obj.GetNamespace(), obj.GetName(), v1.DeleteOptions{})
+	err = client.Delete(context.Background(), obj.GetNamespace(), obj.GetName(), v1.DeleteOptions{})
 	m.Require().NoError(err, "failed to delete obj")
 }
 
