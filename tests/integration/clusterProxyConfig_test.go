@@ -18,7 +18,7 @@ func (m *IntegrationSuite) TestClusterProxyConfig() {
 		Kind:    "ClusterProxyConfig",
 	}
 	cpcName := "testclusterproxyconfig"
-	validCreateObj := getObjectToCreate(cpcName)
+	validCreateObj := getObjectToCreate(cpcName, m.testnamespace)
 	client, err := m.clientFactory.ForKind(objGVK)
 	m.Require().NoError(err, "Failed to create client")
 	result := &v3.ClusterProxyConfig{}
@@ -43,7 +43,7 @@ func (m *IntegrationSuite) TestClusterProxyConfig() {
 	m.Require().True(ok, "The CPC watcher closed before it sent any notifications")
 	m.Require().EqualValues(receivedEvent.Object.GetObjectKind().GroupVersionKind().Kind, "ClusterProxyConfig")
 
-	secondCPC := getObjectToCreate("anotherclusterproxyconfig")
+	secondCPC := getObjectToCreate("anotherclusterproxyconfig", m.testnamespace)
 	// Attempting to create another CPC in the same namespace should fail
 	err = client.Create(ctx, validCreateObj.Namespace, secondCPC, result, metav1.CreateOptions{})
 	m.Error(err, "Error was not returned when attempting to create a second clusterProxyConfig")
@@ -51,11 +51,11 @@ func (m *IntegrationSuite) TestClusterProxyConfig() {
 	m.NoError(err, "Error returned during the deletion of a clusterProxyConfig")
 }
 
-func getObjectToCreate(name string) *v3.ClusterProxyConfig {
+func getObjectToCreate(name, namespace string) *v3.ClusterProxyConfig {
 	return &v3.ClusterProxyConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: testNamespace,
+			Namespace: namespace,
 		},
 		Enabled: true,
 	}

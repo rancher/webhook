@@ -11,7 +11,7 @@ func (m *IntegrationSuite) TestProvisioningCluster() {
 	validCreateObj := &provisioningv1.Cluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-cluster",
-			Namespace: testNamespace,
+			Namespace: m.testnamespace,
 		},
 	}
 	invalidCreate := func() *provisioningv1.Cluster {
