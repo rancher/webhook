@@ -5,7 +5,7 @@ go 1.24.0
 toolchain go1.24.2
 
 replace (
-	github.com/rancher/rke => github.com/rancher/rke v1.7.2
+	github.com/rancher/rke => github.com/rancher/rke v1.8.4
 	k8s.io/api => k8s.io/api v0.33.1
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.33.1
 	k8s.io/apimachinery => k8s.io/apimachinery v0.33.1
@@ -45,7 +45,7 @@ require (
 	github.com/rancher/dynamiclistener v0.7.0
 	github.com/rancher/lasso v0.2.3-rc3
 	github.com/rancher/rancher/pkg/apis v0.0.0-20250624062103-8bf56b046af7
-	github.com/rancher/rke v1.8.0-rc.4
+	github.com/rancher/rke v1.8.4
 	github.com/rancher/wrangler/v3 v3.2.2-rc.3
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.3
