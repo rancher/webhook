@@ -52,7 +52,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/mock v0.5.2
 	golang.org/x/text v0.26.0
-	golang.org/x/tools v0.33.0
+	golang.org/x/tools v0.34.0
 	k8s.io/api v0.33.1
 	k8s.io/apimachinery v0.33.1
 	k8s.io/apiserver v0.33.1
