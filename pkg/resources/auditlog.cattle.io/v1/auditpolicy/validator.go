@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/rancher/rancher/pkg/apis/auditlog.cattle.io/jsonpath"
+	jsonpath "github.com/rancher/jsonpath/pkg"
 	auditlogv1 "github.com/rancher/rancher/pkg/apis/auditlog.cattle.io/v1"
 	"github.com/rancher/webhook/pkg/admission"
 	v1 "github.com/rancher/webhook/pkg/generated/objects/auditlog.cattle.io/v1"
