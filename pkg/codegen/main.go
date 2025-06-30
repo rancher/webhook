@@ -9,6 +9,7 @@ import (
 	"strings"
 	"text/template"
 
+	auditlogv1 "github.com/rancher/rancher/pkg/apis/auditlog.cattle.io/v1"
 	catalogv1 "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
@@ -109,7 +110,13 @@ func main() {
 				&rbacv1.ClusterRole{},
 				&rbacv1.ClusterRoleBinding{},
 			},
-		}}); err != nil {
+		},
+		"auditlog.cattle.io": {
+			Types: []interface{}{
+				&auditlogv1.AuditPolicy{},
+			},
+		},
+	}); err != nil {
 		fmt.Printf("ERROR: %v\n", err)
 	}
 }
