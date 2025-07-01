@@ -5,6 +5,7 @@ import (
 	"github.com/rancher/webhook/pkg/clients"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/resolvers"
+	auditpolicy "github.com/rancher/webhook/pkg/resources/auditlog.cattle.io/v1/auditpolicy"
 	"github.com/rancher/webhook/pkg/resources/catalog.cattle.io/v1/clusterrepo"
 	"github.com/rancher/webhook/pkg/resources/cluster.cattle.io/v3/clusterauthtoken"
 	nshandler "github.com/rancher/webhook/pkg/resources/core/v1/namespace"
@@ -58,6 +59,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		machineconfig.NewValidator(),
 		nshandler.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews()),
 		clusterrepo.NewValidator(),
+		auditpolicy.NewValidator(),
 	}
 
 	if clients.MultiClusterManagement {
