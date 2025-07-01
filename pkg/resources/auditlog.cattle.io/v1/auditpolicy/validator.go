@@ -23,7 +23,7 @@ var gvr = schema.GroupVersionResource{
 
 var _ admission.ValidatingAdmissionHandler = &validator{}
 
-func NewValidator() *validator {
+func NewValidator() admission.ValidatingAdmissionHandler {
 	return &validator{}
 }
 
