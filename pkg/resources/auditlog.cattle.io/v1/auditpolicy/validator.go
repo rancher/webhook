@@ -1,4 +1,4 @@
-package v1
+package auditpolicy
 
 import (
 	"errors"
@@ -22,6 +22,10 @@ var gvr = schema.GroupVersionResource{
 }
 
 var _ admission.ValidatingAdmissionHandler = &validator{}
+
+func NewValidator() *validator {
+	return &validator{}
+}
 
 type validator struct {
 }
