@@ -151,11 +151,11 @@ func TestValidNoProxy(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name         string
-		oldCluster   *v1.Cluster
-		newCluster   *v1.Cluster
-		request      *admission.Request
-		failExpected bool
+		name       string
+		oldCluster *v1.Cluster
+		newCluster *v1.Cluster
+		request    *admission.Request
+		expected   bool
 	}{
 		{
 			name: "valid cluster create operation",
@@ -174,7 +174,7 @@ func TestValidNoProxy(t *testing.T) {
 					},
 				},
 			},
-			failExpected: false,
+			expected: true,
 		},
 		{
 			name: "valid cluster create operation lowercase",
@@ -193,7 +193,7 @@ func TestValidNoProxy(t *testing.T) {
 					},
 				},
 			},
-			failExpected: false,
+			expected: true,
 		},
 		{
 			name: "invalid cluster create operation",
@@ -212,7 +212,7 @@ func TestValidNoProxy(t *testing.T) {
 					},
 				},
 			},
-			failExpected: true,
+			expected: false,
 		},
 		{
 			name: "invalid cluster create operation lowercase",
@@ -231,13 +231,13 @@ func TestValidNoProxy(t *testing.T) {
 					},
 				},
 			},
-			failExpected: true,
+			expected: false,
 		},
 		{
 			name: "valid cluster update operation",
 			request: &admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation: admissionv1.Create,
+					Operation: admissionv1.Update,
 				},
 			},
 			oldCluster: &v1.Cluster{
@@ -255,13 +255,37 @@ func TestValidNoProxy(t *testing.T) {
 					},
 				},
 			},
-			failExpected: false,
+			expected: true,
+		},
+		{
+			name: "valid cluster update operation lowercase",
+			request: &admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Operation: admissionv1.Update,
+				},
+			},
+			oldCluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					AgentEnvVars: []rkev1.EnvVar{},
+				},
+			},
+			newCluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					AgentEnvVars: []rkev1.EnvVar{
+						{
+							Name:  "no_proxy",
+							Value: "valid,value",
+						},
+					},
+				},
+			},
+			expected: true,
 		},
 		{
 			name: "valid cluster update operation",
 			request: &admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation: admissionv1.Create,
+					Operation: admissionv1.Update,
 				},
 			},
 			oldCluster: &v1.Cluster{
@@ -284,13 +308,13 @@ func TestValidNoProxy(t *testing.T) {
 					},
 				},
 			},
-			failExpected: false,
+			expected: true,
 		},
 		{
 			name: "valid malformed cluster update operation",
 			request: &admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation: admissionv1.Create,
+					Operation: admissionv1.Update,
 				},
 			},
 			oldCluster: &v1.Cluster{
@@ -313,13 +337,13 @@ func TestValidNoProxy(t *testing.T) {
 					},
 				},
 			},
-			failExpected: false,
+			expected: true,
 		},
 		{
 			name: "invalid cluster update operation",
 			request: &admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation: admissionv1.Create,
+					Operation: admissionv1.Update,
 				},
 			},
 			oldCluster: &v1.Cluster{
@@ -337,13 +361,37 @@ func TestValidNoProxy(t *testing.T) {
 					},
 				},
 			},
-			failExpected: true,
+			expected: false,
+		},
+		{
+			name: "invalid cluster update operation lowercase",
+			request: &admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Operation: admissionv1.Update,
+				},
+			},
+			oldCluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					AgentEnvVars: []rkev1.EnvVar{},
+				},
+			},
+			newCluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					AgentEnvVars: []rkev1.EnvVar{
+						{
+							Name:  "no_proxy",
+							Value: "new, bad, value",
+						},
+					},
+				},
+			},
+			expected: false,
 		},
 		{
 			name: "invalid cluster update operation",
 			request: &admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
-					Operation: admissionv1.Create,
+					Operation: admissionv1.Update,
 				},
 			},
 			oldCluster: &v1.Cluster{
@@ -366,31 +414,40 @@ func TestValidNoProxy(t *testing.T) {
 					},
 				},
 			},
-			failExpected: true,
+			expected: false,
 		},
 	}
 
 	for _, tst := range tests {
+		tst := tst
 		t.Run(tst.name, func(t *testing.T) {
 			resp := validateHTTPNoProxyVariable(tst.request, tst.oldCluster, tst.newCluster)
-			if resp.Allowed && tst.failExpected {
-				t.Log("Invalid NO_PROXY environment variable operation allowed")
-				switch tst.request.Operation {
-				case admissionv1.Create:
-					if len(tst.newCluster.Spec.AgentEnvVars) > 0 {
-						t.Logf("Expected error when providing NO_PROXY value of '%s'", tst.newCluster.Spec.AgentEnvVars[0].Value)
-					}
-				case admissionv1.Update:
-					var oldValue, newValue string
-					if len(tst.newCluster.Spec.AgentEnvVars) > 0 {
-						newValue = tst.newCluster.Spec.AgentEnvVars[0].Value
-					}
-					if len(tst.oldCluster.Spec.AgentEnvVars) > 0 {
-						oldValue = tst.oldCluster.Spec.AgentEnvVars[0].Value
-					}
+
+			var oldValue, newValue string
+			if tst.newCluster != nil && len(tst.newCluster.Spec.AgentEnvVars) > 0 {
+				newValue = tst.newCluster.Spec.AgentEnvVars[0].Value
+			}
+			if tst.oldCluster != nil && len(tst.oldCluster.Spec.AgentEnvVars) > 0 {
+				oldValue = tst.oldCluster.Spec.AgentEnvVars[0].Value
+			}
+
+			if (resp.Result == nil || resp.Result.Status != failureStatus) && !tst.expected {
+				if oldValue == "" && newValue != "" {
+					t.Logf("Expected error when providing NO_PROXY value of '%s'", newValue)
+				}
+				if oldValue != "" && newValue != "" {
 					t.Logf("Expected error when updating from old value of '%s' to new value of '%s'", oldValue, newValue)
 				}
+				t.Fail()
+			}
 
+			if (resp.Result != nil && resp.Result.Status == failureStatus) && tst.expected {
+				if oldValue == "" && newValue != "" {
+					t.Logf("Encountered unexpected error when providing NO_PROXY value of '%s'", newValue)
+				}
+				if oldValue != "" && newValue != "" {
+					t.Logf("Encountered unexpected error when updating from old value of '%s' to new value of '%s'", oldValue, newValue)
+				}
 				t.Fail()
 			}
 		})
