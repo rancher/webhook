@@ -139,6 +139,10 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 			return response, err
 		}
 
+		if response = validateHTTPNoProxyVariable(request, oldCluster, cluster); !response.Allowed {
+			return response, nil
+		}
+
 		if response = p.validateDataDirectories(request, oldCluster, cluster); !response.Allowed {
 			return response, err
 		}
@@ -406,6 +410,29 @@ func (p *provisioningAdmitter) validateClusterName(request *admission.Request, r
 	}
 
 	return nil
+}
+
+func validateHTTPNoProxyVariable(request *admission.Request, oldCluster, newCluster *v1.Cluster) *admissionv1.AdmissionResponse {
+	switch request.Operation {
+	case admissionv1.Create:
+		proxyValue := retrieveNoProxy(newCluster)
+		if proxyValue != "" && strings.Contains(proxyValue, " ") {
+			return admission.ResponseBadRequest("Malformed NO_PROXY environment variable value format: detected whitespace in value. Value must be a comma-delimited string with no spaces containing one or more IP address prefixes (1.2.3.4, 1.2.3.4:80), IP address prefixes in CIDR notation (1.2.3.4/8), domain names, or special DNS labels (*)")
+		}
+	case admissionv1.Update:
+		// Block updating existing clusters with a malformed NO_PROXY, but
+		// don't block existing clusters which already have a malformed value.
+		oldProxyValue := retrieveNoProxy(oldCluster)
+		newProxyValue := retrieveNoProxy(newCluster)
+
+		alreadyHadSpaces := oldProxyValue != "" && strings.Contains(oldProxyValue, " ")
+		currentlyContainsSpaces := newProxyValue != "" && strings.Contains(newProxyValue, " ")
+		if !alreadyHadSpaces && currentlyContainsSpaces {
+			return admission.ResponseBadRequest("Malformed NO_PROXY environment variable value format: detected whitespace in value. Value must be a comma-delimited string with no spaces containing one or more IP address prefixes (1.2.3.4, 1.2.3.4:80), IP address prefixes in CIDR notation (1.2.3.4/8), domain names, or special DNS labels (*)")
+		}
+	}
+
+	return admission.ResponseAllowed()
 }
 
 func (p *provisioningAdmitter) validateMachinePoolNames(request *admission.Request, response *admissionv1.AdmissionResponse, cluster *v1.Cluster) error {
@@ -862,4 +889,16 @@ func isValidName(clusterName, clusterNamespace string, clusterExists bool) bool 
 	// be limited to 63 characters instead. Additionally, a provisioning cluster with a name that does not conform to
 	// RFC-1123 will fail to deploy required fleet components and should not be accepted.
 	return len(clusterName) <= 63 && fleetNameRegex.MatchString(clusterName)
+}
+
+func retrieveNoProxy(cluster *v1.Cluster) string {
+	if cluster == nil {
+		return ""
+	}
+	for _, envVar := range cluster.Spec.AgentEnvVars {
+		if strings.ToLower(envVar.Name) == "no_proxy" {
+			return envVar.Value
+		}
+	}
+	return ""
 }

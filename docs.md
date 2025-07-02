@@ -558,6 +558,11 @@ The annotation `field.cattle.io/creatorId` must be set to the Username of the Us
 
 If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` cannot be set.
 
+##### NO_PROXY value
+
+Prevent the creation of new objects with an env var (under `spec.agentEnvVars`) with a name of `NO_PROXY` if its value contains one or more spaces. This ensures that the provided value adheres to
+the format expected by Go, and helps to prevent subtle issues elsewhere when writing scripts which utilize `NO_PROXY`.  
+
 ##### Data Directories
 
 Prevent the creation of new objects with an env var (under `spec.agentEnvVars`) with a name of `CATTLE_AGENT_VAR_DIR`.
@@ -618,6 +623,13 @@ Both `minAvailable` and `maxUnavailable` must be a string which represents a non
 ```regex
 ^([0-9]|[1-9][0-9]|100)%$
 ```
+
+##### NO_PROXY value
+
+Prevent the update of objects with an env var (under `spec.agentEnvVars`) with a name of `NO_PROXY` if its value contains one or more spaces. This ensures that the provided value adheres to
+the format expected by Go, and helps to prevent subtle issues elsewhere when writing scripts which utilize `NO_PROXY`.  
+
+The only exception to this check is if the existing cluster already has a `NO_PROXY` variable which includes spaces in its value. In this case, update operations are permitted. If `NO_PROXY` is later updated to value which does not contain spaces, this exception will no longer occur.
 
 ### Mutation Checks
 
