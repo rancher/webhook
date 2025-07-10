@@ -1,8 +1,8 @@
 module github.com/rancher/webhook
 
-go 1.23.4
+go 1.24.0
 
-toolchain go1.23.6
+toolchain go1.24.5
 
 replace (
 	k8s.io/api => k8s.io/api v0.32.1
@@ -42,7 +42,7 @@ require (
 	github.com/go-ldap/ldap/v3 v3.4.10
 	github.com/gorilla/mux v1.8.1
 	github.com/rancher/dynamiclistener v0.6.2
-	github.com/rancher/lasso v0.2.2
+	github.com/rancher/lasso v0.2.3
 	github.com/rancher/rancher/pkg/apis v0.0.0-20250620090016-c2b3e04867a6
 	github.com/rancher/rke v1.8.4
 	github.com/rancher/wrangler/v3 v3.2.1
@@ -52,8 +52,8 @@ require (
 	go.uber.org/mock v0.5.2
 	golang.org/x/text v0.25.0
 	golang.org/x/tools v0.31.0
-	k8s.io/api v0.32.4
-	k8s.io/apimachinery v0.32.4
+	k8s.io/api v0.33.1
+	k8s.io/apimachinery v0.33.1
 	k8s.io/apiserver v0.32.2
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/kubernetes v1.32.1
@@ -168,10 +168,11 @@ require (
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kms v0.32.1 // indirect
 	k8s.io/kube-aggregator v0.32.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f // indirect
+	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff // indirect
 	k8s.io/kubelet v0.0.0 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.0 // indirect
 	sigs.k8s.io/cluster-api v1.9.5 // indirect
 	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.4.3 // indirect
+	sigs.k8s.io/randfill v1.0.0 // indirect
+	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
 )
