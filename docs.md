@@ -524,6 +524,12 @@ When a user is updated or deleted, a check occurs to ensure that the user making
 
 If the user making the request has the verb `manage-users` for the resource `users`, then it is allowed to bypass the check. Note that the wildcard `*` includes the `manage-users` verb.
 
+#### Invalid Fields - Update
+
+Users can update the following fields if they had not been set. But after getting initial values, the fields cannot be changed:
+
+- UserName
+
 ## UserAttribute
 
 ### Validation Checks

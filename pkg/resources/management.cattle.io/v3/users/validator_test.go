@@ -35,6 +35,7 @@ var (
 		ObjectMeta: metav1.ObjectMeta{
 			Name: defaultUserName,
 		},
+		Username: defaultUserName,
 	}
 	getPods = []rbacv1.PolicyRule{
 		{
@@ -193,6 +194,49 @@ func Test_Admit(t *testing.T) {
 					return starPods, nil
 				}
 				return nil, fmt.Errorf("unexpected error")
+			},
+			allowed: false,
+		},
+		{
+			name:    "changing the username not allowed",
+			oldUser: defaultUser.DeepCopy(),
+			newUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: defaultUserName,
+				},
+				Username: "new-username",
+			},
+			requestUserName: requesterUserName,
+			resolverRulesFor: func(string) ([]rbacv1.PolicyRule, error) {
+				return getPods, nil
+			},
+			allowed: false,
+		},
+		{
+			name: "adding a new username allowed",
+			oldUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: defaultUserName,
+				},
+			},
+			newUser:         defaultUser.DeepCopy(),
+			requestUserName: requesterUserName,
+			resolverRulesFor: func(string) ([]rbacv1.PolicyRule, error) {
+				return getPods, nil
+			},
+			allowed: true,
+		},
+		{
+			name:    "removing username not allowed",
+			oldUser: defaultUser.DeepCopy(),
+			newUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: defaultUserName,
+				},
+			},
+			requestUserName: requesterUserName,
+			resolverRulesFor: func(string) ([]rbacv1.PolicyRule, error) {
+				return getPods, nil
 			},
 			allowed: false,
 		},
