@@ -46,7 +46,7 @@ jobs:
         run: |
           mkdir -p "${{ runner.temp}}"
           pushd "${{ runner.temp}}"
-          git clone --depth 1 -b main https://github.com/rancher/rancher.git rancherDir
+          git clone --depth 1 -b release/v2.12 https://github.com/rancher/rancher.git rancherDir
           cd rancherDir
           ./scripts/chart/build chart
           tar cfz "${{ runner.temp }}/rancher.tgz" -C build/chart/rancher .
@@ -74,8 +74,8 @@ jobs:
         run: ./.github/workflows/scripts/start-rancher.sh
         env:
           CHART_PATH: "${{ runner.temp }}/rancher.tgz"
-          RANCHER_IMAGE_TAG: "head"
-          VERSION: "main"
+          RANCHER_IMAGE_TAG: "v2.12-head"
+          VERSION: "release/v2.12"
 
       - name: get vars
         run: cat dist/image_tag >> $GITHUB_ENV
