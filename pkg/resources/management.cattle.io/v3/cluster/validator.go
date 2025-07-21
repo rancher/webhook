@@ -508,10 +508,6 @@ func (a *admitter) validateVersionManagementFeature(oldCluster, newCluster *apis
 
 	if driver != apisv3.ClusterDriverRke2 && driver != apisv3.ClusterDriverK3s {
 		response := admission.ResponseAllowed()
-		if exist {
-			msg := fmt.Sprintf("The annotation [%s] takes effect only on imported RKE2/K3s cluster, please consider removing it from cluster [%s]", VersionManagementAnno, newCluster.Name)
-			response.Warnings = append(response.Warnings, msg)
-		}
 		return response, nil
 	}
 
