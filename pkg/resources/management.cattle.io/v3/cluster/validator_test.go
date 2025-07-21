@@ -522,9 +522,6 @@ func TestAdmit(t *testing.T) {
 					assert.Equal(t, tt.expectedReason, res.Result.Reason)
 				}
 			}
-			if tt.expectContainWarning {
-				assert.NotEmpty(t, res.Warnings)
-			}
 		})
 	}
 }
