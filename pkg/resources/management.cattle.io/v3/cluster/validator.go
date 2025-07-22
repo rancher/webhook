@@ -495,9 +495,9 @@ func getSchedulingCustomization(cluster *apisv3.Cluster) *apisv3.AgentScheduling
 }
 
 // validateVersionManagementFeature validates the annotation for the version management feature is set with valid value on the imported RKE2/K3s cluster,
-// additionally, it permits but include a warning to the response if either of the following is true:
-//   - the annotation is found on a cluster rather than imported RKE2/K3s cluster;
-//   - the spec.rke2Config or spec.k3sConfig is changed when the version management feature is disabled for the cluster.
+// additionally, it permits to the response if either of the following is true:
+//   - the annotation is found on a cluster rather than imported RKE2/K3s cluster (does not takes effect);
+//   - the spec.rke2Config or spec.k3sConfig is changed when the version management feature is disabled for the cluster (emits a warning).
 func (a *admitter) validateVersionManagementFeature(oldCluster, newCluster *apisv3.Cluster, op admissionv1.Operation) (*admissionv1.AdmissionResponse, error) {
 	if op != admissionv1.Create && op != admissionv1.Update {
 		return admission.ResponseAllowed(), nil
