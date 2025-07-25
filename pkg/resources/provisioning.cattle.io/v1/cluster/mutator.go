@@ -42,6 +42,7 @@ const (
 	mountPath = "/etc/rancher/%s/config/rancher-psact.yaml"
 
 	controlPlaneRoleLabel            = "rke.cattle.io/control-plane-role"
+	backupLabel                      = "resources.cattle.io/backup"
 	secretAnnotation                 = "rke.cattle.io/object-authorized-for-clusters"
 	allowDynamicSchemaDropAnnotation = "provisioning.cattle.io/allow-dynamic-schema-drop"
 	runtimeK3S                       = "k3s"
@@ -316,6 +317,9 @@ func (m *ProvisioningClusterMutator) ensureSecret(namespace, name string, data m
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Labels: map[string]string{
+				backupLabel: "true",
+			},
 		},
 		Data: data,
 		Type: corev1.SecretTypeOpaque,
