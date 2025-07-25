@@ -505,6 +505,7 @@ func machineSelectorFile2() rkev1.RKEProvisioningFiles {
 		MachineLabelSelector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
 				controlPlaneRoleLabel: "true",
+				backupLabel:           "true",
 			},
 		},
 		FileSources: []rkev1.ProvisioningFileSource{
@@ -530,6 +531,7 @@ func machineSelectorFile1() rkev1.RKEProvisioningFiles {
 		MachineLabelSelector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{
 				controlPlaneRoleLabel: "true",
+				backupLabel:           "true",
 			},
 		},
 		FileSources: []rkev1.ProvisioningFileSource{
