@@ -14,7 +14,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apiserver/pkg/authentication/user"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
@@ -82,27 +81,26 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	if hasManageUsers {
 		return &admissionv1.AdmissionResponse{Allowed: true}, nil
 	}
-
-	oldUser, newUser, err := objectsv3.UserOldAndNewFromRequest(&request.AdmissionRequest)
+	userObj, err := objectsv3.UserFromRequest(&request.AdmissionRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get current User from request: %w", err)
 	}
 
 	// Need the UserAttribute to find the groups
-	userAttribute, err := a.userAttributeCache.Get(oldUser.Name)
+	userAttribute, err := a.userAttributeCache.Get(userObj.Name)
 	if err != nil && !apierrors.IsNotFound(err) {
-		return nil, fmt.Errorf("failed to get UserAttribute for %s: %w", oldUser.Name, err)
+		return nil, fmt.Errorf("failed to get UserAttribute for %s: %w", userObj.Name, err)
 	}
 
 	userInfo := &user.DefaultInfo{
-		Name:   oldUser.Name,
+		Name:   userObj.Name,
 		Groups: getGroupsFromUserAttribute(userAttribute),
 	}
 
 	// Get all rules for the user being modified
 	rules, err := a.resolver.RulesFor(context.Background(), userInfo, "")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get rules for user %v: %w", oldUser, err)
+		return nil, fmt.Errorf("failed to get rules for user %v: %w", userObj, err)
 	}
 
 	// Ensure that rules of the user being modified aren't greater than the rules of the user making the request
@@ -117,14 +115,6 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 			},
 		}, nil
 	}
-
-	fieldPath := field.NewPath("user")
-	if request.Operation == admissionv1.Update {
-		if err := validateUpdateFields(oldUser, newUser, fieldPath); err != nil {
-			return admission.ResponseBadRequest(err.Error()), nil
-		}
-	}
-
 	return &admissionv1.AdmissionResponse{Allowed: true}, nil
 }
 
@@ -142,13 +132,4 @@ func getGroupsFromUserAttribute(userAttribute *v3.UserAttribute) []string {
 		}
 	}
 	return result
-}
-
-// validateUpdateFields
-func validateUpdateFields(oldUser, newUser *v3.User, fieldPath *field.Path) error {
-	const reason = "field is immutable"
-	if oldUser.Username != "" && oldUser.Username != newUser.Username {
-		return field.Invalid(fieldPath.Child("username"), newUser.Username, reason)
-	}
-	return nil
 }
