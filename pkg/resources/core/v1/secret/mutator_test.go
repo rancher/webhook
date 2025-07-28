@@ -3,10 +3,14 @@ package secret
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"testing"
 
+	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
+	ctrlv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/wrangler/v3/pkg/generic/fake"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -354,7 +358,7 @@ func TestMutatorAdmitOnDelete(t *testing.T) {
 				}).Times(1)
 			}
 
-			mutator := NewMutator(roleController, roleBindingController)
+			mutator := NewMutator(roleController, roleBindingController, nil, nil)
 			resp, err := mutator.Admit(&req)
 			if test.wantErr {
 				require.Error(t, err)
@@ -395,7 +399,7 @@ func TestMutatorAdmitOnCreate(t *testing.T) {
 	roleBindingController.EXPECT().Cache().Return(roleBindingCache).AnyTimes()
 	roleBindingCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
 
-	mutator := NewMutator(roleController, roleBindingController)
+	mutator := NewMutator(roleController, roleBindingController, nil, nil)
 
 	for _, test := range tests {
 		test := test
@@ -438,4 +442,269 @@ func addRoleRefToBinding(role rbacv1.Role, binding rbacv1.RoleBinding) *rbacv1.R
 		Name: role.Name,
 	}
 	return newBinding
+}
+
+func TestAdmitLocalUserPassword(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	rawSecret, err := json.Marshal(&corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-user",
+		},
+		Data: map[string][]byte{
+			"password": []byte("password"),
+		},
+	})
+	assert.NoError(t, err)
+	rawHashedSecret, err := json.Marshal(&corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-user",
+			Annotations: map[string]string{
+				passwordHashAnnotation: pbkdf2sha3512Hash,
+			},
+		},
+		Data: map[string][]byte{
+			"password": []byte("password"),
+		},
+	})
+	assert.NoError(t, err)
+	fakeUser := &v3.User{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-user",
+		},
+		Username: "test",
+	}
+	tests := map[string]struct {
+		request           *admission.Request
+		hasher            passwordHasher
+		mockSettingsCache func() ctrlv3.SettingCache
+		mockUserCache     func() ctrlv3.UserCache
+		wantAllowed       bool
+		wantPatch         string
+		wantErr           string
+	}{
+		"password is successfully hashed": {
+			request: &admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Namespace:       localUserPasswordsNamespace,
+					Kind:            secretGVK,
+					Resource:        secretGVR,
+					RequestKind:     &secretGVK,
+					RequestResource: &secretGVR,
+					UserInfo:        authenicationv1.UserInfo{Username: "test-user"},
+					Object: runtime.RawExtension{
+						Raw: rawSecret,
+					},
+				},
+			},
+			hasher: func(password string) ([]byte, []byte, error) {
+				return []byte("hashedPassword"), []byte("salt"), nil
+			},
+			mockSettingsCache: func() ctrlv3.SettingCache {
+				mock := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
+				mock.EXPECT().Get(passwordMinLengthSetting).Return(&v3.Setting{
+					Value: "5",
+				}, nil)
+
+				return mock
+			},
+			mockUserCache: func() ctrlv3.UserCache {
+				mock := fake.NewMockNonNamespacedCacheInterface[*v3.User](ctrl)
+				mock.EXPECT().Get("test-user").Return(fakeUser, nil)
+
+				return mock
+			},
+			wantPatch:   `[{"op":"add","path":"/metadata/ownerReferences","value":[{"apiVersion":"","kind":"","name":"test-user","uid":""}]},{"op":"add","path":"/metadata/annotations","value":{"cattle.io/password-hash":"pbkdf2sha3512"}},{"op":"replace","path":"/data/password","value":"aGFzaGVkUGFzc3dvcmQ="},{"op":"add","path":"/data/salt","value":"c2FsdA=="}]`, // aGFzaGVkUGFzc3dvcmQ= -> hashedPassword base64 encoded, and c2FsdA==" => salt base64 encoded
+			wantAllowed: true,
+		},
+		"password was already hashed": {
+			request: &admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Namespace:       localUserPasswordsNamespace,
+					Kind:            secretGVK,
+					Resource:        secretGVR,
+					RequestKind:     &secretGVK,
+					RequestResource: &secretGVR,
+					UserInfo:        authenicationv1.UserInfo{Username: "test-user"},
+					Object: runtime.RawExtension{
+						Raw: rawHashedSecret,
+					},
+				},
+			},
+			mockSettingsCache: func() ctrlv3.SettingCache {
+				return fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
+			},
+			mockUserCache: func() ctrlv3.UserCache {
+				return fake.NewMockNonNamespacedCacheInterface[*v3.User](ctrl)
+			},
+			wantAllowed: true,
+		},
+		"password is shorter than password-min-length setting": {
+			request: &admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Namespace:       localUserPasswordsNamespace,
+					Kind:            secretGVK,
+					Resource:        secretGVR,
+					RequestKind:     &secretGVK,
+					RequestResource: &secretGVR,
+					UserInfo:        authenicationv1.UserInfo{Username: "test-user"},
+					Object: runtime.RawExtension{
+						Raw: rawSecret,
+					},
+				},
+			},
+			hasher: func(password string) ([]byte, []byte, error) {
+				return []byte("hashedPassword"), []byte("salt"), nil
+			},
+			mockSettingsCache: func() ctrlv3.SettingCache {
+				mock := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
+				mock.EXPECT().Get(passwordMinLengthSetting).Return(&v3.Setting{
+					Value: "10",
+				}, nil)
+
+				return mock
+			},
+			mockUserCache: func() ctrlv3.UserCache {
+				mock := fake.NewMockNonNamespacedCacheInterface[*v3.User](ctrl)
+				mock.EXPECT().Get("test-user").Return(fakeUser, nil)
+
+				return mock
+			},
+
+			wantAllowed: false,
+		},
+		"password is the same as the user name": {
+			request: &admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Namespace:       localUserPasswordsNamespace,
+					Kind:            secretGVK,
+					Resource:        secretGVR,
+					RequestKind:     &secretGVK,
+					RequestResource: &secretGVR,
+					UserInfo:        authenicationv1.UserInfo{Username: "password"},
+					Object: runtime.RawExtension{
+						Raw: rawSecret,
+					},
+				},
+			},
+			hasher: func(password string) ([]byte, []byte, error) {
+				return []byte("hashedPassword"), []byte("salt"), nil
+			},
+			mockSettingsCache: func() ctrlv3.SettingCache {
+				mock := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
+				mock.EXPECT().Get(passwordMinLengthSetting).Return(&v3.Setting{
+					Value: "5",
+				}, nil)
+
+				return mock
+			},
+			mockUserCache: func() ctrlv3.UserCache {
+				mock := fake.NewMockNonNamespacedCacheInterface[*v3.User](ctrl)
+				mock.EXPECT().Get("test-user").Return(fakeUser, nil)
+
+				return mock
+			},
+			wantAllowed: false,
+		},
+		"error creating hashed password": {
+			request: &admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Namespace:       localUserPasswordsNamespace,
+					Kind:            secretGVK,
+					Resource:        secretGVR,
+					RequestKind:     &secretGVK,
+					RequestResource: &secretGVR,
+					UserInfo:        authenicationv1.UserInfo{Username: "test-user", UID: ""},
+					Object: runtime.RawExtension{
+						Raw: rawSecret,
+					},
+				},
+			},
+			hasher: func(password string) ([]byte, []byte, error) {
+				return nil, nil, fmt.Errorf("unexpected error")
+			},
+			mockSettingsCache: func() ctrlv3.SettingCache {
+				mock := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
+				mock.EXPECT().Get(passwordMinLengthSetting).Return(&v3.Setting{
+					Value: "5",
+				}, nil)
+
+				return mock
+			},
+			mockUserCache: func() ctrlv3.UserCache {
+				mock := fake.NewMockNonNamespacedCacheInterface[*v3.User](ctrl)
+				mock.EXPECT().Get("test-user").Return(fakeUser, nil)
+
+				return mock
+			},
+			wantErr: "unexpected error",
+		},
+		"user doesn't exist": {
+			request: &admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Namespace:       localUserPasswordsNamespace,
+					Kind:            secretGVK,
+					Resource:        secretGVR,
+					RequestKind:     &secretGVK,
+					RequestResource: &secretGVR,
+					UserInfo:        authenicationv1.UserInfo{Username: "test-user", UID: ""},
+					Object: runtime.RawExtension{
+						Raw: rawSecret,
+					},
+				},
+			},
+			hasher: func(password string) ([]byte, []byte, error) {
+				return []byte("hashedPassword"), []byte("salt"), nil
+			},
+			mockSettingsCache: func() ctrlv3.SettingCache {
+				return fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
+			},
+			mockUserCache: func() ctrlv3.UserCache {
+				mock := fake.NewMockNonNamespacedCacheInterface[*v3.User](ctrl)
+				mock.EXPECT().Get("test-user").Return(nil, apierrors.NewNotFound(schema.GroupResource{}, ""))
+
+				return mock
+			},
+			wantAllowed: false,
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			m := Mutator{
+				hasher:       test.hasher,
+				settingCache: test.mockSettingsCache(),
+				userCache:    test.mockUserCache(),
+			}
+
+			response, err := m.Admit(test.request)
+
+			if test.wantErr != "" {
+				assert.EqualError(t, err, test.wantErr)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, test.wantAllowed, response.Allowed)
+				if test.wantPatch != "" {
+					var wantPatch []interface{}
+					err = json.Unmarshal([]byte(test.wantPatch), &wantPatch)
+					assert.NoError(t, err)
+					var patch []interface{}
+					err = json.Unmarshal(response.Patch, &patch)
+					assert.NoError(t, err)
+					sortPatch(patch)
+					sortPatch(wantPatch)
+					assert.Equal(t, wantPatch, patch)
+				} else {
+					assert.Nil(t, response.Patch)
+				}
+			}
+		})
+	}
+}
+
+func sortPatch(patch []interface{}) {
+	sort.Slice(patch, func(i, j int) bool {
+		pi := patch[i].(map[string]interface{})
+		pj := patch[j].(map[string]interface{})
+		return fmt.Sprint(pi["path"]) < fmt.Sprint(pj["path"])
+	})
 }
