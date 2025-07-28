@@ -87,7 +87,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			clusterrole.NewValidator(),
 			clusterrolebinding.NewValidator(),
 			authconfig.NewValidator(),
-			users.NewValidator(clients.Management.UserAttribute().Cache(), clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.DefaultResolver),
+			users.NewValidator(clients.Management.UserAttribute().Cache(), clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.DefaultResolver, clients.Management.User().Cache()),
 		)
 	} else {
 		handlers = append(handlers, clusterauthtoken.NewValidator())
@@ -106,7 +106,7 @@ func Mutation(clients *clients.Clients) ([]admission.MutatingAdmissionHandler, e
 	}
 
 	if clients.MultiClusterManagement {
-		secrets := secret.NewMutator(clients.RBAC.Role(), clients.RBAC.RoleBinding())
+		secrets := secret.NewMutator(clients.RBAC.Role(), clients.RBAC.RoleBinding(), clients.Management.Setting().Cache(), clients.Management.User().Cache())
 		projects := project.NewMutator(clients.Core.Namespace().Cache(), clients.Management.RoleTemplate().Cache(), clients.Management.Project().Cache())
 		grbs := globalrolebinding.NewMutator(clients.Management.GlobalRole().Cache())
 		mutators = append(mutators, secrets, projects, grbs)
