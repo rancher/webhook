@@ -73,6 +73,19 @@ func (v *Validator) Admitters() []admission.Admitter {
 }
 
 func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+	oldUser, newUser, err := objectsv3.UserOldAndNewFromRequest(&request.AdmissionRequest)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current User from request: %w", err)
+	}
+
+	// Validate update fields
+	fieldPath := field.NewPath("user")
+	if request.Operation == admissionv1.Update {
+		if err := validateUpdateFields(oldUser, newUser, fieldPath); err != nil {
+			return admission.ResponseBadRequest(err.Error()), nil
+		}
+	}
+
 	// Check if requester has manage-user verb
 	hasManageUsers, err := auth.RequestUserHasVerb(request, gvr, a.sar, manageUsersVerb, "", "")
 	if err != nil {
@@ -81,11 +94,6 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 
 	if hasManageUsers {
 		return &admissionv1.AdmissionResponse{Allowed: true}, nil
-	}
-
-	oldUser, newUser, err := objectsv3.UserOldAndNewFromRequest(&request.AdmissionRequest)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get current User from request: %w", err)
 	}
 
 	// Need the UserAttribute to find the groups
@@ -118,13 +126,6 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		}, nil
 	}
 
-	fieldPath := field.NewPath("user")
-	if request.Operation == admissionv1.Update {
-		if err := validateUpdateFields(oldUser, newUser, fieldPath); err != nil {
-			return admission.ResponseBadRequest(err.Error()), nil
-		}
-	}
-
 	return &admissionv1.AdmissionResponse{Allowed: true}, nil
 }
 
@@ -144,7 +145,7 @@ func getGroupsFromUserAttribute(userAttribute *v3.UserAttribute) []string {
 	return result
 }
 
-// validateUpdateFields
+// validateUpdateFields validates fields during an update. The manage-users verb does not apply to these validations.
 func validateUpdateFields(oldUser, newUser *v3.User, fieldPath *field.Path) error {
 	const reason = "field is immutable"
 	if oldUser.Username != "" && oldUser.Username != newUser.Username {
