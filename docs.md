@@ -104,6 +104,11 @@ places a `field.cattle.io/creatorId` annotation with the name of the user as the
 
 If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` does not get set.
 
+For secrets that holds local users passwords, which are stored in the `cattle-local-user-passwords` namespace:
+- Verifies the password has the minimum required length.
+- The password is not the same as the username.
+- It encrypts the password using pbkdf2 
+
 #### On delete
 
 Checks if there are any RoleBindings owned by this secret which provide access to a role granting access to this secret.
@@ -518,6 +523,10 @@ When a Token is updated, the following checks take place:
 
 ### Validation Checks
 
+#### Create
+
+Verifies there aren't any other users with the same username.
+
 #### Update and Delete
 
 When a user is updated or deleted, a check occurs to ensure that the user making the request has permissions greater than or equal to the user being updated or deleted. To get the user's groups, the user's UserAttributes are checked. This is best effort, because UserAttributes are only updated when a User logs in, so it may not be perfectly up to date.
@@ -529,6 +538,8 @@ If the user making the request has the verb `manage-users` for the resource `use
 Users can update the following fields if they had not been set. But after getting initial values, the fields cannot be changed:
 
 - UserName
+
+A user can't deactivate or delete himself.
 
 ## UserAttribute
 
