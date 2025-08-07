@@ -2503,8 +2503,123 @@ func Test_validateS3Secret(t *testing.T) {
 		shouldSucceed bool
 	}{
 		{
+			name:          "valid - s3 credential is changed and exists",
+			shouldSucceed: true,
+			oldCluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "fleet-default",
+					Name:      "testing-cluster",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							ETCD: &rkev1.ETCD{
+								S3: &rkev1.ETCDSnapshotS3{
+									CloudCredentialName: "old-secret",
+								},
+							},
+						},
+					},
+				},
+			},
+			cluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "fleet-default",
+					Name:      "testing-cluster",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							ETCD: &rkev1.ETCD{
+								S3: &rkev1.ETCDSnapshotS3{
+									CloudCredentialName: "credential-from-client",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:          "invalid - s3 credential is changed and does not exist",
+			shouldSucceed: false,
+			oldCluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "fleet-default",
+					Name:      "testing-cluster",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							ETCD: &rkev1.ETCD{
+								S3: &rkev1.ETCDSnapshotS3{
+									CloudCredentialName: "old-secret",
+								},
+							},
+						},
+					},
+				},
+			},
+			cluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "fleet-default",
+					Name:      "testing-cluster",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							ETCD: &rkev1.ETCD{
+								S3: &rkev1.ETCDSnapshotS3{
+									CloudCredentialName: "non-exist",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:          "valid - s3 credential remains the same and exists",
+			shouldSucceed: true,
+			oldCluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "fleet-default",
+					Name:      "testing-cluster",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							ETCD: &rkev1.ETCD{
+								S3: &rkev1.ETCDSnapshotS3{
+									CloudCredentialName: "credential-from-cache",
+								},
+							},
+						},
+					},
+				},
+			},
+			cluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "fleet-default",
+					Name:      "testing-cluster",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							ETCD: &rkev1.ETCD{
+								S3: &rkev1.ETCDSnapshotS3{
+									CloudCredentialName: "credential-from-cache",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name:          "invalid - s3 credential does not exist",
 			shouldSucceed: false,
+			oldCluster:    &v1.Cluster{},
 			cluster: &v1.Cluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "fleet-default",
@@ -2526,6 +2641,7 @@ func Test_validateS3Secret(t *testing.T) {
 		{
 			name:          "valid - s3 credential can be found in cache",
 			shouldSucceed: true,
+			oldCluster:    &v1.Cluster{},
 			cluster: &v1.Cluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "fleet-default",
@@ -2547,6 +2663,7 @@ func Test_validateS3Secret(t *testing.T) {
 		{
 			name:          "valid - s3 credential can be found in client",
 			shouldSucceed: true,
+			oldCluster:    &v1.Cluster{},
 			cluster: &v1.Cluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "fleet-default",
@@ -2568,6 +2685,7 @@ func Test_validateS3Secret(t *testing.T) {
 		{
 			name:          "valid - s3 credential is empty string",
 			shouldSucceed: true,
+			oldCluster:    &v1.Cluster{},
 			cluster: &v1.Cluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Namespace: "fleet-default",
@@ -2598,7 +2716,7 @@ func Test_validateS3Secret(t *testing.T) {
 				secretCache:  createMockSecretCache(ctrl),
 			}
 
-			response, err := a.validateS3Secret(tt.cluster)
+			response, err := a.validateS3Secret(tt.oldCluster, tt.cluster)
 			assert.Equal(t, tt.shouldSucceed, response.Allowed)
 			assert.NoError(t, err)
 		})

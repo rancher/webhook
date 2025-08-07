@@ -157,7 +157,7 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 			return response, err
 		}
 
-		if response, err = p.validateS3Secret(cluster); err != nil || !response.Allowed {
+		if response, err = p.validateS3Secret(oldCluster, cluster); err != nil || !response.Allowed {
 			return response, err
 		}
 	}
@@ -703,19 +703,36 @@ func (p *provisioningAdmitter) validatePodDisruptionBudget(oldCluster, cluster *
 	return admission.ResponseAllowed(), nil
 }
 
-func (p *provisioningAdmitter) validateS3Secret(cluster *v1.Cluster) (*admissionv1.AdmissionResponse, error) {
-	if cluster.Name == localCluster ||
-		cluster.Spec.RKEConfig == nil ||
-		cluster.Spec.RKEConfig.ETCD == nil ||
-		cluster.Spec.RKEConfig.ETCD.S3 == nil ||
-		cluster.Spec.RKEConfig.ETCD.S3.CloudCredentialName == "" {
+// validateS3Secret checks if the S3 cloud credential secret referenced in the cluster exists.
+func (p *provisioningAdmitter) validateS3Secret(oldCluster, cluster *v1.Cluster) (*admissionv1.AdmissionResponse, error) {
+	if cluster.Name == localCluster {
+		return admission.ResponseAllowed(), nil
+	}
+
+	rkeConfig := cluster.Spec.RKEConfig
+	if rkeConfig == nil || rkeConfig.ETCD == nil || rkeConfig.ETCD.S3 == nil || rkeConfig.ETCD.S3.CloudCredentialName == "" {
+		return admission.ResponseAllowed(), nil
+	}
+
+	var (
+		oldSecret string
+		newSecret string
+	)
+	if oldCluster.Spec.RKEConfig != nil &&
+		oldCluster.Spec.RKEConfig.ETCD != nil &&
+		oldCluster.Spec.RKEConfig.ETCD.S3 != nil {
+		oldSecret = oldCluster.Spec.RKEConfig.ETCD.S3.CloudCredentialName
+	}
+	newSecret = cluster.Spec.RKEConfig.ETCD.S3.CloudCredentialName
+
+	// Skip if the credential names remain the same
+	if oldSecret == newSecret {
 		return admission.ResponseAllowed(), nil
 	}
 
 	// check if the secret exists
-	var err error
-	namespace, name := getCloudCredentialSecretInfo(cluster.Namespace, cluster.Spec.RKEConfig.ETCD.S3.CloudCredentialName)
-	_, err = p.secretCache.Get(namespace, name)
+	namespace, name := getCloudCredentialSecretInfo(cluster.Namespace, newSecret)
+	_, err := p.secretCache.Get(namespace, name)
 	if apierrors.IsNotFound(err) {
 		// Since the secret can be created alongside the cluster via the UI, there's a chance it's not yet present in the cache.
 		// Therefore, we perform an additional check directly against the API server.
@@ -725,7 +742,7 @@ func (p *provisioningAdmitter) validateS3Secret(cluster *v1.Cluster) (*admission
 		msg := fmt.Sprintf("etcd s3 cloud credential secret %s/%s is not found", namespace, name)
 		return admission.ResponseBadRequest(msg), nil
 	} else if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get etcd s3 cloud credential secret %s/%s: %w", namespace, name, err)
 	}
 
 	return admission.ResponseAllowed(), nil
