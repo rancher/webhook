@@ -496,7 +496,7 @@ func TestAdmitLocalUserPassword(t *testing.T) {
 					},
 				},
 			},
-			hasher: func(password string) ([]byte, []byte, error) {
+			hasher: func(_ string) ([]byte, []byte, error) {
 				return []byte("hashedPassword"), []byte("salt"), nil
 			},
 			mockSettingsCache: func() ctrlv3.SettingCache {
@@ -552,7 +552,7 @@ func TestAdmitLocalUserPassword(t *testing.T) {
 					},
 				},
 			},
-			hasher: func(password string) ([]byte, []byte, error) {
+			hasher: func(_ string) ([]byte, []byte, error) {
 				return []byte("hashedPassword"), []byte("salt"), nil
 			},
 			mockSettingsCache: func() ctrlv3.SettingCache {
@@ -586,7 +586,7 @@ func TestAdmitLocalUserPassword(t *testing.T) {
 					},
 				},
 			},
-			hasher: func(password string) ([]byte, []byte, error) {
+			hasher: func(_ string) ([]byte, []byte, error) {
 				return []byte("hashedPassword"), []byte("salt"), nil
 			},
 			mockSettingsCache: func() ctrlv3.SettingCache {
@@ -619,7 +619,7 @@ func TestAdmitLocalUserPassword(t *testing.T) {
 					},
 				},
 			},
-			hasher: func(password string) ([]byte, []byte, error) {
+			hasher: func(_ string) ([]byte, []byte, error) {
 				return nil, nil, fmt.Errorf("unexpected error")
 			},
 			mockSettingsCache: func() ctrlv3.SettingCache {
@@ -652,7 +652,7 @@ func TestAdmitLocalUserPassword(t *testing.T) {
 					},
 				},
 			},
-			hasher: func(password string) ([]byte, []byte, error) {
+			hasher: func(_ string) ([]byte, []byte, error) {
 				return []byte("hashedPassword"), []byte("salt"), nil
 			},
 			mockSettingsCache: func() ctrlv3.SettingCache {
