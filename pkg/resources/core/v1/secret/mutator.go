@@ -1,9 +1,15 @@
 package secret
 
 import (
+	"crypto/pbkdf2"
+	"crypto/rand"
+	"crypto/sha3"
 	"fmt"
+	"strconv"
+	"unicode/utf8"
 
 	"github.com/rancher/webhook/pkg/admission"
+	ctrlv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv1 "github.com/rancher/webhook/pkg/generated/objects/core/v1"
 	"github.com/rancher/webhook/pkg/patch"
 	"github.com/rancher/webhook/pkg/resources/common"
@@ -14,6 +20,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/trace"
 )
@@ -22,7 +29,15 @@ const (
 	mutatorRoleBindingOwnerIndex = "webhook.cattle.io/role-binding-index"
 	secretKind                   = "Secret"
 	ownerFormat                  = "%s/%s"
+	localUserPasswordsNamespace  = "cattle-local-user-passwords"
+	passwordHashAnnotation       = "cattle.io/password-hash"
+	pbkdf2sha3512Hash            = "pbkdf2sha3512"
+	iterations                   = 210000
+	keyLength                    = 32
+	passwordMinLengthSetting     = "password-min-length"
 )
+
+type passwordHasher func(password string) ([]byte, []byte, error)
 
 var gvr = corev1.SchemeGroupVersion.WithResource("secrets")
 
@@ -30,14 +45,20 @@ var gvr = corev1.SchemeGroupVersion.WithResource("secrets")
 type Mutator struct {
 	roleController        v1.RoleController
 	roleBindingController v1.RoleBindingController
+	hasher                passwordHasher
+	settingCache          ctrlv3.SettingCache
+	userCache             ctrlv3.UserCache
 }
 
 // NewMutator returns a new mutator which mutates secret objects, and related resources
-func NewMutator(roleController v1.RoleController, roleBindingController v1.RoleBindingController) *Mutator {
+func NewMutator(roleController v1.RoleController, roleBindingController v1.RoleBindingController, settingCache ctrlv3.SettingCache, userCache ctrlv3.UserCache) *Mutator {
 	roleBindingController.Cache().AddIndexer(mutatorRoleBindingOwnerIndex, roleBindingIndexer)
 	return &Mutator{
 		roleController:        roleController,
 		roleBindingController: roleBindingController,
+		settingCache:          settingCache,
+		userCache:             userCache,
+		hasher:                hashPassword,
 	}
 
 }
@@ -64,7 +85,7 @@ func (m *Mutator) GVR() schema.GroupVersionResource {
 
 // Operations returns list of operations handled by this mutator.
 func (m *Mutator) Operations() []admissionregistrationv1.OperationType {
-	return []admissionregistrationv1.OperationType{admissionregistrationv1.Create, admissionregistrationv1.Delete}
+	return []admissionregistrationv1.OperationType{admissionregistrationv1.Create, admissionregistrationv1.Delete, admissionregistrationv1.Update}
 }
 
 // MutatingWebhook returns the MutatingWebhook used for this CRD.
@@ -75,7 +96,7 @@ func (m *Mutator) MutatingWebhook(clientConfig admissionregistrationv1.WebhookCl
 	mutatingWebhook.MatchConditions = []admissionregistrationv1.MatchCondition{
 		{
 			Name:       "filter-by-secret-type-cloud-credential",
-			Expression: `request.operation == 'DELETE' || (object != null && object.type == "provisioning.cattle.io/cloud-credential")`,
+			Expression: `request.operation == 'DELETE' || (object != null && object.type == "provisioning.cattle.io/cloud-credential" && request.operation == 'CREATE') || (object != null && object.metadata.namespace == "` + localUserPasswordsNamespace + `")`,
 		},
 	}
 
@@ -96,11 +117,18 @@ func (m *Mutator) Admit(request *admission.Request) (*admissionv1.AdmissionRespo
 	if err != nil {
 		return nil, err
 	}
+	if request.Namespace == localUserPasswordsNamespace {
+		return m.admitLocalUserPassword(secret, request)
+	}
 	switch request.Operation {
 	case admissionv1.Create:
 		return m.admitCreate(secret, request)
 	case admissionv1.Delete:
 		return m.admitDelete(secret)
+	case admissionv1.Update:
+		return &admissionv1.AdmissionResponse{
+			Allowed: true,
+		}, nil
 	default:
 		return nil, fmt.Errorf("operation type %q not handled", request.Operation)
 	}
@@ -178,4 +206,98 @@ func amendRulesToOnlyPermitDelete(rules []rbacv1.PolicyRule, secretName string) 
 
 	}
 	return rules, amended
+}
+
+// admitLocalUserPassword handle the secrets that contains the local user passwords, which are stored in the cattle-local-user-passwords namespace.
+// If the annotation ccattle.io/password-hash is not present in the secret, the webhook will encrypt it using pbkdf2. The secret is mutated to include the hashed password, the salt and the user as owner reference.
+func (m *Mutator) admitLocalUserPassword(secret *corev1.Secret, request *admission.Request) (*admissionv1.AdmissionResponse, error) {
+	if secret.Annotations[passwordHashAnnotation] == pbkdf2sha3512Hash ||
+		request.Operation == admissionv1.Delete {
+		// no need to do anything if password is encrypted or is a delete operation.
+		return &admissionv1.AdmissionResponse{
+			Allowed: true,
+		}, nil
+	}
+	user, err := m.userCache.Get(secret.Name)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return admission.ResponseBadRequest(fmt.Sprintf("user %s does not exist. User must be created before the secret", secret.Name)), nil
+		}
+		return nil, err
+	}
+	password := string(secret.Data["password"])
+	passwordMinLength, err := m.getPasswordMinLength()
+	if err != nil {
+		return nil, err
+	}
+	if utf8.RuneCountInString(password) < passwordMinLength {
+		return admission.ResponseBadRequest(fmt.Sprintf("password must be at least %v characters", passwordMinLength)), nil
+	}
+	if request.UserInfo.Username == password {
+		return admission.ResponseBadRequest("password cannot be the same as username"), nil
+	}
+	hashedPassword, salt, err := m.hasher(password)
+	if err != nil {
+		return nil, err
+	}
+	response := &admissionv1.AdmissionResponse{}
+	newSecret := secret.DeepCopy()
+	if newSecret.Annotations == nil {
+		newSecret.Annotations = map[string]string{}
+	}
+	newSecret.Annotations[passwordHashAnnotation] = pbkdf2sha3512Hash
+	newSecret.Data["password"] = hashedPassword
+	newSecret.Data["salt"] = salt
+	newSecret.OwnerReferences = []metav1.OwnerReference{
+		{
+			APIVersion: user.APIVersion,
+			Kind:       user.Kind,
+			Name:       user.Name,
+			UID:        user.UID,
+		},
+	}
+	if err := patch.CreatePatch(request.Object.Raw, newSecret, response); err != nil {
+		return nil, fmt.Errorf("failed to create patch: %w", err)
+	}
+	response.Allowed = true
+
+	return response, nil
+}
+
+// getPasswordMinLength gets the min length for passwords from the settings.
+func (m *Mutator) getPasswordMinLength() (int, error) {
+	setting, err := m.settingCache.Get("password-min-length")
+	if err != nil {
+		return 0, err
+	}
+	var passwordMinLength int
+	if setting.Value != "" {
+		passwordMinLength, err = strconv.Atoi(setting.Value)
+		if err != nil {
+			return 0, err
+		}
+	} else {
+		passwordMinLength, err = strconv.Atoi(setting.Default)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	return passwordMinLength, nil
+}
+
+// hashPassword hashes the password using pbkdf2.
+func hashPassword(password string) ([]byte, []byte, error) {
+	salt := make([]byte, 32)
+	_, err := rand.Read(salt)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to generate salt: %w", err)
+	}
+
+	passwordHashed, err := pbkdf2.Key(sha3.New512, password, salt, iterations, keyLength)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return passwordHashed, salt, nil
 }
