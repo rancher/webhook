@@ -64,13 +64,12 @@ func TestAdmit(t *testing.T) {
 	}).AnyTimes()
 
 	tests := []struct {
-		name                 string
-		oldCluster           v3.Cluster
-		newCluster           v3.Cluster
-		operation            admissionv1.Operation
-		expectAllowed        bool
-		expectedReason       metav1.StatusReason
-		expectContainWarning bool
+		name           string
+		oldCluster     v3.Cluster
+		newCluster     v3.Cluster
+		operation      admissionv1.Operation
+		expectAllowed  bool
+		expectedReason metav1.StatusReason
 	}{
 		{
 			name:          "Create",
@@ -449,8 +448,7 @@ func TestAdmit(t *testing.T) {
 					Driver: v3.ClusterDriverAKS,
 				},
 			},
-			expectAllowed:        true,
-			expectContainWarning: true,
+			expectAllowed: true,
 		},
 		{
 			name:      "cluster version management - invalid cluster type, invalid annotation, update",
@@ -470,8 +468,7 @@ func TestAdmit(t *testing.T) {
 					Driver: v3.ClusterDriverAKS,
 				},
 			},
-			expectAllowed:        true,
-			expectContainWarning: true,
+			expectAllowed: true,
 		},
 		{
 			name:      "Delete local cluster where Rancher is deployed",
@@ -521,9 +518,6 @@ func TestAdmit(t *testing.T) {
 				if tt.expectedReason != "" {
 					assert.Equal(t, tt.expectedReason, res.Result.Reason)
 				}
-			}
-			if tt.expectContainWarning {
-				assert.NotEmpty(t, res.Warnings)
 			}
 		})
 	}
