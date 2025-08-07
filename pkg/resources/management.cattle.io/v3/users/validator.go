@@ -3,7 +3,6 @@ package users
 import (
 	"context"
 	"fmt"
-	"k8s.io/utils/ptr"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
@@ -20,6 +19,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
+	"k8s.io/utils/ptr"
 )
 
 var (
