@@ -545,6 +545,10 @@ following:
 - Equal to another data directory
 - Attempts to nest another data directory
 
+##### Etcd S3 CloudCredential Secret
+
+Prevent the creation of objects if the secret specified in `.spec.rkeConfig.etcd.s3.cloudCredentialName` does not exist.
+
 #### On Update
 
 ##### Creator ID Annotation
@@ -561,7 +565,7 @@ section. A secondary validator will ensure that the effective data directory for
 from the one chosen during cluster creation. Additionally, the changing of a data directory for the `system-agent`, 
 kubernetes distro (RKE2/K3s), and CAPR components is also prohibited.
 
-#### cluster.spec.clusterAgentDeploymentCustomization and cluster.spec.fleetAgentDeploymentCustomization
+##### cluster.spec.clusterAgentDeploymentCustomization and cluster.spec.fleetAgentDeploymentCustomization
 
 The `DeploymentCustomization` fields are of 3 types:
 - `appendTolerations`: adds tolerations to the appropriate deployment (cluster-agent/fleet-agent)
@@ -576,7 +580,7 @@ A `Toleration` is matched to a regex which is provided by upstream [apimachinery
 
 For the `Affinity` based rules, the `podAffinity`/`podAntiAffinity` are validated via label selectors via [this apimachinery function](https://github.com/kubernetes/apimachinery/blob/02a41040d88da08de6765573ae2b1a51f424e1ca/pkg/apis/meta/v1/validation/validation.go#L56) whereas the `nodeAffinity` `nodeSelectorTerms` are validated via the same `Toleration` function.
 
-#### cluster.spec.clusterAgentDeploymentCustomization.schedulingCustomization
+##### cluster.spec.clusterAgentDeploymentCustomization.schedulingCustomization
 
 The `SchedulingCustomization` subfield of the `DeploymentCustomization` field defines the properties of a Pod Disruption Budget and Priority Class which will be automatically deployed by Rancher for the cattle-cluster-agent.
 
@@ -595,9 +599,15 @@ Both `minAvailable` and `maxUnavailable` must be a string which represents a non
 ^([0-9]|[1-9][0-9]|100)%$
 ```
 
+##### Etcd S3 CloudCredential Secret
+
+Prevent the update of objects if the secret specified in `.spec.rkeConfig.etcd.s3.cloudCredentialName` does not exist.
+
 ### Mutation Checks
 
 #### On Create
+
+##### Creator ID Annotation
 
 When a cluster is created `field.cattle.io/creatorId` is set to the Username from the request.
 
