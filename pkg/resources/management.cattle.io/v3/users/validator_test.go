@@ -35,6 +35,7 @@ var (
 		ObjectMeta: metav1.ObjectMeta{
 			Name: defaultUserName,
 		},
+		Username: defaultUserName,
 	}
 	getPods = []rbacv1.PolicyRule{
 		{
@@ -114,12 +115,12 @@ func Test_Admit(t *testing.T) {
 			oldUser:         defaultUser.DeepCopy(),
 			requestUserName: requesterUserName,
 			resolverRulesFor: func(s string) ([]rbacv1.PolicyRule, error) {
-				if s == requesterUserName {
+				switch s {
+				case requesterUserName, defaultUserName:
 					return getPods, nil
-				} else if s == defaultUserName {
-					return getPods, nil
+				default:
+					return nil, fmt.Errorf("unexpected error")
 				}
-				return nil, fmt.Errorf("unexpected error")
 			},
 			allowed: true,
 		},
@@ -129,12 +130,12 @@ func Test_Admit(t *testing.T) {
 			newUser:         defaultUser.DeepCopy(),
 			requestUserName: requesterUserName,
 			resolverRulesFor: func(s string) ([]rbacv1.PolicyRule, error) {
-				if s == requesterUserName {
+				switch s {
+				case requesterUserName, defaultUserName:
 					return getPods, nil
-				} else if s == defaultUserName {
-					return getPods, nil
+				default:
+					return nil, fmt.Errorf("unexpected error")
 				}
-				return nil, fmt.Errorf("unexpected error")
 			},
 			allowed: true,
 		},
@@ -143,12 +144,14 @@ func Test_Admit(t *testing.T) {
 			oldUser:         defaultUser.DeepCopy(),
 			requestUserName: requesterUserName,
 			resolverRulesFor: func(s string) ([]rbacv1.PolicyRule, error) {
-				if s == requesterUserName {
+				switch s {
+				case requesterUserName:
 					return starPods, nil
-				} else if s == defaultUserName {
+				case defaultUserName:
 					return getPods, nil
+				default:
+					return nil, fmt.Errorf("unexpected error")
 				}
-				return nil, fmt.Errorf("unexpected error")
 			},
 			allowed: true,
 		},
@@ -158,12 +161,14 @@ func Test_Admit(t *testing.T) {
 			newUser:         defaultUser.DeepCopy(),
 			requestUserName: requesterUserName,
 			resolverRulesFor: func(s string) ([]rbacv1.PolicyRule, error) {
-				if s == requesterUserName {
+				switch s {
+				case requesterUserName:
 					return starPods, nil
-				} else if s == defaultUserName {
+				case defaultUserName:
 					return getPods, nil
+				default:
+					return nil, fmt.Errorf("unexpected error")
 				}
-				return nil, fmt.Errorf("unexpected error")
 			},
 			allowed: true,
 		},
@@ -172,12 +177,14 @@ func Test_Admit(t *testing.T) {
 			oldUser:         defaultUser.DeepCopy(),
 			requestUserName: requesterUserName,
 			resolverRulesFor: func(s string) ([]rbacv1.PolicyRule, error) {
-				if s == requesterUserName {
+				switch s {
+				case requesterUserName:
 					return getPods, nil
-				} else if s == defaultUserName {
+				case defaultUserName:
 					return starPods, nil
+				default:
+					return nil, fmt.Errorf("unexpected error")
 				}
-				return nil, fmt.Errorf("unexpected error")
 			},
 			allowed: false,
 		},
@@ -187,14 +194,53 @@ func Test_Admit(t *testing.T) {
 			newUser:         defaultUser.DeepCopy(),
 			requestUserName: requesterUserName,
 			resolverRulesFor: func(s string) ([]rbacv1.PolicyRule, error) {
-				if s == requesterUserName {
+				switch s {
+				case requesterUserName:
 					return getPods, nil
-				} else if s == defaultUserName {
+				case defaultUserName:
 					return starPods, nil
+				default:
+					return nil, fmt.Errorf("unexpected error")
 				}
-				return nil, fmt.Errorf("unexpected error")
 			},
 			allowed: false,
+		},
+		{
+			name:    "changing the username not allowed",
+			oldUser: defaultUser.DeepCopy(),
+			newUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: defaultUserName,
+				},
+				Username: "new-username",
+			},
+			requestUserName: requesterUserName,
+			allowed:         false,
+		},
+		{
+			name: "adding a new username allowed",
+			oldUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: defaultUserName,
+				},
+			},
+			newUser:         defaultUser.DeepCopy(),
+			requestUserName: requesterUserName,
+			resolverRulesFor: func(string) ([]rbacv1.PolicyRule, error) {
+				return getPods, nil
+			},
+			allowed: true,
+		},
+		{
+			name:    "removing username not allowed",
+			oldUser: defaultUser.DeepCopy(),
+			newUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: defaultUserName,
+				},
+			},
+			requestUserName: requesterUserName,
+			allowed:         false,
 		},
 	}
 	for _, tt := range tests {
