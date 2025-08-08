@@ -2205,7 +2205,7 @@ func Test_validateS3Secret(t *testing.T) {
 				},
 				Spec: v1.ClusterSpec{
 					RKEConfig: &v1.RKEConfig{
-						ClusterConfiguration: rkev1.ClusterConfiguration{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
 							ETCD: &rkev1.ETCD{
 								S3: &rkev1.ETCDSnapshotS3{
 									CloudCredentialName: "old-secret",
@@ -2222,7 +2222,7 @@ func Test_validateS3Secret(t *testing.T) {
 				},
 				Spec: v1.ClusterSpec{
 					RKEConfig: &v1.RKEConfig{
-						ClusterConfiguration: rkev1.ClusterConfiguration{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
 							ETCD: &rkev1.ETCD{
 								S3: &rkev1.ETCDSnapshotS3{
 									CloudCredentialName: "credential-from-client",
@@ -2243,7 +2243,7 @@ func Test_validateS3Secret(t *testing.T) {
 				},
 				Spec: v1.ClusterSpec{
 					RKEConfig: &v1.RKEConfig{
-						ClusterConfiguration: rkev1.ClusterConfiguration{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
 							ETCD: &rkev1.ETCD{
 								S3: &rkev1.ETCDSnapshotS3{
 									CloudCredentialName: "old-secret",
@@ -2260,7 +2260,7 @@ func Test_validateS3Secret(t *testing.T) {
 				},
 				Spec: v1.ClusterSpec{
 					RKEConfig: &v1.RKEConfig{
-						ClusterConfiguration: rkev1.ClusterConfiguration{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
 							ETCD: &rkev1.ETCD{
 								S3: &rkev1.ETCDSnapshotS3{
 									CloudCredentialName: "non-exist",
@@ -2281,7 +2281,7 @@ func Test_validateS3Secret(t *testing.T) {
 				},
 				Spec: v1.ClusterSpec{
 					RKEConfig: &v1.RKEConfig{
-						ClusterConfiguration: rkev1.ClusterConfiguration{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
 							ETCD: &rkev1.ETCD{
 								S3: &rkev1.ETCDSnapshotS3{
 									CloudCredentialName: "credential-from-cache",
@@ -2298,7 +2298,7 @@ func Test_validateS3Secret(t *testing.T) {
 				},
 				Spec: v1.ClusterSpec{
 					RKEConfig: &v1.RKEConfig{
-						ClusterConfiguration: rkev1.ClusterConfiguration{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
 							ETCD: &rkev1.ETCD{
 								S3: &rkev1.ETCDSnapshotS3{
 									CloudCredentialName: "credential-from-cache",
@@ -2320,7 +2320,7 @@ func Test_validateS3Secret(t *testing.T) {
 				},
 				Spec: v1.ClusterSpec{
 					RKEConfig: &v1.RKEConfig{
-						ClusterConfiguration: rkev1.ClusterConfiguration{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
 							ETCD: &rkev1.ETCD{
 								S3: &rkev1.ETCDSnapshotS3{
 									CloudCredentialName: "non-exist",
@@ -2342,7 +2342,7 @@ func Test_validateS3Secret(t *testing.T) {
 				},
 				Spec: v1.ClusterSpec{
 					RKEConfig: &v1.RKEConfig{
-						ClusterConfiguration: rkev1.ClusterConfiguration{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
 							ETCD: &rkev1.ETCD{
 								S3: &rkev1.ETCDSnapshotS3{
 									CloudCredentialName: "credential-from-cache",
@@ -2364,7 +2364,7 @@ func Test_validateS3Secret(t *testing.T) {
 				},
 				Spec: v1.ClusterSpec{
 					RKEConfig: &v1.RKEConfig{
-						ClusterConfiguration: rkev1.ClusterConfiguration{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
 							ETCD: &rkev1.ETCD{
 								S3: &rkev1.ETCDSnapshotS3{
 									CloudCredentialName: "credential-from-client",
@@ -2386,7 +2386,7 @@ func Test_validateS3Secret(t *testing.T) {
 				},
 				Spec: v1.ClusterSpec{
 					RKEConfig: &v1.RKEConfig{
-						ClusterConfiguration: rkev1.ClusterConfiguration{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
 							ETCD: &rkev1.ETCD{
 								S3: &rkev1.ETCDSnapshotS3{
 									CloudCredentialName: "",
