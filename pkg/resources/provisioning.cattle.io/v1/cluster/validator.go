@@ -53,6 +53,7 @@ func NewProvisioningClusterValidator(client *clients.Clients) *ProvisioningClust
 		admitter: provisioningAdmitter{
 			sar:               client.K8s.AuthorizationV1().SubjectAccessReviews(),
 			mgmtClusterClient: client.Management.Cluster(),
+			secretClient:      client.Core.Secret(),
 			secretCache:       client.Core.Secret().Cache(),
 			psactCache:        client.Management.PodSecurityAdmissionConfigurationTemplate().Cache(),
 			featureCache:      client.Management.Feature().Cache(),
@@ -87,6 +88,7 @@ func (p *ProvisioningClusterValidator) Admitters() []admission.Admitter {
 type provisioningAdmitter struct {
 	sar               authorizationv1.SubjectAccessReviewInterface
 	mgmtClusterClient v3.ClusterClient
+	secretClient      corev1controller.SecretController
 	secretCache       corev1controller.SecretCache
 	psactCache        v3.PodSecurityAdmissionConfigurationTemplateCache
 	featureCache      v3.FeatureCache
@@ -148,6 +150,10 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 		}
 
 		if response, err = p.validatePriorityClass(oldCluster, cluster); err != nil || !response.Allowed {
+			return response, err
+		}
+
+		if response, err = p.validateS3Secret(oldCluster, cluster); err != nil || !response.Allowed {
 			return response, err
 		}
 	}
@@ -665,6 +671,51 @@ func (p *provisioningAdmitter) validatePodDisruptionBudget(oldCluster, cluster *
 
 	if maxUnavailIsString && maxUnavailStr != "" && !common.PdbPercentageRegex.Match([]byte(maxUnavailStr)) {
 		return admission.ResponseBadRequest("minAvailable must be a whole integer or a percentage value between 1 and 100, regex used is '^([1-9]|[1-9][0-9]|100)%$'"), nil
+	}
+
+	return admission.ResponseAllowed(), nil
+}
+
+// validateS3Secret checks if the S3 cloud credential secret referenced in the cluster exists.
+func (p *provisioningAdmitter) validateS3Secret(oldCluster, cluster *v1.Cluster) (*admissionv1.AdmissionResponse, error) {
+	if cluster.Name == localCluster {
+		return admission.ResponseAllowed(), nil
+	}
+
+	rkeConfig := cluster.Spec.RKEConfig
+	if rkeConfig == nil || rkeConfig.ETCD == nil || rkeConfig.ETCD.S3 == nil || rkeConfig.ETCD.S3.CloudCredentialName == "" {
+		return admission.ResponseAllowed(), nil
+	}
+
+	var (
+		oldSecret string
+		newSecret string
+	)
+	if oldCluster.Spec.RKEConfig != nil &&
+		oldCluster.Spec.RKEConfig.ETCD != nil &&
+		oldCluster.Spec.RKEConfig.ETCD.S3 != nil {
+		oldSecret = oldCluster.Spec.RKEConfig.ETCD.S3.CloudCredentialName
+	}
+	newSecret = cluster.Spec.RKEConfig.ETCD.S3.CloudCredentialName
+
+	// Skip if the credential names remain the same
+	if oldSecret == newSecret {
+		return admission.ResponseAllowed(), nil
+	}
+
+	// check if the secret exists
+	namespace, name := getCloudCredentialSecretInfo(cluster.Namespace, newSecret)
+	_, err := p.secretCache.Get(namespace, name)
+	if apierrors.IsNotFound(err) {
+		// Since the secret can be created alongside the cluster via the UI, there's a chance it's not yet present in the cache.
+		// Therefore, we perform an additional check directly against the API server.
+		_, err = p.secretClient.Get(namespace, name, metav1.GetOptions{})
+	}
+	if apierrors.IsNotFound(err) {
+		msg := fmt.Sprintf("etcd s3 cloud credential secret %s/%s is not found", namespace, name)
+		return admission.ResponseBadRequest(msg), nil
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to get etcd s3 cloud credential secret %s/%s: %w", namespace, name, err)
 	}
 
 	return admission.ResponseAllowed(), nil

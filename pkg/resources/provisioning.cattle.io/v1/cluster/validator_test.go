@@ -15,7 +15,8 @@ import (
 	"go.uber.org/mock/gomock"
 	admissionv1 "k8s.io/api/admission/v1"
 	k8sv1 "k8s.io/api/core/v1"
-	v12 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
@@ -1248,11 +1249,11 @@ func Test_validateAgentDeploymentCustomization(t *testing.T) {
 						PodAffinity: &k8sv1.PodAffinity{
 							RequiredDuringSchedulingIgnoredDuringExecution: []k8sv1.PodAffinityTerm{
 								{
-									LabelSelector: &v12.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"key": "validValue",
 										},
-										MatchExpressions: []v12.LabelSelectorRequirement{
+										MatchExpressions: []metav1.LabelSelectorRequirement{
 											{
 												Key:      "validKey",
 												Operator: "In",
@@ -1266,9 +1267,9 @@ func Test_validateAgentDeploymentCustomization(t *testing.T) {
 								{
 									Weight: 1,
 									PodAffinityTerm: k8sv1.PodAffinityTerm{
-										NamespaceSelector: &v12.LabelSelector{
+										NamespaceSelector: &metav1.LabelSelector{
 											MatchLabels: nil,
-											MatchExpressions: []v12.LabelSelectorRequirement{
+											MatchExpressions: []metav1.LabelSelectorRequirement{
 												{
 													Key:      "validKey",
 													Operator: "In",
@@ -1288,11 +1289,11 @@ func Test_validateAgentDeploymentCustomization(t *testing.T) {
 						PodAntiAffinity: &k8sv1.PodAntiAffinity{
 							RequiredDuringSchedulingIgnoredDuringExecution: []k8sv1.PodAffinityTerm{
 								{
-									LabelSelector: &v12.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"key": "validValue",
 										},
-										MatchExpressions: []v12.LabelSelectorRequirement{
+										MatchExpressions: []metav1.LabelSelectorRequirement{
 											{
 												Key:      "validKey",
 												Operator: "In",
@@ -1306,9 +1307,9 @@ func Test_validateAgentDeploymentCustomization(t *testing.T) {
 								{
 									Weight: 1,
 									PodAffinityTerm: k8sv1.PodAffinityTerm{
-										NamespaceSelector: &v12.LabelSelector{
+										NamespaceSelector: &metav1.LabelSelector{
 											MatchLabels: nil,
-											MatchExpressions: []v12.LabelSelectorRequirement{
+											MatchExpressions: []metav1.LabelSelectorRequirement{
 												{
 													Key:      "validKey",
 													Operator: "In",
@@ -1400,11 +1401,11 @@ func Test_validateAgentDeploymentCustomization(t *testing.T) {
 						PodAffinity: &k8sv1.PodAffinity{
 							RequiredDuringSchedulingIgnoredDuringExecution: []k8sv1.PodAffinityTerm{
 								{
-									LabelSelector: &v12.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"key": "`{}invalidKey",
 										},
-										MatchExpressions: []v12.LabelSelectorRequirement{
+										MatchExpressions: []metav1.LabelSelectorRequirement{
 											{
 												Key:      "`{}invalidKey",
 												Operator: "In",
@@ -1418,9 +1419,9 @@ func Test_validateAgentDeploymentCustomization(t *testing.T) {
 								{
 									Weight: 1,
 									PodAffinityTerm: k8sv1.PodAffinityTerm{
-										NamespaceSelector: &v12.LabelSelector{
+										NamespaceSelector: &metav1.LabelSelector{
 											MatchLabels: nil,
-											MatchExpressions: []v12.LabelSelectorRequirement{
+											MatchExpressions: []metav1.LabelSelectorRequirement{
 												{
 													Key:      "`{}invalidKey",
 													Operator: "In",
@@ -1440,11 +1441,11 @@ func Test_validateAgentDeploymentCustomization(t *testing.T) {
 						PodAntiAffinity: &k8sv1.PodAntiAffinity{
 							RequiredDuringSchedulingIgnoredDuringExecution: []k8sv1.PodAffinityTerm{
 								{
-									LabelSelector: &v12.LabelSelector{
+									LabelSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{
 											"key": "validValue",
 										},
-										MatchExpressions: []v12.LabelSelectorRequirement{
+										MatchExpressions: []metav1.LabelSelectorRequirement{
 											{
 												Key:      "`{}invalidKey",
 												Operator: "In",
@@ -1458,9 +1459,9 @@ func Test_validateAgentDeploymentCustomization(t *testing.T) {
 								{
 									Weight: 1,
 									PodAffinityTerm: k8sv1.PodAffinityTerm{
-										NamespaceSelector: &v12.LabelSelector{
+										NamespaceSelector: &metav1.LabelSelector{
 											MatchLabels: nil,
-											MatchExpressions: []v12.LabelSelectorRequirement{
+											MatchExpressions: []metav1.LabelSelectorRequirement{
 												{
 													Key:      "`{}invalidKey",
 													Operator: "In",
@@ -2145,4 +2146,272 @@ func createMockFeatureCache(ctrl *gomock.Controller, featureName string, enabled
 		}, nil
 	}).AnyTimes()
 	return featureCache
+}
+
+func createMockSecretClient(ctrl *gomock.Controller) *fake.MockControllerInterface[*k8sv1.Secret, *k8sv1.SecretList] {
+	secretClient := fake.NewMockControllerInterface[*k8sv1.Secret, *k8sv1.SecretList](ctrl)
+	secretClient.EXPECT().Get("fleet-default", "credential-from-client", gomock.Any()).Return(
+		&k8sv1.Secret{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Secret",
+				APIVersion: "v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "fleet-default",
+				Name:      "credential-from-client",
+			},
+		}, nil).AnyTimes()
+	secretClient.EXPECT().Get("fleet-default", "non-exist", gomock.Any()).Return(
+		nil, apierrors.NewNotFound(k8sv1.Resource("secret"), "secret")).AnyTimes()
+
+	return secretClient
+}
+
+func createMockSecretCache(ctrl *gomock.Controller) *fake.MockCacheInterface[*k8sv1.Secret] {
+	secretCache := fake.NewMockCacheInterface[*k8sv1.Secret](ctrl)
+	secretCache.EXPECT().Get("fleet-default", "credential-from-cache").Return(
+		&k8sv1.Secret{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Secret",
+				APIVersion: "v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "fleet-default",
+				Name:      "credential-from-cache",
+			},
+		}, nil).AnyTimes()
+	secretCache.EXPECT().Get("fleet-default", "credential-from-client").Return(
+		nil, apierrors.NewNotFound(k8sv1.Resource("secret"), "secret")).AnyTimes()
+	secretCache.EXPECT().Get("fleet-default", "non-exist").Return(
+		nil, apierrors.NewNotFound(k8sv1.Resource("secret"), "secret")).AnyTimes()
+
+	return secretCache
+}
+
+func Test_validateS3Secret(t *testing.T) {
+	tests := []struct {
+		name          string
+		cluster       *v1.Cluster
+		oldCluster    *v1.Cluster
+		shouldSucceed bool
+	}{
+		{
+			name:          "valid - s3 credential is changed and exists",
+			shouldSucceed: true,
+			oldCluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "fleet-default",
+					Name:      "testing-cluster",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
+							ETCD: &rkev1.ETCD{
+								S3: &rkev1.ETCDSnapshotS3{
+									CloudCredentialName: "old-secret",
+								},
+							},
+						},
+					},
+				},
+			},
+			cluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "fleet-default",
+					Name:      "testing-cluster",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
+							ETCD: &rkev1.ETCD{
+								S3: &rkev1.ETCDSnapshotS3{
+									CloudCredentialName: "credential-from-client",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:          "invalid - s3 credential is changed and does not exist",
+			shouldSucceed: false,
+			oldCluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "fleet-default",
+					Name:      "testing-cluster",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
+							ETCD: &rkev1.ETCD{
+								S3: &rkev1.ETCDSnapshotS3{
+									CloudCredentialName: "old-secret",
+								},
+							},
+						},
+					},
+				},
+			},
+			cluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "fleet-default",
+					Name:      "testing-cluster",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
+							ETCD: &rkev1.ETCD{
+								S3: &rkev1.ETCDSnapshotS3{
+									CloudCredentialName: "non-exist",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:          "valid - s3 credential remains the same and exists",
+			shouldSucceed: true,
+			oldCluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "fleet-default",
+					Name:      "testing-cluster",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
+							ETCD: &rkev1.ETCD{
+								S3: &rkev1.ETCDSnapshotS3{
+									CloudCredentialName: "credential-from-cache",
+								},
+							},
+						},
+					},
+				},
+			},
+			cluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "fleet-default",
+					Name:      "testing-cluster",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
+							ETCD: &rkev1.ETCD{
+								S3: &rkev1.ETCDSnapshotS3{
+									CloudCredentialName: "credential-from-cache",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:          "invalid - s3 credential does not exist",
+			shouldSucceed: false,
+			oldCluster:    &v1.Cluster{},
+			cluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "fleet-default",
+					Name:      "testing-cluster",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
+							ETCD: &rkev1.ETCD{
+								S3: &rkev1.ETCDSnapshotS3{
+									CloudCredentialName: "non-exist",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:          "valid - s3 credential can be found in cache",
+			shouldSucceed: true,
+			oldCluster:    &v1.Cluster{},
+			cluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "fleet-default",
+					Name:      "testing-cluster",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
+							ETCD: &rkev1.ETCD{
+								S3: &rkev1.ETCDSnapshotS3{
+									CloudCredentialName: "credential-from-cache",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:          "valid - s3 credential can be found in client",
+			shouldSucceed: true,
+			oldCluster:    &v1.Cluster{},
+			cluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "fleet-default",
+					Name:      "testing-cluster",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
+							ETCD: &rkev1.ETCD{
+								S3: &rkev1.ETCDSnapshotS3{
+									CloudCredentialName: "credential-from-client",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:          "valid - s3 credential is empty string",
+			shouldSucceed: true,
+			oldCluster:    &v1.Cluster{},
+			cluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "fleet-default",
+					Name:      "testing-cluster",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						RKEClusterSpecCommon: rkev1.RKEClusterSpecCommon{
+							ETCD: &rkev1.ETCD{
+								S3: &rkev1.ETCDSnapshotS3{
+									CloudCredentialName: "",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	t.Parallel()
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			a := provisioningAdmitter{
+				secretClient: createMockSecretClient(ctrl),
+				secretCache:  createMockSecretCache(ctrl),
+			}
+
+			response, err := a.validateS3Secret(tt.oldCluster, tt.cluster)
+			assert.Equal(t, tt.shouldSucceed, response.Allowed)
+			assert.NoError(t, err)
+		})
+	}
 }
