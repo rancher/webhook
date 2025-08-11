@@ -257,19 +257,13 @@ func Test_Admit(t *testing.T) {
 				Password: "new-password",
 			},
 			requestUserName: requesterUserName,
-			resolverRulesFor: func(string) ([]rbacv1.PolicyRule, error) {
-				return getPods, nil
-			},
-			allowed: false,
+			allowed:         false,
 		},
 		{
 			name:            "user can't delete himself",
 			oldUser:         defaultUser.DeepCopy(),
 			requestUserName: defaultUserName,
-			resolverRulesFor: func(string) ([]rbacv1.PolicyRule, error) {
-				return getPods, nil
-			},
-			allowed: false,
+			allowed:         false,
 		},
 		{
 			name: "user can't deactivate himself",
@@ -282,10 +276,7 @@ func Test_Admit(t *testing.T) {
 			},
 			newUser:         defaultUser.DeepCopy(),
 			requestUserName: defaultUserName,
-			resolverRulesFor: func(string) ([]rbacv1.PolicyRule, error) {
-				return getPods, nil
-			},
-			allowed: false,
+			allowed:         false,
 		},
 		{
 			name:            "username already exists",

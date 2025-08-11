@@ -32,6 +32,7 @@ const (
 	localUserPasswordsNamespace  = "cattle-local-user-passwords"
 	passwordHashAnnotation       = "cattle.io/password-hash"
 	pbkdf2sha3512Hash            = "pbkdf2sha3512"
+	bcryptHash                   = "bcrypt"
 	iterations                   = 210000
 	keyLength                    = 32
 	passwordMinLengthSetting     = "password-min-length"
@@ -212,6 +213,7 @@ func amendRulesToOnlyPermitDelete(rules []rbacv1.PolicyRule, secretName string) 
 // If the annotation ccattle.io/password-hash is not present in the secret, the webhook will encrypt it using pbkdf2. The secret is mutated to include the hashed password, the salt and the user as owner reference.
 func (m *Mutator) admitLocalUserPassword(secret *corev1.Secret, request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	if secret.Annotations[passwordHashAnnotation] == pbkdf2sha3512Hash ||
+		secret.Annotations[passwordHashAnnotation] == bcryptHash ||
 		request.Operation == admissionv1.Delete {
 		// no need to do anything if password is encrypted or is a delete operation.
 		return &admissionv1.AdmissionResponse{
