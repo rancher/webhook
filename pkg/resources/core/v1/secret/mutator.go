@@ -97,7 +97,9 @@ func (m *Mutator) MutatingWebhook(clientConfig admissionregistrationv1.WebhookCl
 	mutatingWebhook.MatchConditions = []admissionregistrationv1.MatchCondition{
 		{
 			Name:       "filter-by-secret-type-cloud-credential",
-			Expression: `request.operation == 'DELETE' || (object != null && object.type == "provisioning.cattle.io/cloud-credential" && request.operation == 'CREATE') || (object != null && object.metadata.namespace == "` + localUserPasswordsNamespace + `")`,
+			Expression: `request.operation == 'DELETE' ||
+			(object != null && object.type == "provisioning.cattle.io/cloud-credential" && request.operation == 'CREATE') || 
+			(object != null && object.metadata.namespace == "` + localUserPasswordsNamespace + `")`,
 		},
 	}
 
@@ -209,8 +211,8 @@ func amendRulesToOnlyPermitDelete(rules []rbacv1.PolicyRule, secretName string) 
 	return rules, amended
 }
 
-// admitLocalUserPassword handle the secrets that contains the local user passwords, which are stored in the cattle-local-user-passwords namespace.
-// If the annotation ccattle.io/password-hash is not present in the secret, the webhook will encrypt it using pbkdf2. The secret is mutated to include the hashed password, the salt and the user as owner reference.
+// admitLocalUserPassword handles the secrets that contains the local user passwords, which are stored in the cattle-local-user-passwords namespace.
+// If the annotation cattle.io/password-hash is not present in the secret, the webhook will encrypt it using pbkdf2. The secret is mutated to include the hashed password, the salt and the user as owner reference.
 func (m *Mutator) admitLocalUserPassword(secret *corev1.Secret, request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	if secret.Annotations[passwordHashAnnotation] == pbkdf2sha3512Hash ||
 		secret.Annotations[passwordHashAnnotation] == bcryptHash ||
