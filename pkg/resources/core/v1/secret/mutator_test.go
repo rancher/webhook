@@ -455,7 +455,7 @@ func TestAdmitLocalUserPassword(t *testing.T) {
 		},
 	})
 	assert.NoError(t, err)
-	rawHashedSecret, err := json.Marshal(&corev1.Secret{
+	rawPbkdf2HashedSecret, err := json.Marshal(&corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-user",
 			Annotations: map[string]string{
@@ -467,6 +467,19 @@ func TestAdmitLocalUserPassword(t *testing.T) {
 		},
 	})
 	assert.NoError(t, err)
+	rawBcryptHashedSecret, err := json.Marshal(&corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-user",
+			Annotations: map[string]string{
+				passwordHashAnnotation: bcryptHash,
+			},
+		},
+		Data: map[string][]byte{
+			"password": []byte("password"),
+		},
+	})
+	assert.NoError(t, err)
+
 	fakeUser := &v3.User{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-user",
@@ -516,7 +529,7 @@ func TestAdmitLocalUserPassword(t *testing.T) {
 			wantPatch:   `[{"op":"add","path":"/metadata/ownerReferences","value":[{"apiVersion":"","kind":"","name":"test-user","uid":""}]},{"op":"add","path":"/metadata/annotations","value":{"cattle.io/password-hash":"pbkdf2sha3512"}},{"op":"replace","path":"/data/password","value":"aGFzaGVkUGFzc3dvcmQ="},{"op":"add","path":"/data/salt","value":"c2FsdA=="}]`, // aGFzaGVkUGFzc3dvcmQ= -> hashedPassword base64 encoded, and c2FsdA==" => salt base64 encoded
 			wantAllowed: true,
 		},
-		"password was already hashed": {
+		"password was already hashed using pbkdf2": {
 			request: &admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
 					Namespace:       localUserPasswordsNamespace,
@@ -526,7 +539,7 @@ func TestAdmitLocalUserPassword(t *testing.T) {
 					RequestResource: &secretGVR,
 					UserInfo:        authenicationv1.UserInfo{Username: "test-user"},
 					Object: runtime.RawExtension{
-						Raw: rawHashedSecret,
+						Raw: rawPbkdf2HashedSecret,
 					},
 				},
 			},
@@ -538,6 +551,29 @@ func TestAdmitLocalUserPassword(t *testing.T) {
 			},
 			wantAllowed: true,
 		},
+		"password was already hashed using bcrypt": {
+			request: &admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Namespace:       localUserPasswordsNamespace,
+					Kind:            secretGVK,
+					Resource:        secretGVR,
+					RequestKind:     &secretGVK,
+					RequestResource: &secretGVR,
+					UserInfo:        authenicationv1.UserInfo{Username: "test-user"},
+					Object: runtime.RawExtension{
+						Raw: rawBcryptHashedSecret,
+					},
+				},
+			},
+			mockSettingsCache: func() ctrlv3.SettingCache {
+				return fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
+			},
+			mockUserCache: func() ctrlv3.UserCache {
+				return fake.NewMockNonNamespacedCacheInterface[*v3.User](ctrl)
+			},
+			wantAllowed: true,
+		},
+
 		"password is shorter than password-min-length setting": {
 			request: &admission.Request{
 				AdmissionRequest: admissionv1.AdmissionRequest{
