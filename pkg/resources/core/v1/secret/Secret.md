@@ -12,6 +12,11 @@ places a `field.cattle.io/creatorId` annotation with the name of the user as the
 
 If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` does not get set.
 
+For secrets stored in the `cattle-local-user-passwords` namespace containing local users passwords:
+- Verifies the password has the minimum required length.
+- Verifies the password is not the same as the username.
+- Encrypts the password using pbkdf2.
+
 ### On delete
 
 Checks if there are any RoleBindings owned by this secret which provide access to a role granting access to this secret.
