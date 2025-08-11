@@ -15,7 +15,8 @@ If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creator
 For secrets stored in the `cattle-local-user-passwords` namespace containing local users passwords:
 - Verifies the password has the minimum required length.
 - Verifies the password is not the same as the username.
-- Encrypts the password using pbkdf2 
+- Encrypts the password using pbkdf2.
+
 ### On delete
 
 Checks if there are any RoleBindings owned by this secret which provide access to a role granting access to this secret.
