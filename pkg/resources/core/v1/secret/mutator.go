@@ -97,9 +97,7 @@ func (m *Mutator) MutatingWebhook(clientConfig admissionregistrationv1.WebhookCl
 	mutatingWebhook.MatchConditions = []admissionregistrationv1.MatchCondition{
 		{
 			Name:       "filter-by-secret-type-cloud-credential",
-			Expression: `request.operation == 'DELETE' ||
-			(object != null && object.type == "provisioning.cattle.io/cloud-credential" && request.operation == 'CREATE') || 
-			(object != null && object.metadata.namespace == "` + localUserPasswordsNamespace + `")`,
+			Expression: `request.operation == 'DELETE' || (object != null && object.type == "provisioning.cattle.io/cloud-credential" && request.operation == 'CREATE') || (object != null && object.metadata.namespace == "` + localUserPasswordsNamespace + `")`,
 		},
 	}
 
