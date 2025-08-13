@@ -32,7 +32,7 @@ jobs:
       - name: Install dependencies
         run: sudo snap install yq --channel=v4/stable
 
-      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           ref: "${{ env.WEBHOOK_REF }}"
           path: webhook
@@ -44,7 +44,7 @@ jobs:
             secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATE_KEY
 
       # Fetch github token just for the rancher repository
-      - uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
+      - uses: actions/create-github-app-token@a8d616148505b5069dccd32f177bb87d7f39123b # v2
         id: app-token
         with:
           app-id: ${{ env.APP_ID }}
@@ -53,7 +53,7 @@ jobs:
             rancher
 
       - name: Checkout rancher repository
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           repository: ${{ github.repository_owner }}/rancher
           ref: "${{ env.RANCHER_REF }}"
@@ -71,7 +71,7 @@ jobs:
           charts_branch=$(grep '"chart-default-branch"' pkg/settings/setting.go | cut -d'"' -f4)
           echo "charts_branch=$charts_branch" >> $GITHUB_OUTPUT
 
-      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           repository: ${{ github.repository_owner }}/charts
           ref: "${{ steps.find_charts_branch.outputs.charts_branch }}"
