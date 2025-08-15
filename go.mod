@@ -1,8 +1,8 @@
 module github.com/rancher/webhook
 
-go 1.23.4
+go 1.24.0
 
-toolchain go1.23.6
+toolchain go1.24.6
 
 replace (
 	github.com/rancher/rke => github.com/rancher/rke v1.8.4
@@ -44,8 +44,8 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/rancher/dynamiclistener v0.6.2
 	github.com/rancher/lasso v0.2.2
-	github.com/rancher/rancher/pkg/apis v0.0.0-20250723154624-7a1c8fb1a3da
-	github.com/rancher/rke v1.8.5-rc.2
+	github.com/rancher/rancher/pkg/apis v0.0.0-20250815173419-c988641e59af
+	github.com/rancher/rke v1.8.5
 	github.com/rancher/wrangler/v3 v3.2.1
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.3
@@ -61,7 +61,7 @@ require (
 	k8s.io/pod-security-admission v0.32.1
 	k8s.io/utils v0.0.0-20250502105355-0f33e8f1c979
 	sigs.k8s.io/controller-runtime v0.19.7
-	sigs.k8s.io/yaml v1.5.0
+	sigs.k8s.io/yaml v1.6.0
 )
 
 require (
@@ -115,10 +115,10 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/rancher/aks-operator v1.11.4 // indirect
-	github.com/rancher/eks-operator v1.11.4 // indirect
+	github.com/rancher/aks-operator v1.11.5-rc.1 // indirect
+	github.com/rancher/eks-operator v1.11.5-rc.1 // indirect
 	github.com/rancher/fleet/pkg/apis v0.12.3 // indirect
-	github.com/rancher/gke-operator v1.11.4 // indirect
+	github.com/rancher/gke-operator v1.11.5-rc.1 // indirect
 	github.com/rancher/norman v0.5.2 // indirect
 	github.com/spf13/cobra v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
@@ -153,7 +153,7 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20241202173237-19429a94021a // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250207221924-e9438ea467c6 // indirect
 	google.golang.org/grpc v1.70.0 // indirect
-	google.golang.org/protobuf v1.36.5 // indirect
+	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
