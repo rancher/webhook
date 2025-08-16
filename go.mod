@@ -33,7 +33,7 @@ replace (
 	k8s.io/kubectl => k8s.io/kubectl v0.30.1
 	k8s.io/kubelet => k8s.io/kubelet v0.30.1
 	k8s.io/kubernetes => k8s.io/kubernetes v1.30.1
-	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.30.1
+	k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.30.14
 	k8s.io/metrics => k8s.io/metrics v0.30.1
 	k8s.io/mount-utils => k8s.io/mount-utils v0.30.1
 	k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.30.1
@@ -59,7 +59,7 @@ require (
 	golang.org/x/tools v0.31.0
 	k8s.io/api v0.32.1
 	k8s.io/apimachinery v0.32.1
-	k8s.io/apiserver v0.31.1
+	k8s.io/apiserver v0.31.12
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/kubernetes v1.30.10
 	k8s.io/pod-security-admission v0.30.1
