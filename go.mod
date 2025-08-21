@@ -45,20 +45,20 @@ require (
 	github.com/rancher/dynamiclistener v0.7.0
 	github.com/rancher/jsonpath v0.0.0-20250620213443-ad24535cf0c1
 	github.com/rancher/lasso v0.2.3
-	github.com/rancher/rancher/pkg/apis v0.0.0-20250814202051-a9ea8e1ba932
+	github.com/rancher/rancher/pkg/apis v0.0.0-20250821200130-827584b58ddd
 	github.com/rancher/rke v1.8.0
-	github.com/rancher/wrangler/v3 v3.2.2
+	github.com/rancher/wrangler/v3 v3.2.3
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/mock v0.5.2
 	golang.org/x/text v0.27.0
 	golang.org/x/tools v0.34.0
-	k8s.io/api v0.33.1
-	k8s.io/apimachinery v0.33.1
-	k8s.io/apiserver v0.33.1
+	k8s.io/api v0.33.4
+	k8s.io/apimachinery v0.33.4
+	k8s.io/apiserver v0.33.4
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/kubernetes v1.33.1
+	k8s.io/kubernetes v1.33.4
 	k8s.io/pod-security-admission v0.32.1
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
 	sigs.k8s.io/controller-runtime v0.21.0
@@ -97,10 +97,10 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/rancher/aks-operator v1.12.1-rc.1 // indirect
-	github.com/rancher/eks-operator v1.12.1-rc.1 // indirect
+	github.com/rancher/aks-operator v1.12.1 // indirect
+	github.com/rancher/eks-operator v1.12.1 // indirect
 	github.com/rancher/fleet/pkg/apis v0.13.0 // indirect
-	github.com/rancher/gke-operator v1.12.1-rc.1 // indirect
+	github.com/rancher/gke-operator v1.12.1 // indirect
 	github.com/rancher/norman v0.6.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
@@ -121,9 +121,9 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/apiextensions-apiserver v0.33.1 // indirect
+	k8s.io/apiextensions-apiserver v0.33.4 // indirect
 	k8s.io/code-generator v0.33.1 // indirect
-	k8s.io/component-base v0.33.1 // indirect
+	k8s.io/component-base v0.33.4 // indirect
 	k8s.io/component-helpers v0.33.1 // indirect
 	k8s.io/controller-manager v0.33.1 // indirect
 	k8s.io/gengo v0.0.0-20250130153323-76c5745d3511 // indirect
