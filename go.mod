@@ -46,7 +46,7 @@ require (
 	github.com/rancher/wrangler v1.1.1
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.3
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.11.1
 	golang.org/x/exp v0.0.0-20230206171751-46f607a40771
 	golang.org/x/text v0.15.0
 	golang.org/x/tools v0.21.0
