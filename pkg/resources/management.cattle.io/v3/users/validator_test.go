@@ -30,7 +30,6 @@ const (
 	managerUserName   = "manage-user"
 	defaultUserName   = "test-user"
 	sarErrorUser      = "sar-error-user"
-	ssrErrorUser      = "ssr-error-user"
 	requesterUserName = "requester-user"
 )
 
@@ -223,20 +222,6 @@ func Test_Admit(t *testing.T) {
 			allowed:         false,
 		},
 		{
-			name: "adding a new username allowed",
-			oldUser: &v3.User{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: defaultUserName,
-				},
-			},
-			newUser:         defaultUser.DeepCopy(),
-			requestUserName: requesterUserName,
-			resolverRulesFor: func(string) ([]rbacv1.PolicyRule, error) {
-				return getPods, nil
-			},
-			allowed: true,
-		},
-		{
 			name:    "removing username not allowed",
 			oldUser: defaultUser.DeepCopy(),
 			newUser: &v3.User{
@@ -307,6 +292,52 @@ func Test_Admit(t *testing.T) {
 			},
 			allowed: false,
 			wantErr: true,
+		},
+		{
+			name: "username already exists on update",
+			oldUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "another-user",
+				},
+			},
+			newUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "another-user",
+				},
+				Username: defaultUserName,
+			},
+			requestUserName: managerUserName,
+			mockUserCache: func() controllerv3.UserCache {
+				mock := fake.NewMockNonNamespacedCacheInterface[*v3.User](ctrl)
+				mock.EXPECT().List(labels.Everything()).Return([]*v3.User{
+					&defaultUser,
+				}, nil)
+				return mock
+			},
+			allowed: false,
+		},
+		{
+			name: "setting a unique username on update is allowed",
+			oldUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "another-user",
+				},
+			},
+			newUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "another-user",
+				},
+				Username: "a-different-username",
+			},
+			requestUserName: managerUserName,
+			mockUserCache: func() controllerv3.UserCache {
+				mock := fake.NewMockNonNamespacedCacheInterface[*v3.User](ctrl)
+				mock.EXPECT().List(labels.Everything()).Return([]*v3.User{
+					&defaultUser,
+				}, nil)
+				return mock
+			},
+			allowed: true,
 		},
 	}
 	for _, tt := range tests {

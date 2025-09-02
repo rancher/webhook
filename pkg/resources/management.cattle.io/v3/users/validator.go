@@ -83,14 +83,8 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	}
 
 	if request.Operation == admissionv1.Create && newUser.Username != "" {
-		users, err := a.userCache.List(labels.Everything())
-		if err != nil {
-			return nil, fmt.Errorf("failed to get users %w", err)
-		}
-		for _, user := range users {
-			if user.Username == newUser.Username {
-				return admission.ResponseBadRequest("username already exists"), nil
-			}
+		if resp, err := a.checkUsernameUniqueness(newUser.Username); err != nil || resp != nil {
+			return resp, err
 		}
 		return &admissionv1.AdmissionResponse{Allowed: true}, nil
 	}
@@ -100,6 +94,12 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		if err := validateUpdateFields(oldUser, newUser, fieldPath); err != nil {
 			return admission.ResponseBadRequest(err.Error()), nil
 		}
+		if oldUser.Username == "" && newUser.Username != "" {
+			if resp, err := a.checkUsernameUniqueness(newUser.Username); err != nil || resp != nil {
+				return resp, err
+			}
+		}
+
 		oldUserEnabled := ptr.Deref(oldUser.Enabled, false)
 		newUserEnabled := ptr.Deref(newUser.Enabled, false)
 
@@ -154,6 +154,23 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	}
 
 	return &admissionv1.AdmissionResponse{Allowed: true}, nil
+}
+
+// checkUsernameUniqueness checks if a given username is already in use by another user.
+func (a *admitter) checkUsernameUniqueness(username string) (*admissionv1.AdmissionResponse, error) {
+	if username == "" {
+		return nil, nil
+	}
+	users, err := a.userCache.List(labels.Everything())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get users: %w", err)
+	}
+	for _, user := range users {
+		if user.Username == username {
+			return admission.ResponseBadRequest("username already exists"), nil
+		}
+	}
+	return nil, nil
 }
 
 // getGroupsFromUserAttributes gets the list of group principals from a UserAttribute.
