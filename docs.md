@@ -523,7 +523,7 @@ When a Token is updated, the following checks take place:
 
 ### Validation Checks
 
-#### Create
+#### Create and Delete
 
 Verifies there aren't any other users with the same username.
 
