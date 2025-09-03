@@ -85,7 +85,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			clusterrole.NewValidator(),
 			clusterrolebinding.NewValidator(),
 			authconfig.NewValidator(),
-			users.NewValidator(clients.Management.UserAttribute().Cache(), clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.DefaultResolver),
+			users.NewValidator(clients.Management.UserAttribute().Cache(), clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.DefaultResolver, clients.Management.User().Cache()),
 		)
 	} else {
 		handlers = append(handlers, clusterauthtoken.NewValidator())
