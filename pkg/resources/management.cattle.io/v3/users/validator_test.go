@@ -3,11 +3,13 @@ package users
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
+	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/wrangler/v3/pkg/generic/fake"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
@@ -16,6 +18,7 @@ import (
 	authorizationv1 "k8s.io/api/authorization/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/authentication/user"
 	authorizationFake "k8s.io/client-go/kubernetes/typed/authorization/v1/fake"
@@ -26,7 +29,6 @@ const (
 	managerUserName   = "manage-user"
 	defaultUserName   = "test-user"
 	sarErrorUser      = "sar-error-user"
-	ssrErrorUser      = "ssr-error-user"
 	requesterUserName = "requester-user"
 )
 
@@ -78,6 +80,7 @@ func Test_Admit(t *testing.T) {
 		resolverRulesFor func(string) ([]rbacv1.PolicyRule, error)
 		requestUserName  string
 		allowed          bool
+		mockUserCache    func() controllerv3.UserCache
 		wantErr          bool
 	}{
 		{
@@ -218,20 +221,6 @@ func Test_Admit(t *testing.T) {
 			allowed:         false,
 		},
 		{
-			name: "adding a new username allowed",
-			oldUser: &v3.User{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: defaultUserName,
-				},
-			},
-			newUser:         defaultUser.DeepCopy(),
-			requestUserName: requesterUserName,
-			resolverRulesFor: func(string) ([]rbacv1.PolicyRule, error) {
-				return getPods, nil
-			},
-			allowed: true,
-		},
-		{
 			name:    "removing username not allowed",
 			oldUser: defaultUser.DeepCopy(),
 			newUser: &v3.User{
@@ -241,6 +230,82 @@ func Test_Admit(t *testing.T) {
 			},
 			requestUserName: requesterUserName,
 			allowed:         false,
+		},
+		{
+			name:            "username already exists",
+			newUser:         defaultUser.DeepCopy(),
+			requestUserName: defaultUserName,
+			mockUserCache: func() controllerv3.UserCache {
+				mock := fake.NewMockNonNamespacedCacheInterface[*v3.User](ctrl)
+				mock.EXPECT().List(labels.Everything()).Return([]*v3.User{
+					{
+						Username: defaultUserName,
+					},
+				}, nil)
+
+				return mock
+			},
+
+			allowed: false,
+		},
+		{
+			name:            "failed to get users",
+			newUser:         defaultUser.DeepCopy(),
+			requestUserName: defaultUserName,
+			mockUserCache: func() controllerv3.UserCache {
+				mock := fake.NewMockNonNamespacedCacheInterface[*v3.User](ctrl)
+				mock.EXPECT().List(labels.Everything()).Return(nil, errors.New("some error"))
+
+				return mock
+			},
+			allowed: false,
+			wantErr: true,
+		},
+		{
+			name: "username already exists on update",
+			oldUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "another-user",
+				},
+			},
+			newUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "another-user",
+				},
+				Username: defaultUserName,
+			},
+			requestUserName: managerUserName,
+			mockUserCache: func() controllerv3.UserCache {
+				mock := fake.NewMockNonNamespacedCacheInterface[*v3.User](ctrl)
+				mock.EXPECT().List(labels.Everything()).Return([]*v3.User{
+					&defaultUser,
+				}, nil)
+				return mock
+			},
+			allowed: false,
+		},
+		{
+			name: "setting a unique username on update is allowed",
+			oldUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "another-user",
+				},
+			},
+			newUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "another-user",
+				},
+				Username: "a-different-username",
+			},
+			requestUserName: managerUserName,
+			mockUserCache: func() controllerv3.UserCache {
+				mock := fake.NewMockNonNamespacedCacheInterface[*v3.User](ctrl)
+				mock.EXPECT().List(labels.Everything()).Return([]*v3.User{
+					&defaultUser,
+				}, nil)
+				return mock
+			},
+			allowed: true,
 		},
 	}
 	for _, tt := range tests {
@@ -258,6 +323,9 @@ func Test_Admit(t *testing.T) {
 				a.resolver = &fakeResolver{
 					rulesFor: tt.resolverRulesFor,
 				}
+			}
+			if tt.mockUserCache != nil {
+				a.userCache = tt.mockUserCache()
 			}
 
 			req := createUserRequest(t, tt.oldUser, tt.newUser, tt.requestUserName)
