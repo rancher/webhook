@@ -104,6 +104,11 @@ places a `field.cattle.io/creatorId` annotation with the name of the user as the
 
 If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` does not get set.
 
+For secrets stored in the `cattle-local-user-passwords` namespace containing local users passwords:
+- Verifies the password has the minimum required length.
+- Verifies the password is not the same as the username.
+- Encrypts the password using pbkdf2.
+
 #### On delete
 
 Checks if there are any RoleBindings owned by this secret which provide access to a role granting access to this secret.
@@ -518,6 +523,10 @@ When a Token is updated, the following checks take place:
 
 ### Validation Checks
 
+#### Create and Delete
+
+Verifies there aren't any other users with the same username.
+
 #### Update and Delete
 
 When a user is updated or deleted, a check occurs to ensure that the user making the request has permissions greater than or equal to the user being updated or deleted. To get the user's groups, the user's UserAttributes are checked. This is best effort, because UserAttributes are only updated when a User logs in, so it may not be perfectly up to date.
@@ -529,6 +538,8 @@ If the user making the request has the verb `manage-users` for the resource `use
 Users can update the following fields if they had not been set. But after getting initial values, the fields cannot be changed:
 
 - UserName
+
+A user can't deactivate or delete himself.
 
 ## UserAttribute
 
@@ -580,6 +591,10 @@ following:
 - Equal to another data directory
 - Attempts to nest another data directory
 
+##### Etcd S3 CloudCredential Secret
+
+Prevent the creation of objects if the secret specified in `.spec.rkeConfig.etcd.s3.cloudCredentialName` does not exist.
+
 #### On Update
 
 ##### Creator ID Annotation
@@ -596,7 +611,7 @@ section. A secondary validator will ensure that the effective data directory for
 from the one chosen during cluster creation. Additionally, the changing of a data directory for the `system-agent`, 
 kubernetes distro (RKE2/K3s), and CAPR components is also prohibited.
 
-#### cluster.spec.clusterAgentDeploymentCustomization and cluster.spec.fleetAgentDeploymentCustomization
+##### cluster.spec.clusterAgentDeploymentCustomization and cluster.spec.fleetAgentDeploymentCustomization
 
 The `DeploymentCustomization` fields are of 3 types:
 - `appendTolerations`: adds tolerations to the appropriate deployment (cluster-agent/fleet-agent)
@@ -611,7 +626,7 @@ A `Toleration` is matched to a regex which is provided by upstream [apimachinery
 
 For the `Affinity` based rules, the `podAffinity`/`podAntiAffinity` are validated via label selectors via [this apimachinery function](https://github.com/kubernetes/apimachinery/blob/02a41040d88da08de6765573ae2b1a51f424e1ca/pkg/apis/meta/v1/validation/validation.go#L56) whereas the `nodeAffinity` `nodeSelectorTerms` are validated via the same `Toleration` function.
 
-#### cluster.spec.clusterAgentDeploymentCustomization.schedulingCustomization
+##### cluster.spec.clusterAgentDeploymentCustomization.schedulingCustomization
 
 The `SchedulingCustomization` subfield of the `DeploymentCustomization` field defines the properties of a Pod Disruption Budget and Priority Class which will be automatically deployed by Rancher for the cattle-cluster-agent.
 
@@ -637,9 +652,15 @@ the format expected by Go, and helps to prevent subtle issues elsewhere when wri
 
 The only exception to this check is if the existing cluster already has a `NO_PROXY` variable which includes spaces in its value. In this case, update operations are permitted. If `NO_PROXY` is later updated to value which does not contain spaces, this exception will no longer occur.
 
+##### Etcd S3 CloudCredential Secret
+
+Prevent the update of objects if the secret specified in `.spec.rkeConfig.etcd.s3.cloudCredentialName` does not exist.
+
 ### Mutation Checks
 
 #### On Create
+
+##### Creator ID Annotation
 
 When a cluster is created `field.cattle.io/creatorId` is set to the Username from the request.
 

@@ -494,28 +494,24 @@ func getSchedulingCustomization(cluster *apisv3.Cluster) *apisv3.AgentScheduling
 	return cluster.Spec.ClusterAgentDeploymentCustomization.SchedulingCustomization
 }
 
-// validateVersionManagementFeature validates the annotation for the version management feature is set with valid value on the imported RKE2/K3s cluster,
-// additionally, it permits but include a warning to the response if either of the following is true:
-//   - the annotation is found on a cluster rather than imported RKE2/K3s cluster;
-//   - the spec.rke2Config or spec.k3sConfig is changed when the version management feature is disabled for the cluster.
+// validateVersionManagementFeature validates the annotation for the version management feature is set with valid value on the imported RKE2/K3s cluster;
+// Note the following:
+//   - no validation is done if the cluster is not an imported RKE2/K3s cluster;
+//   - a warning is emitted if `spec.rke2Config` or `spec.k3sConfig` is changed when the version management feature is disabled for the cluster.
 func (a *admitter) validateVersionManagementFeature(oldCluster, newCluster *apisv3.Cluster, op admissionv1.Operation) (*admissionv1.AdmissionResponse, error) {
 	if op != admissionv1.Create && op != admissionv1.Update {
 		return admission.ResponseAllowed(), nil
 	}
 
-	val, exist := newCluster.Annotations[VersionManagementAnno]
 	driver := newCluster.Status.Driver
 
 	if driver != apisv3.ClusterDriverRke2 && driver != apisv3.ClusterDriverK3s {
 		response := admission.ResponseAllowed()
-		if exist {
-			msg := fmt.Sprintf("The annotation [%s] takes effect only on imported RKE2/K3s cluster, please consider removing it from cluster [%s]", VersionManagementAnno, newCluster.Name)
-			response.Warnings = append(response.Warnings, msg)
-		}
 		return response, nil
 	}
 
 	// reaching this point indicates the cluster is an imported RKE2/K3s cluster
+	val, exist := newCluster.Annotations[VersionManagementAnno]
 	if !exist {
 		message := fmt.Sprintf("the %s annotation is missing", VersionManagementAnno)
 		return admission.ResponseBadRequest(message), nil
