@@ -52,6 +52,7 @@ func main() {
 					v3.ClusterProxyConfig{},
 					v3.Feature{},
 					v3.UserAttribute{},
+					v3.User{},
 				},
 			},
 			"provisioning.cattle.io": {

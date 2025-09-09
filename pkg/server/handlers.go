@@ -59,7 +59,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		userAttribute := userattribute.NewValidator()
 		clusterRoles := clusterrole.NewValidator()
 		clusterRoleBindings := clusterrolebinding.NewValidator()
-		users := users.NewValidator(clients.Management.UserAttribute().Cache(), clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.DefaultResolver)
+		users := users.NewValidator(clients.Management.UserAttribute().Cache(), clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.DefaultResolver, clients.Management.User().Cache())
 
 		handlers = append(handlers, psact, globalRoles, globalRoleBindings, prtbs, crtbs, roleTemplates, secrets, nodeDriver, projects, roles, rolebindings, clusterRoles, clusterRoleBindings, clusterProxyConfigs, userAttribute, setting, users)
 	}
