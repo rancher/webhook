@@ -61,7 +61,7 @@ func (v *Validator) GVR() schema.GroupVersionResource {
 
 // Operations returns list of operations handled by the validator.
 func (v *Validator) Operations() []admissionregistrationv1.OperationType {
-	return []admissionregistrationv1.OperationType{admissionregistrationv1.Update, admissionregistrationv1.Delete}
+	return []admissionregistrationv1.OperationType{admissionregistrationv1.Create, admissionregistrationv1.Update, admissionregistrationv1.Delete}
 }
 
 func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.WebhookClientConfig) []admissionregistrationv1.ValidatingWebhook {
