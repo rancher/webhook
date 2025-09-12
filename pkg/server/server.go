@@ -43,8 +43,6 @@ const (
 	webhookPortEnvKey       = "CATTLE_PORT"
 	webhookURLEnvKey        = "CATTLE_WEBHOOK_URL"
 	allowedCNsEnv           = "ALLOWED_CNS"
-	ignoreTLSHandshakeError = "IGNORE_TLS_HANDSHAKE_ERROR"
-	ignoreTLSHandErrorVal   = false
 )
 
 var caFile = filepath.Join(os.TempDir(), "k8s-webhook-server", "client-ca", "ca.crt")
