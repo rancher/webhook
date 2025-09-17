@@ -238,6 +238,7 @@ func (s *secretHandler) sync(_ string, secret *corev1.Secret) (*corev1.Secret, e
 		},
 		Webhooks: mutatingWebhooks,
 	}
+	logrus.Infof("*************TEST***********")
 	err := s.ensureWebhookConfiguration(validatingConfig, mutatingConfig)
 	if err != nil {
 		logrus.Errorf("Failed to ensure configuration: %s", err.Error())
