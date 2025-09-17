@@ -22,6 +22,7 @@ import (
 	"github.com/rancher/webhook/pkg/clients"
 	"github.com/rancher/webhook/pkg/health"
 	admissionregistration "github.com/rancher/wrangler/v3/pkg/generated/controllers/admissionregistration.k8s.io/v1"
+	secretstore "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
 	"github.com/sirupsen/logrus"
 	v1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -120,7 +121,7 @@ func ListenAndServe(ctx context.Context, cfg *rest.Config, mcmEnabled bool) erro
 		RetryPeriod:     2 * time.Second,
 		ReleaseOnCancel: true,
 		Callbacks: leaderelection.LeaderCallbacks{
-			OnStartedLeading: func(c context.Context) {
+			OnStartedLeading: func(_ context.Context) {
 				leaderFlag.Store(true)
 				logrus.Infof("[%s] elected leader: will manage webhook configurations", id)
 			},
@@ -206,7 +207,7 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, validators []
 		}
 	}
 	return server.ListenAndServe(ctx, webhookHTTPSPort, webhookHTTPPort, router, &server.ListenOpts{
-		Secrets:       clients.Core.Secret(),
+		Secrets:       &gatedSecrets{SecretController: clients.Core.Secret()},
 		CertNamespace: namespace,
 		CertName:      certName,
 		CAName:        caName,
@@ -418,4 +419,26 @@ func getAllowedCNs() []string {
 		return nil
 	}
 	return strings.Split(allowedCNString, ",")
+}
+
+// gatedSecrets wraps SecretController so only the leader writes TLS/CA secrets.
+type gatedSecrets struct {
+	secretstore.SecretController
+}
+
+func (g *gatedSecrets) Create(sec *corev1.Secret) (*corev1.Secret, error) {
+	if !leaderFlag.Load() {
+		// Pretend success so dynamiclistener doesn’t requeue forever.
+		logrus.Infof("not leader, skipping create of secret %s/%s", sec.Namespace, sec.Name)
+		return sec.DeepCopy(), nil
+	}
+	return g.SecretController.Create(sec)
+}
+
+func (g *gatedSecrets) Update(sec *corev1.Secret) (*corev1.Secret, error) {
+	if !leaderFlag.Load() {
+		logrus.Infof("not leader, skipping update of secret %s/%s", sec.Namespace, sec.Name)
+		return sec.DeepCopy(), nil
+	}
+	return g.SecretController.Update(sec)
 }
