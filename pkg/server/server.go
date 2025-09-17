@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -164,7 +165,7 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, validators []
 	router := mux.NewRouter()
 	errChecker := health.NewErrorChecker("Config Applied")
 	health.RegisterHealthCheckers(router, errChecker)
-	errChecker.Store(nil)
+	errChecker.Store(errors.New("webhook configuration not yet applied"))
 	router.Use(certAuth())
 
 	logrus.Debug("Creating Webhook routes")
@@ -232,9 +233,10 @@ type secretHandler struct {
 // sync updates the validating admission configuration whenever the TLS cert changes.
 // Only the elected leader performs the updates, followers are a no-op.
 func (s *secretHandler) sync(_ string, secret *corev1.Secret) (*corev1.Secret, error) {
-	// Only leader should manage webhook configuration
+	// The leader is responsible for applying the webhook configuration.
+	// Follower pods are only responsible for serving traffic and can be marked as healthy once the certificates are generated.
 	if !leaderFlag.Load() {
-		// Not the leader: do nothing, return nil
+		s.errChecker.Store(nil)
 		return nil, nil
 	}
 
@@ -242,9 +244,7 @@ func (s *secretHandler) sync(_ string, secret *corev1.Secret) (*corev1.Secret, e
 		return nil, nil
 	}
 
-	logrus.Info("Sleeping for 15 seconds then applying webhook config")
-	// Sleep here to make sure server is listening and all caches are primed
-	time.Sleep(15 * time.Second)
+	logrus.Info("Applying webhook config")
 
 	validationClientConfig := v1.WebhookClientConfig{
 		Service: &v1.ServiceReference{
