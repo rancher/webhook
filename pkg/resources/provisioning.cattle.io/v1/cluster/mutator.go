@@ -52,7 +52,6 @@ const (
 
 var (
 	parsedRangeLessThan123 = semver.MustParseRange("< 1.23.0-rancher0")
-	parsedRangeLessThan125 = semver.MustParseRange("< 1.25.0-rancher0")
 )
 
 var gvr = schema.GroupVersionResource{

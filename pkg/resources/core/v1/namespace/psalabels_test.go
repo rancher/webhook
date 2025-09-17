@@ -373,11 +373,12 @@ func TestValidatePSALabels(t *testing.T) {
 		spec := review.Spec
 
 		// simulate SAR not allowed
-		if spec.User == failSarUser {
+		switch spec.User {
+		case failSarUser:
 			review.Status.Allowed = false
 			review.Status.Reason = fmt.Sprintf("%s %s", "Can not update project PSA for:", spec.User)
 			return true, review, nil
-		} else if spec.User == sarErrorUser {
+		case sarErrorUser:
 			return true, nil, fmt.Errorf("SAR creation failed for user #{spec.User}")
 		}
 		review.Status.Allowed = true

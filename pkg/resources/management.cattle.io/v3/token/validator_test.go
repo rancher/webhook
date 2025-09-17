@@ -14,7 +14,7 @@ import (
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 type TokenFieldsSuite struct {
@@ -37,7 +37,7 @@ type tokenFieldsTest struct {
 }
 
 func (t *tokenFieldsTest) name() string {
-	return pointer.StringDeref(t.lastUsedAt, "nil")
+	return ptr.Deref(t.lastUsedAt, "nil")
 }
 
 func (t *tokenFieldsTest) toToken() ([]byte, error) {
@@ -51,23 +51,23 @@ var tokenFieldsTests = []tokenFieldsTest{
 		allowed: true,
 	},
 	{
-		lastUsedAt: pointer.String(time.Now().Format(time.RFC3339)),
+		lastUsedAt: ptr.To(time.Now().Format(time.RFC3339)),
 		allowed:    true,
 	},
 	{
-		lastUsedAt: pointer.String("2024-03-25T21:2:45Z"), // Not a valid RFC3339 time.
+		lastUsedAt: ptr.To("2024-03-25T21:2:45Z"), // Not a valid RFC3339 time.
 	},
 	{
-		lastUsedAt: pointer.String("1w"),
+		lastUsedAt: ptr.To("1w"),
 	},
 	{
-		lastUsedAt: pointer.String("1d"),
+		lastUsedAt: ptr.To("1d"),
 	},
 	{
-		lastUsedAt: pointer.String("-1h"),
+		lastUsedAt: ptr.To("-1h"),
 	},
 	{
-		lastUsedAt: pointer.String(""),
+		lastUsedAt: ptr.To(""),
 	},
 }
 
@@ -81,8 +81,7 @@ func (s *TokenFieldsSuite) TestValidateOnCreate() {
 
 func (s *TokenFieldsSuite) TestDontValidateOnDelete() {
 	// Make sure that Token can be deleted without enforcing validation of user token fields.
-	alwaysAllow := true
-	s.validate(v1.Delete, alwaysAllow)
+	s.validate(v1.Delete, true)
 }
 
 func (s *TokenFieldsSuite) validate(op v1.Operation, allowed ...bool) {

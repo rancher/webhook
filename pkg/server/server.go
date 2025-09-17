@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -44,7 +43,6 @@ const (
 	webhookURLEnvKey        = "CATTLE_WEBHOOK_URL"
 	allowedCNsEnv           = "ALLOWED_CNS"
 	ignoreTLSHandshakeError = "IGNORE_TLS_HANDSHAKE_ERROR"
-	ignoreTLSHandErrorVal   = false
 )
 
 var caFile = filepath.Join(os.TempDir(), "k8s-webhook-server", "client-ca", "ca.crt")
@@ -340,7 +338,7 @@ func certAuth() func(next http.Handler) http.Handler {
 }
 
 func getVerifyOptions() *x509.VerifyOptions {
-	caCert, err := ioutil.ReadFile(caFile)
+	caCert, err := os.ReadFile(caFile)
 	if err != nil {
 		logrus.Infof("could not read client CA file at %s, incoming requests will not be authenticated", caFile)
 		return nil

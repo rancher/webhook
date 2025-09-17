@@ -57,14 +57,12 @@ func NewUserInfo(username string, groups ...string) *user.DefaultInfo {
 	}
 }
 
-// copySlices copies multiple rule list into one large list.
-// this is used instead of append so that the original list are not modified.
+// copySlices copies multiple rule lists into one large list.
+// this is used instead of append so that the original list is not modified.
 func copySlices(slices ...[]rbacv1.PolicyRule) []rbacv1.PolicyRule {
 	ret := []rbacv1.PolicyRule{}
 	for _, slice := range slices {
-		for _, rule := range slice {
-			ret = append(ret, rule)
-		}
+		ret = append(ret, slice...)
 	}
 	return ret
 }

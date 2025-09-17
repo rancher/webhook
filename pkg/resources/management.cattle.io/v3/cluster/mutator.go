@@ -167,5 +167,4 @@ func (m *ManagementClusterMutator) mutateVersionManagement(cluster *apisv3.Clust
 		}
 		cluster.Annotations[VersionManagementAnno] = "system-default"
 	}
-	return
 }

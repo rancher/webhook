@@ -218,10 +218,6 @@ func TestAdmit(t *testing.T) {
 				orphanPolicy := metav1.DeletePropagationOrphan
 				deleteOpts.PropagationPolicy = &orphanPolicy
 			}
-			if test.hasOrphanDelete {
-				orphan := true
-				deleteOpts.OrphanDependents = &orphan
-			}
 
 			req.Options.Raw, err = json.Marshal(deleteOpts)
 			assert.NoError(t, err)

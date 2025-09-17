@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
+	v1 "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
 	admissionv1 "k8s.io/api/admission/v1"
 )
 

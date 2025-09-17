@@ -93,10 +93,9 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	if err != nil {
 		return nil, fmt.Errorf("unable to unmarshal delete options %w", err)
 	}
-	hasOrphanDependents := deleteOpts.OrphanDependents != nil && *deleteOpts.OrphanDependents
 	hasOrphanPolicy := deleteOpts.PropagationPolicy != nil && *deleteOpts.PropagationPolicy == metav1.DeletePropagationOrphan
 	// we are only concerned with requests that attempt to orphan resources
-	if !hasOrphanDependents && !hasOrphanPolicy {
+	if !hasOrphanPolicy {
 		return admission.ResponseAllowed(), nil
 	}
 	secret, err := objectsv1.SecretFromRequest(&request.AdmissionRequest)
