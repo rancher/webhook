@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	v1 "github.com/rancher/rancher/pkg/apis/auditlog.cattle.io/v1"
+	"github.com/rancher/rancher/pkg/apis/auditlog.cattle.io/v1"
 	admissionv1 "k8s.io/api/admission/v1"
 )
 
@@ -38,7 +38,7 @@ func AuditPolicyOldAndNewFromRequest(request *admissionv1.AdmissionRequest) (*v1
 	return oldObject, object, nil
 }
 
-// AuditPolicyFromRequest returns an AuditPolicy object from the webhook request.
+// AuditPolicyFromRequest returns a AuditPolicy object from the webhook request.
 // If the operation is a Delete operation, then the old object is returned.
 // Otherwise, the new object is returned.
 func AuditPolicyFromRequest(request *admissionv1.AdmissionRequest) (*v1.AuditPolicy, error) {

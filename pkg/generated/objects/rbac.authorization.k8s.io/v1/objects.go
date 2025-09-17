@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	admissionv1 "k8s.io/api/admission/v1"
-	v1 "k8s.io/api/rbac/v1"
+	"k8s.io/api/rbac/v1"
 )
 
 // RoleOldAndNewFromRequest gets the old and new Role objects, respectively, from the webhook request.
