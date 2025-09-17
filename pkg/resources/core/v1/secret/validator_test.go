@@ -24,7 +24,6 @@ func TestAdmit(t *testing.T) {
 		name                       string
 		hasRoleRefs                bool
 		hasRoleBindingRefs         bool
-		hasOrphanDelete            bool
 		hasOrphanPropagationDelete bool
 		secretDecodeError          bool
 		optionsDecodeError         bool
@@ -39,11 +38,6 @@ func TestAdmit(t *testing.T) {
 			wantAdmit: true,
 		},
 		{
-			name:            "no refs, can orphan",
-			hasOrphanDelete: true,
-			wantAdmit:       true,
-		},
-		{
 			name:                       "no refs, can orphan through propagation",
 			hasOrphanPropagationDelete: true,
 			wantAdmit:                  true,
@@ -52,12 +46,6 @@ func TestAdmit(t *testing.T) {
 			name:        "role refs, can delete",
 			hasRoleRefs: true,
 			wantAdmit:   true,
-		},
-		{
-			name:            "role refs, cannot orphan",
-			hasRoleRefs:     true,
-			hasOrphanDelete: true,
-			wantAdmit:       false,
 		},
 		{
 			name:                       "role refs, cannot orphan through propagation",
@@ -71,12 +59,6 @@ func TestAdmit(t *testing.T) {
 			wantAdmit:          true,
 		},
 		{
-			name:               "role binding refs, cannot orphan",
-			hasRoleBindingRefs: true,
-			hasOrphanDelete:    true,
-			wantAdmit:          false,
-		},
-		{
 			name:                       "role binding refs, cannot orphan through propagation",
 			hasRoleBindingRefs:         true,
 			hasOrphanPropagationDelete: true,
@@ -87,13 +69,6 @@ func TestAdmit(t *testing.T) {
 			hasRoleRefs:        true,
 			hasRoleBindingRefs: true,
 			wantAdmit:          true,
-		},
-		{
-			name:               "role and role binding refs, cannot orphan",
-			hasRoleRefs:        true,
-			hasRoleBindingRefs: true,
-			hasOrphanDelete:    true,
-			wantAdmit:          false,
 		},
 		{
 			name:                       "role and role binding refs, cannot orphan through propagation",
