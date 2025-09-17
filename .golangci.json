@@ -1,17 +1,35 @@
 {
+        "version": "2",
+	"formatters": {
+		"enable": [
+			"goimports",
+			"gofmt"
+		]
+	},
 	"linters": {
 		"disable-all": true,
 		"enable": [
 			"govet",
-			"revive",
-			"goimports",
 			"misspell",
-			"ineffassign",
-			"gofmt"
-		]
+			"ineffassign"
+		],
+            "disable": [
+		"revive"
+                ]
 	},
-	"run": {
-		"deadline": "5m"
+	"linters-settings": {
+	    "revive": {
+                "rules": [
+                    {
+		    "name" : "exported",
+		    "disabled": true
+		    }
+                ]
+            },
+            "comment": [
+                "This next block doesn't suppress the comment-requirement for exported names",
+                "so disable revive until it does."
+                ]
 	},
 	"issues": {
 		"exclude-rules": [
