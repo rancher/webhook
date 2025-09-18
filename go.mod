@@ -5,6 +5,7 @@ go 1.24.0
 toolchain go1.24.6
 
 replace (
+	github.com/felixge/snoop => github.com/felixge/httpsnoop v1.0.4
 	github.com/rancher/rke => github.com/rancher/rke v1.8.4
 	k8s.io/api => k8s.io/api v0.32.1
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.32.1
@@ -15,6 +16,7 @@ replace (
 	k8s.io/cloud-provider => k8s.io/cloud-provider v0.32.1
 	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.32.1
 	k8s.io/code-generator => k8s.io/code-generator v0.32.1
+	k8s.io/component-base => k8s.io/component-base v0.32.1
 	k8s.io/component-helpers => k8s.io/component-helpers v0.32.1
 	k8s.io/controller-manager => k8s.io/controller-manager v0.32.1
 	k8s.io/cri-api => k8s.io/cri-api v0.32.1
@@ -43,7 +45,7 @@ require (
 	github.com/go-ldap/ldap/v3 v3.4.10
 	github.com/gorilla/mux v1.8.1
 	github.com/rancher/dynamiclistener v0.6.2
-	github.com/rancher/lasso v0.2.3
+	github.com/rancher/lasso v0.2.4
 	github.com/rancher/rancher/pkg/apis v0.0.0-20250821052120-92c1d050c17c
 	github.com/rancher/rke v1.8.5
 	github.com/rancher/wrangler/v3 v3.2.4
