@@ -949,6 +949,17 @@ func TestValidateDataDirectories(t *testing.T) {
 			shouldSucceed: true,
 		},
 		{
+			name:    "old no rkeconfig",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+				},
+			},
+			oldCluster:    &v1.Cluster{},
+			shouldSucceed: true,
+		},
+		{
 			name:    "Create",
 			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
 			cluster: &v1.Cluster{
