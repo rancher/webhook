@@ -6,6 +6,7 @@ toolchain go1.24.6
 
 replace (
 	github.com/felixge/snoop => github.com/felixge/httpsnoop v1.0.4
+	github.com/google/cel-go => github.com/google/cel-go v0.22.0
 	github.com/rancher/rke => github.com/rancher/rke v1.8.4
 	k8s.io/api => k8s.io/api v0.32.1
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.32.1
