@@ -507,7 +507,7 @@ func (p *provisioningAdmitter) validatePSACT(request *admission.Request, respons
 			if err != nil {
 				return fmt.Errorf("[provisioning cluster validator] failed to get the kube-apiserver arguments: %w", err)
 			}
-			if args.keyHasValue(kubeAPIAdmissionConfigOption, mountPath) {
+			if keyHasValue(args, kubeAPIAdmissionConfigOption, mountPath) {
 				return fmt.Errorf("[provisioning cluster validator] admission-control-config-file under kube-apiserver-arg should not be set to %s", mountPath)
 			}
 		} else {
@@ -553,7 +553,7 @@ func (p *provisioningAdmitter) validatePSACT(request *admission.Request, respons
 			if err != nil {
 				return fmt.Errorf("[provisioning cluster validator] failed to get the kube-apiserver arguments: %w", err)
 			}
-			if !args.keyHasValue(kubeAPIAdmissionConfigOption, mountPath) {
+			if !keyHasValue(args, kubeAPIAdmissionConfigOption, mountPath) {
 				return fmt.Errorf("[provisioning cluster validator] admission-control-config-file under kube-apiserver-arg should be set to %s", mountPath)
 			}
 		}
