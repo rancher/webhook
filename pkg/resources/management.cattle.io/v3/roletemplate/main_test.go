@@ -27,7 +27,6 @@ type testState struct {
 }
 
 type tableTest struct {
-	// wantRT     func() *v3.RoleTemplate //nolint:unused - can this be removed?
 	name       string
 	args       args
 	stateSetup func(state testState)
