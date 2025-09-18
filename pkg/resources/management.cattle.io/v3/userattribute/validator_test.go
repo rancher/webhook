@@ -14,7 +14,7 @@ import (
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 type RetentionFieldsSuite struct {
@@ -39,9 +39,9 @@ type retentionFieldsTest struct {
 }
 
 func (t *retentionFieldsTest) name() string {
-	return pointer.StringDeref(t.lastLogin, "nil") + "_" +
-		pointer.StringDeref(t.disableAfter, "nil") + "_" +
-		pointer.StringDeref(t.deleteAfter, "nil")
+	return ptr.Deref(t.lastLogin, "nil") + "_" +
+		ptr.Deref(t.disableAfter, "nil") + "_" +
+		ptr.Deref(t.deleteAfter, "nil")
 }
 
 func (t *retentionFieldsTest) toUserAttribute() ([]byte, error) {
@@ -57,54 +57,54 @@ var retentionFieldsTests = []retentionFieldsTest{
 		allowed: true,
 	},
 	{
-		disableAfter: pointer.String("0"),
+		disableAfter: ptr.To("0"),
 		allowed:      true,
 	},
 	{
-		deleteAfter: pointer.String("0"),
+		deleteAfter: ptr.To("0"),
 		allowed:     true,
 	},
 	{
-		disableAfter: pointer.String("1h2m3s"),
+		disableAfter: ptr.To("1h2m3s"),
 		allowed:      true,
 	},
 	{
-		deleteAfter: pointer.String("1h2m3s"),
+		deleteAfter: ptr.To("1h2m3s"),
 		allowed:     true,
 	},
 	{
-		lastLogin: pointer.String(time.Now().Format(time.RFC3339)),
+		lastLogin: ptr.To(time.Now().Format(time.RFC3339)),
 		allowed:   true,
 	},
 	{
-		disableAfter: pointer.String("1w"),
+		disableAfter: ptr.To("1w"),
 	},
 	{
-		deleteAfter: pointer.String("1w"),
+		deleteAfter: ptr.To("1w"),
 	},
 	{
-		disableAfter: pointer.String("1d"),
+		disableAfter: ptr.To("1d"),
 	},
 	{
-		deleteAfter: pointer.String("1d"),
+		deleteAfter: ptr.To("1d"),
 	},
 	{
-		disableAfter: pointer.String(""),
+		disableAfter: ptr.To(""),
 	},
 	{
-		deleteAfter: pointer.String(""),
+		deleteAfter: ptr.To(""),
 	},
 	{
-		disableAfter: pointer.String("-1h"),
+		disableAfter: ptr.To("-1h"),
 	},
 	{
-		deleteAfter: pointer.String("-1h"),
+		deleteAfter: ptr.To("-1h"),
 	},
 	{
-		lastLogin: pointer.String("2024-03-25T21:2:45Z"), // Not a valid RFC3339 time.
+		lastLogin: ptr.To("2024-03-25T21:2:45Z"), // Not a valid RFC3339 time.
 	},
 	{
-		lastLogin: pointer.String(""),
+		lastLogin: ptr.To(""),
 	},
 }
 
@@ -118,8 +118,7 @@ func (s *RetentionFieldsSuite) TestValidateOnCreate() {
 
 func (s *RetentionFieldsSuite) TestDontValidateOnDelete() {
 	// Make sure that UserAttribute can be deleted without enforcing validation of user retention fields.
-	alwaysAllow := true
-	s.validate(v1.Delete, alwaysAllow)
+	s.validate(v1.Delete, true)
 }
 
 func (s *RetentionFieldsSuite) validate(op v1.Operation, allowed ...bool) {

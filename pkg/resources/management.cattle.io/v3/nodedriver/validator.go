@@ -76,7 +76,7 @@ func (v *Validator) Admitters() []admission.Admitter {
 	return []admission.Admitter{&v.admitter}
 }
 
-// Admit is the entrypoint for the validator. Admit will return an error if it unable to process the request.
+// Admit is the entrypoint for the validator. Admit will return an error if it is unable to process the request.
 // If this function is called without NewValidator(..) calls will panic.
 func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	oldObject, newObject, err := objectsv3.NodeDriverOldAndNewFromRequest(&request.AdmissionRequest)
@@ -87,8 +87,15 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	// the check to see if the driver is being disabled is either when we're
 	// running a delete operation OR an update operation where the active flag
 	// toggles from true -> false
-	if !(request.Operation == admissionv1.Delete && oldObject.Spec.Active) &&
-		!(request.Operation == admissionv1.Update && !newObject.Spec.Active && oldObject.Spec.Active) {
+	//nolint:revive
+	//if !((request.Operation == admissionv1.Delete && oldObject.Spec.Active) ||
+	//	(request.Operation == admissionv1.Update && oldObject.Spec.Active && !newObject.Spec.Active)) {
+	//	return admission.ResponseAllowed(), nil
+	//}
+	// golangci-lint 2.4 wants the above expression demorgan-simplified
+	// I think the above form is easier to understand, so leaving it in commented
+	if !oldObject.Spec.Active || (request.Operation != admissionv1.Delete &&
+		(request.Operation != admissionv1.Update || newObject.Spec.Active)) {
 		return admission.ResponseAllowed(), nil
 	}
 
@@ -102,7 +109,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, err
 	}
 
-	if !(rke1Deleted && rke2Deleted) {
+	if !rke1Deleted || !rke2Deleted {
 		return driverInUse, nil
 	}
 

@@ -50,9 +50,9 @@ func (m *IntegrationSuite) SetupSuite() {
 	m.clientFactory, err = client.NewSharedClientFactoryForConfig(restCfg)
 	m.Require().NoError(err, "Failed to create clientFactory Interface")
 
-	schemes.Register(v3.AddToScheme)
-	schemes.Register(provisioningv1.AddToScheme)
-	schemes.Register(corev1.AddToScheme)
+	_ = schemes.Register(v3.AddToScheme)
+	_ = schemes.Register(provisioningv1.AddToScheme)
+	_ = schemes.Register(corev1.AddToScheme)
 
 }
 

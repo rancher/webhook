@@ -244,7 +244,7 @@ func TestValidateActiveDirectoryConfig(t *testing.T) {
 		UserSearchFilter:            "(status=active)",
 		GroupSearchFilter:           "(depNo=123)",
 	}
-	config.ObjectMeta.Name = "activedirectory"
+	config.Name = "activedirectory"
 	config.Type = "activeDirectoryConfig"
 	config.Enabled = true
 
@@ -465,7 +465,7 @@ func testLdapAdmit(t *testing.T, validator *authconfig.Validator, provider strin
 	switch provider {
 	case "openldap":
 		o := v3.OpenLdapConfig{}
-		o.ObjectMeta.Name = provider
+		o.Name = provider
 		o.Type = "openLdapConfig"
 		n := o
 		n.LdapFields = fields
@@ -473,7 +473,7 @@ func testLdapAdmit(t *testing.T, validator *authconfig.Validator, provider strin
 		oldConfig, newConfig = o, n
 	case "freeipa":
 		o := v3.OpenLdapConfig{}
-		o.ObjectMeta.Name = provider
+		o.Name = provider
 		o.Type = "freeIpaConfig"
 		n := o
 		n.LdapFields = fields

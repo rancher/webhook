@@ -789,7 +789,7 @@ func (r *RoleTemplateSuite) Test_Delete() {
 				roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
 				cacheIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, map[string]cache.IndexFunc{})
 				roleTemplateCache.EXPECT().AddIndexer(expectedIndexerName, gomock.Any()).Do(func(name string, indexFunc func(rt *v3.RoleTemplate) ([]string, error)) {
-					cacheIndexer.AddIndexers(map[string]cache.IndexFunc{name: func(obj interface{}) (strings []string, e error) {
+					_ = cacheIndexer.AddIndexers(map[string]cache.IndexFunc{name: func(obj interface{}) (strings []string, e error) {
 						return indexFunc(obj.(*v3.RoleTemplate))
 					}})
 				})
@@ -806,8 +806,8 @@ func (r *RoleTemplateSuite) Test_Delete() {
 				})
 				defaultRT := newDefaultRT()
 				defaultRT.RoleTemplateNames = []string{r.adminRT.Name}
-				cacheIndexer.Add(defaultRT)
-				cacheIndexer.Add(r.readNodesRT)
+				_ = cacheIndexer.Add(defaultRT)
+				_ = cacheIndexer.Add(r.readNodesRT)
 				grCache := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRole](ctrl)
 				grCache.EXPECT().AddIndexer(expectedGlobalRefIndex, gomock.Any())
 				grCache.EXPECT().GetByIndex(expectedGlobalRefIndex, gomock.Any()).Return([]*v3.GlobalRole{}, nil).AnyTimes()
@@ -836,7 +836,7 @@ func (r *RoleTemplateSuite) Test_Delete() {
 				roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
 				cacheIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, map[string]cache.IndexFunc{})
 				roleTemplateCache.EXPECT().AddIndexer(expectedIndexerName, gomock.Any()).Do(func(name string, indexFunc func(rt *v3.RoleTemplate) ([]string, error)) {
-					cacheIndexer.AddIndexers(map[string]cache.IndexFunc{name: func(obj interface{}) (strings []string, e error) {
+					_ = cacheIndexer.AddIndexers(map[string]cache.IndexFunc{name: func(obj interface{}) (strings []string, e error) {
 						return indexFunc(obj.(*v3.RoleTemplate))
 					}})
 				})
@@ -856,9 +856,9 @@ func (r *RoleTemplateSuite) Test_Delete() {
 				defaultRT2 := newDefaultRT()
 				defaultRT2.Name = "default2"
 				defaultRT2.RoleTemplateNames = []string{r.adminRT.Name}
-				cacheIndexer.Add(defaultRT)
-				cacheIndexer.Add(defaultRT2)
-				cacheIndexer.Add(r.readNodesRT)
+				_ = cacheIndexer.Add(defaultRT)
+				_ = cacheIndexer.Add(defaultRT2)
+				_ = cacheIndexer.Add(r.readNodesRT)
 				grCache := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRole](ctrl)
 				grCache.EXPECT().AddIndexer(expectedGlobalRefIndex, gomock.Any())
 				grCache.EXPECT().GetByIndex(expectedGlobalRefIndex, gomock.Any()).Return([]*v3.GlobalRole{}, nil).AnyTimes()

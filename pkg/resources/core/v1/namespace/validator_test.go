@@ -72,7 +72,8 @@ func TestValidatingWebhook(t *testing.T) {
 		assert.Equal(t, v1.ClusterScope, *rule.Scope)
 
 		assert.Contains(t, []v1.OperationType{v1.Create, v1.Update, v1.Delete}, operation, "only expected webhooks for create, update and delete")
-		if operation == v1.Update {
+		switch operation {
+		case v1.Update:
 			assert.False(t, hasAllUpdateWebhook, "had more than one webhook validating update calls, exepcted only one")
 			hasAllUpdateWebhook = true
 			assert.Nil(t, webhook.NamespaceSelector)
@@ -81,7 +82,7 @@ func TestValidatingWebhook(t *testing.T) {
 				// failure policy defaults to fail, but if we specify one it needs to be fail
 				assert.Equal(t, v1.Fail, *webhook.FailurePolicy)
 			}
-		} else if operation == v1.Create {
+		case v1.Create:
 			assert.NotNil(t, webhook.NamespaceSelector)
 			matchExpressions := webhook.NamespaceSelector.MatchExpressions
 			assert.Len(t, matchExpressions, 1)

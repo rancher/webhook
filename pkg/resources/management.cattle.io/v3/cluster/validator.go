@@ -110,7 +110,8 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 
 	if a.userCache != nil {
 		// The following checks don't make sense for downstream clusters (userCache == nil)
-		if request.Operation == admissionv1.Create {
+		switch request.Operation {
+		case admissionv1.Create:
 			if fieldErr := common.CheckCreatorIDAndNoCreatorRBAC(newCluster); fieldErr != nil {
 				return admission.ResponseBadRequest(fieldErr.Error()), nil
 			}
@@ -121,7 +122,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 			if fieldErr != nil {
 				return admission.ResponseBadRequest(fieldErr.Error()), nil
 			}
-		} else if request.Operation == admissionv1.Update {
+		case admissionv1.Update:
 			if fieldErr := common.CheckCreatorAnnotationsOnUpdate(oldCluster, newCluster); fieldErr != nil {
 				return admission.ResponseBadRequest(fieldErr.Error()), nil
 			}

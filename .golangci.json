@@ -1,17 +1,45 @@
 {
+	"version": "2",
+	"formatters": {
+		"enable": [
+			"goimports",
+			"gofmt"
+		],
+		"exclusions": {
+			"paths": [
+				"pkg/generated/objects/auditlog.cattle.io/v1/objects.go",
+				"pkg/generated/objects/catalog.cattle.io/v1/objects.go",
+				"pkg/generated/objects/core/v1/objects.go",
+				"pkg/generated/objects/management.cattle.io/v3/objects.go",
+				"pkg/generated/objects/provisioning.cattle.io/v1/objects.go",
+				"pkg/generated/objects/rbac.authorization.k8s.io/v1/objects.go"
+			]
+		}
+	},
 	"linters": {
 		"disable-all": true,
 		"enable": [
 			"govet",
-			"revive",
-			"goimports",
 			"misspell",
-			"ineffassign",
-			"gofmt"
+			"ineffassign"
+		],
+		"disable": [
+			"revive"
 		]
 	},
-	"run": {
-		"deadline": "5m"
+	"linters-settings": {
+		"revive": {
+				"rules": [
+					{
+			"name" : "exported",
+			"disabled": true
+			}
+				]
+			},
+			"comment": [
+				"This next block doesn't suppress the comment-requirement for exported names",
+				"so disable revive until it does."
+				]
 	},
 	"issues": {
 		"exclude-rules": [

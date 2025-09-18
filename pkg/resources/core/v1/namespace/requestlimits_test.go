@@ -79,7 +79,7 @@ func TestRequestLimitAdmitter(t *testing.T) {
 		{
 			name:             "create ns within only memory req and cpu limit",
 			operationType:    v1.Create,
-			limitsAnnotation: `{"limitsMemory": "256Mi", "limitssCpu": "100m"}`,
+			limitsAnnotation: `{"limitsMemory": "256Mi", "limitsCpu": "100m"}`,
 			wantAllowed:      true,
 		},
 		{
@@ -109,7 +109,7 @@ func TestRequestLimitAdmitter(t *testing.T) {
 			admitter := requestLimitAdmitter{}
 			request, err := createRequestLimitRequest(test.limitsAnnotation, test.operationType)
 			if test.operationType == v1.Update {
-				request.AdmissionRequest.OldObject.Raw, err = json.Marshal(corev1.Namespace{
+				request.OldObject.Raw, err = json.Marshal(corev1.Namespace{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: testNs,
 					},
