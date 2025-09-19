@@ -253,6 +253,10 @@ func (p *provisioningAdmitter) validateDataDirectories(request *admission.Reques
 	if request.Operation != admissionv1.Update {
 		return admission.ResponseAllowed()
 	}
+	// possible in the harvester case, as rkeConfig is patched to be non-nil.
+	if oldCluster.Spec.RKEConfig == nil {
+		return admission.ResponseAllowed()
+	}
 
 	if response := p.validateSystemAgentDataDirectory(oldCluster, newCluster); !response.Allowed {
 		return response
