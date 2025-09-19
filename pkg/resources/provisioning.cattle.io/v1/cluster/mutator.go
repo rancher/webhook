@@ -194,7 +194,7 @@ func (m *ProvisioningClusterMutator) Admit(request *admission.Request) (*admissi
 // dynamicSchemaSpec field for a machine pool if the "provisioning.cattle.io/allow-dynamic-schema-drop" annotation is
 // not present and true on the cluster. If the value of the annotation is true, no mutation is performed.
 func (m *ProvisioningClusterMutator) handleDynamicSchemaDrop(request *admission.Request, oldCluster, cluster *v1.Cluster) *admissionv1.AdmissionResponse {
-	if cluster.Name == "local" || cluster.Spec.RKEConfig == nil {
+	if cluster.Name == "local" || oldCluster == nil || oldCluster.Spec.RKEConfig == nil || cluster.Spec.RKEConfig == nil {
 		return admission.ResponseAllowed()
 	}
 
