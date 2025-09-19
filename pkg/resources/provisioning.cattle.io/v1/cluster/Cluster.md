@@ -24,6 +24,8 @@ following:
 - Equal to another data directory
 - Attempts to nest another data directory
 
+If the action is an update, and the old cluster had a `nil` `.spec.rkeConfig`, accept the request, since this is how rancherd operates, and is required for harvester installations.
+
 #### Etcd S3 CloudCredential Secret
 
 Prevent the creation of objects if the secret specified in `.spec.rkeConfig.etcd.s3.cloudCredentialName` does not exist.
@@ -107,4 +109,3 @@ Check for the presence of the `provisioning.cattle.io/allow-dynamic-schema-drop`
 perform no mutations. If the value is not present or not `"true"`, compare the value of the `dynamicSchemaSpec` field
 for each `machinePool`, to its' previous value. If the values are not identical, revert the value for the
 `dynamicSchemaSpec` for the specific `machinePool`, but do not reject the request.
-
