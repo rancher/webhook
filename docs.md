@@ -584,6 +584,8 @@ following:
 - Equal to another data directory
 - Attempts to nest another data directory
 
+If the action is an update, and the old cluster had a `nil` `.spec.rkeConfig`, accept the request, since this is how rancherd operates, and is required for harvester installations.
+
 ##### Etcd S3 CloudCredential Secret
 
 Prevent the creation of objects if the secret specified in `.spec.rkeConfig.etcd.s3.cloudCredentialName` does not exist.
