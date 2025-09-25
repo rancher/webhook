@@ -151,6 +151,12 @@ jobs:
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ env.DOCKER_PASSWORD }}
 
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REPO }}/rancher-webhook
+
       - name: Build and push the webhook image
         id: build
         # https://github.com/docker/build-push-action/releases/tag/v6.3.0
@@ -158,6 +164,7 @@ jobs:
         with:
           context: .
           file: ./package/Dockerfile
+          labels: ${{ steps.meta.outputs.labels }}
           platforms: "linux/${{ matrix.arch }}"
           outputs: type=image,name=${{ env.REPO }}/rancher-webhook,push-by-digest=true,name-canonical=true,push=true
 
