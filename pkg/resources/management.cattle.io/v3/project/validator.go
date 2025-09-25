@@ -165,7 +165,7 @@ func (a *admitter) admitCommonCreateUpdate(oldProject, newProject *v3.Project) (
 	if fieldErr != nil {
 		return admission.ResponseBadRequest(fieldErr.Error()), nil
 	}
-	fieldErr, err = a.checkQuotaValues(&nsQuota.Limit, &projectQuota.Limit, oldProject)
+	fieldErr, err = a.checkQuotaValues(&nsQuota.Limit, &projectQuota.Limit, newProject)
 	if err != nil {
 		return nil, fmt.Errorf("error checking quota values: %w", err)
 	}
@@ -258,20 +258,24 @@ func checkQuotaFields(projectQuota *v3.ProjectResourceQuota, nsQuota *v3.Namespa
 	return nil, nil
 }
 
-func (a *admitter) checkQuotaValues(nsQuota, projectQuota *v3.ResourceQuotaLimit, oldProject *v3.Project) (*field.Error, error) {
+// checkQuotaValues ensures that the new quotas are consistent with the new
+// used-limit.  checking against the old used-limit is contra-indicated as it
+// may contain bogus data, causing failure to validate. making it impossible to
+// replace a bogus used-limit with good values.
+func (a *admitter) checkQuotaValues(nsQuota, projectQuota *v3.ResourceQuotaLimit, newProject *v3.Project) (*field.Error, error) {
 	// check quota on new project
 	fieldErr, err := namespaceQuotaFits(nsQuota, projectQuota)
 	if err != nil || fieldErr != nil {
 		return fieldErr, err
 	}
 
-	// if there is no old project or no quota on the old project, no further validation needed
-	if oldProject == nil || oldProject.Spec.ResourceQuota == nil {
+	// if there is no new project or no quota on the new project, no further validation needed
+	if newProject == nil || newProject.Spec.ResourceQuota == nil {
 		return nil, nil
 	}
 
 	// check quota relative to used quota
-	return usedQuotaFits(&oldProject.Spec.ResourceQuota.UsedLimit, projectQuota)
+	return usedQuotaFits(&newProject.Spec.ResourceQuota.UsedLimit, projectQuota)
 }
 
 func namespaceQuotaFits(namespaceQuota, projectQuota *v3.ResourceQuotaLimit) (*field.Error, error) {
