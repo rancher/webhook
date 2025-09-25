@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/rancher/dynamiclistener"
@@ -125,15 +124,6 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, validators []
 		logrus.Debugf("creating route: %s", path)
 	}
 
-	handler := &secretHandler{
-		validators:           validators,
-		mutators:             mutators,
-		errChecker:           errChecker,
-		validatingController: clients.Admission.ValidatingWebhookConfiguration(),
-		mutatingController:   clients.Admission.MutatingWebhookConfiguration(),
-	}
-	clients.Core.Secret().OnChange(ctx, "secrets", handler.sync)
-
 	defer func() {
 		if rErr != nil {
 			return
@@ -152,7 +142,7 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, validators []
 		}
 	}
 	ignoreTLSHandErrorVal, _ := strconv.ParseBool(os.Getenv(ignoreTLSHandshakeError))
-	return server.ListenAndServe(ctx, webhookHTTPSPort, webhookHTTPPort, router, &server.ListenOpts{
+	err := server.ListenAndServe(ctx, webhookHTTPSPort, webhookHTTPPort, router, &server.ListenOpts{
 		Secrets:       clients.Core.Secret(),
 		CertNamespace: namespace,
 		CertName:      certName,
@@ -167,25 +157,30 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, validators []
 		DisplayServerLogs:       true,
 		IgnoreTLSHandshakeError: ignoreTLSHandErrorVal,
 	})
-}
-
-type secretHandler struct {
-	validators           []admission.ValidatingAdmissionHandler
-	mutators             []admission.MutatingAdmissionHandler
-	errChecker           *health.ErrorChecker
-	validatingController admissionregistration.ValidatingWebhookConfigurationClient
-	mutatingController   admissionregistration.MutatingWebhookConfigurationClient
-}
-
-// sync updates the validating admission configuration whenever the TLS cert changes.
-func (s *secretHandler) sync(_ string, secret *corev1.Secret) (*corev1.Secret, error) {
-	if secret == nil || secret.Name != caName || secret.Namespace != namespace || len(secret.Data[corev1.TLSCertKey]) == 0 {
-		return nil, nil
+	if err != nil {
+		return fmt.Errorf("failed to start webhook server: %w", err)
 	}
 
-	logrus.Info("Sleeping for 15 seconds then applying webhook config")
-	// Sleep here to make sure server is listening and all caches are primed
-	time.Sleep(15 * time.Second)
+	err = createWebhookConfigurations(validators, mutators, clients)
+	if err != nil {
+		return fmt.Errorf("failed to create webhook configurations: %w", err)
+	}
+
+	return nil
+}
+
+// createWebhookConfigurations creates the webhook admission configuration.
+func createWebhookConfigurations(
+	validators []admission.ValidatingAdmissionHandler,
+	mutators []admission.MutatingAdmissionHandler,
+	clients *clients.Clients,
+) error {
+
+	secret, err := clients.Core.Secret().Get(namespace, caName, metav1.GetOptions{})
+	if err != nil {
+		logrus.Errorf("failed to get secret for webhook configuration: %v", err)
+		return err
+	}
 
 	validationClientConfig := v1.WebhookClientConfig{
 		Service: &v1.ServiceReference{
@@ -216,12 +211,12 @@ func (s *secretHandler) sync(_ string, secret *corev1.Secret) (*corev1.Secret, e
 			URL: &mutationURL,
 		}
 	}
-	validatingWebhooks := make([]v1.ValidatingWebhook, 0, len(s.validators))
-	for _, webhook := range s.validators {
+	validatingWebhooks := make([]v1.ValidatingWebhook, 0, len(validators))
+	for _, webhook := range validators {
 		validatingWebhooks = append(validatingWebhooks, webhook.ValidatingWebhook(validationClientConfig)...)
 	}
-	mutatingWebhooks := make([]v1.MutatingWebhook, 0, len(s.mutators))
-	for _, webhook := range s.mutators {
+	mutatingWebhooks := make([]v1.MutatingWebhook, 0, len(mutators))
+	for _, webhook := range mutators {
 		mutatingWebhooks = append(mutatingWebhooks, webhook.MutatingWebhook(mutationClientConfig)...)
 	}
 	validatingConfig := &v1.ValidatingWebhookConfiguration{
@@ -236,22 +231,31 @@ func (s *secretHandler) sync(_ string, secret *corev1.Secret) (*corev1.Secret, e
 		},
 		Webhooks: mutatingWebhooks,
 	}
-	err := s.ensureWebhookConfiguration(validatingConfig, mutatingConfig)
+	// Use clients to get controllers
+	err = ensureWebhookConfiguration(
+		validatingConfig,
+		mutatingConfig,
+		clients.Admission.ValidatingWebhookConfiguration(),
+		clients.Admission.MutatingWebhookConfiguration(),
+	)
 	if err != nil {
 		logrus.Errorf("Failed to ensure configuration: %s", err.Error())
+		return err
 	}
 
-	s.errChecker.Store(err)
-	return secret, err
-
+	return nil
 }
 
-// ensureWebhookConfiguration creates or updates the current validating and mutating webhook configuration to have the desired webhook.
-func (s *secretHandler) ensureWebhookConfiguration(validatingConfig *v1.ValidatingWebhookConfiguration, mutatingConfig *v1.MutatingWebhookConfiguration) error {
-
-	currValidating, err := s.validatingController.Get(validatingConfig.Name, metav1.GetOptions{})
+// ensureWebhookConfiguration creates validating and mutating webhook configuration to have the desired webhook.
+func ensureWebhookConfiguration(
+	validatingConfig *v1.ValidatingWebhookConfiguration,
+	mutatingConfig *v1.MutatingWebhookConfiguration,
+	validatingController admissionregistration.ValidatingWebhookConfigurationClient,
+	mutatingController admissionregistration.MutatingWebhookConfigurationClient,
+) error {
+	currValidating, err := validatingController.Get(validatingConfig.Name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
-		_, err = s.validatingController.Create(validatingConfig)
+		_, err = validatingController.Create(validatingConfig)
 		if err != nil {
 			return fmt.Errorf("failed to create validating configuration: %w", err)
 		}
@@ -259,15 +263,15 @@ func (s *secretHandler) ensureWebhookConfiguration(validatingConfig *v1.Validati
 		return fmt.Errorf("failed to get validating configuration: %w", err)
 	} else {
 		currValidating.Webhooks = validatingConfig.Webhooks
-		_, err = s.validatingController.Update(currValidating)
+		_, err = validatingController.Update(currValidating)
 		if err != nil {
 			return fmt.Errorf("failed to update validating configuration: %w", err)
 		}
 	}
 
-	currMutation, err := s.mutatingController.Get(mutatingConfig.Name, metav1.GetOptions{})
+	currMutation, err := mutatingController.Get(mutatingConfig.Name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
-		_, err = s.mutatingController.Create(mutatingConfig)
+		_, err = mutatingController.Create(mutatingConfig)
 		if err != nil {
 			return fmt.Errorf("failed to create mutating configuration: %w", err)
 		}
@@ -275,7 +279,7 @@ func (s *secretHandler) ensureWebhookConfiguration(validatingConfig *v1.Validati
 		return fmt.Errorf("failed to get mutating configuration: %w", err)
 	} else {
 		currMutation.Webhooks = mutatingConfig.Webhooks
-		_, err = s.mutatingController.Update(currMutation)
+		_, err = mutatingController.Update(currMutation)
 		if err != nil {
 			return fmt.Errorf("failed to update mutating configuration: %w", err)
 		}
