@@ -2,7 +2,7 @@ package cluster
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -18,17 +18,16 @@ import (
 )
 
 func Test_GetKubeAPIServerArgs(t *testing.T) {
-	errInvalidType := errors.New("failed to convert input into slice: invalid type: []string, expected interface{}")
 	tests := []struct {
 		name        string
 		cluster     *v1.Cluster
-		expected    keyValueArgs
+		expected    []string
 		expectedErr error
 	}{
 		{
 			name:        "cluster without kube-apiserver-arg",
 			cluster:     clusterWithoutKubeAPIServerArg(),
-			expected:    keyValueArgs{},
+			expected:    []string{},
 			expectedErr: nil,
 		},
 		{
@@ -38,42 +37,49 @@ func Test_GetKubeAPIServerArgs(t *testing.T) {
 					RKEConfig: &v1.RKEConfig{},
 				},
 			},
-			expected:    keyValueArgs{},
+			expected:    []string{},
 			expectedErr: nil,
 		},
 		{
 			name:    "cluster with kube-apiserver-arg",
 			cluster: clusterWithKubeAPIServerArg(),
-			expected: keyValueArgs{
-				{key: "foo", value: "bar"},
-				{key: "foo2", value: "bar2"},
+			expected: []string{
+				"foo=bar",
+				"foo2=bar2",
 			},
 			expectedErr: nil,
 		},
 		{
 			name:    "cluster with kube-apiserver-arg-2",
 			cluster: clusterWithKubeAPIServerArg2(),
-			expected: keyValueArgs{
-				{key: "foo", value: "bar"},
-				{key: "foo2", value: "bar2"},
-				{key: "foo3", value: "bar3=baz3"},
+			expected: []string{
+				"foo=bar",
+				"foo2=bar2",
+				"foo3=bar3=baz3",
 			},
 			expectedErr: nil,
 		},
 		{
 			name:    "cluster with duplicate keys in kube-apiserver-arg",
 			cluster: clusterWithKubeAPIServerArg3(),
-			expected: keyValueArgs{
-				{key: "foo", value: "bar"},
-				{key: "foo2", value: "bar2=baz2"},
+			expected: []string{
+				"foo=bar",
+				"foo2=bar2",
+				"foo2=bar2=baz2",
 			},
 			expectedErr: nil,
 		},
 		{
-			name:        "cluster with invalid data in kube-apiserver-arg",
-			cluster:     clusterWithInvalidKubeAPIServerArg(),
-			expected:    keyValueArgs{},
-			expectedErr: errInvalidType,
+			name:        "cluster with bool flag data in kube-apiserver-arg",
+			cluster:     clusterWithBoolFlagKubeAPIServerArg(),
+			expected:    []string{"foo", "foo2=bar2"},
+			expectedErr: nil,
+		},
+		{
+			name:        "cluster with invalid data type in kube-apiserver-arg",
+			cluster:     clusterWithInvalidKubeAPIServerArgType(),
+			expected:    []string{},
+			expectedErr: fmt.Errorf("failed to convert input into slice: invalid type: int, expected interface{}"),
 		},
 	}
 	for _, tt := range tests {
@@ -85,7 +91,7 @@ func Test_GetKubeAPIServerArgs(t *testing.T) {
 				}
 			}
 			if !reflect.DeepEqual(tt.expected, got) {
-				t.Errorf("got: %v, expected: %v", got, tt.expected)
+				t.Errorf("expected: %v, got: %v", tt.expected, got)
 			}
 		})
 	}
@@ -94,15 +100,15 @@ func Test_GetKubeAPIServerArgs(t *testing.T) {
 func Test_SetKubeAPIServerArgs(t *testing.T) {
 	tests := []struct {
 		name     string
-		arg      keyValueArgs
+		args     []string
 		cluster  *v1.Cluster
 		expected *v1.Cluster
 	}{
 		{
 			name: "cluster that already has kube-apiserver-arg",
-			arg: keyValueArgs{
-				{key: "foo", value: "bar"},
-				{key: "foo2", value: "bar2"},
+			args: []string{
+				"foo=bar",
+				"foo2=bar2",
 			},
 			cluster: &v1.Cluster{
 				Spec: v1.ClusterSpec{
@@ -123,9 +129,9 @@ func Test_SetKubeAPIServerArgs(t *testing.T) {
 		},
 		{
 			name: "cluster that does not have MachineGlobalConfig",
-			arg: keyValueArgs{
-				{key: "foo", value: "bar"},
-				{key: "foo2", value: "bar2"},
+			args: []string{
+				"foo=bar",
+				"foo2=bar2",
 			},
 			cluster: &v1.Cluster{
 				Spec: v1.ClusterSpec{
@@ -136,9 +142,9 @@ func Test_SetKubeAPIServerArgs(t *testing.T) {
 		},
 		{
 			name: "cluster does not have kube-apiserver-arg but other args",
-			arg: keyValueArgs{
-				{key: "foo", value: "bar"},
-				{key: "foo2", value: "bar2"},
+			args: []string{
+				"foo=bar",
+				"foo2=bar2",
 			},
 			cluster: &v1.Cluster{
 				Spec: v1.ClusterSpec{
@@ -162,9 +168,9 @@ func Test_SetKubeAPIServerArgs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			setKubeAPIServerArgs(tt.arg, tt.cluster)
-			got, _ := parseFromRawArgs(tt.cluster.Spec.RKEConfig.MachineGlobalConfig.Data["kube-apiserver-arg"])
-			expected, _ := parseFromRawArgs(tt.expected.Spec.RKEConfig.MachineGlobalConfig.Data["kube-apiserver-arg"])
+			setKubeAPIServerArgs(tt.args, tt.cluster)
+			got, _ := getKubeAPIServerArgs(tt.cluster)
+			expected, _ := getKubeAPIServerArgs(tt.expected)
 			if !reflect.DeepEqual(got, expected) {
 				t.Errorf("got: %v, expected: %v", got, expected)
 			}
@@ -485,12 +491,18 @@ func clusterWithKubeAPIServerArg3() *v1.Cluster {
 	return cluster
 }
 
-func clusterWithInvalidKubeAPIServerArg() *v1.Cluster {
+func clusterWithBoolFlagKubeAPIServerArg() *v1.Cluster {
 	cluster := clusterWithoutKubeAPIServerArg()
 	var arg []string
-	arg = append(arg, "foo=bar")
+	arg = append(arg, "foo")
 	arg = append(arg, "foo2=bar2")
 	cluster.Spec.RKEConfig.MachineGlobalConfig.Data["kube-apiserver-arg"] = arg
+	return cluster
+}
+
+func clusterWithInvalidKubeAPIServerArgType() *v1.Cluster {
+	cluster := clusterWithoutKubeAPIServerArg()
+	cluster.Spec.RKEConfig.MachineGlobalConfig.Data["kube-apiserver-arg"] = 123
 	return cluster
 }
 
