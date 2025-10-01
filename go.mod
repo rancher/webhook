@@ -37,7 +37,7 @@ replace (
 require (
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/golang/mock v1.6.0
-	github.com/gorilla/mux v1.8.0
+	github.com/gorilla/mux v1.8.1
 	github.com/rancher/dynamiclistener v0.3.6
 	github.com/rancher/lasso v0.0.0-20230830164424-d684fdeb6f29
 	github.com/rancher/lasso/controller-runtime v0.0.0-20230830164424-d684fdeb6f29
