@@ -100,10 +100,10 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 			}
 		}
 
-		oldUserEnabled := ptr.Deref(oldUser.Enabled, false)
-		newUserEnabled := ptr.Deref(newUser.Enabled, false)
+		oldUserEnabled := ptr.Deref(oldUser.Enabled, true)
+		newUserEnabled := ptr.Deref(newUser.Enabled, true)
 
-		if newUser.Username == request.UserInfo.Username && oldUserEnabled && !newUserEnabled {
+		if newUser.Name == request.UserInfo.Username && oldUserEnabled && !newUserEnabled {
 			return admission.ResponseBadRequest("can't deactivate yourself"), nil
 		}
 	}

@@ -259,7 +259,13 @@ func Test_Admit(t *testing.T) {
 				Username: defaultUserName,
 				Enabled:  ptr.To(true),
 			},
-			newUser:         defaultUser.DeepCopy(),
+			newUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: defaultUserName,
+				},
+				Username: defaultUserName,
+				Enabled:  ptr.To(false),
+			},
 			requestUserName: defaultUserName,
 			allowed:         false,
 		},
