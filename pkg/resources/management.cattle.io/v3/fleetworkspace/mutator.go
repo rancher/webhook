@@ -107,7 +107,8 @@ func (m *Mutator) Admit(request *admission.Request) (*admissionv1.AdmissionRespo
 		if err != nil {
 			return nil, fmt.Errorf("failed to get fleetworkspace namespace '%s': %w", fw.Name, err)
 		}
-		if ns.Labels[k8sManagedLabel] != "rancher" && (ns.Annotations == nil || ns.Annotations[AllowFleetWorkspaceCreationForExistingNamespaceAnn] != "true") {
+		if (ns.Labels == nil || ns.Labels[k8sManagedLabel] != "rancher") &&
+			(ns.Annotations == nil || ns.Annotations[AllowFleetWorkspaceCreationForExistingNamespaceAnn] != "true") {
 			return admission.ResponseBadRequest(fmt.Sprintf("namespace '%s' already exists", fw.Name)), nil
 		}
 		cr, err := m.clusterroles.Cache().Get(fleetAdminRole)

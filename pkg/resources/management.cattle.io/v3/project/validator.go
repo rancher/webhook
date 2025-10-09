@@ -101,7 +101,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 }
 
 func (a *admitter) admitDelete(project *v3.Project) (*admissionv1.AdmissionResponse, error) {
-	if project.Labels[systemProjectLabel] == "true" {
+	if project.Labels != nil && project.Labels[systemProjectLabel] == "true" {
 		return admission.ResponseBadRequest("System Project cannot be deleted"), nil
 	}
 	return admission.ResponseAllowed(), nil
