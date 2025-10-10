@@ -17,7 +17,6 @@ import (
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/clients"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
-	objectsv1 "github.com/rancher/webhook/pkg/generated/objects/provisioning.cattle.io/v1"
 	psa "github.com/rancher/webhook/pkg/podsecurityadmission"
 	"github.com/rancher/webhook/pkg/resources/common"
 	corev1controller "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
@@ -99,7 +98,7 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 	listTrace := trace.New("provisioningClusterValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
-	oldCluster, cluster, err := objectsv1.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
+	oldCluster, cluster, err := common.OldAndNewFromRequest[v1.Cluster](&request.AdmissionRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +114,7 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 			return response, err
 		}
 
-		if response = p.validateRKEConfigChanged(oldCluster, cluster); !response.Allowed {
+		if response := p.validateRKEConfigChanged(oldCluster, cluster); !response.Allowed {
 			return response, nil
 		}
 

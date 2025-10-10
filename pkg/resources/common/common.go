@@ -1,11 +1,14 @@
 package common
 
 import (
+	"encoding/json"
+	"fmt"
 	"regexp"
 
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
 	"github.com/sirupsen/logrus"
+	admissionv1 "k8s.io/api/admission/v1"
 	authnv1 "k8s.io/api/authentication/v1"
 	authzv1 "k8s.io/api/authorization/v1"
 	v1 "k8s.io/api/rbac/v1"
@@ -122,4 +125,34 @@ func (c *CachedVerbChecker) HasVerb() bool {
 	}
 	c.hasVerbBeenChecked = true
 	return c.hasVerb
+}
+
+// OldAndNewFromRequest gets the old and new objects, respectively, from the webhook request.
+// If the request is a Delete operation, then the new object is the zero value for the object.
+// Similarly, if the request is a Create operation, then the old object is the zero value for object.
+func OldAndNewFromRequest[T any](request *admissionv1.AdmissionRequest) (*T, *T, error) {
+	if request == nil {
+		return nil, nil, fmt.Errorf("nil request")
+	}
+
+	var object T
+	var oldObject T
+
+	if request.Operation != admissionv1.Delete {
+		err := json.Unmarshal(request.Object.Raw, &object)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to unmarshal request object: %w", err)
+		}
+	}
+
+	if request.Operation == admissionv1.Create {
+		return nil, &object, nil
+	}
+
+	err := json.Unmarshal(request.OldObject.Raw, &oldObject)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal request oldObject: %w", err)
+	}
+
+	return &oldObject, &object, nil
 }
