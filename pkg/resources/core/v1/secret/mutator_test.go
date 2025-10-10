@@ -28,7 +28,7 @@ var (
 	secretGVK = metav1.GroupVersionKind{Group: "", Version: "v1", Kind: "Secret"}
 )
 
-func Test_roleBindingIndexer(t *testing.T) {
+func TestRoleBindingIndexer(t *testing.T) {
 	testNamespace := "test-ns"
 	createBinding := func(roleRefKind string, ownerRefs ...metav1.OwnerReference) rbacv1.RoleBinding {
 		return rbacv1.RoleBinding{
@@ -486,6 +486,17 @@ func TestAdmitLocalUserPassword(t *testing.T) {
 		},
 		Username: "test",
 	}
+
+	rawUsernameSecret, err := json.Marshal(&corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-user",
+		},
+		Data: map[string][]byte{
+			"password": []byte(fakeUser.Username),
+		},
+	})
+	assert.NoError(t, err)
+
 	tests := map[string]struct {
 		request           *admission.Request
 		hasher            passwordHasher
@@ -616,14 +627,14 @@ func TestAdmitLocalUserPassword(t *testing.T) {
 					Resource:        secretGVR,
 					RequestKind:     &secretGVK,
 					RequestResource: &secretGVR,
-					UserInfo:        authenicationv1.UserInfo{Username: "password"},
+					UserInfo:        authenicationv1.UserInfo{Username: "test-user"},
 					Object: runtime.RawExtension{
-						Raw: rawSecret,
+						Raw: rawUsernameSecret,
 					},
 				},
 			},
 			hasher: func(_ string) ([]byte, []byte, error) {
-				return []byte("hashedPassword"), []byte("salt"), nil
+				panic("should not be called")
 			},
 			mockSettingsCache: func() ctrlv3.SettingCache {
 				mock := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
@@ -720,10 +731,10 @@ func TestAdmitLocalUserPassword(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Equal(t, test.wantAllowed, response.Allowed)
 				if test.wantPatch != "" {
-					var wantPatch []interface{}
+					var wantPatch []any
 					err = json.Unmarshal([]byte(test.wantPatch), &wantPatch)
 					assert.NoError(t, err)
-					var patch []interface{}
+					var patch []any
 					err = json.Unmarshal(response.Patch, &patch)
 					assert.NoError(t, err)
 					sortPatch(patch)
@@ -737,10 +748,10 @@ func TestAdmitLocalUserPassword(t *testing.T) {
 	}
 }
 
-func sortPatch(patch []interface{}) {
+func sortPatch(patch []any) {
 	sort.Slice(patch, func(i, j int) bool {
-		pi := patch[i].(map[string]interface{})
-		pj := patch[j].(map[string]interface{})
+		pi := patch[i].(map[string]any)
+		pj := patch[j].(map[string]any)
 		return fmt.Sprint(pi["path"]) < fmt.Sprint(pj["path"])
 	})
 }
