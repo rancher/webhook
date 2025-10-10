@@ -99,7 +99,7 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 	listTrace := trace.New("provisioningClusterValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
-	oldCluster, cluster, err := objectsv1.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
+	oldCluster, cluster, err := objectsv1.OldAndNewFromRequest[v1.Cluster](&request.AdmissionRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 			return response, err
 		}
 
-		if response = p.validateRKEConfigChanged(oldCluster, cluster); !response.Allowed {
+		if response := p.validateRKEConfigChanged(oldCluster, cluster); !response.Allowed {
 			return response, nil
 		}
 
