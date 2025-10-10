@@ -2733,3 +2733,133 @@ func Test_validateS3Secret(t *testing.T) {
 		})
 	}
 }
+
+func Test_ValidateRKEConfigChanged(t *testing.T) {
+	tests := []struct {
+		name       string
+		oldCluster *v1.Cluster
+		newCluster *v1.Cluster
+		expected   bool
+	}{
+		{
+			name:       "create",
+			oldCluster: nil,
+			newCluster: &v1.Cluster{},
+			expected:   true,
+		},
+		{
+			name:       "no change - nil",
+			oldCluster: &v1.Cluster{},
+			newCluster: &v1.Cluster{},
+			expected:   true,
+		},
+		{
+			name:       "no change - nil - local",
+			oldCluster: &v1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "local"}},
+			newCluster: &v1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "local"}},
+			expected:   true,
+		},
+		{
+			name: "no change - not nil",
+			oldCluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+				},
+			},
+			newCluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "no change - not nil - local",
+			oldCluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "local",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+				},
+			},
+			newCluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "local",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+				},
+			},
+			expected: true,
+		},
+		{
+			name:       "change - was nil",
+			oldCluster: &v1.Cluster{},
+			newCluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "change - was nil - local",
+			oldCluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "local",
+				},
+			},
+			newCluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "local",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "change - was not nil",
+			oldCluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+				},
+			},
+			newCluster: &v1.Cluster{},
+			expected:   false,
+		},
+		{
+			name: "change - was not nil - local",
+			oldCluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "local",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+				},
+			},
+			newCluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "local",
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			p := provisioningAdmitter{}
+			response := p.validateRKEConfigChanged(tt.oldCluster, tt.newCluster)
+			if tt.expected {
+				assert.True(t, response.Allowed, "Expected change to be admitted")
+			} else {
+				assert.False(t, response.Allowed, "Expected change not to be admitted")
+			}
+		})
+	}
+}
