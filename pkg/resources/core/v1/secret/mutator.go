@@ -220,6 +220,7 @@ func (m *Mutator) admitLocalUserPassword(secret *corev1.Secret, request *admissi
 			Allowed: true,
 		}, nil
 	}
+
 	user, err := m.userCache.Get(secret.Name)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -227,21 +228,26 @@ func (m *Mutator) admitLocalUserPassword(secret *corev1.Secret, request *admissi
 		}
 		return nil, err
 	}
+
 	password := string(secret.Data["password"])
 	passwordMinLength, err := m.getPasswordMinLength()
 	if err != nil {
 		return nil, err
 	}
+
 	if utf8.RuneCountInString(password) < passwordMinLength {
 		return admission.ResponseBadRequest(fmt.Sprintf("password must be at least %v characters", passwordMinLength)), nil
 	}
-	if request.UserInfo.Username == password {
+
+	if user.Username == password {
 		return admission.ResponseBadRequest("password cannot be the same as username"), nil
 	}
+
 	hashedPassword, salt, err := m.hasher(password)
 	if err != nil {
 		return nil, err
 	}
+
 	response := &admissionv1.AdmissionResponse{}
 	newSecret := secret.DeepCopy()
 	if newSecret.Annotations == nil {
