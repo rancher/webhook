@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"testing"
 
+	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/stretchr/testify/require"
+	admissionv1 "k8s.io/api/admission/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
 	v1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/authentication/user"
@@ -423,6 +426,140 @@ func TestIsRulesAllowed(t *testing.T) {
 				}
 				require.Equal(t, ss.hasVerb, verbChecker.hasVerb)
 				require.Equal(t, ss.hasVerbBeenChecked, verbChecker.hasVerbBeenChecked)
+			}
+		})
+	}
+}
+
+func TestOldAndNewFromRequest(t *testing.T) {
+	tests := []struct {
+		name        string
+		req         *admissionv1.AdmissionRequest
+		expected    *provv1.Cluster
+		expectedOld *provv1.Cluster
+		expectedErr bool
+	}{
+		{
+			name:        "nil request",
+			req:         nil,
+			expectedErr: true,
+		},
+		{
+			name: "create",
+			req: &admissionv1.AdmissionRequest{
+				Operation: admissionv1.Create,
+				Object: runtime.RawExtension{
+					Raw: []byte(`{"metadata":{"namespace":"test","name":"test"}}`),
+				},
+			},
+			expected: &provv1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test",
+					Name:      "test",
+				},
+			},
+			expectedOld: &provv1.Cluster{},
+		},
+		{
+			name: "create error",
+			req: &admissionv1.AdmissionRequest{
+				Operation: admissionv1.Create,
+				Object: runtime.RawExtension{
+					Raw: []byte(``),
+				},
+			},
+			expectedErr: true,
+		},
+		{
+			name: "update",
+			req: &admissionv1.AdmissionRequest{
+				Operation: admissionv1.Update,
+				Object: runtime.RawExtension{
+					Raw: []byte(`{"metadata":{"namespace":"test","name":"test","resourceVersion":"1"}}`),
+				},
+				OldObject: runtime.RawExtension{
+					Raw: []byte(`{"metadata":{"namespace":"test","name":"test"}}`),
+				},
+			},
+			expected: &provv1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace:       "test",
+					Name:            "test",
+					ResourceVersion: "1",
+				},
+			},
+			expectedOld: &provv1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test",
+					Name:      "test",
+				},
+			},
+		},
+		{
+			name: "update error",
+			req: &admissionv1.AdmissionRequest{
+				Operation: admissionv1.Update,
+				Object: runtime.RawExtension{
+					Raw: []byte(``),
+				},
+				OldObject: runtime.RawExtension{
+					Raw: []byte(`{"metadata":{"namespace":"test","name":"test"}}`),
+				},
+			},
+			expectedErr: true,
+		},
+		{
+			name: "update error old object",
+			req: &admissionv1.AdmissionRequest{
+				Operation: admissionv1.Update,
+				Object: runtime.RawExtension{
+					Raw: []byte(`{"metadata":{"namespace":"test","name":"test"}}`),
+				},
+				OldObject: runtime.RawExtension{
+					Raw: []byte(``),
+				},
+			},
+			expectedErr: true,
+		},
+		{
+			name: "delete",
+			req: &admissionv1.AdmissionRequest{
+				Operation: admissionv1.Delete,
+				OldObject: runtime.RawExtension{
+					Raw: []byte(`{"metadata":{"namespace":"test","name":"test"}}`),
+				},
+			},
+			expected: &provv1.Cluster{},
+			expectedOld: &provv1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test",
+					Name:      "test",
+				},
+			},
+		},
+		{
+			name: "delete error",
+			req: &admissionv1.AdmissionRequest{
+				Operation: admissionv1.Delete,
+				OldObject: runtime.RawExtension{
+					Raw: []byte(``),
+				},
+			},
+			expectedErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			old, obj, err := OldAndNewFromRequest[provv1.Cluster](tt.req)
+			if tt.expectedErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedOld, old)
+				require.Equal(t, tt.expected, obj)
 			}
 		})
 	}

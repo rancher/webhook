@@ -35,6 +35,12 @@ webhook_deployed() {
 try --waitmsg "Waiting for webhook to be deployed (2)" webhook_deployed
 echo "Webhook deployed"
 
+crds_exist() {
+  kubectl get crd azureconfigs.rke-machine-config.cattle.io
+}
+
+try --waitmsg "Waiting for CRDs" crds_exist
+
 # Shut down the core rancher part, but leave the rest of the rancher environment running
 set -e
 echo "Shutting down core rancher"

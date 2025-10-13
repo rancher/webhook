@@ -38,6 +38,12 @@ The annotation `field.cattle.io/creatorId` cannot be changed, but it can be remo
 
 If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` cannot be set.
 
+#### RKEConfig changed
+
+The `spec.rkeConfig` field cannot be changed from `nil`/ not `nil` after creation.
+
+The local cluster is an exemption, as the rancherd use case allows managing the local cluster via this mechanism.
+
 #### Data Directories
 
 On update, prevent new env vars with this name from being added but allow them to be removed. Rancher will perform 
