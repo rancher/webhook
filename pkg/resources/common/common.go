@@ -146,7 +146,7 @@ func OldAndNewFromRequest[T any](request *admissionv1.AdmissionRequest) (*T, *T,
 	}
 
 	if request.Operation == admissionv1.Create {
-		return nil, &object, nil
+		return &oldObject, &object, nil
 	}
 
 	err := json.Unmarshal(request.OldObject.Raw, &oldObject)
