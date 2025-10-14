@@ -990,7 +990,7 @@ func TestProjectValidation(t *testing.T) {
 			wantAllowed: false,
 		},
 		{
-			name:      "update with project quota less than used quota",
+			name:      "update with project quota less than used quota, quota changed",
 			operation: admissionv1.Update,
 			oldProject: &v3.Project{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1036,6 +1036,154 @@ func TestProjectValidation(t *testing.T) {
 					},
 				},
 			},
+			wantAllowed: false,
+		},
+		{
+			name:      "update with project quota less than used quota, used quota changed",
+			operation: admissionv1.Update,
+			oldProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+					ResourceQuota: &v3.ProjectResourceQuota{
+						Limit: v3.ResourceQuotaLimit{
+							ConfigMaps: "100",
+						},
+						UsedLimit: v3.ResourceQuotaLimit{
+							ConfigMaps: "100",
+						},
+					},
+					NamespaceDefaultResourceQuota: &v3.NamespaceResourceQuota{
+						Limit: v3.ResourceQuotaLimit{
+							ConfigMaps: "50",
+						},
+					},
+				},
+			},
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+					ResourceQuota: &v3.ProjectResourceQuota{
+						Limit: v3.ResourceQuotaLimit{
+							ConfigMaps: "100",
+						},
+						UsedLimit: v3.ResourceQuotaLimit{
+							ConfigMaps: "1000",
+						},
+					},
+					NamespaceDefaultResourceQuota: &v3.NamespaceResourceQuota{
+						Limit: v3.ResourceQuotaLimit{
+							ConfigMaps: "50",
+						},
+					},
+				},
+			},
+			wantAllowed: false,
+		},
+		{
+			name:      "update project with bogus used quota, to good used quota",
+			operation: admissionv1.Update,
+			oldProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+					ResourceQuota: &v3.ProjectResourceQuota{
+						Limit: v3.ResourceQuotaLimit{
+							ConfigMaps: "100",
+						},
+						UsedLimit: v3.ResourceQuotaLimit{
+							ConfigMaps: "xxxxxxxxxx",
+						},
+					},
+					NamespaceDefaultResourceQuota: &v3.NamespaceResourceQuota{
+						Limit: v3.ResourceQuotaLimit{
+							ConfigMaps: "50",
+						},
+					},
+				},
+			},
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+					ResourceQuota: &v3.ProjectResourceQuota{
+						Limit: v3.ResourceQuotaLimit{
+							ConfigMaps: "100",
+						},
+						UsedLimit: v3.ResourceQuotaLimit{
+							ConfigMaps: "100",
+						},
+					},
+					NamespaceDefaultResourceQuota: &v3.NamespaceResourceQuota{
+						Limit: v3.ResourceQuotaLimit{
+							ConfigMaps: "50",
+						},
+					},
+				},
+			},
+			wantAllowed: true,
+		},
+		{
+			name:      "update project with good used quota, to bogus used quota",
+			operation: admissionv1.Update,
+			oldProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+					ResourceQuota: &v3.ProjectResourceQuota{
+						Limit: v3.ResourceQuotaLimit{
+							ConfigMaps: "100",
+						},
+						UsedLimit: v3.ResourceQuotaLimit{
+							ConfigMaps: "100",
+						},
+					},
+					NamespaceDefaultResourceQuota: &v3.NamespaceResourceQuota{
+						Limit: v3.ResourceQuotaLimit{
+							ConfigMaps: "50",
+						},
+					},
+				},
+			},
+			newProject: &v3.Project{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "testcluster",
+				},
+				Spec: v3.ProjectSpec{
+					ClusterName: "testcluster",
+					ResourceQuota: &v3.ProjectResourceQuota{
+						Limit: v3.ResourceQuotaLimit{
+							ConfigMaps: "100",
+						},
+						UsedLimit: v3.ResourceQuotaLimit{
+							ConfigMaps: "xxxxxxxxxx",
+						},
+					},
+					NamespaceDefaultResourceQuota: &v3.NamespaceResourceQuota{
+						Limit: v3.ResourceQuotaLimit{
+							ConfigMaps: "50",
+						},
+					},
+				},
+			},
+			wantErr:     true,
 			wantAllowed: false,
 		},
 		{
