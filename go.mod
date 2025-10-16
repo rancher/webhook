@@ -36,17 +36,17 @@ require (
 	github.com/evanphx/json-patch v5.9.11+incompatible
 	github.com/go-ldap/ldap/v3 v3.4.11
 	github.com/gorilla/mux v1.8.1
-	github.com/rancher/dynamiclistener v0.7.2-rc.3
+	github.com/rancher/dynamiclistener v0.7.2-rc1
 	github.com/rancher/jsonpath v0.0.0-20250620213443-ad24535cf0c1
-	github.com/rancher/lasso v0.2.5-rc.1
-	github.com/rancher/rancher/pkg/apis v0.0.0-20250918152046-69e9a6ff0ae9
+	github.com/rancher/lasso v0.2.5
+	github.com/rancher/rancher/pkg/apis v0.0.0-20251016122233-75bbeda654cc
 	github.com/rancher/rke v1.8.6
-	github.com/rancher/wrangler/v3 v3.3.0-rc.2
+	github.com/rancher/wrangler/v3 v3.3.1
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
-	golang.org/x/text v0.29.0
+	golang.org/x/text v0.30.0
 	golang.org/x/tools v0.37.0
 	k8s.io/api v0.34.1
 	k8s.io/apimachinery v0.34.1
@@ -55,11 +55,9 @@ require (
 	k8s.io/kubernetes v1.34.1
 	k8s.io/pod-security-admission v0.34.1
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
-	sigs.k8s.io/controller-runtime v0.21.0
+	sigs.k8s.io/controller-runtime v0.22.2
 	sigs.k8s.io/yaml v1.6.0
 )
-
-require golang.org/x/tools/go/expect v0.1.0-deprecated // indirect
 
 require (
 	github.com/Azure/go-ntlmssp v0.0.0-20221128193559-754e69321358 // indirect
@@ -93,29 +91,29 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/rancher/aks-operator v1.12.1 // indirect
-	github.com/rancher/ali-operator v0.0.0-20250910043122-2aba32fbfe4c // indirect
-	github.com/rancher/eks-operator v1.12.1 // indirect
-	github.com/rancher/fleet/pkg/apis v0.13.0 // indirect
-	github.com/rancher/gke-operator v1.12.1 // indirect
+	github.com/rancher/aks-operator v1.13.0-rc.1 // indirect
+	github.com/rancher/ali-operator v0.0.3-0.20251001142421-ca64da576db5 // indirect
+	github.com/rancher/eks-operator v1.13.0-rc.1 // indirect
+	github.com/rancher/fleet/pkg/apis v0.14.0-alpha.3 // indirect
+	github.com/rancher/gke-operator v1.13.0-rc.1 // indirect
 	//TODO: Replace with a tag during un-rc'ing
-	github.com/rancher/norman v0.7.1-0.20251002202451-d14394e537ab // indirect
+	github.com/rancher/norman v0.7.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	go.opentelemetry.io/otel v1.36.0 // indirect
-	go.opentelemetry.io/otel/trace v1.36.0 // indirect
+	go.opentelemetry.io/otel v1.37.0 // indirect
+	go.opentelemetry.io/otel/trace v1.37.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.42.0 // indirect
+	golang.org/x/crypto v0.43.0 // indirect
 	golang.org/x/mod v0.28.0 // indirect
-	golang.org/x/net v0.44.0 // indirect
-	golang.org/x/oauth2 v0.30.0 // indirect
+	golang.org/x/net v0.46.0 // indirect
+	golang.org/x/oauth2 v0.32.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
-	golang.org/x/sys v0.36.0 // indirect
-	golang.org/x/term v0.35.0 // indirect
-	golang.org/x/time v0.12.0 // indirect
+	golang.org/x/sys v0.37.0 // indirect
+	golang.org/x/term v0.36.0 // indirect
+	golang.org/x/time v0.13.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
-	google.golang.org/protobuf v1.36.8 // indirect
+	google.golang.org/protobuf v1.36.10 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
@@ -131,7 +129,7 @@ require (
 	k8s.io/kube-aggregator v0.34.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b // indirect
 	k8s.io/kubelet v0.0.0 // indirect
-	sigs.k8s.io/cluster-api v1.10.2 // indirect
+	sigs.k8s.io/cluster-api v1.10.6 // indirect
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
