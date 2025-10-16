@@ -132,8 +132,7 @@ jobs:
             echo "TAG=head" >> $GITHUB_ENV
           else
             VERSION=$(echo "${{ github.ref }}" | sed -E -n 's|refs/heads/release/v(.*)|\1|p')
-            SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-            echo "TAG=v${VERSION}-${SHORT_SHA}-head" >> $GITHUB_ENV
+            echo "TAG=v${VERSION}-${{ github.sha }}-head" >> $GITHUB_ENV
           fi
       - name: Create manifest list and push
         working-directory: /tmp/digests
