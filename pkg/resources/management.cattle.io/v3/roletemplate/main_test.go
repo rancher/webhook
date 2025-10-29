@@ -27,7 +27,6 @@ type testState struct {
 }
 
 type tableTest struct {
-	wantRT     func() *v3.RoleTemplate
 	name       string
 	args       args
 	stateSetup func(state testState)

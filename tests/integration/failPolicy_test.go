@@ -40,9 +40,9 @@ func (m *FailurePolicySuite) SetupSuite() {
 	m.clientFactory, err = client.NewSharedClientFactoryForConfig(restCfg)
 	m.Require().NoError(err, "Failed to create clientFactory Interface")
 
-	schemes.Register(v3.AddToScheme)
-	schemes.Register(provisioningv1.AddToScheme)
-	schemes.Register(corev1.AddToScheme)
+	_ = schemes.Register(v3.AddToScheme)
+	_ = schemes.Register(provisioningv1.AddToScheme)
+	_ = schemes.Register(corev1.AddToScheme)
 }
 func (m *FailurePolicySuite) SetupTest() {
 	m.checkWebhookIsDown()
@@ -61,7 +61,7 @@ func (m *FailurePolicySuite) checkWebhookIsDown() {
 		LabelSelector: "app=rancher-webhook",
 	}
 	pods := corev1.PodList{}
-	podClient.List(context.Background(), "cattle-system", &pods, listOpts)
+	_ = podClient.List(context.Background(), "cattle-system", &pods, listOpts)
 	m.Require().Equal(0, len(pods.Items), "Test can not run while rancher-webhook pods are still running")
 }
 
@@ -76,26 +76,28 @@ func (m *FailurePolicySuite) TestNamespaceFail() {
 	objGVK, err := gvk.Get(validCreateObj)
 	m.Require().NoError(err, "failed to get GVK")
 
-	client, err := m.clientFactory.ForKind(objGVK)
+	cfClient, err := m.clientFactory.ForKind(objGVK)
 	m.Require().NoError(err, "Failed to create client")
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancel()
-	err = client.Create(ctx, "", validCreateObj, nil, v1.CreateOptions{})
+	err = cfClient.Create(ctx, "", validCreateObj, nil, v1.CreateOptions{})
 	m.Require().True(errors.IsInternalError(err), "Webhook should fail with service unavailable when the webhook is down instead we received :%v", err)
 
 	// Attempt to clean up the namespace if the create went through.
-	defer client.Delete(ctx, "", name, v1.DeleteOptions{})
+	defer func() {
+		_ = cfClient.Delete(ctx, "", name, v1.DeleteOptions{})
+	}()
 
 	validCreateObj.Name = "default"
-	err = client.Update(ctx, "", validCreateObj, nil, v1.UpdateOptions{})
+	err = cfClient.Update(ctx, "", validCreateObj, nil, v1.UpdateOptions{})
 	m.Require().True(errors.IsInternalError(err), "Webhook should fail with service unavailable when the webhook is down instead we received :%v", err)
 
 	validCreateObj.Name = "kube-system"
-	err = client.Create(ctx, "", validCreateObj, nil, v1.CreateOptions{})
+	err = cfClient.Create(ctx, "", validCreateObj, nil, v1.CreateOptions{})
 	m.Require().True(errors.IsAlreadyExists(err), "Webhook should fail to create kube-system with an already exist error instead we received :%v", err)
 
-	err = client.Update(ctx, "", validCreateObj, nil, v1.UpdateOptions{})
+	err = cfClient.Update(ctx, "", validCreateObj, nil, v1.UpdateOptions{})
 	m.Require().True(errors.IsInternalError(err), "Webhook should fail to update kube-system namespace with service unavailable when the webhook is down instead we received :%v", err)
 }
 
@@ -109,22 +111,24 @@ func (m *FailurePolicySuite) TestSettingSucceed() {
 	objGVK, err := gvk.Get(createObj)
 	m.Require().NoError(err, "failed to get GVK")
 
-	client, err := m.clientFactory.ForKind(objGVK)
+	cfClient, err := m.clientFactory.ForKind(objGVK)
 	m.Require().NoError(err, "Failed to create client")
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancel()
-	err = client.Create(ctx, "", createObj, nil, v1.CreateOptions{})
+	err = cfClient.Create(ctx, "", createObj, nil, v1.CreateOptions{})
 	m.Require().NoError(err)
 
 	// Attempt to clean up the setting if the create went through.
-	defer client.Delete(ctx, "", name, v1.DeleteOptions{})
+	defer func() {
+		_ = cfClient.Delete(ctx, "", name, v1.DeleteOptions{})
+	}()
 
 	updateObj := &mgmtv3.Setting{}
-	err = client.Get(ctx, "", name, updateObj, v1.GetOptions{})
+	err = cfClient.Get(ctx, "", name, updateObj, v1.GetOptions{})
 	m.Require().NoError(err)
 	updateObj.Value = "new-value"
 
-	err = client.Update(ctx, "", updateObj, updateObj, v1.UpdateOptions{})
+	err = cfClient.Update(ctx, "", updateObj, updateObj, v1.UpdateOptions{})
 	m.Require().NoError(err)
 }

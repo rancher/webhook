@@ -105,7 +105,9 @@ func (m *IntegrationSuite) TestMutateProject() {
 	}
 	err = rtClient.Create(ctx, "", rt, rt, metav1.CreateOptions{})
 	m.Require().NoError(err)
-	defer rtClient.Delete(ctx, "", rt.Name, metav1.DeleteOptions{})
+	defer func() {
+		_ = rtClient.Delete(ctx, "", rt.Name, metav1.DeleteOptions{})
+	}()
 	validCreateObj := &v3.Project{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      randomName(),
@@ -124,7 +126,7 @@ func (m *IntegrationSuite) TestMutateProject() {
 	err = json.Unmarshal([]byte(annos), &annosMap)
 	m.Require().NoError(err)
 	m.Require().Contains(annosMap, "required")
-	m.Require().Contains(annosMap["required"], rt.ObjectMeta.Name)
+	m.Require().Contains(annosMap["required"], rt.Name)
 	err = projectClient.Delete(ctx, validCreateObj.Namespace, validCreateObj.Name, metav1.DeleteOptions{})
 	m.Require().NoError(err)
 }

@@ -7,7 +7,6 @@ import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -15,7 +14,7 @@ func (m *IntegrationSuite) TestGlobalRoleBinding() {
 	const grName = "grb-testgr"
 	newObj := func() *v3.GlobalRoleBinding { return &v3.GlobalRoleBinding{} }
 	validCreateObj := &v3.GlobalRoleBinding{
-		ObjectMeta: v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name: "test-globalrolebinding",
 		},
 		UserName:       testUser,
@@ -53,7 +52,7 @@ func (m *IntegrationSuite) TestGlobalRoleBinding() {
 	}
 
 	testGR := &v3.GlobalRole{
-		ObjectMeta: v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name: grName,
 		},
 		Rules: []rbacv1.PolicyRule{
@@ -84,7 +83,9 @@ func (m *IntegrationSuite) TestMutateGlobalRoleBinding() {
 	}
 	err = grClient.Create(ctx, "", gr, gr, metav1.CreateOptions{})
 	m.Require().NoError(err)
-	defer grClient.Delete(ctx, "", gr.Name, metav1.DeleteOptions{})
+	defer func() {
+		_ = grClient.Delete(ctx, "", gr.Name, metav1.DeleteOptions{})
+	}()
 	validCreateObj := &v3.GlobalRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "test-gr-",

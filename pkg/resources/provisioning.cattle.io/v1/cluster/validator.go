@@ -17,7 +17,6 @@ import (
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/clients"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
-	objectsv1 "github.com/rancher/webhook/pkg/generated/objects/provisioning.cattle.io/v1"
 	psa "github.com/rancher/webhook/pkg/podsecurityadmission"
 	"github.com/rancher/webhook/pkg/resources/common"
 	corev1controller "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
@@ -99,7 +98,7 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 	listTrace := trace.New("provisioningClusterValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
-	oldCluster, cluster, err := objectsv1.ClusterOldAndNewFromRequest(&request.AdmissionRequest)
+	oldCluster, cluster, err := common.OldAndNewFromRequest[v1.Cluster](&request.AdmissionRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -113,6 +112,10 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 	if request.Operation == admissionv1.Create || request.Operation == admissionv1.Update {
 		if err := p.validateClusterName(request, response, cluster); err != nil || response.Result != nil {
 			return response, err
+		}
+
+		if response := p.validateRKEConfigChanged(request, oldCluster, cluster); !response.Allowed {
+			return response, nil
 		}
 
 		if err := p.validateMachinePoolNames(request, response, cluster); err != nil || response.Result != nil {
@@ -178,6 +181,22 @@ func getEnvVar(name string, envVars []rkev1.EnvVar) *rkev1.EnvVar {
 		}
 	}
 	return envVar
+}
+
+// validateRKEConfigChanged validates that after creation, the `spec.rkeConfig` cannot be set to a non-nil value if it
+// was nil, and likewise cannot be set to a nil value if it was not. The local cluster is explicitly exempted from
+// setting rkeConfig from nil to not nil, as it is a valid usecase to do so for rancherd in harvester environments.
+func (p *provisioningAdmitter) validateRKEConfigChanged(request *admission.Request, oldCluster, newCluster *v1.Cluster) *admissionv1.AdmissionResponse {
+	if request.Operation != admissionv1.Update {
+		return admission.ResponseAllowed()
+	}
+	if oldCluster.Spec.RKEConfig == nil && newCluster.Spec.RKEConfig != nil && oldCluster.Name != localCluster {
+		return admission.ResponseBadRequest("RKEConfig cannot be changed from null after cluster creation")
+	} else if oldCluster.Spec.RKEConfig != nil && newCluster.Spec.RKEConfig == nil {
+		return admission.ResponseBadRequest("RKEConfig cannot be made null after cluster creation")
+	}
+
+	return admission.ResponseAllowed()
 }
 
 // validateSystemAgentDataDirectory validates the effective system agent data directory, ensuring that the intended
@@ -251,6 +270,10 @@ func (p *provisioningAdmitter) validateDataDirectories(request *admission.Reques
 		return admission.ResponseAllowed()
 	}
 	if request.Operation != admissionv1.Update {
+		return admission.ResponseAllowed()
+	}
+	// possible in the harvester case, as rkeConfig is patched to be non-nil.
+	if oldCluster.Spec.RKEConfig == nil {
 		return admission.ResponseAllowed()
 	}
 
@@ -507,7 +530,7 @@ func (p *provisioningAdmitter) validatePSACT(request *admission.Request, respons
 			if err != nil {
 				return fmt.Errorf("[provisioning cluster validator] failed to get the kube-apiserver arguments: %w", err)
 			}
-			if args.keyHasValue(kubeAPIAdmissionConfigOption, mountPath) {
+			if keyHasValue(args, kubeAPIAdmissionConfigOption, mountPath) {
 				return fmt.Errorf("[provisioning cluster validator] admission-control-config-file under kube-apiserver-arg should not be set to %s", mountPath)
 			}
 		} else {
@@ -553,7 +576,7 @@ func (p *provisioningAdmitter) validatePSACT(request *admission.Request, respons
 			if err != nil {
 				return fmt.Errorf("[provisioning cluster validator] failed to get the kube-apiserver arguments: %w", err)
 			}
-			if !args.keyHasValue(kubeAPIAdmissionConfigOption, mountPath) {
+			if !keyHasValue(args, kubeAPIAdmissionConfigOption, mountPath) {
 				return fmt.Errorf("[provisioning cluster validator] admission-control-config-file under kube-apiserver-arg should be set to %s", mountPath)
 			}
 		}

@@ -949,6 +949,17 @@ func TestValidateDataDirectories(t *testing.T) {
 			shouldSucceed: true,
 		},
 		{
+			name:    "old no rkeconfig",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+				},
+			},
+			oldCluster:    &v1.Cluster{},
+			shouldSucceed: true,
+		},
+		{
 			name:    "Create",
 			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
 			cluster: &v1.Cluster{
@@ -2719,6 +2730,158 @@ func Test_validateS3Secret(t *testing.T) {
 			response, err := a.validateS3Secret(tt.oldCluster, tt.cluster)
 			assert.Equal(t, tt.shouldSucceed, response.Allowed)
 			assert.NoError(t, err)
+		})
+	}
+}
+
+func Test_ValidateRKEConfigChanged(t *testing.T) {
+	tests := []struct {
+		name       string
+		op         admissionv1.Operation
+		oldCluster *v1.Cluster
+		newCluster *v1.Cluster
+		expected   bool
+	}{
+		{
+			name:       "create",
+			op:         admissionv1.Create,
+			oldCluster: &v1.Cluster{},
+			newCluster: &v1.Cluster{},
+			expected:   true,
+		},
+		{
+			name:       "delete",
+			op:         admissionv1.Delete,
+			oldCluster: &v1.Cluster{},
+			newCluster: &v1.Cluster{},
+			expected:   true,
+		},
+		{
+			name:       "no change - nil",
+			op:         admissionv1.Update,
+			oldCluster: &v1.Cluster{},
+			newCluster: &v1.Cluster{},
+			expected:   true,
+		},
+		{
+			name:       "no change - nil - local",
+			op:         admissionv1.Update,
+			oldCluster: &v1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "local"}},
+			newCluster: &v1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "local"}},
+			expected:   true,
+		},
+		{
+			name: "no change - not nil",
+			op:   admissionv1.Update,
+			oldCluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+				},
+			},
+			newCluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "no change - not nil - local",
+			op:   admissionv1.Update,
+			oldCluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "local",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+				},
+			},
+			newCluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "local",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+				},
+			},
+			expected: true,
+		},
+		{
+			name:       "change - was nil",
+			op:         admissionv1.Update,
+			oldCluster: &v1.Cluster{},
+			newCluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "change - was nil - local",
+			op:   admissionv1.Update,
+			oldCluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "local",
+				},
+			},
+			newCluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "local",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "change - was not nil",
+			op:   admissionv1.Update,
+			oldCluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+				},
+			},
+			newCluster: &v1.Cluster{},
+			expected:   false,
+		},
+		{
+			name: "change - was not nil - local",
+			op:   admissionv1.Update,
+			oldCluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "local",
+				},
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{},
+				},
+			},
+			newCluster: &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "local",
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			p := provisioningAdmitter{}
+			req := &admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Operation: tt.op,
+				},
+			}
+			response := p.validateRKEConfigChanged(req, tt.oldCluster, tt.newCluster)
+			if tt.expected {
+				assert.True(t, response.Allowed, "Expected change to be admitted")
+			} else {
+				assert.False(t, response.Allowed, "Expected change not to be admitted")
+			}
 		})
 	}
 }

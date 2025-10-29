@@ -37,7 +37,7 @@ func (m *PortSuite) SetupSuite() {
 	m.clientFactory, err = client.NewSharedClientFactoryForConfig(restCfg)
 	m.Require().NoError(err, "Failed to create clientFactory Interface")
 
-	schemes.Register(corev1.AddToScheme)
+	_ = schemes.Register(corev1.AddToScheme)
 }
 
 func (m *PortSuite) TestWebhookPortChanged() {
@@ -53,7 +53,7 @@ func (m *PortSuite) TestWebhookPortChanged() {
 		LabelSelector: "app=rancher-webhook",
 	}
 	pods := corev1.PodList{}
-	podClient.List(context.Background(), "cattle-system", &pods, listOpts)
+	_ = podClient.List(context.Background(), "cattle-system", &pods, listOpts)
 	var webhookPod *corev1.Pod
 	for _, pod := range pods.Items {
 		if pod.Status.Phase == corev1.PodRunning {
@@ -66,11 +66,15 @@ func (m *PortSuite) TestWebhookPortChanged() {
 	if webhookPod == nil {
 		m.Require().FailNow("running webhook pod not found")
 	}
-	m.Require().Equal(corev1.PodRunning, webhookPod.Status.Phase, "Rancher-webhook pod is not running Phase=%s", webhookPod.Status.Phase)
-	m.Require().Len(webhookPod.Spec.Containers, 1, "Rancher-webhook pod has the incorrect number of containers")
-	m.Require().Len(webhookPod.Spec.Containers[0].Ports, 1, "Rancher-webhook container has the incorrect number of ports")
-	havePort := webhookPod.Spec.Containers[0].Ports[0].ContainerPort
-	if havePort != testWebhookPort {
-		m.Require().FailNowf("expected webhook port not found", "wanted '%d' was not found instead have '%d'", testWebhookPort, havePort)
+	// The following nolint:govet directive doesn't work, so add an encompassing test
+	//nolint:govet // the static checker isn't processing the above 'FileNow'
+	if webhookPod != nil && webhookPod.Spec.Containers != nil && webhookPod.Spec.Containers[0].Ports != nil {
+		m.Require().Equal(corev1.PodRunning, webhookPod.Status.Phase, "Rancher-webhook pod is not running Phase=%s", webhookPod.Status.Phase)
+		m.Require().Len(webhookPod.Spec.Containers, 1, "Rancher-webhook pod has the incorrect number of containers")
+		m.Require().Len(webhookPod.Spec.Containers[0].Ports, 1, "Rancher-webhook container has the incorrect number of ports")
+		havePort := webhookPod.Spec.Containers[0].Ports[0].ContainerPort
+		if havePort != testWebhookPort {
+			m.Require().FailNowf("expected webhook port not found", "wanted '%d' was not found instead have '%d'", testWebhookPort, havePort)
+		}
 	}
 }

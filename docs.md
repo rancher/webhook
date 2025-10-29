@@ -591,6 +591,8 @@ following:
 - Equal to another data directory
 - Attempts to nest another data directory
 
+If the action is an update, and the old cluster had a `nil` `.spec.rkeConfig`, accept the request, since this is how rancherd operates, and is required for harvester installations.
+
 ##### Etcd S3 CloudCredential Secret
 
 Prevent the creation of objects if the secret specified in `.spec.rkeConfig.etcd.s3.cloudCredentialName` does not exist.
@@ -602,6 +604,12 @@ Prevent the creation of objects if the secret specified in `.spec.rkeConfig.etcd
 The annotation `field.cattle.io/creatorId` cannot be changed, but it can be removed.
 
 If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` cannot be set.
+
+##### RKEConfig changed
+
+The `spec.rkeConfig` field cannot be changed from `nil`/ not `nil` after creation.
+
+The local cluster is an exemption, as the rancherd use case allows managing the local cluster via this mechanism.
 
 ##### Data Directories
 

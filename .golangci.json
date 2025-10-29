@@ -11,12 +11,12 @@
 		]
 	},
 	"run": {
-		"deadline": "5m"
+            "timeout": "10m"
 	},
 	"issues": {
 		"exclude-rules": [
 			{
-				"linters": "revive",
+				"linters": ["revive"],
 				"text": "should have comment or be unexported"
 			}
 		],

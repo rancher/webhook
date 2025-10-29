@@ -66,27 +66,6 @@ var (
 			},
 		},
 	}
-	adminRTRules = []rbacv1.PolicyRule{
-		{
-			APIGroups: []string{
-				"*",
-			},
-			Resources: []string{
-				"*",
-			},
-			Verbs: []string{
-				"*",
-			},
-		},
-		{
-			NonResourceURLs: []string{
-				"*",
-			},
-			Verbs: []string{
-				"*",
-			},
-		},
-	}
 
 	noInhertRT = &v3.RoleTemplate{
 		ObjectMeta: metav1.ObjectMeta{
@@ -106,12 +85,6 @@ var (
 			Name: "second-rt",
 		},
 		Rules: secondRTRules,
-	}
-	adminRT = &v3.RoleTemplate{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "cluster-owner",
-		},
-		Rules: adminRTRules,
 	}
 )
 

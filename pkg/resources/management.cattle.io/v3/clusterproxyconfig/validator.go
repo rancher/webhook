@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/rancher/webhook/pkg/admission"
-	webhookadmission "github.com/rancher/webhook/pkg/admission"
 	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
@@ -40,7 +39,7 @@ func (v *Validator) GVR() schema.GroupVersionResource {
 	return gvr
 }
 
-// Operations returns list of operations handled by this validator.
+// Operations returns the list of operations handled by this validator.
 func (v *Validator) Operations() []admissionregistrationv1.OperationType {
 	return []admissionregistrationv1.OperationType{admissionregistrationv1.Create}
 }
@@ -75,7 +74,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return &admissionv1.AdmissionResponse{
 			Result: &metav1.Status{
 				Status:  "Failure",
-				Message: fmt.Sprintf("there may only be one clusterproxyconfig object defined per cluster"),
+				Message: "there may only be one clusterproxyconfig object defined per cluster",
 				Reason:  metav1.StatusReasonConflict,
 				Code:    http.StatusConflict,
 			},
@@ -83,5 +82,5 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		}, nil
 	}
 
-	return webhookadmission.ResponseAllowed(), nil
+	return admission.ResponseAllowed(), nil
 }

@@ -26,7 +26,7 @@ type typeInfo struct {
 }
 
 func main() {
-	os.Unsetenv("GOPATH")
+	_ = os.Unsetenv("GOPATH")
 	err := generateDocs("pkg/resources", "docs.md")
 	if err != nil {
 		panic(err)
@@ -137,7 +137,7 @@ func generateObjectsFromRequest(outputDir string, groups map[string]args.Group) 
 			}
 			if rt.Kind() == reflect.Ptr {
 				// PkgPath returns an empty string for pointers
-				// Elem returns a Type associated to the dereferenced type.
+				// Elem returns a Type associated with the dereferenced type.
 				rt = rt.Elem()
 			}
 			ti.Package = rt.PkgPath()
@@ -178,7 +178,9 @@ func gofmtAndWriteToFile(path string, content []byte) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
 	_, err = f.Write(formatted)
 	return err
