@@ -124,8 +124,8 @@ github.com/prometheus/procfs v0.15.1 h1:YagwOFzUgYfKKHX6Dr+sHT7km/hxC76UB0leargg
 github.com/prometheus/procfs v0.15.1/go.mod h1:fB45yRUv8NstnjriLhBQLuOUt+WW4BsoGhij/e3PBqk=
 github.com/rancher/aks-operator v1.12.2 h1:8LIhxbLGAwfEHUdoVZCDBJAchOOwYApcYLDB4TnI9cU=
 github.com/rancher/aks-operator v1.12.2/go.mod h1:/GsBn/+RmLBvwlfUeOPVA1kWS4bGHIJJDCZ96fWF+fE=
-github.com/rancher/dynamiclistener v0.7.0 h1:+jyfZ4lVamc1UbKWo8V8dhSPtCgRZYaY8nm7wiHeko4=
-github.com/rancher/dynamiclistener v0.7.0/go.mod h1:Q2YA42xp7Xc69JiSlJ8GpvLvze261T0iQ/TP4RdMCYk=
+github.com/rancher/dynamiclistener v0.7.2-rc1 h1:KATDDyzlpE8VvqAjOOwqrwHaPY80XlFyA7tOlw6AyXw=
+github.com/rancher/dynamiclistener v0.7.2-rc1/go.mod h1:kq+3QHceIpW3f2xVpYgok7ILn1JcS8+O2utC42y8ZNY=
 github.com/rancher/eks-operator v1.12.2 h1:eInPuMsNNLxtclDPQPiRmD9R4rfsPGMfHGcx+AKEYqU=
 github.com/rancher/eks-operator v1.12.2/go.mod h1:R/rjIhYk5T5Z1hNatDGHM3HAic+j70OqwnqprrKbYQ4=
 github.com/rancher/fleet/pkg/apis v0.13.0 h1:soXF3cKWD9sMRcX5OlVnOY8aoPr+/FF8DP/zZtLLe3g=
