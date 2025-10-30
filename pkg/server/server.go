@@ -151,6 +151,7 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, validators []
 			return fmt.Errorf("failed to decode webhook port value '%s': %w", portStr, err)
 		}
 	}
+
 	return server.ListenAndServe(ctx, webhookHTTPSPort, webhookHTTPPort, router, &server.ListenOpts{
 		Secrets:       clients.Core.Secret(),
 		CertNamespace: namespace,
@@ -163,7 +164,8 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, validators []
 			FilterCN:  dynamiclistener.OnlyAllow(tlsName),
 			TLSConfig: tlsConfig,
 		},
-		DisplayServerLogs: true,
+		DisplayServerLogs:       true,
+		IgnoreTLSHandshakeError: true,
 	})
 }
 
