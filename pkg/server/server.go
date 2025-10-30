@@ -42,7 +42,6 @@ const (
 	webhookPortEnvKey       = "CATTLE_PORT"
 	webhookURLEnvKey        = "CATTLE_WEBHOOK_URL"
 	allowedCNsEnv           = "ALLOWED_CNS"
-	ignoreTLSHandshakeError = "IGNORE_TLS_HANDSHAKE_ERROR"
 )
 
 var caFile = filepath.Join(os.TempDir(), "k8s-webhook-server", "client-ca", "ca.crt")
@@ -151,7 +150,6 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, validators []
 			return fmt.Errorf("failed to decode webhook port value '%s': %w", portStr, err)
 		}
 	}
-	ignoreTLSHandErrorVal, _ := strconv.ParseBool(os.Getenv(ignoreTLSHandshakeError))
 	return server.ListenAndServe(ctx, webhookHTTPSPort, webhookHTTPPort, router, &server.ListenOpts{
 		Secrets:       clients.Core.Secret(),
 		CertNamespace: namespace,
@@ -165,7 +163,7 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, validators []
 			TLSConfig: tlsConfig,
 		},
 		DisplayServerLogs:       true,
-		IgnoreTLSHandshakeError: ignoreTLSHandErrorVal,
+		IgnoreTLSHandshakeError: true,
 	})
 }
 

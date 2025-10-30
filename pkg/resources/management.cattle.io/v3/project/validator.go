@@ -148,7 +148,7 @@ func (a *admitter) admitUpdate(oldProject, newProject *v3.Project) (*admissionv1
 
 }
 
-func (a *admitter) admitCommonCreateUpdate(oldProject, newProject *v3.Project) (*admissionv1.AdmissionResponse, error) {
+func (a *admitter) admitCommonCreateUpdate(_, newProject *v3.Project) (*admissionv1.AdmissionResponse, error) {
 	projectQuota := newProject.Spec.ResourceQuota
 	nsQuota := newProject.Spec.NamespaceDefaultResourceQuota
 	containerLimit := newProject.Spec.ContainerDefaultResourceLimit
