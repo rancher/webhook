@@ -1,18 +1,21 @@
-TARGETS := $(shell ls scripts)
+.PHONY: all build test validate package package-helm clean
 
-.dapper:
-	@echo Downloading dapper
-	@curl -sL https://releases.rancher.com/dapper/latest/dapper-$$(uname -s)-$$(uname -m) > .dapper.tmp
-	@@chmod +x .dapper.tmp
-	@./.dapper.tmp -v
-	@mv .dapper.tmp .dapper
+all: build
 
-$(TARGETS): .dapper
-	./.dapper $@
+build:
+	./scripts/build
+
+test:
+	./scripts/test
+
+validate:
+	./scripts/validate
+
+package-helm:
+	./scripts/package-helm
+
+package: build package-helm
+	./scripts/package
 
 clean:
-	rm -rf build bin dist
-
-.DEFAULT_GOAL := default
-
-.PHONY: $(TARGETS)
+	rm -rf bin dist
