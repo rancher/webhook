@@ -1,9 +1,7 @@
 .PHONY: all build test validate package package-helm clean
 
-# The default target is to build and package everything
 all: package
 
-# build is now responsible for building the final image AND extracting the binary
 build:
 	@echo "--- Building Webhook Image & Binary ---"
 	@bash -c 'source scripts/version && \
@@ -28,7 +26,6 @@ validate:
 package-helm:
 	./scripts/package-helm
 
-# package now depends on the build being complete, and just creates release artifacts
 package: build package-helm
 	@echo "--- Packaging Release Artifacts ---"
 	@bash -c 'source scripts/version && \
