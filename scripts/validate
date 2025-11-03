@@ -3,12 +3,17 @@ set -e
 
 cd $(dirname $0)/..
 
-echo Running validation
+echo "--- Validating ---"
 
-if ! command -v golangci-lint; then
-    echo Skipping validation: no golangci-lint available
-    exit
+LINT_VERSION="v1.64.8"
+LINT_BIN="./bin/golangci-lint-${LINT_VERSION}"
+
+if [ ! -f "${LINT_BIN}" ]; then
+    echo "--- Downloading golangci-lint ${LINT_VERSION} ---"
+    mkdir -p ./bin
+    curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ./bin ${LINT_VERSION}
+    mv ./bin/golangci-lint "${LINT_BIN}"
 fi
 
-echo Running: golangci-lint
-golangci-lint run
+echo "--- Running golangci-lint ---"
+"${LINT_BIN}" run
