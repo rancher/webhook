@@ -3,7 +3,20 @@
 all: build
 
 build:
-	./scripts/build
+	@echo "--- Building webhook binary ---"
+	@bash -c 'source scripts/version && \
+	mkdir -p bin && \
+	docker build \
+		--file package/Dockerfile \
+		--target binary \
+		--build-arg ARCH=$${ARCH} \
+		--build-arg VERSION=$${VERSION} \
+		--build-arg COMMIT=$${COMMIT} \
+		-t rancher/webhook:binary-$${TAG} \
+		. && \
+	CONTAINER_ID=$$(docker create rancher/webhook:binary-$${TAG} echo) && \
+	docker cp $$CONTAINER_ID:/webhook ./bin/webhook && \
+	docker rm $$CONTAINER_ID'
 
 test:
 	./scripts/test
