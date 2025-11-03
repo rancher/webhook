@@ -69,9 +69,6 @@ jobs:
 #      - name: Run validation
 #        run: golangci-lint run
 
-      - name: Build
-        run: make build
-
       - name: Package
         run: make package
 

@@ -1,21 +1,22 @@
 .PHONY: all build test validate package package-helm clean
 
-all: build
+# The default target is to build and package everything
+all: package
 
+# build is now responsible for building the final image AND extracting the binary
 build:
-	@echo "--- Building webhook binary ---"
+	@echo "--- Building Webhook Image & Binary ---"
 	@bash -c 'source scripts/version && \
-	mkdir -p bin && \
 	docker build \
 		--file package/Dockerfile \
-		--target binary \
 		--build-arg ARCH=$${ARCH} \
 		--build-arg VERSION=$${VERSION} \
 		--build-arg COMMIT=$${COMMIT} \
-		-t rancher/webhook:binary-$${TAG} \
+		-t rancher/webhook:$${TAG} \
 		. && \
-	CONTAINER_ID=$$(docker create rancher/webhook:binary-$${TAG} echo) && \
-	docker cp $$CONTAINER_ID:/webhook ./bin/webhook && \
+	mkdir -p bin && \
+	CONTAINER_ID=$$(docker create rancher/webhook:$${TAG} echo) && \
+	docker cp $$CONTAINER_ID:/usr/bin/webhook ./bin/webhook && \
 	docker rm $$CONTAINER_ID'
 
 test:
@@ -27,8 +28,14 @@ validate:
 package-helm:
 	./scripts/package-helm
 
+# package now depends on the build being complete, and just creates release artifacts
 package: build package-helm
-	./scripts/package
+	@echo "--- Packaging Release Artifacts ---"
+	@bash -c 'source scripts/version && \
+	mkdir -p dist && \
+	chmod a+rwx dist && \
+	docker save -o dist/rancher-webhook-image.tar rancher/webhook:$${TAG} && \
+	echo IMAGE_TAG=$${TAG} > dist/image_tag'
 
 clean:
 	rm -rf bin dist
