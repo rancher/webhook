@@ -22,6 +22,10 @@ ARG LDFLAGS="-X main.Version=${VERSION} -X main.GitCommit=${COMMIT} ${LINKFLAGS}
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/root/.cache,id=rancher go mod download
 
+# ===============
+# Webhook Binary Build Stage
+# ===============
+FROM --platform=$BUILDPLATFORM build as webhook-build
 # Copy source and build the webhook binary
 COPY pkg/ pkg/
 COPY main.go ./
@@ -54,7 +58,7 @@ RUN --mount=type=cache,target=/root/.cache,id=rancher go test ./tests/integratio
 # Binary Stage (for extracting the main binary)
 # ===============
 FROM scratch AS binary
-COPY --from=build /dist/webhook /webhook
+COPY --from=webhook-build /dist/webhook /webhook
 
 # ===============
 # Test Binary Stage to extract the integration test binary
@@ -74,8 +78,8 @@ RUN echo "$user:x:1000:1000::/home/$user:/bin/bash" >> /etc/passwd && \
     mkdir /home/$user && \
     chown -R $user:$user /home/$user
 
-# Copy the compiled binary from the build stage
-COPY --from=build /dist/webhook /usr/bin/
+# Copy the compiled binary from the webhook-build stage
+COPY --from=webhook-build /dist/webhook /usr/bin/
 
 USER $user
 
