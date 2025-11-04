@@ -12,9 +12,9 @@ endif
 export ARCH
 PLATFORM ?= linux/$(ARCH)
 
-.PHONY: all build integration-test-binary test validate package package-helm image clean
+.PHONY: all build integration-test-binary test validate ci package-helm image clean
 
-all: package
+all: ci
 
 build:
 	@echo "--- Building Webhook Binary ---"
@@ -75,8 +75,8 @@ image: build
 	docker save -o dist/rancher-webhook-image.tar rancher/webhook:$${TAG} && \
 	echo IMAGE_TAG=$${TAG} > dist/image_tag'
 
-# package target is for CI, ensuring tests and validation run first
-package: test validate image package-helm
+# ci target is for CI, ensuring tests and validation run first
+ci: test validate image package-helm
 
 clean:
 	rm -rf bin dist
