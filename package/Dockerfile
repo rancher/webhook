@@ -28,12 +28,20 @@ COPY main.go ./
 RUN --mount=type=cache,target=/root/.cache,id=rancher GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags "${LDFLAGS}" -o /dist/webhook .
 
 # ===============
-# Unit Test Stage
+# Test Stage
 # ===============
 FROM build AS test
 COPY . .
 RUN --mount=type=cache,target=/root/.cache,id=rancher go test --coverpkg=./pkg/... -coverprofile=coverage.out --count=1 ./pkg/...
 RUN cat coverage.out | awk 'BEGIN {cov=0; stat=0;} $3!="" { cov+=($3==1?$2:0); stat+=$2; } END {printf("Total coverage: %.2f%% of statements\n", (cov/stat)*100);}'
+
+# ===============
+# Validate Stage
+# ===============
+FROM build AS validate
+RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b /usr/local/bin v1.64.8
+COPY . .
+RUN --mount=type=cache,target=/root/.cache,id=rancher golangci-lint run
 
 # ===============
 # Integration Test Build Stage
@@ -55,7 +63,7 @@ FROM scratch AS test-binary
 COPY --from=integration-test-build /dist/rancher-webhook-integration.test /rancher-webhook-integration.test
 
 # ===============
-# Final Stage to copy binary and set up runtime environment
+# Final Stage
 # ===============
 FROM registry.suse.com/bci/bci-micro:15.7
 
