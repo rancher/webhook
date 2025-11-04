@@ -23,7 +23,6 @@ test:
 		--file package/Dockerfile \
 		--target test \
 		--progress=plain \
-		--no-cache \
 		.
 
 validate:
