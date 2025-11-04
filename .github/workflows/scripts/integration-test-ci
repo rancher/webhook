@@ -4,6 +4,16 @@ set -eu
 cd $(dirname $0)/../../..
 DIST_DIR="$PWD"/dist
 
+# Determine architecture without using Go
+UNAME_ARCH=$(uname -m)
+if [ "$UNAME_ARCH" = "x86_64" ]; then
+    ARCH="amd64"
+elif [ "$UNAME_ARCH" = "aarch64" ]; then
+    ARCH="arm64"
+else
+    ARCH="$UNAME_ARCH"
+fi
+
 # Build the integration test binary using Docker
 echo "--- Building Integration Test Binary ---"
 mkdir -p bin
@@ -11,8 +21,8 @@ docker buildx build \
     --file package/Dockerfile \
     --target test-binary \
     --build-arg TARGETOS=linux \
-    --build-arg TARGETARCH=$(go env GOARCH) \
-    --platform=linux/$(go env GOARCH) \
+    --build-arg TARGETARCH=${ARCH} \
+    --platform=linux/${ARCH} \
     --output=type=local,dest=./bin \
     .
 

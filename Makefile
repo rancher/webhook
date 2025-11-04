@@ -26,7 +26,12 @@ test:
 		.
 
 validate:
-	./scripts/validate
+	@echo "--- Validating ---"
+	@docker buildx build \
+        --file package/Dockerfile \
+        --target validate \
+        --progress=plain \
+        .
 
 package-helm:
 	./scripts/package-helm
