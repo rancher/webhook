@@ -12,7 +12,7 @@ endif
 export ARCH
 PLATFORM ?= linux/$(ARCH)
 
-.PHONY: all build test-binary test validate package package-helm image clean
+.PHONY: all build integration-test-binary test validate package package-helm image clean
 
 all: package
 
@@ -29,13 +29,13 @@ build:
 		--output=type=local,dest=./bin \
 		. '
 
-test-binary:
+integration-test-binary:
 	@echo "--- Building Integration Test Binary ---"
 	@bash -c 'source scripts/version && \
 	mkdir -p bin && \
 	docker buildx build \
 		--file package/Dockerfile \
-		--target test-binary \
+		--target integration-test-binary \
 		--platform=$(PLATFORM) \
 		--output=type=local,dest=./bin \
 		. '

@@ -63,7 +63,7 @@ RUN --mount=type=cache,target=/root/.cache,id=rancher go test ./tests/integratio
 # ===============
 # Test Binary Stage to extract the integration test binary
 # ===============
-FROM scratch AS test-binary
+FROM scratch AS integration-test-binary
 COPY --from=integration-test-build /dist/rancher-webhook-integration.test /rancher-webhook-integration.test
 
 # ===============
