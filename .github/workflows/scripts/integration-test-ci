@@ -14,17 +14,8 @@ else
     ARCH="$UNAME_ARCH"
 fi
 
-# Build the integration test binary using Docker
-echo "--- Building Integration Test Binary ---"
-mkdir -p bin
-docker buildx build \
-    --file package/Dockerfile \
-    --target test-binary \
-    --build-arg TARGETOS=linux \
-    --build-arg TARGETARCH=${ARCH} \
-    --platform=linux/${ARCH} \
-    --output=type=local,dest=./bin \
-    .
+# Build the integration test binary
+make test-binary ARCH=${ARCH}
 
 source ./scripts/version
 # Source tags file to get the last built tags

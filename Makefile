@@ -1,4 +1,4 @@
-.PHONY: all build test validate package package-helm clean
+.PHONY: all build test-binary test validate package package-helm clean
 
 all: package
 
@@ -9,10 +9,19 @@ build:
 	docker buildx build \
 		--file package/Dockerfile \
 		--target binary \
-		--build-arg TARGETOS=linux \
-		--build-arg TARGETARCH=$${ARCH} \
 		--build-arg VERSION=$${VERSION} \
 		--build-arg COMMIT=$${COMMIT} \
+		--platform=linux/$${ARCH} \
+		--output=type=local,dest=./bin \
+		. '
+
+test-binary:
+	@echo "--- Building Integration Test Binary ---"
+	@bash -c 'source scripts/version && \
+	mkdir -p bin && \
+	docker buildx build \
+		--file package/Dockerfile \
+		--target test-binary \
 		--platform=linux/$${ARCH} \
 		--output=type=local,dest=./bin \
 		. '
@@ -41,8 +50,6 @@ package: test validate build package-helm
 	@bash -c 'source scripts/version && \
 	docker buildx build \
 		--file package/Dockerfile \
-		--build-arg TARGETOS=linux \
-		--build-arg TARGETARCH=$${ARCH} \
 		--build-arg VERSION=$${VERSION} \
 		--build-arg COMMIT=$${COMMIT} \
 		--platform=linux/$${ARCH} \

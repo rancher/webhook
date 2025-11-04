@@ -51,7 +51,7 @@ RUN --mount=type=cache,target=/root/.cache,id=rancher golangci-lint run
 # Integration Test Build Stage
 # ===============
 FROM build AS integration-test-build
-COPY tests/integration/ tests/integration/
+COPY . .
 RUN --mount=type=cache,target=/root/.cache,id=rancher go test ./tests/integration/... -c -o /dist/rancher-webhook-integration.test
 
 # ===============
