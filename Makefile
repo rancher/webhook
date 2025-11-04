@@ -31,7 +31,7 @@ validate:
 package-helm:
 	./scripts/package-helm
 
-package: build package-helm
+package: test validate build package-helm
 	@echo "--- Packaging Final Image ---"
 	@bash -c 'source scripts/version && \
 	docker buildx build \

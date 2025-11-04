@@ -35,20 +35,6 @@ jobs:
         # https://github.com/actions/checkout/releases/tag/v4.1.1
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
-      - name: Setup Go
-        # https://github.com/actions/setup-go/releases/tag/v5.0.0
-        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
-        with:
-          go-version-file: 'go.mod'
-
-      - name: Install golangci-lint
-        uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84 # v6.5.2
-        with:
-          version: v1.64.8
-
-      - name: Run validate-ci
-        run: ./scripts/validate-ci
-
       # TODO: Pull this next one out once there's a helm-release for rancher 2.9
       - name: Checkout rancher/rancher and build the chart
         run: |
@@ -60,10 +46,7 @@ jobs:
           tar cfz "${{ runner.temp }}/rancher.tgz" -C build/chart/rancher .
           popd
 
-      - name: Run unit tests
-        run: go test --coverpkg=./pkg/... -coverprofile=coverage.out --count=1 ./pkg/...
-
-      - name: Package
+      - name: Build, Test, and Package
         run: make package
 
       - name: install K3d
