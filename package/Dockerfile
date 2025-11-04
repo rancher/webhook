@@ -13,8 +13,6 @@ WORKDIR /src
 # Define build arguments
 ARG VERSION
 ARG COMMIT
-ARG TARGETOS
-ARG TARGETARCH
 ARG LINKFLAGS="-extldflags -static -s"
 ARG LDFLAGS="-X main.Version=${VERSION} -X main.GitCommit=${COMMIT} ${LINKFLAGS}"
 
@@ -25,11 +23,19 @@ RUN --mount=type=cache,target=/root/.cache,id=rancher go mod download
 # ===============
 # Webhook Binary Build Stage
 # ===============
-FROM --platform=$BUILDPLATFORM build as webhook-build
+FROM --platform=$BUILDPLATFORM build AS webhook-build
+ARG TARGETOS
+ARG TARGETARCH
 # Copy source and build the webhook binary
 COPY pkg/ pkg/
 COPY main.go ./
 RUN --mount=type=cache,target=/root/.cache,id=rancher GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags "${LDFLAGS}" -o /dist/webhook .
+
+# ===============
+# Binary Stage (for extracting the main binary)
+# ===============
+FROM scratch AS binary
+COPY --from=webhook-build /dist/webhook /webhook
 
 # ===============
 # Test Stage
@@ -53,12 +59,6 @@ RUN --mount=type=cache,target=/root/.cache,id=rancher golangci-lint run
 FROM build AS integration-test-build
 COPY . .
 RUN --mount=type=cache,target=/root/.cache,id=rancher go test ./tests/integration/... -c -o /dist/rancher-webhook-integration.test
-
-# ===============
-# Binary Stage (for extracting the main binary)
-# ===============
-FROM scratch AS binary
-COPY --from=webhook-build /dist/webhook /webhook
 
 # ===============
 # Test Binary Stage to extract the integration test binary
