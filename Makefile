@@ -1,3 +1,6 @@
+ARCH ?= amd64
+PLATFORM ?= linux/$(ARCH)
+
 .PHONY: all build test-binary test validate package package-helm clean
 
 all: package
@@ -11,7 +14,7 @@ build:
 		--target binary \
 		--build-arg VERSION=$${VERSION} \
 		--build-arg COMMIT=$${COMMIT} \
-		--platform=linux/$${ARCH} \
+		--platform=$(PLATFORM) \
 		--output=type=local,dest=./bin \
 		. '
 
@@ -22,7 +25,7 @@ test-binary:
 	docker buildx build \
 		--file package/Dockerfile \
 		--target test-binary \
-		--platform=linux/$${ARCH} \
+		--platform=$(PLATFORM) \
 		--output=type=local,dest=./bin \
 		. '
 
@@ -52,7 +55,7 @@ package: test validate build package-helm
 		--file package/Dockerfile \
 		--build-arg VERSION=$${VERSION} \
 		--build-arg COMMIT=$${COMMIT} \
-		--platform=linux/$${ARCH} \
+		--platform=$(PLATFORM) \
 		-t rancher/webhook:$${TAG} \
 		--load \
 		. && \
