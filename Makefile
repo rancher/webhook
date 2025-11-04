@@ -1,4 +1,16 @@
-ARCH ?= amd64
+# Set default ARCH, but allow it to be overridden
+UNAME_ARCH := $(shell uname -m)
+ifeq ($(UNAME_ARCH),x86_64)
+    ARCH ?= amd64
+else ifeq ($(UNAME_ARCH),aarch64)
+    ARCH ?= arm64
+else
+    ARCH ?= $(UNAME_ARCH)
+endif
+
+# Export ARCH so it's available to subshells (like the scripts)
+export ARCH
+PLATFORM ?= linux/$(ARCH)
 
 .PHONY: all build test-binary test validate package package-helm clean
 
@@ -11,10 +23,9 @@ build:
 	docker buildx build \
 		--file package/Dockerfile \
 		--target binary \
-		--build-arg TARGETARCH=$${ARCH} \
 		--build-arg VERSION=$${VERSION} \
 		--build-arg COMMIT=$${COMMIT} \
-		--platform=linux/$${ARCH} \
+		--platform=$(PLATFORM) \
 		--output=type=local,dest=./bin \
 		. '
 
@@ -25,8 +36,7 @@ test-binary:
 	docker buildx build \
 		--file package/Dockerfile \
 		--target test-binary \
-		--build-arg TARGETARCH=$${ARCH} \
-		--platform=linux/$${ARCH} \
+		--platform=$(PLATFORM) \
 		--output=type=local,dest=./bin \
 		. '
 
@@ -54,10 +64,9 @@ package: test validate build package-helm
 	@bash -c 'source scripts/version && \
 	docker buildx build \
 		--file package/Dockerfile \
-		--build-arg TARGETARCH=$${ARCH} \
 		--build-arg VERSION=$${VERSION} \
 		--build-arg COMMIT=$${COMMIT} \
-		--platform=linux/$${ARCH} \
+		--platform=$(PLATFORM) \
 		-t rancher/webhook:$${TAG} \
 		--load \
 		. && \

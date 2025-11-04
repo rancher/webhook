@@ -14,17 +14,7 @@ else
     VERSION="0.0.0-${COMMIT}${DIRTY}"
 fi
 
-if [ -z "${ARCH:-}" ] ; then
-    UNAME_ARCH=$(uname -m)
-    if [ "$UNAME_ARCH" = "x86_64" ]; then
-        ARCH="amd64"
-    elif [ "$UNAME_ARCH" = "aarch64" ]; then
-        ARCH="arm64"
-    else
-        ARCH="$UNAME_ARCH"
-    fi
-fi
-
+# ARCH is now expected to be in the environment, set by the Makefile
 SUFFIX="-${ARCH}"
 
 HELM_TAG="${HELM_TAG:-${TAG:-${VERSION}}}"
