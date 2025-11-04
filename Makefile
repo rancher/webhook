@@ -3,22 +3,28 @@
 all: package
 
 build:
-	@echo "--- Building Webhook Image & Binary ---"
+	@echo "--- Building Webhook Binary ---"
 	@bash -c 'source scripts/version && \
-	docker build \
+	mkdir -p bin && \
+	docker buildx build \
 		--file package/Dockerfile \
-		--build-arg ARCH=$${ARCH} \
+		--target binary \
+		--build-arg TARGETOS=linux \
+		--build-arg TARGETARCH=$${ARCH} \
 		--build-arg VERSION=$${VERSION} \
 		--build-arg COMMIT=$${COMMIT} \
-		-t rancher/webhook:$${TAG} \
-		. && \
-	mkdir -p bin && \
-	CONTAINER_ID=$$(docker create rancher/webhook:$${TAG} echo) && \
-	docker cp $$CONTAINER_ID:/usr/bin/webhook ./bin/webhook && \
-	docker rm $$CONTAINER_ID'
+		--platform=linux/$${ARCH} \
+		--output=type=local,dest=./bin \
+		. '
 
 test:
-	./scripts/test
+	@echo "--- Running Unit Tests ---"
+	@docker buildx build \
+		--file package/Dockerfile \
+		--target test \
+		--progress=plain \
+		--no-cache \
+		.
 
 validate:
 	./scripts/validate
@@ -27,8 +33,18 @@ package-helm:
 	./scripts/package-helm
 
 package: build package-helm
-	@echo "--- Packaging Release Artifacts ---"
+	@echo "--- Packaging Final Image ---"
 	@bash -c 'source scripts/version && \
+	docker buildx build \
+		--file package/Dockerfile \
+		--build-arg TARGETOS=linux \
+		--build-arg TARGETARCH=$${ARCH} \
+		--build-arg VERSION=$${VERSION} \
+		--build-arg COMMIT=$${COMMIT} \
+		--platform=linux/$${ARCH} \
+		-t rancher/webhook:$${TAG} \
+		--load \
+		. && \
 	mkdir -p dist && \
 	chmod a+rwx dist && \
 	docker save -o dist/rancher-webhook-image.tar rancher/webhook:$${TAG} && \

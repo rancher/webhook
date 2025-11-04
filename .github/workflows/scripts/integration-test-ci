@@ -4,8 +4,17 @@ set -eu
 cd $(dirname $0)/../../..
 DIST_DIR="$PWD"/dist
 
-# Build the integration test binary
-go test ./tests/integration/... -c -o ./bin/rancher-webhook-integration.test
+# Build the integration test binary using Docker
+echo "--- Building Integration Test Binary ---"
+mkdir -p bin
+docker buildx build \
+    --file package/Dockerfile \
+    --target test-binary \
+    --build-arg TARGETOS=linux \
+    --build-arg TARGETARCH=$(go env GOARCH) \
+    --platform=linux/$(go env GOARCH) \
+    --output=type=local,dest=./bin \
+    .
 
 source ./scripts/version
 # Source tags file to get the last built tags
