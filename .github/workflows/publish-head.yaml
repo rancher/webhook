@@ -25,9 +25,14 @@ jobs:
       uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
       with:
         go-version-file: 'go.mod'
+    - name: Set Version/Commit
+      run: |
+            source ./scripts/version
+            echo "VERSION=${VERSION}" >> $GITHUB_ENV
+            echo "COMMIT=${COMMIT}" >> $GITHUB_ENV
     - name: Build and package
       run: |
-          ./scripts/build
+          make build ARCH=${{ matrix.arch }}
           mkdir -p dist/artifacts
           cp bin/webhook dist/artifacts/webhook-linux-${{ matrix.arch }}
       env:
@@ -80,6 +85,11 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ env.DOCKER_PASSWORD }}
+      - name: Set Version/Commit
+        run: |
+          source ./scripts/version
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "COMMIT=${COMMIT}" >> $GITHUB_ENV
       - name: Build and push the webhook image
         id: build
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
@@ -88,6 +98,9 @@ jobs:
           file: ./package/Dockerfile
           platforms: "linux/${{ matrix.arch }}"
           outputs: type=image,name=${{ env.REPO }}/rancher-webhook,push-by-digest=true,name-canonical=true,push=true
+          build-args: |
+            VERSION=${{ env.VERSION }}
+            COMMIT=${{ env.COMMIT }}
       - name: Export digest
         run: |
           mkdir -p /tmp/digests
