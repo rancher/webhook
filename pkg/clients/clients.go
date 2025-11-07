@@ -8,6 +8,8 @@ import (
 	managementv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/generated/controllers/provisioning.cattle.io"
 	provv1 "github.com/rancher/webhook/pkg/generated/controllers/provisioning.cattle.io/v1"
+	"github.com/rancher/webhook/pkg/generated/controllers/rke.cattle.io"
+	rkev1 "github.com/rancher/webhook/pkg/generated/controllers/rke.cattle.io/v1"
 	"github.com/rancher/wrangler/v3/pkg/clients"
 	"github.com/rancher/wrangler/v3/pkg/schemes"
 	v1 "k8s.io/api/admissionregistration/v1"
@@ -21,6 +23,7 @@ type Clients struct {
 	MultiClusterManagement bool
 	Management             managementv3.Interface
 	Provisioning           provv1.Interface
+	RKE                    rkev1.Interface
 	RoleTemplateResolver   *auth.RoleTemplateResolver
 	GlobalRoleResolver     *auth.GlobalRoleResolver
 	DefaultResolver        validation.AuthorizationRuleResolver
@@ -46,6 +49,11 @@ func New(ctx context.Context, rest *rest.Config, mcmEnabled bool) (*Clients, err
 		return nil, err
 	}
 
+	rke, err := rke.NewFactoryFromConfigWithOptions(rest, clients.FactoryOptions)
+	if err != nil {
+		return nil, err
+	}
+
 	if err = mgmt.Start(ctx, 5); err != nil {
 		return nil, err
 	}
@@ -61,6 +69,7 @@ func New(ctx context.Context, rest *rest.Config, mcmEnabled bool) (*Clients, err
 		Clients:                *clients,
 		Management:             mgmt.Management().V3(),
 		Provisioning:           prov.Provisioning().V1(),
+		RKE:                    rke.Rke().V1(),
 		MultiClusterManagement: mcmEnabled,
 		DefaultResolver:        validation.NewDefaultRuleResolver(rbacRestGetter, rbacRestGetter, rbacRestGetter, rbacRestGetter),
 	}
