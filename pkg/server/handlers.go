@@ -55,7 +55,6 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 	handlers := []admission.ValidatingAdmissionHandler{
 		feature.NewValidator(),
 		clusters,
-		provisioningCluster.NewProvisioningClusterValidator(clients),
 		machineconfig.NewValidator(),
 		nshandler.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews()),
 		clusterrepo.NewValidator(),
@@ -69,6 +68,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 
 		handlers = append(
 			handlers,
+			provisioningCluster.NewProvisioningClusterValidator(clients),
 			clusterproxyconfig.NewValidator(clients.Management.ClusterProxyConfig().Cache()),
 			podsecurityadmissionconfigurationtemplate.NewValidator(clients.Management.Cluster().Cache(), clients.Provisioning.Cluster().Cache()),
 			globalrole.NewValidator(clients.DefaultResolver, grbResolvers, clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.GlobalRoleResolver),
