@@ -881,7 +881,7 @@ func parseSnapshotClusterSpec(snap *rkev1.ETCDSnapshot) (*v1.ClusterSpec, error)
 		return nil, fmt.Errorf(`metadata missing "provisioning-cluster-spec"`)
 	}
 
-	// This inner value is *also* base64-encoded, containing gzipped data.
+	// This inner value is also base64-encoded, containing gzipped data.
 	innerGz, err := base64.StdEncoding.DecodeString(innerB64)
 	if err != nil {
 		return nil, fmt.Errorf("inner base64 decode failed: %w", err)
