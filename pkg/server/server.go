@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/rancher/dynamiclistener"
 	"github.com/rancher/dynamiclistener/server"
@@ -98,10 +99,7 @@ func ListenAndServe(ctx context.Context, cfg *rest.Config, mcmEnabled bool) erro
 	if err != nil {
 		return fmt.Errorf("failed to create kubernetes clientset: %w", err)
 	}
-	id, err := os.Hostname()
-	if err != nil || id == "" {
-		id = fmt.Sprintf("rancher-webhook-%d", time.Now().UnixNano())
-	}
+	id := uuid.New().String()
 
 	lock := &resourcelock.LeaseLock{
 		LeaseMeta: metav1.ObjectMeta{
