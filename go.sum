@@ -122,8 +122,8 @@ github.com/rancher/aks-operator v1.13.0-rc.1 h1:Vy83SjeSm9q7kI18+nkSOR0hyeydDj39
 github.com/rancher/aks-operator v1.13.0-rc.1/go.mod h1:xu0BJ01Ynzs4wLMDf2V5eaazEf1/kndX0AeqqsTFVfQ=
 github.com/rancher/ali-operator v1.13.0-rc.2 h1:a0biHGez+Np9XybJVh3yKN4RGPdaCzfM6D6cAXJac6o=
 github.com/rancher/ali-operator v1.13.0-rc.2/go.mod h1:s5HznpxsN9LsgtX6u5UoW9dZNKnDLuXcwzQRAEoDcog=
-github.com/rancher/dynamiclistener v0.7.3-rc.1 h1:F4Et+TaL8RcXTdTvJKuj6OL5Gg1I1IWJNyBVgKc5E0o=
-github.com/rancher/dynamiclistener v0.7.3-rc.1/go.mod h1:++39p1G3pz0N7yRzvZsjc+5x4l0cMUi2jo49Fy+IbCE=
+github.com/rancher/dynamiclistener v1.27.5 h1:FA/s9vbQzGz1Au3BuFvdbBfBBUmHGXGR3xoliwR4qfY=
+github.com/rancher/dynamiclistener v1.27.5/go.mod h1:VqBaJNi+bZmre0+gi+2Jb6jbn7ovHzRueW+M7QhVKsk=
 github.com/rancher/eks-operator v1.13.0-rc.1 h1:IbimIq+TuC88RQ3KF1Ez882XFP2nDnihbeqVPXLvuLk=
 github.com/rancher/eks-operator v1.13.0-rc.1/go.mod h1:tj6ioCe9v5J1HM0ZXR3/K5InoEjOfjCvSHMuXMj2x4M=
 github.com/rancher/fleet/pkg/apis v0.14.0-rc.1 h1:ZsDc25j4/iuKJ8DhxaOSnHdqOskRRe7QxJAdD9HBn28=
@@ -140,6 +140,8 @@ github.com/rancher/rancher/pkg/apis v0.0.0-20251107134102-07888a4e905c h1:Pmsd/2
 github.com/rancher/rancher/pkg/apis v0.0.0-20251107134102-07888a4e905c/go.mod h1:5NVZjf8M7M+cYECrbY7DwIYGnGqonrej4gXQPijw4lU=
 github.com/rancher/rke v1.8.6 h1:JHVWweWOUYFGirt5an7jmOZDRrrE6aU3ZpV1a1jSeSs=
 github.com/rancher/rke v1.8.6/go.mod h1:EaAkq796bgmmx/s15Xz0TvCkBOfepMOqO8tFockOmis=
+github.com/rancher/wrangler v1.1.1 h1:wmqUwqc2M7ADfXnBCJTFkTB5ZREWpD78rnZMzmxwMvM=
+github.com/rancher/wrangler v1.1.1/go.mod h1:ioVbKupzcBOdzsl55MvEDN0R1wdGggj8iNCYGFI5JvM=
 github.com/rancher/wrangler/v3 v3.3.1 h1:YFqRfhxjuLNudUrvWrn+64wUPZ8pnn2KWbTsha75JLg=
 github.com/rancher/wrangler/v3 v3.3.1/go.mod h1:0D4kZDaOUkP5W2Zfww/75tQwF9w7kaZgzpZG+4XQDAI=
 github.com/robfig/cron v1.2.0 h1:ZjScXvvxeQ63Dbyxy76Fj3AT3Ut0aKsyd2/tl3DTMuQ=
