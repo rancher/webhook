@@ -115,6 +115,10 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 			return response, err
 		}
 
+		if response := p.validateRKEConfigChanged(request, oldCluster, cluster); !response.Allowed {
+			return response, nil
+		}
+
 		if err := p.validateMachinePoolNames(request, response, cluster); err != nil || response.Result != nil {
 			return response, err
 		}
@@ -178,6 +182,22 @@ func getEnvVar(name string, envVars []rkev1.EnvVar) *rkev1.EnvVar {
 		}
 	}
 	return envVar
+}
+
+// validateRKEConfigChanged validates that after creation, the `spec.rkeConfig` cannot be set to a non-nil value if it
+// was nil, and likewise cannot be set to a nil value if it was not. The local cluster is explicitly exempted from
+// setting rkeConfig from nil to not nil, as it is a valid usecase to do so for rancherd in harvester environments.
+func (p *provisioningAdmitter) validateRKEConfigChanged(request *admission.Request, oldCluster, newCluster *v1.Cluster) *admissionv1.AdmissionResponse {
+	if request.Operation != admissionv1.Update {
+		return admission.ResponseAllowed()
+	}
+	if oldCluster.Spec.RKEConfig == nil && newCluster.Spec.RKEConfig != nil && oldCluster.Name != localCluster {
+		return admission.ResponseBadRequest("RKEConfig cannot be changed from null after cluster creation")
+	} else if oldCluster.Spec.RKEConfig != nil && newCluster.Spec.RKEConfig == nil {
+		return admission.ResponseBadRequest("RKEConfig cannot be made null after cluster creation")
+	}
+
+	return admission.ResponseAllowed()
 }
 
 // validateSystemAgentDataDirectory validates the effective system agent data directory, ensuring that the intended
