@@ -92,6 +92,7 @@ func main() {
 				&v3.Project{},
 				&v3.Setting{},
 				&v3.User{},
+				&v3.AuthConfig{},
 			},
 		},
 		"provisioning.cattle.io": {
