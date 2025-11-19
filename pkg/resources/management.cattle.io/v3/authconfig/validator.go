@@ -92,6 +92,11 @@ func (a *admitter) admitUpdate(request *admission.Request, oldAuthConfig, newAut
 func (a *admitter) admitCommonCreateUpdate(request *admission.Request, _, newAuthConfig *v3.AuthConfig) (*admissionv1.AdmissionResponse, error) {
 	var err error
 
+	if !newAuthConfig.Enabled {
+		// Validate the config only if the auth provider is enabled.
+		return admission.ResponseAllowed(), nil
+	}
+
 	switch newAuthConfig.Type {
 	case "openLdapConfig", "freeIpaConfig":
 		err = validateLDAPConfig(request)

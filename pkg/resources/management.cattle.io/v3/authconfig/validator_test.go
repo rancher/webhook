@@ -22,6 +22,7 @@ var (
 
 func TestValidateLdapConfig(t *testing.T) {
 	t.Parallel()
+
 	fields := v3.LdapFields{
 		Servers:                     []string{"ldap.example.com"},
 		TLS:                         true,
@@ -45,9 +46,10 @@ func TestValidateLdapConfig(t *testing.T) {
 	invalidFilter := "cn=foo" // No parentheses.
 
 	tests := []struct {
-		desc    string
-		fields  func() v3.LdapFields
-		allowed bool
+		desc     string
+		fields   func() v3.LdapFields
+		disabled bool // Whether the auth provider is disabled.
+		allowed  bool
 	}{
 		{
 			desc:    "valid config",
@@ -60,6 +62,16 @@ func TestValidateLdapConfig(t *testing.T) {
 				fields.Servers = nil
 				return fields
 			},
+		},
+		{
+			desc: "servers not specified for the disabled provider",
+			fields: func() v3.LdapFields {
+				fields := fields
+				fields.Servers = nil
+				return fields
+			},
+			disabled: true,
+			allowed:  true,
 		},
 		{
 			desc: "tls is on without certificate",
@@ -194,7 +206,7 @@ func TestValidateLdapConfig(t *testing.T) {
 					if test.fields != nil {
 						fields = test.fields()
 					}
-					testLdapAdmit(t, validator, provider, op, fields, test.allowed)
+					testLdapAdmit(t, validator, provider, op, fields, !test.disabled, test.allowed)
 				})
 			}
 		}
@@ -223,6 +235,7 @@ func TestValidateActiveDirectoryConfig(t *testing.T) {
 	}
 	config.ObjectMeta.Name = "activedirectory"
 	config.Type = "activeDirectoryConfig"
+	config.Enabled = true
 
 	invalidAttr := "1foo"     // Leading digit.
 	invalidFilter := "cn=foo" // No parentheses.
@@ -243,6 +256,16 @@ func TestValidateActiveDirectoryConfig(t *testing.T) {
 				config.Servers = nil
 				return config
 			},
+		},
+		{
+			desc: "servers not specified for the disabled provider",
+			config: func() v3.ActiveDirectoryConfig {
+				config := config
+				config.Servers = nil
+				config.Enabled = false
+				return config
+			},
+			allowed: true,
 		},
 		{
 			desc: "tls is on without certificate",
@@ -417,7 +440,7 @@ func TestIsValidLdapAttr(t *testing.T) {
 	}
 }
 
-func testLdapAdmit(t *testing.T, validator *authconfig.Validator, provider string, op v1.Operation, fields v3.LdapFields, allowed bool) {
+func testLdapAdmit(t *testing.T, validator *authconfig.Validator, provider string, op v1.Operation, fields v3.LdapFields, enabled, allowed bool) {
 	var oldConfig, newConfig any
 	switch provider {
 	case "openldap":
@@ -426,6 +449,7 @@ func testLdapAdmit(t *testing.T, validator *authconfig.Validator, provider strin
 		o.Type = "openLdapConfig"
 		n := o
 		n.LdapFields = fields
+		n.Enabled = enabled
 		oldConfig, newConfig = o, n
 	case "freeipa":
 		o := v3.OpenLdapConfig{}
@@ -433,6 +457,7 @@ func testLdapAdmit(t *testing.T, validator *authconfig.Validator, provider strin
 		o.Type = "freeIpaConfig"
 		n := o
 		n.LdapFields = fields
+		n.Enabled = enabled
 		oldConfig, newConfig = o, n
 	}
 
