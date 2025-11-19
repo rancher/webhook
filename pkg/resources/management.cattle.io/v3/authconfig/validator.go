@@ -125,9 +125,6 @@ func validateLDAPConfig(request *admission.Request) error {
 	if len(config.Servers) < 1 {
 		err = errors.Join(err, field.Forbidden(field.NewPath("servers"), "at least one server is required"))
 	}
-	if config.TLS && config.Certificate == "" {
-		err = errors.Join(err, field.Forbidden(field.NewPath("certificate"), "certificate is required"))
-	}
 
 	if config.UserSearchAttribute != "" {
 		for _, attr := range strings.Split(config.UserSearchAttribute, "|") {
@@ -196,9 +193,6 @@ func validateActiveDirectoryConfig(request *admission.Request) error {
 
 	if len(config.Servers) < 1 {
 		err = errors.Join(err, field.Forbidden(field.NewPath("servers"), "at least one server is required"))
-	}
-	if config.TLS && config.Certificate == "" {
-		err = errors.Join(err, field.Forbidden(field.NewPath("certificate"), "certificate is required"))
 	}
 
 	if config.UserSearchAttribute != "" {

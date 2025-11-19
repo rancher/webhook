@@ -80,6 +80,7 @@ func TestValidateLdapConfig(t *testing.T) {
 				fields.Certificate = ""
 				return fields
 			},
+			allowed: true,
 		},
 		{
 			desc: "invalid UserSearchAttribute",
@@ -274,6 +275,7 @@ func TestValidateActiveDirectoryConfig(t *testing.T) {
 				config.Certificate = ""
 				return config
 			},
+			allowed: true,
 		},
 		{
 			desc: "invalid UserSearchAttribute",

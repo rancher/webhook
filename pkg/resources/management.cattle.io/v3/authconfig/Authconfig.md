@@ -6,7 +6,6 @@
 When an LDAP (`openldap`, `freeipa`) or ActiveDirectory (`activedirectory`) authconfig is created or updated, the following checks take place:
 
 - The field `servers` is required.
-- If the field `tls` is set to true, the field `certificate` is required.
 - If set, the following fields should have valid LDAP attribute names according to RFC4512
   - `userSearchAttribute`
   - `userLoginAttribute`
