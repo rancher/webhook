@@ -5,14 +5,17 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/rancher/dynamiclistener"
 	"github.com/rancher/dynamiclistener/server"
@@ -25,7 +28,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/leaderelection"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
 )
 
 const (
@@ -45,6 +51,10 @@ const (
 )
 
 var caFile = filepath.Join(os.TempDir(), "k8s-webhook-server", "client-ca", "ca.crt")
+
+// leaderFlag indicates whether this process is the elected leader.
+// Gate config mutation work on this to avoid concurrent writers.
+var leaderFlag atomic.Bool
 
 // tlsOpt option function applied to all webhook servers.
 var tlsOpt = func(config *tls.Config) {
@@ -84,6 +94,48 @@ func ListenAndServe(ctx context.Context, cfg *rest.Config, mcmEnabled bool) erro
 		return err
 	}
 
+	k8sClient, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to create kubernetes clientset: %w", err)
+	}
+	id := uuid.New().String()
+
+	lock := &resourcelock.LeaseLock{
+		LeaseMeta: metav1.ObjectMeta{
+			Name:      "rancher-webhook-leader",
+			Namespace: namespace,
+		},
+		Client: k8sClient.CoordinationV1(),
+		LockConfig: resourcelock.ResourceLockConfig{
+			Identity: id,
+		},
+	}
+
+	go leaderelection.RunOrDie(ctx, leaderelection.LeaderElectionConfig{
+		Lock:            lock,
+		LeaseDuration:   15 * time.Second,
+		RenewDeadline:   10 * time.Second,
+		RetryPeriod:     2 * time.Second,
+		ReleaseOnCancel: true,
+		Callbacks: leaderelection.LeaderCallbacks{
+			OnStartedLeading: func(_ context.Context) {
+				leaderFlag.Store(true)
+				logrus.Infof("[%s] elected leader: will manage webhook configurations", id)
+			},
+			OnStoppedLeading: func() {
+				leaderFlag.Store(false)
+				logrus.Infof("[%s] lost leadership: will stop managing webhook configurations", id)
+			},
+			OnNewLeader: func(identity string) {
+				if identity == id {
+					logrus.Infof("[%s] I am the new leader", id)
+				} else {
+					logrus.Infof("[%s] observed new leader: %s", id, identity)
+				}
+			},
+		},
+	})
+
 	if err = listenAndServe(ctx, clients, validators, mutators); err != nil {
 		return err
 	}
@@ -110,6 +162,7 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, validators []
 	router := mux.NewRouter()
 	errChecker := health.NewErrorChecker("Config Applied")
 	health.RegisterHealthCheckers(router, errChecker)
+	errChecker.Store(errors.New("webhook configuration not yet applied"))
 	router.Use(certAuth())
 
 	logrus.Debug("Creating Webhook routes")
@@ -176,14 +229,20 @@ type secretHandler struct {
 }
 
 // sync updates the validating admission configuration whenever the TLS cert changes.
+// Only the elected leader performs the updates, followers are a no-op.
 func (s *secretHandler) sync(_ string, secret *corev1.Secret) (*corev1.Secret, error) {
+	// The leader is responsible for applying the webhook configuration.
+	// Follower pods are only responsible for serving traffic and can be marked as healthy once the certificates are generated.
+	if !leaderFlag.Load() {
+		s.errChecker.Store(nil)
+		return nil, nil
+	}
+
 	if secret == nil || secret.Name != caName || secret.Namespace != namespace || len(secret.Data[corev1.TLSCertKey]) == 0 {
 		return nil, nil
 	}
 
-	logrus.Info("Sleeping for 15 seconds then applying webhook config")
-	// Sleep here to make sure server is listening and all caches are primed
-	time.Sleep(15 * time.Second)
+	logrus.Info("Applying webhook config")
 
 	validationClientConfig := v1.WebhookClientConfig{
 		Service: &v1.ServiceReference{
