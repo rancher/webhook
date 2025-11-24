@@ -26,26 +26,17 @@ jobs:
 
     - name : Checkout repository
       uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-      # https://github.com/actions/checkout/releases/tag/v4.1.1
 
-    - name: Setup Go
-      uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
-      # https://github.com/actions/setup-go/releases/tag/v5.0.0
-      with:
-        go-version-file: 'go.mod'
+    - name: Build Binary
+      run: make build ARCH=${{ matrix.arch }}
 
-    - name: Build and package
+    - name: Package Helm Chart
+      run: make package-helm
+
+    - name: Prepare Artifacts
       run: |
-          ./scripts/build
-          mkdir -p dist/artifacts
-          cp bin/webhook dist/artifacts/webhook-linux-${{ matrix.arch }}
-      env:
-        ARCH: "${{ matrix.arch}}"
-        GOARCH: "${{ matrix.arch}}"
-
-    - name: Generate checksum files
-      run: |
-        ls -lR dist
+        mkdir -p dist/artifacts
+        cp bin/webhook dist/artifacts/webhook-linux-${{ matrix.arch }}
         cd dist/artifacts
         sha256sum webhook-linux-${{ matrix.arch }} > sha256sum-${{ matrix.arch }}.txt
 
@@ -122,12 +113,6 @@ jobs:
           name: webhook-artifacts-${{ matrix.arch }}
           path: dist/artifacts
 
-      - name: Move binary to bin/
-        run: |
-          mkdir -p bin/
-          cp -v dist/artifacts/webhook-linux-${{ matrix.arch }} bin/webhook
-          chmod +x bin/webhook
-
       - name: "Read vault secrets"
         uses: rancher-eio/read-vault-secrets@main
         with:
@@ -151,6 +136,12 @@ jobs:
           username: ${{ env.DOCKER_USERNAME }}
           password: ${{ env.DOCKER_PASSWORD }}
 
+      - name: Set Version/Commit
+        run: |
+          source ./scripts/version
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "COMMIT=${COMMIT}" >> $GITHUB_ENV
+
       - name: Build and push the webhook image
         id: build
         # https://github.com/docker/build-push-action/releases/tag/v6.3.0
@@ -159,6 +150,9 @@ jobs:
           context: .
           file: ./package/Dockerfile
           platforms: "linux/${{ matrix.arch }}"
+          build-args: |
+            VERSION=${{ env.VERSION }}
+            COMMIT=${{ env.COMMIT }}
           outputs: type=image,name=${{ env.REPO }}/rancher-webhook,push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
