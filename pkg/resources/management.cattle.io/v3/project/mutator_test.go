@@ -29,6 +29,14 @@ var (
 		},
 		Spec: v3.ProjectSpec{
 			ClusterName: "testcluster",
+			ResourceQuota: &v3.ProjectResourceQuota{
+				Limit: v3.ResourceQuotaLimit{
+					ConfigMaps: "1",
+					Extended: map[string]string{
+						"ephemeral-storage": "14",
+					},
+				},
+			},
 		},
 	}
 	emptyProject = func() *v3.Project {
@@ -74,6 +82,17 @@ func TestAdmit(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "p-abc123",
 					},
+					Spec: v3.ProjectSpec{
+						ClusterName: "testcluster",
+						ResourceQuota: &v3.ProjectResourceQuota{
+							Limit: v3.ResourceQuotaLimit{
+								ConfigMaps: "1",
+								Extended: map[string]string{
+									"ephemeral-storage": "14",
+								},
+							},
+						},
+					},
 				}
 			},
 			oldProject: func() *v3.Project {
@@ -87,6 +106,17 @@ func TestAdmit(t *testing.T) {
 				return &v3.Project{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "p-abc123",
+					},
+					Spec: v3.ProjectSpec{
+						ClusterName: "testcluster",
+						ResourceQuota: &v3.ProjectResourceQuota{
+							Limit: v3.ResourceQuotaLimit{
+								ConfigMaps: "1",
+								Extended: map[string]string{
+									"ephemeral-storage": "14",
+								},
+							},
+						},
 					},
 					Status: v3.ProjectStatus{
 						BackingNamespace: "p-abc123",
