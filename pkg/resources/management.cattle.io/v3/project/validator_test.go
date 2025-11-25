@@ -14,11 +14,53 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	admissionv1 "k8s.io/api/admission/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
+
+func TestConvertLimitToResourceList(t *testing.T) {
+	t.Run("ConvertLimitToResourceList", func(t *testing.T) {
+		out, err := convertLimitToResourceList(&v3.ResourceQuotaLimit{
+			ConfigMaps:             "1",
+			LimitsCPU:              "2",
+			LimitsMemory:           "3",
+			PersistentVolumeClaims: "4",
+			Pods:                   "5",
+			ReplicationControllers: "6",
+			RequestsCPU:            "7",
+			RequestsMemory:         "8",
+			RequestsStorage:        "9",
+			Secrets:                "10",
+			Services:               "11",
+			ServicesLoadBalancers:  "12",
+			ServicesNodePorts:      "13",
+			Extended: map[string]string{
+				"ephemeral-storage": "14",
+			},
+		})
+		assert.NoError(t, err)
+		assert.Equal(t, corev1.ResourceList{
+			"configmaps":             resource.MustParse("1"),
+			"ephemeral-storage":      resource.MustParse("14"),
+			"limits.cpu":             resource.MustParse("2"),
+			"limits.memory":          resource.MustParse("3"),
+			"persistentvolumeclaims": resource.MustParse("4"),
+			"pods":                   resource.MustParse("5"),
+			"replicationcontrollers": resource.MustParse("6"),
+			"requests.cpu":           resource.MustParse("7"),
+			"requests.memory":        resource.MustParse("8"),
+			"requests.storage":       resource.MustParse("9"),
+			"secrets":                resource.MustParse("10"),
+			"services":               resource.MustParse("11"),
+			"services.loadbalancers": resource.MustParse("12"),
+			"services.nodeports":     resource.MustParse("13"),
+		}, out)
+	})
+}
 
 func TestProjectValidation(t *testing.T) {
 	t.Parallel()
