@@ -817,7 +817,7 @@ func (p *provisioningAdmitter) validateETCDSnapshotRestore(request *admission.Re
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return admission.ResponseBadRequest(
-				fmt.Sprintf("etcd restore references missing snapshot %q in namespace %q", newRestore.Name, newCluster.Namespace)), nil
+				fmt.Sprintf("etcd restore references missing snapshot %s in namespace %s", newRestore.Name, newCluster.Namespace)), nil
 		}
 		return nil, fmt.Errorf("failed to get etcd snapshot %s/%s: %w", newCluster.Namespace, newRestore.Name, err)
 	}
@@ -850,8 +850,7 @@ func (p *provisioningAdmitter) validateETCDSnapshotRestore(request *admission.Re
 		return admission.ResponseAllowed(), nil
 
 	default:
-		return admission.ResponseBadRequest(
-			fmt.Sprintf("unsupported restore mode %q", newRestore.RestoreRKEConfig)), nil
+		return admission.ResponseBadRequest(fmt.Sprintf("unsupported restore mode %s", newRestore.RestoreRKEConfig)), nil
 	}
 }
 
