@@ -3027,7 +3027,7 @@ func TestParseSnapshotClusterSpec(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
+		t.Run(testCase.name, func(_ *testing.T) {
 			resultSpec, err := parseSnapshotClusterSpec(testCase.snapshot)
 
 			if testCase.shouldError {
