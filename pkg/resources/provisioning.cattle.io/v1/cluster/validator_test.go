@@ -3205,7 +3205,7 @@ func TestValidateETCDSnapshotRestore(t *testing.T) {
 					Return(nil, apierrors.NewNotFound(rkev1.Resource("etcdsnapshot"), nonExistentSnapshotName))
 			},
 			expectAllowed:   false,
-			expectedDenyMsg: fmt.Sprintf("etcd restore references missing snapshot %q in namespace %q", nonExistentSnapshotName, testNamespace),
+			expectedDenyMsg: fmt.Sprintf("etcd restore references missing snapshot %s in namespace %s", nonExistentSnapshotName, testNamespace),
 		},
 		{
 			name:       "should return internal error if cache fails",
@@ -3298,7 +3298,7 @@ func TestValidateETCDSnapshotRestore(t *testing.T) {
 					Return(validAllSnapshot, nil)
 			},
 			expectAllowed:   false,
-			expectedDenyMsg: `unsupported restore mode "invalid-mode"`,
+			expectedDenyMsg: "unsupported restore mode invalid-mode",
 		},
 	}
 
