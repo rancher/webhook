@@ -597,8 +597,18 @@ func (p *provisioningAdmitter) validatePSACT(request *admission.Request, respons
 // configured. The cluster-agent-scheduling-customization feature must be enabled to configure a Priority Class, however an existing
 // Priority Class may be deleted even if the feature is disabled.
 func (p *provisioningAdmitter) validatePriorityClass(oldCluster, cluster *v1.Cluster) (*admissionv1.AdmissionResponse, error) {
-	newClusterScheduling := getSchedulingCustomization(cluster)
-	oldClusterScheduling := getSchedulingCustomization(oldCluster)
+	for _, agentType := range common.AllAgentTypes {
+		admissionResponse, err := p.validateSinglePriorityClass(oldCluster, cluster, agentType)
+		if err != nil || !admissionResponse.Allowed {
+			return admissionResponse, err
+		}
+	}
+	return admission.ResponseAllowed(), nil
+}
+
+func (p *provisioningAdmitter) validateSinglePriorityClass(oldCluster, cluster *v1.Cluster, agentType common.AgentType) (*admissionv1.AdmissionResponse, error) {
+	newClusterScheduling := getSchedulingCustomization(cluster, agentType)
+	oldClusterScheduling := getSchedulingCustomization(oldCluster, agentType)
 
 	var newPC, oldPC *v1.PriorityClassSpec
 	if newClusterScheduling != nil {
@@ -654,8 +664,18 @@ func (p *provisioningAdmitter) validatePriorityClass(oldCluster, cluster *v1.Clu
 // configured. The cluster-agent-scheduling-customization feature must be enabled to configure a Pod Disruption Budget, however an existing
 // Pod Disruption Budget may be deleted even if the feature is disabled.
 func (p *provisioningAdmitter) validatePodDisruptionBudget(oldCluster, cluster *v1.Cluster) (*admissionv1.AdmissionResponse, error) {
-	newClusterScheduling := getSchedulingCustomization(cluster)
-	oldClusterScheduling := getSchedulingCustomization(oldCluster)
+	for _, agentType := range common.AllAgentTypes {
+		admissionResponse, err := p.validateSinglePodDisruptionBudget(oldCluster, cluster, agentType)
+		if err != nil || !admissionResponse.Allowed {
+			return admissionResponse, err
+		}
+	}
+	return admission.ResponseAllowed(), nil
+}
+
+func (p *provisioningAdmitter) validateSinglePodDisruptionBudget(oldCluster, cluster *v1.Cluster, agentType common.AgentType) (*admissionv1.AdmissionResponse, error) {
+	newClusterScheduling := getSchedulingCustomization(cluster, agentType)
+	oldClusterScheduling := getSchedulingCustomization(oldCluster, agentType)
 
 	var newPDB, oldPDB *v1.PodDisruptionBudgetSpec
 	if newClusterScheduling != nil {
@@ -897,20 +917,35 @@ func validateAffinity(overrideAffinity *k8sv1.Affinity, path *field.Path) field.
 	return errList
 }
 
-func getSchedulingCustomization(cluster *v1.Cluster) *v1.AgentSchedulingCustomization {
+func getSchedulingCustomization(cluster *v1.Cluster, agentType common.AgentType) *v1.AgentSchedulingCustomization {
 	if cluster == nil {
 		return nil
 	}
 
-	if cluster.Spec.ClusterAgentDeploymentCustomization == nil {
-		return nil
+	switch agentType {
+	case common.AgentTypeCluster:
+		if cluster.Spec.ClusterAgentDeploymentCustomization == nil {
+			return nil
+		}
+
+		if cluster.Spec.ClusterAgentDeploymentCustomization.SchedulingCustomization == nil {
+			return nil
+		}
+
+		return cluster.Spec.ClusterAgentDeploymentCustomization.SchedulingCustomization
+	case common.AgentTypeFleet:
+		if cluster.Spec.FleetAgentDeploymentCustomization == nil {
+			return nil
+		}
+
+		if cluster.Spec.FleetAgentDeploymentCustomization.SchedulingCustomization == nil {
+			return nil
+		}
+
+		return cluster.Spec.FleetAgentDeploymentCustomization.SchedulingCustomization
 	}
 
-	if cluster.Spec.ClusterAgentDeploymentCustomization.SchedulingCustomization == nil {
-		return nil
-	}
-
-	return cluster.Spec.ClusterAgentDeploymentCustomization.SchedulingCustomization
+	return nil
 }
 
 func validatePodAffinityTerms(terms []k8sv1.PodAffinityTerm, path *field.Path) field.ErrorList {
