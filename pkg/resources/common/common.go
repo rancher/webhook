@@ -33,6 +33,13 @@ const (
 // between 0% and 100% so that it can be used in a Pod Disruption Budget
 var PdbPercentageRegex = regexp.MustCompile("^([0-9]|[1-9][0-9]|100)%$")
 
+type AgentType int
+
+const (
+	AgentTypeCluster AgentType = iota
+	AgentTypeFleet
+)
+
 // ConvertAuthnExtras converts authnv1 type extras to authzv1 extras. Technically these are both
 // type alias to string, so the conversion is straightforward
 func ConvertAuthnExtras(extra map[string]authnv1.ExtraValue) map[string]authzv1.ExtraValue {
