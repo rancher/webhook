@@ -1841,20 +1841,20 @@ func Test_validateAgentSchedulingCustomizationPriorityClass(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		cluster        *v1.Cluster
-		oldCluster     *v1.Cluster
+		oldPC          *v1.PriorityClassSpec
+		pc             *v1.PriorityClassSpec
 		featureEnabled bool
 		shouldSucceed  bool
 	}{
 		{
 			name:           "empty priority class - feature enabled",
-			cluster:        &v1.Cluster{},
+			pc:             nil,
 			shouldSucceed:  true,
 			featureEnabled: true,
 		},
 		{
 			name:           "empty priority class - feature disabled",
-			cluster:        &v1.Cluster{},
+			pc:             nil,
 			shouldSucceed:  true,
 			featureEnabled: true,
 		},
@@ -1862,236 +1862,173 @@ func Test_validateAgentSchedulingCustomizationPriorityClass(t *testing.T) {
 			name:           "valid priority class with default preemption",
 			shouldSucceed:  true,
 			featureEnabled: true,
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PriorityClass: &v1.PriorityClassSpec{
-								Value: 123456,
-							},
-						},
-					},
-				},
+			pc: &v1.PriorityClassSpec{
+				Value: 123456,
 			},
 		},
 		{
 			name:           "valid priority class with custom preemption",
 			shouldSucceed:  true,
 			featureEnabled: true,
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PriorityClass: &v1.PriorityClassSpec{
-								Value:            123456,
-								PreemptionPolicy: &preemptionNever,
-							},
-						},
-					},
-				},
+			pc: &v1.PriorityClassSpec{
+				Value:            123456,
+				PreemptionPolicy: &preemptionNever,
 			},
 		},
 		{
 			name:           "invalid priority class - value too large",
 			shouldSucceed:  false,
 			featureEnabled: true,
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PriorityClass: &v1.PriorityClassSpec{
-								Value: 1234567891234567890,
-							},
-						},
-					},
-				},
+			pc: &v1.PriorityClassSpec{
+				Value: 1234567891234567890,
 			},
 		},
 		{
 			name:           "invalid priority class - value too small",
 			shouldSucceed:  false,
 			featureEnabled: true,
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PriorityClass: &v1.PriorityClassSpec{
-								Value: -1234567891234567890,
-							},
-						},
-					},
-				},
+			pc: &v1.PriorityClassSpec{
+				Value: -1234567891234567890,
 			},
 		},
 		{
 			name:           "invalid priority class - preemption value invalid",
 			shouldSucceed:  false,
 			featureEnabled: true,
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PriorityClass: &v1.PriorityClassSpec{
-								Value:            24321,
-								PreemptionPolicy: &preemptionInvalid,
-							},
-						},
-					},
-				},
+			pc: &v1.PriorityClassSpec{
+				Value:            24321,
+				PreemptionPolicy: &preemptionInvalid,
 			},
 		},
 		{
 			name:           "invalid priority class - feature is disabled",
 			shouldSucceed:  false,
 			featureEnabled: false,
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PriorityClass: &v1.PriorityClassSpec{
-								Value:            24321,
-								PreemptionPolicy: &preemptionInvalid,
-							},
-						},
-					},
-				},
+			pc: &v1.PriorityClassSpec{
+				Value:            24321,
+				PreemptionPolicy: &preemptionInvalid,
 			},
 		},
 		{
 			name:           "invalid update attempt - feature is disabled",
 			shouldSucceed:  false,
 			featureEnabled: false,
-			oldCluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PriorityClass: &v1.PriorityClassSpec{
-								Value: 1234,
-							},
-						},
-					},
-				},
+			oldPC: &v1.PriorityClassSpec{
+				Value: 1234,
 			},
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PriorityClass: &v1.PriorityClassSpec{
-								Value: 4321,
-							},
-						},
-					},
-				},
+			pc: &v1.PriorityClassSpec{
+				Value: 4321,
 			},
 		},
 		{
 			name:           "valid update attempt - feature is enabled",
 			shouldSucceed:  false,
 			featureEnabled: false,
-			oldCluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PriorityClass: &v1.PriorityClassSpec{
-								Value: 1234,
-							},
-						},
-					},
-				},
+			oldPC: &v1.PriorityClassSpec{
+				Value: 1234,
 			},
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PriorityClass: &v1.PriorityClassSpec{
-								Value: 4321,
-							},
-						},
-					},
-				},
+			pc: &v1.PriorityClassSpec{
+				Value: 4321,
 			},
 		},
 		{
 			name:           "valid update attempt - feature is disabled, but fields are unchanged",
 			shouldSucceed:  true,
 			featureEnabled: false,
-			oldCluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PriorityClass: &v1.PriorityClassSpec{
-								Value: 1234,
-							},
-						},
-					},
-				},
+			oldPC: &v1.PriorityClassSpec{
+				Value: 1234,
 			},
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PriorityClass: &v1.PriorityClassSpec{
-								Value: 1234,
-							},
-						},
-					},
-				},
+			pc: &v1.PriorityClassSpec{
+				Value: 1234,
 			},
 		},
 		{
 			name:           "valid update attempt - field is removed while feature is disabled",
 			shouldSucceed:  true,
 			featureEnabled: false,
-			oldCluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PriorityClass: &v1.PriorityClassSpec{
-								Value: 1234,
-							},
-						},
-					},
-				},
+			oldPC: &v1.PriorityClassSpec{
+				Value: 1234,
 			},
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{},
-			},
+			pc: nil,
 		},
 	}
 
 	t.Parallel()
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			a := provisioningAdmitter{
-				featureCache: createMockFeatureCache(ctrl, common.SchedulingCustomizationFeatureName, tt.featureEnabled),
-			}
+	for _, agentType := range common.AllAgentTypes {
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				a := provisioningAdmitter{
+					featureCache: createMockFeatureCache(ctrl, common.SchedulingCustomizationFeatureName, tt.featureEnabled),
+				}
 
-			response, err := a.validatePriorityClass(tt.oldCluster, tt.cluster)
-			assert.Equal(t, tt.shouldSucceed, response.Allowed)
-			assert.NoError(t, err)
-		})
+				var oldCluster, cluster *v1.Cluster
+				switch agentType {
+				case common.AgentTypeCluster:
+					oldCluster = &v1.Cluster{
+						Spec: v1.ClusterSpec{
+							ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
+								SchedulingCustomization: &v1.AgentSchedulingCustomization{
+									PriorityClass: tt.oldPC,
+								},
+							},
+						},
+					}
+					cluster = &v1.Cluster{
+						Spec: v1.ClusterSpec{
+							ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
+								SchedulingCustomization: &v1.AgentSchedulingCustomization{
+									PriorityClass: tt.pc,
+								},
+							},
+						},
+					}
+				case common.AgentTypeFleet:
+					oldCluster = &v1.Cluster{
+						Spec: v1.ClusterSpec{
+							FleetAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
+								SchedulingCustomization: &v1.AgentSchedulingCustomization{
+									PriorityClass: tt.oldPC,
+								},
+							},
+						},
+					}
+					cluster = &v1.Cluster{
+						Spec: v1.ClusterSpec{
+							FleetAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
+								SchedulingCustomization: &v1.AgentSchedulingCustomization{
+									PriorityClass: tt.pc,
+								},
+							},
+						},
+					}
+				}
+
+				response, err := a.validatePriorityClass(oldCluster, cluster)
+				assert.Equal(t, tt.shouldSucceed, response.Allowed)
+				assert.NoError(t, err)
+			})
+		}
 	}
 }
 
 func Test_validateAgentSchedulingCustomizationPodDisruptionBudget(t *testing.T) {
 	tests := []struct {
 		name           string
-		cluster        *v1.Cluster
-		oldCluster     *v1.Cluster
+		pdb            *v1.PodDisruptionBudgetSpec
+		oldPdb         *v1.PodDisruptionBudgetSpec
 		featureEnabled bool
 		shouldSucceed  bool
 	}{
 		{
 			name:           "no scheduling customization - feature enabled",
-			cluster:        &v1.Cluster{},
+			pdb:            nil,
 			shouldSucceed:  true,
 			featureEnabled: true,
 		},
 		{
 			name:           "no scheduling customization - feature disabled",
-			cluster:        &v1.Cluster{},
+			pdb:            nil,
 			shouldSucceed:  true,
 			featureEnabled: false,
 		},
@@ -2099,364 +2036,230 @@ func Test_validateAgentSchedulingCustomizationPodDisruptionBudget(t *testing.T) 
 			name:           "invalid PDB configuration - negative min available integer",
 			shouldSucceed:  false,
 			featureEnabled: true,
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
-								MinAvailable: "-1",
-							},
-						},
-					},
-				},
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "-1",
 			},
 		},
 		{
 			name:           "invalid PDB configuration - negative max unavailable integer",
 			shouldSucceed:  false,
 			featureEnabled: true,
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
-								MaxUnavailable: "-1",
-							},
-						},
-					},
-				},
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MaxUnavailable: "-1",
 			},
 		},
 		{
 			name:           "invalid PDB configuration - both fields set",
 			shouldSucceed:  false,
 			featureEnabled: true,
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
-								MaxUnavailable: "1",
-								MinAvailable:   "1",
-							},
-						},
-					},
-				},
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MaxUnavailable: "1",
+				MinAvailable:   "1",
 			},
 		},
 		{
 			name:           "invalid PDB configuration - string passed to max unavailable",
 			shouldSucceed:  false,
 			featureEnabled: true,
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
-								MaxUnavailable: "five",
-							},
-						},
-					},
-				},
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MaxUnavailable: "five",
 			},
 		},
 		{
 			name:           "invalid PDB configuration - string passed to min available",
 			shouldSucceed:  false,
 			featureEnabled: true,
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
-								MinAvailable: "five",
-							},
-						},
-					},
-				},
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "five",
 			},
 		},
 		{
 			name:           "invalid PDB configuration - string with invalid percentage number set for min available",
 			shouldSucceed:  false,
 			featureEnabled: true,
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
-								MinAvailable: "5.5%",
-							},
-						},
-					},
-				},
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "5.5%",
 			},
 		},
 		{
 			name:           "invalid PDB configuration - string with invalid percentage number set for max unavailable",
 			shouldSucceed:  false,
 			featureEnabled: true,
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
-								MaxUnavailable: "5.5%",
-							},
-						},
-					},
-				},
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MaxUnavailable: "5.5%",
 			},
 		},
 		{
 			name:           "invalid PDB configuration - both set to zero",
 			shouldSucceed:  false,
 			featureEnabled: true,
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
-								MinAvailable:   "0",
-								MaxUnavailable: "0",
-							},
-						},
-					},
-				},
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable:   "0",
+				MaxUnavailable: "0",
 			},
 		},
 		{
 			name:           "valid PDB configuration - max unavailable set to integer",
 			shouldSucceed:  true,
 			featureEnabled: true,
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
-								MaxUnavailable: "1",
-							},
-						},
-					},
-				},
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MaxUnavailable: "1",
 			},
 		},
 		{
 			name:           "valid PDB configuration - min available set to integer",
 			shouldSucceed:  true,
 			featureEnabled: true,
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
-								MinAvailable: "1",
-							},
-						},
-					},
-				},
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "1",
 			},
 		},
 		{
 			name:           "valid PDB configuration - min available set to integer",
 			shouldSucceed:  true,
 			featureEnabled: true,
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
-								MinAvailable:   "1",
-								MaxUnavailable: "0",
-							},
-						},
-					},
-				},
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable:   "1",
+				MaxUnavailable: "0",
 			},
 		},
 		{
 			name:           "valid PDB configuration - max unavailable set to integer",
 			shouldSucceed:  true,
 			featureEnabled: true,
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
-								MinAvailable:   "0",
-								MaxUnavailable: "1",
-							},
-						},
-					},
-				},
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable:   "0",
+				MaxUnavailable: "1",
 			},
 		},
 		{
 			name:           "valid PDB configuration - max unavailable set to percentage",
 			shouldSucceed:  true,
 			featureEnabled: true,
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
-								MaxUnavailable: "50%",
-							},
-						},
-					},
-				},
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MaxUnavailable: "50%",
 			},
 		},
 		{
 			name:           "valid PDB configuration - min available set to percentage",
 			shouldSucceed:  true,
 			featureEnabled: true,
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
-								MinAvailable: "50%",
-							},
-						},
-					},
-				},
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "50%",
 			},
 		},
 		{
 			name:           "valid PDB configuration - updating from percentage to int",
 			shouldSucceed:  true,
 			featureEnabled: true,
-			oldCluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
-								MinAvailable: "50%",
-							},
-						},
-					},
-				},
+			oldPdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "50%",
 			},
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
-								MinAvailable: "1",
-							},
-						},
-					},
-				},
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "1",
 			},
 		},
 		{
 			name:           "invalid PDB reconfiguration - feature is disabled",
 			shouldSucceed:  false,
 			featureEnabled: false,
-			oldCluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
-								MinAvailable: "50%",
-							},
-						},
-					},
-				},
+			oldPdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "50%",
 			},
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
-								MinAvailable: "1",
-							},
-						},
-					},
-				},
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "1",
 			},
 		},
 		{
 			name:           "invalid PDB creation - feature is disabled",
 			shouldSucceed:  false,
 			featureEnabled: false,
-			oldCluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{},
-			},
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
-								MinAvailable: "1",
-							},
-						},
-					},
-				},
+			oldPdb:         nil,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "1",
 			},
 		},
 		{
 			name:           "valid PDB reconfiguration - field is removed while feature is disabled",
 			shouldSucceed:  true,
 			featureEnabled: false,
-			oldCluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
-								MinAvailable: "50%",
-							},
-						},
-					},
-				},
+			oldPdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "50%",
 			},
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{},
-			},
+			pdb: nil,
 		},
 		{
 			name:           "valid update - field is unchanged while feature is disabled",
 			shouldSucceed:  true,
 			featureEnabled: false,
-			oldCluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
-								MinAvailable: "50%",
-							},
-						},
-					},
-				},
+			oldPdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "50%",
 			},
-			cluster: &v1.Cluster{
-				Spec: v1.ClusterSpec{
-					ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
-						SchedulingCustomization: &v1.AgentSchedulingCustomization{
-							PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
-								MinAvailable: "50%",
-							},
-						},
-					},
-				},
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "50%",
 			},
 		},
 	}
 
 	t.Parallel()
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			a := provisioningAdmitter{
-				featureCache: createMockFeatureCache(ctrl, common.SchedulingCustomizationFeatureName, tt.featureEnabled),
-			}
+	for _, agentType := range common.AllAgentTypes {
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				a := provisioningAdmitter{
+					featureCache: createMockFeatureCache(ctrl, common.SchedulingCustomizationFeatureName, tt.featureEnabled),
+				}
 
-			response, err := a.validatePodDisruptionBudget(tt.oldCluster, tt.cluster)
-			assert.Equal(t, tt.shouldSucceed, response.Allowed)
-			assert.NoError(t, err)
-		})
+				var (
+					oldCluster, cluster *v1.Cluster
+				)
+
+				switch agentType {
+				case common.AgentTypeCluster:
+					oldCluster = &v1.Cluster{
+						Spec: v1.ClusterSpec{
+							ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
+								SchedulingCustomization: &v1.AgentSchedulingCustomization{
+									PodDisruptionBudget: tt.oldPdb,
+								},
+							},
+						},
+					}
+					cluster = &v1.Cluster{
+						Spec: v1.ClusterSpec{
+							ClusterAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
+								SchedulingCustomization: &v1.AgentSchedulingCustomization{
+									PodDisruptionBudget: tt.pdb,
+								},
+							},
+						},
+					}
+				case common.AgentTypeFleet:
+					oldCluster = &v1.Cluster{
+						Spec: v1.ClusterSpec{
+							FleetAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
+								SchedulingCustomization: &v1.AgentSchedulingCustomization{
+									PodDisruptionBudget: tt.oldPdb,
+								},
+							},
+						},
+					}
+					cluster = &v1.Cluster{
+						Spec: v1.ClusterSpec{
+							FleetAgentDeploymentCustomization: &v1.AgentDeploymentCustomization{
+								SchedulingCustomization: &v1.AgentSchedulingCustomization{
+									PodDisruptionBudget: tt.pdb,
+								},
+							},
+						},
+					}
+				}
+
+				response, err := a.validatePodDisruptionBudget(oldCluster, cluster)
+				assert.Equal(t, tt.shouldSucceed, response.Allowed)
+				assert.NoError(t, err)
+			})
+		}
 	}
 }
 
