@@ -293,57 +293,96 @@ func (a *admitter) validatePriorityClass(oldCluster, newCluster *apisv3.Cluster,
 		return admission.ResponseAllowed(), nil
 	}
 
+	// Collect PriorityClass specs for all supported agent types. The core
+	// validation logic for a single PriorityClass is delegated to
+	// validateSinglePriorityClass so it can be reused regardless of where the
+	// spec comes from.
+	type agentPC struct {
+		agentType common.AgentType
+		oldPC     *apisv3.PriorityClassSpec
+		newPC     *apisv3.PriorityClassSpec
+	}
+
+	var pcs []agentPC
 	for _, agentType := range []common.AgentType{common.AgentTypeCluster, common.AgentTypeFleet} {
 		newClusterScheduling := getSchedulingCustomization(newCluster, agentType)
 		oldClusterScheduling := getSchedulingCustomization(oldCluster, agentType)
 
-		var newPC, oldPC *apisv3.PriorityClassSpec
+		ap := agentPC{agentType: agentType}
 		if newClusterScheduling != nil {
-			newPC = newClusterScheduling.PriorityClass
+			ap.newPC = newClusterScheduling.PriorityClass
 		}
-
 		if oldClusterScheduling != nil {
-			oldPC = oldClusterScheduling.PriorityClass
+			ap.oldPC = oldClusterScheduling.PriorityClass
 		}
 
-		if newPC == nil {
+		// Only consider agents that have a PriorityClass configured in either the
+		// old or new cluster; if neither has one, this agent is irrelevant for
+		// validation.
+		if ap.newPC != nil || ap.oldPC != nil {
+			pcs = append(pcs, ap)
+		}
+	}
+
+	// If no PriorityClasses are configured for any agent type, allow.
+	if len(pcs) == 0 {
+		return admission.ResponseAllowed(), nil
+	}
+
+	// Validate each configured PriorityClass independently. If any validation
+	// fails, reject the request; otherwise, allow when all are valid.
+	for _, ap := range pcs {
+		resp, err := a.validateSinglePriorityClass(ap.oldPC, ap.newPC)
+		if err != nil || !resp.Allowed {
+			return resp, err
+		}
+	}
+
+	return admission.ResponseAllowed(), nil
+}
+
+// validateSinglePriorityClass contains the core validation logic for a single
+// PriorityClass configuration, including feature-gate handling. It is
+// independent of where the PriorityClass comes from (cluster or fleet agent).
+func (a *admitter) validateSinglePriorityClass(oldPC, newPC *apisv3.PriorityClassSpec) (*admissionv1.AdmissionResponse, error) {
+	if newPC == nil {
+		return admission.ResponseAllowed(), nil
+	}
+
+	featuredEnabled, err := a.featureCache.Get(common.SchedulingCustomizationFeatureName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine status of '%s' feature", common.SchedulingCustomizationFeatureName)
+	}
+
+	enabled := featuredEnabled.Status.Default
+	if featuredEnabled.Spec.Value != nil {
+		enabled = *featuredEnabled.Spec.Value
+	}
+
+	// if the feature is disabled then we should not permit any changes between the old
+	// and new PriorityClass other than deletion
+	if !enabled && oldPC != nil {
+		if reflect.DeepEqual(*oldPC, *newPC) {
 			return admission.ResponseAllowed(), nil
 		}
 
-		featuredEnabled, err := a.featureCache.Get(common.SchedulingCustomizationFeatureName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to determine status of '%s' feature", common.SchedulingCustomizationFeatureName)
-		}
+		return admission.ResponseBadRequest(fmt.Sprintf("'%s' feature is disabled, will only permit removal of Scheduling Customization fields until reenabled", common.SchedulingCustomizationFeatureName)), nil
+	}
 
-		enabled := featuredEnabled.Status.Default
-		if featuredEnabled.Spec.Value != nil {
-			enabled = *featuredEnabled.Spec.Value
-		}
+	if !enabled && oldPC == nil {
+		return admission.ResponseBadRequest(fmt.Sprintf("the '%s' feature must be enabled in order to configure a Priority Class or Pod Disruption Budget", common.SchedulingCustomizationFeatureName)), nil
+	}
 
-		// if the feature is disabled then we should not permit any changes between the old and new clusters other than deletion
-		if !enabled && oldPC != nil {
-			if reflect.DeepEqual(*oldPC, *newPC) {
-				return admission.ResponseAllowed(), nil
-			}
+	if newPC.PreemptionPolicy != nil && *newPC.PreemptionPolicy != corev1.PreemptNever && *newPC.PreemptionPolicy != corev1.PreemptLowerPriority && *newPC.PreemptionPolicy != "" {
+		return admission.ResponseBadRequest("Priority Class Preemption value must be 'Never', 'PreemptLowerPriority', or empty"), nil
+	}
 
-			return admission.ResponseBadRequest(fmt.Sprintf("'%s' feature is disabled, will only permit removal of Scheduling Customization fields until reenabled", common.SchedulingCustomizationFeatureName)), nil
-		}
+	if newPC.Value > 1000000000 {
+		return admission.ResponseBadRequest("Priority Class value cannot be greater than 1 billion"), nil
+	}
 
-		if !enabled && oldPC == nil {
-			return admission.ResponseBadRequest(fmt.Sprintf("the '%s' feature must be enabled in order to configure a Priority Class or Pod Disruption Budget", common.SchedulingCustomizationFeatureName)), nil
-		}
-
-		if newPC.PreemptionPolicy != nil && *newPC.PreemptionPolicy != corev1.PreemptNever && *newPC.PreemptionPolicy != corev1.PreemptLowerPriority && *newPC.PreemptionPolicy != "" {
-			return admission.ResponseBadRequest("Priority Class Preemption value must be 'Never', 'PreemptLowerPriority', or empty"), nil
-		}
-
-		if newPC.Value > 1000000000 {
-			return admission.ResponseBadRequest("Priority Class value cannot be greater than 1 billion"), nil
-		}
-
-		if newPC.Value < -1000000000 {
-			return admission.ResponseBadRequest("Priority Class value cannot be less than negative 1 billion"), nil
-		}
+	if newPC.Value < -1000000000 {
+		return admission.ResponseBadRequest("Priority Class value cannot be less than negative 1 billion"), nil
 	}
 
 	return admission.ResponseAllowed(), nil

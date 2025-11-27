@@ -865,20 +865,20 @@ func Test_validateAgentSchedulingCustomizationPriorityClass(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		cluster        *v3.Cluster
-		oldCluster     *v3.Cluster
+		pc             *v3.PriorityClassSpec
+		oldPC          *v3.PriorityClassSpec
 		featureEnabled bool
 		shouldSucceed  bool
 	}{
 		{
 			name:           "empty priority class - feature enabled",
-			cluster:        &v3.Cluster{},
+			pc:             nil,
 			shouldSucceed:  true,
 			featureEnabled: true,
 		},
 		{
 			name:           "empty priority class - feature disabled",
-			cluster:        &v3.Cluster{},
+			pc:             nil,
 			shouldSucceed:  true,
 			featureEnabled: true,
 		},
@@ -886,226 +886,94 @@ func Test_validateAgentSchedulingCustomizationPriorityClass(t *testing.T) {
 			name:           "valid priority class with default preemption",
 			shouldSucceed:  true,
 			featureEnabled: true,
-			cluster: &v3.Cluster{
-				Spec: v3.ClusterSpec{
-					ClusterSpecBase: v3.ClusterSpecBase{
-						ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
-							SchedulingCustomization: &v3.AgentSchedulingCustomization{
-								PriorityClass: &v3.PriorityClassSpec{
-									Value: 123456,
-								},
-							},
-						},
-					},
-				},
+			pc: &v3.PriorityClassSpec{
+				Value: 123456,
 			},
 		},
 		{
 			name:           "valid priority class with custom preemption",
 			shouldSucceed:  true,
 			featureEnabled: true,
-			cluster: &v3.Cluster{
-				Spec: v3.ClusterSpec{
-					ClusterSpecBase: v3.ClusterSpecBase{
-						ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
-							SchedulingCustomization: &v3.AgentSchedulingCustomization{
-								PriorityClass: &v3.PriorityClassSpec{
-									Value:            123456,
-									PreemptionPolicy: &preemptionNever,
-								},
-							},
-						},
-					},
-				},
+			pc: &v3.PriorityClassSpec{
+				Value:            123456,
+				PreemptionPolicy: &preemptionNever,
 			},
 		},
 		{
 			name:           "invalid priority class - value too large",
 			shouldSucceed:  false,
 			featureEnabled: true,
-			cluster: &v3.Cluster{
-				Spec: v3.ClusterSpec{
-					ClusterSpecBase: v3.ClusterSpecBase{
-						ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
-							SchedulingCustomization: &v3.AgentSchedulingCustomization{
-								PriorityClass: &v3.PriorityClassSpec{
-									Value: 1234567891234567890,
-								},
-							},
-						},
-					},
-				},
+			pc: &v3.PriorityClassSpec{
+				Value: 1234567891234567890,
 			},
 		},
 		{
 			name:           "invalid priority class - value too small",
 			shouldSucceed:  false,
 			featureEnabled: true,
-			cluster: &v3.Cluster{
-				Spec: v3.ClusterSpec{
-					ClusterSpecBase: v3.ClusterSpecBase{
-						ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
-							SchedulingCustomization: &v3.AgentSchedulingCustomization{
-								PriorityClass: &v3.PriorityClassSpec{
-									Value: -1234567891234567890,
-								},
-							},
-						},
-					},
-				},
+			pc: &v3.PriorityClassSpec{
+				Value: -1234567891234567890,
 			},
 		},
 		{
 			name:           "invalid priority class - preemption value invalid",
 			shouldSucceed:  false,
 			featureEnabled: true,
-			cluster: &v3.Cluster{
-				Spec: v3.ClusterSpec{
-					ClusterSpecBase: v3.ClusterSpecBase{
-						ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
-							SchedulingCustomization: &v3.AgentSchedulingCustomization{
-								PriorityClass: &v3.PriorityClassSpec{
-									Value:            24321,
-									PreemptionPolicy: &preemptionInvalid,
-								},
-							},
-						},
-					},
-				},
+			pc: &v3.PriorityClassSpec{
+				Value:            24321,
+				PreemptionPolicy: &preemptionInvalid,
 			},
 		},
 		{
 			name:           "invalid priority class - feature is disabled",
 			shouldSucceed:  false,
 			featureEnabled: false,
-			cluster: &v3.Cluster{
-				Spec: v3.ClusterSpec{
-					ClusterSpecBase: v3.ClusterSpecBase{
-						ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
-							SchedulingCustomization: &v3.AgentSchedulingCustomization{
-								PriorityClass: &v3.PriorityClassSpec{
-									Value:            24321,
-									PreemptionPolicy: &preemptionInvalid,
-								},
-							},
-						},
-					},
-				},
+			pc: &v3.PriorityClassSpec{
+				Value:            24321,
+				PreemptionPolicy: &preemptionInvalid,
 			},
 		},
 		{
 			name:           "invalid update attempt - feature is disabled",
 			shouldSucceed:  false,
 			featureEnabled: false,
-			oldCluster: &v3.Cluster{
-				Spec: v3.ClusterSpec{
-					ClusterSpecBase: v3.ClusterSpecBase{
-						ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
-							SchedulingCustomization: &v3.AgentSchedulingCustomization{
-								PriorityClass: &v3.PriorityClassSpec{
-									Value: 1234,
-								},
-							},
-						},
-					},
-				},
+			oldPC: &v3.PriorityClassSpec{
+				Value: 1234,
 			},
-			cluster: &v3.Cluster{
-				Spec: v3.ClusterSpec{
-					ClusterSpecBase: v3.ClusterSpecBase{
-						ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
-							SchedulingCustomization: &v3.AgentSchedulingCustomization{
-								PriorityClass: &v3.PriorityClassSpec{
-									Value: 4321,
-								},
-							},
-						},
-					},
-				},
+			pc: &v3.PriorityClassSpec{
+				Value: 4321,
 			},
 		},
 		{
 			name:           "valid update attempt - feature is enabled",
 			shouldSucceed:  false,
 			featureEnabled: false,
-			oldCluster: &v3.Cluster{
-				Spec: v3.ClusterSpec{
-					ClusterSpecBase: v3.ClusterSpecBase{
-						ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
-							SchedulingCustomization: &v3.AgentSchedulingCustomization{
-								PriorityClass: &v3.PriorityClassSpec{
-									Value: 1234,
-								},
-							},
-						},
-					},
-				},
+			oldPC: &v3.PriorityClassSpec{
+				Value: 1234,
 			},
-			cluster: &v3.Cluster{
-				Spec: v3.ClusterSpec{
-					ClusterSpecBase: v3.ClusterSpecBase{
-						ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
-							SchedulingCustomization: &v3.AgentSchedulingCustomization{
-								PriorityClass: &v3.PriorityClassSpec{
-									Value: 4321,
-								},
-							},
-						},
-					},
-				},
+			pc: &v3.PriorityClassSpec{
+				Value: 4321,
 			},
 		},
 		{
 			name:           "valid update attempt - feature is disabled, but fields are unchanged",
 			shouldSucceed:  true,
 			featureEnabled: false,
-			oldCluster: &v3.Cluster{
-				Spec: v3.ClusterSpec{
-					ClusterSpecBase: v3.ClusterSpecBase{
-						ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
-							SchedulingCustomization: &v3.AgentSchedulingCustomization{
-								PriorityClass: &v3.PriorityClassSpec{
-									Value: 1234,
-								},
-							},
-						},
-					},
-				},
+			oldPC: &v3.PriorityClassSpec{
+				Value: 1234,
 			},
-			cluster: &v3.Cluster{
-				Spec: v3.ClusterSpec{
-					ClusterSpecBase: v3.ClusterSpecBase{
-						ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
-							SchedulingCustomization: &v3.AgentSchedulingCustomization{
-								PriorityClass: &v3.PriorityClassSpec{
-									Value: 1234,
-								},
-							},
-						},
-					},
-				},
+			pc: &v3.PriorityClassSpec{
+				Value: 1234,
 			},
 		},
 		{
 			name:           "valid update attempt - field is removed while feature is disabled",
 			shouldSucceed:  true,
 			featureEnabled: false,
-			oldCluster: &v3.Cluster{
-				Spec: v3.ClusterSpec{
-					ClusterSpecBase: v3.ClusterSpecBase{
-						ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
-							SchedulingCustomization: &v3.AgentSchedulingCustomization{
-								PriorityClass: &v3.PriorityClassSpec{
-									Value: 1234,
-								},
-							},
-						},
-					},
-				},
+			oldPC: &v3.PriorityClassSpec{
+				Value: 1234,
 			},
-			cluster: &v3.Cluster{
-				Spec: v3.ClusterSpec{},
-			},
+			pc: nil,
 		},
 	}
 
@@ -1118,11 +986,40 @@ func Test_validateAgentSchedulingCustomizationPriorityClass(t *testing.T) {
 				featureCache: createMockFeatureCache(ctrl, common.SchedulingCustomizationFeatureName, tt.featureEnabled),
 			}
 
-			response, err := a.validatePriorityClass(tt.oldCluster, tt.cluster, admissionv1.Create)
+			var (
+				oldCluster = &v3.Cluster{}
+				cluster    = &v3.Cluster{}
+			)
+
+			if tt.oldPC != nil {
+				oldCluster.Spec = v3.ClusterSpec{
+					ClusterSpecBase: v3.ClusterSpecBase{
+						ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
+							SchedulingCustomization: &v3.AgentSchedulingCustomization{
+								PriorityClass: tt.oldPC,
+							},
+						},
+					},
+				}
+			}
+
+			if tt.pc != nil {
+				cluster.Spec = v3.ClusterSpec{
+					ClusterSpecBase: v3.ClusterSpecBase{
+						ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
+							SchedulingCustomization: &v3.AgentSchedulingCustomization{
+								PriorityClass: tt.pc,
+							},
+						},
+					},
+				}
+			}
+
+			response, err := a.validatePriorityClass(oldCluster, cluster, admissionv1.Create)
 			assert.Equal(t, tt.shouldSucceed, response.Allowed)
 			assert.NoError(t, err)
 
-			response, err = a.validatePriorityClass(tt.oldCluster, tt.cluster, admissionv1.Update)
+			response, err = a.validatePriorityClass(oldCluster, cluster, admissionv1.Update)
 			assert.Equal(t, tt.shouldSucceed, response.Allowed)
 			assert.NoError(t, err)
 
