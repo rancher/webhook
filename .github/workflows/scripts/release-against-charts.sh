@@ -3,22 +3,39 @@
 # Bumps Webhook version in a locally checked out rancher/charts repository
 #
 # Usage:
-#   ./release-against-charts.sh <path to charts repo> <prev webhook release> <new webhook release>
+#   ./release-against-charts.sh <path to charts repo> <prev webhook release> <new webhook release> [bump major]
 #
 # Example:
-# ./release-against-charts.sh "${GITHUB_WORKSPACE}" "v0.5.0-rc.13" "v0.5.0-rc.14"
+# ./release-against-charts.sh "${GITHUB_WORKSPACE}" "v0.5.0-rc.13" "v0.5.0-rc.14" false
 
 CHARTS_DIR=$1
-PREV_WEBHOOK_VERSION=$2   # e.g. v0.5.2-rc.3
-NEW_WEBHOOK_VERSION=$3    # e.g. v0.5.2-rc.4
+PREV_WEBHOOK_VERSION="$2"   # e.g. 0.5.0-rc.13
+NEW_WEBHOOK_VERSION="$3"    # e.g. 0.5.0-rc.14
+BUMP_MAJOR="${4:-false}"   # default false if not given
 
 usage() {
     cat <<EOF
 Usage:
-  $0 <path to charts repo> <prev webhook release> <new webhook release>
+  $0 <path to charts repo> <prev webhook release> <new webhook release> [bump_major]
+
+Arguments:
+  <path to charts repo>   Path to locally checked out charts repo
+  <prev webhook release>  Previous rancher-webhook version (e.g. v0.5.0-rc.13)
+  <new webhook release>   New rancher-webhook version (e.g. v0.5.0-rc.14, v0.5.0, v0.6.0-rc.0)
+  <bump_major>            Optional. Must be "true" if introducing a new webhook minor version.
+                          Example: v0.5.0 → v0.6.0-rc.0 requires bump_major=true.
+
+Examples:
+  RC to RC:        $0 ./charts v0.5.0-rc.0 v0.5.0-rc.1
+  RC to stable:    $0 ./charts v0.5.0-rc.0 v0.5.0
+  stable to RC:    $0 ./charts v0.5.0 v0.5.1-rc.1
+  new minor RC:    $0 ./charts v0.5.0 v0.6.0-rc.0 true   # bump chart major
 EOF
 }
 
+# Bumps the patch version of a semver version string
+# e.g. 1.2.3 -> 1.2.4
+# e.g. 1.2.3-rc.4 -> 1.2.4
 bump_patch() {
     version=$1
     major=$(echo "$version" | cut -d. -f1)
@@ -28,6 +45,17 @@ bump_patch() {
     echo "${major}.${minor}.${new_patch}"
 }
 
+# Bumps the major version of a semver version string and resets minor and patch to 0
+# e.g. 1.2.3 -> 2.0.0
+# e.g. 1.2.3-rc.4 -> 2.0.0
+bump_major() {
+    version=$1
+    major=$(echo "$version" | cut -d. -f1)
+    new_major=$((major + 1))
+    echo "${new_major}.0.0"
+}
+
+# Validates that the version is in the format v<major>.<minor>.<patch> or v<major>.<minor>.<patch>-rc.<number>
 validate_version_format() {
     version=$1
     if ! echo "$version" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$'; then
@@ -59,6 +87,18 @@ fi
 PREV_WEBHOOK_VERSION_SHORT=$(echo "$PREV_WEBHOOK_VERSION" | sed 's|^v||')  # e.g. 0.5.2-rc.3
 NEW_WEBHOOK_VERSION_SHORT=$(echo "$NEW_WEBHOOK_VERSION" | sed 's|^v||')  # e.g. 0.5.2-rc.4
 
+# Extract base versions without -rc suffix
+prev_base=$(echo "$PREV_WEBHOOK_VERSION_SHORT" | sed 's/-rc.*//')
+new_base=$(echo "$NEW_WEBHOOK_VERSION_SHORT" | sed 's/-rc.*//')
+
+prev_minor=$(echo "$prev_base" | cut -d. -f2)
+new_minor=$(echo "$new_base" | cut -d. -f2)
+
+is_new_minor=false
+if [ "$new_minor" -gt "$prev_minor" ]; then
+    is_new_minor=true
+fi
+
 set -ue
 
 cd "${CHARTS_DIR}"
@@ -77,17 +117,30 @@ if ! PREV_CHART_VERSION=$(yq '.version' ./packages/rancher-webhook/package.yaml)
     exit 1
 fi
 
-if [ "$is_prev_rc" = "false" ]; then
+# Determine new chart version
+if [ "$is_new_minor" = "true" ]; then
+    if [ "$BUMP_MAJOR" != "true" ]; then
+        echo "Error: Detected new minor bump ($PREV_WEBHOOK_VERSION to $NEW_WEBHOOK_VERSION), but bump_major flag was not set."
+        exit 1
+    fi
+    echo "Bumping chart major: $PREV_CHART_VERSION to $(bump_major "$PREV_CHART_VERSION")"
+    NEW_CHART_VERSION=$(bump_major "$PREV_CHART_VERSION")
+    COMMIT_MSG="Bump rancher-webhook to $NEW_WEBHOOK_VERSION (chart version major bump)"
+elif [ "$is_prev_rc" = "false" ]; then
+    echo "Bumping chart patch: $PREV_CHART_VERSION to $(bump_patch "$PREV_CHART_VERSION")"
     NEW_CHART_VERSION=$(bump_patch "$PREV_CHART_VERSION")
+    COMMIT_MSG="Bump rancher-webhook to $NEW_WEBHOOK_VERSION (chart version patch bump)"
 else
+    echo "Keeping chart version unchanged: $PREV_CHART_VERSION"
     NEW_CHART_VERSION=$PREV_CHART_VERSION
+    COMMIT_MSG="Bump rancher-webhook to $NEW_WEBHOOK_VERSION (no chart version bump)"
 fi
 
 sed -i "s/${PREV_WEBHOOK_VERSION_SHORT}/${NEW_WEBHOOK_VERSION_SHORT}/g" ./packages/rancher-webhook/package.yaml
 sed -i "s/${PREV_CHART_VERSION}/${NEW_CHART_VERSION}/g" ./packages/rancher-webhook/package.yaml
 
 git add packages/rancher-webhook
-git commit -m "Bump rancher-webhook to $NEW_WEBHOOK_VERSION"
+git commit -m "$COMMIT_MSG"
 
 PACKAGE=rancher-webhook make charts
 git add ./assets/rancher-webhook ./charts/rancher-webhook index.yaml
