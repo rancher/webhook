@@ -3,7 +3,7 @@
 # Bumps Webhook version in a locally checked out rancher/charts repository
 #
 # Usage:
-#   ./release-against-charts.sh <path to charts repo> <prev webhook release> <new webhook release> [bump major]
+#   ./release-against-charts.sh <path to charts repo> <prev webhook release> <new webhook release> <bump major>
 #
 # Example:
 # ./release-against-charts.sh "${GITHUB_WORKSPACE}" "v0.5.0-rc.13" "v0.5.0-rc.14" false
@@ -11,24 +11,24 @@
 CHARTS_DIR=$1
 PREV_WEBHOOK_VERSION="$2"   # e.g. 0.5.0-rc.13
 NEW_WEBHOOK_VERSION="$3"    # e.g. 0.5.0-rc.14
-BUMP_MAJOR="${4:-false}"   # default false if not given
+BUMP_MAJOR="$4"             # must be "true" or "false"
 
 usage() {
     cat <<EOF
 Usage:
-  $0 <path to charts repo> <prev webhook release> <new webhook release> [bump_major]
+  $0 <path to charts repo> <prev webhook release> <new webhook release> <bump_major>
 
 Arguments:
   <path to charts repo>   Path to locally checked out charts repo
   <prev webhook release>  Previous rancher-webhook version (e.g. v0.5.0-rc.13)
   <new webhook release>   New rancher-webhook version (e.g. v0.5.0-rc.14, v0.5.0, v0.6.0-rc.0)
-  <bump_major>            Optional. Must be "true" if introducing a new webhook minor version.
+  <bump_major>            Must be "true" if introducing a new webhook minor version, "false" otherwise.
                           Example: v0.5.0 → v0.6.0-rc.0 requires bump_major=true.
 
 Examples:
-  RC to RC:        $0 ./charts v0.5.0-rc.0 v0.5.0-rc.1
-  RC to stable:    $0 ./charts v0.5.0-rc.0 v0.5.0
-  stable to RC:    $0 ./charts v0.5.0 v0.5.1-rc.1
+  RC to RC:        $0 ./charts v0.5.0-rc.0 v0.5.0-rc.1 false
+  RC to stable:    $0 ./charts v0.5.0-rc.0 v0.5.0 false
+  stable to RC:    $0 ./charts v0.5.0 v0.5.1-rc.1 false
   new minor RC:    $0 ./charts v0.5.0 v0.6.0-rc.0 true   # bump chart major
 EOF
 }
@@ -64,8 +64,13 @@ validate_version_format() {
     fi
 }
 
-if [ -z "$CHARTS_DIR" ] || [ -z "$PREV_WEBHOOK_VERSION" ] || [ -z "$NEW_WEBHOOK_VERSION" ]; then
+if [ -z "$CHARTS_DIR" ] || [ -z "$PREV_WEBHOOK_VERSION" ] || [ -z "$NEW_WEBHOOK_VERSION" ] || [ -z "$BUMP_MAJOR" ]; then
     usage
+    exit 1
+fi
+
+if [ "$BUMP_MAJOR" != "true" ] && [ "$BUMP_MAJOR" != "false" ]; then
+    echo "Error: bump_major must be 'true' or 'false', got '$BUMP_MAJOR'"
     exit 1
 fi
 
@@ -87,12 +92,8 @@ fi
 PREV_WEBHOOK_VERSION_SHORT=$(echo "$PREV_WEBHOOK_VERSION" | sed 's|^v||')  # e.g. 0.5.2-rc.3
 NEW_WEBHOOK_VERSION_SHORT=$(echo "$NEW_WEBHOOK_VERSION" | sed 's|^v||')  # e.g. 0.5.2-rc.4
 
-# Extract base versions without -rc suffix
-prev_base=$(echo "$PREV_WEBHOOK_VERSION_SHORT" | sed 's/-rc.*//')
-new_base=$(echo "$NEW_WEBHOOK_VERSION_SHORT" | sed 's/-rc.*//')
-
-prev_minor=$(echo "$prev_base" | cut -d. -f2)
-new_minor=$(echo "$new_base" | cut -d. -f2)
+prev_minor=$(echo "$PREV_WEBHOOK_VERSION_SHORT" | cut -d. -f2)
+new_minor=$(echo "$NEW_WEBHOOK_VERSION_SHORT" | cut -d. -f2)
 
 is_new_minor=false
 if [ "$new_minor" -gt "$prev_minor" ]; then
@@ -123,12 +124,12 @@ if [ "$is_new_minor" = "true" ]; then
         echo "Error: Detected new minor bump ($PREV_WEBHOOK_VERSION to $NEW_WEBHOOK_VERSION), but bump_major flag was not set."
         exit 1
     fi
-    echo "Bumping chart major: $PREV_CHART_VERSION to $(bump_major "$PREV_CHART_VERSION")"
     NEW_CHART_VERSION=$(bump_major "$PREV_CHART_VERSION")
+    echo "Bumping chart major: $PREV_CHART_VERSION to $NEW_CHART_VERSION"
     COMMIT_MSG="Bump rancher-webhook to $NEW_WEBHOOK_VERSION (chart version major bump)"
 elif [ "$is_prev_rc" = "false" ]; then
-    echo "Bumping chart patch: $PREV_CHART_VERSION to $(bump_patch "$PREV_CHART_VERSION")"
     NEW_CHART_VERSION=$(bump_patch "$PREV_CHART_VERSION")
+    echo "Bumping chart patch: $PREV_CHART_VERSION to $NEW_CHART_VERSION"
     COMMIT_MSG="Bump rancher-webhook to $NEW_WEBHOOK_VERSION (chart version patch bump)"
 else
     echo "Keeping chart version unchanged: $PREV_CHART_VERSION"
