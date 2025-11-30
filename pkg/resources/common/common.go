@@ -33,11 +33,11 @@ const (
 // between 0% and 100% so that it can be used in a Pod Disruption Budget
 var PdbPercentageRegex = regexp.MustCompile("^([0-9]|[1-9][0-9]|100)%$")
 
-type AgentType int
+type AgentType string
 
 const (
-	AgentTypeCluster AgentType = iota
-	AgentTypeFleet
+	AgentTypeCluster AgentType = "cluster"
+	AgentTypeFleet   AgentType = "fleet"
 )
 
 // ConvertAuthnExtras converts authnv1 type extras to authzv1 extras. Technically these are both

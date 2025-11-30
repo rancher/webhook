@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -635,6 +636,7 @@ func Test_validateAgentSchedulingCustomizationPodDisruptionBudget(t *testing.T) 
 		},
 		{
 			name:           "no scheduling customization - feature disabled",
+			oldPDB:         nil,
 			pdb:            nil,
 			shouldSucceed:  true,
 			featureEnabled: false,
@@ -782,9 +784,6 @@ func Test_validateAgentSchedulingCustomizationPodDisruptionBudget(t *testing.T) 
 			shouldSucceed:  false,
 			featureEnabled: false,
 			oldPDB:         nil,
-			// oldCluster: &v3.Cluster{
-			// 	Spec: v3.ClusterSpec{},
-			// },
 			pdb: &v3.PodDisruptionBudgetSpec{
 				MinAvailable: "1",
 			},
@@ -812,51 +811,59 @@ func Test_validateAgentSchedulingCustomizationPodDisruptionBudget(t *testing.T) 
 	}
 
 	t.Parallel()
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			a := admitter{
-				featureCache: createMockFeatureCache(ctrl, common.SchedulingCustomizationFeatureName, tt.featureEnabled),
-			}
-
-			var (
-				oldCluster = &v3.Cluster{}
-				cluster    = &v3.Cluster{}
-			)
-			if tt.oldPDB != nil {
-				oldCluster.Spec = v3.ClusterSpec{
-					ClusterSpecBase: v3.ClusterSpecBase{
-						ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
-							SchedulingCustomization: &v3.AgentSchedulingCustomization{
-								PodDisruptionBudget: tt.oldPDB,
-							},
-						},
-					},
+	for _, agentType := range []common.AgentType{common.AgentTypeCluster, common.AgentTypeFleet} {
+		for _, tt := range tests {
+			t.Run(fmt.Sprintf("%s/%s", agentType, tt.name), func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				a := admitter{
+					featureCache: createMockFeatureCache(ctrl, common.SchedulingCustomizationFeatureName, tt.featureEnabled),
 				}
-			}
-			if tt.pdb != nil {
-				cluster.Spec = v3.ClusterSpec{
-					ClusterSpecBase: v3.ClusterSpecBase{
-						ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
-							SchedulingCustomization: &v3.AgentSchedulingCustomization{
-								PodDisruptionBudget: tt.pdb,
-							},
-						},
-					},
-				}
-			}
 
-			response, err := a.validatePodDisruptionBudget(oldCluster, cluster, admissionv1.Create)
-			assert.Equal(t, tt.shouldSucceed, response.Allowed)
-			assert.NoError(t, err)
+				var oldCluster, newCluster *v3.Cluster
+				oldCluster = newClusterWithPDB(tt.oldPDB, agentType)
+				newCluster = newClusterWithPDB(tt.pdb, agentType)
 
-			response, err = a.validatePodDisruptionBudget(oldCluster, cluster, admissionv1.Update)
-			assert.Equal(t, tt.shouldSucceed, response.Allowed)
-			assert.Nil(t, err)
-			assert.NoError(t, err)
-		})
+				response, err := a.validatePodDisruptionBudget(oldCluster, newCluster, admissionv1.Create)
+				assert.Equal(t, tt.shouldSucceed, response.Allowed)
+				assert.NoError(t, err)
+
+				response, err = a.validatePodDisruptionBudget(oldCluster, newCluster, admissionv1.Update)
+				assert.Equal(t, tt.shouldSucceed, response.Allowed)
+				assert.Nil(t, err)
+				assert.NoError(t, err)
+			})
+		}
 	}
+}
+
+func newClusterWithPDB(pdb *v3.PodDisruptionBudgetSpec, agentType common.AgentType) *v3.Cluster {
+	c := &v3.Cluster{}
+	if pdb == nil {
+		return c
+	}
+	switch agentType {
+	case common.AgentTypeCluster:
+		c.Spec = v3.ClusterSpec{
+			ClusterSpecBase: v3.ClusterSpecBase{
+				ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
+					SchedulingCustomization: &v3.AgentSchedulingCustomization{
+						PodDisruptionBudget: pdb,
+					},
+				},
+			},
+		}
+	case common.AgentTypeFleet:
+		c.Spec = v3.ClusterSpec{
+			ClusterSpecBase: v3.ClusterSpecBase{
+				FleetAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
+					SchedulingCustomization: &v3.AgentSchedulingCustomization{
+						PodDisruptionBudget: pdb,
+					},
+				},
+			},
+		}
+	}
+	return c
 }
 
 func Test_validateAgentSchedulingCustomizationPriorityClass(t *testing.T) {
@@ -978,53 +985,60 @@ func Test_validateAgentSchedulingCustomizationPriorityClass(t *testing.T) {
 	}
 
 	t.Parallel()
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			a := admitter{
-				featureCache: createMockFeatureCache(ctrl, common.SchedulingCustomizationFeatureName, tt.featureEnabled),
-			}
-
-			var (
-				oldCluster = &v3.Cluster{}
-				cluster    = &v3.Cluster{}
-			)
-
-			if tt.oldPC != nil {
-				oldCluster.Spec = v3.ClusterSpec{
-					ClusterSpecBase: v3.ClusterSpecBase{
-						ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
-							SchedulingCustomization: &v3.AgentSchedulingCustomization{
-								PriorityClass: tt.oldPC,
-							},
-						},
-					},
+	for _, agentType := range []common.AgentType{common.AgentTypeCluster, common.AgentTypeFleet} {
+		agentType := agentType // TODO delete
+		for _, tt := range tests {
+			tt := tt // TODO delete
+			t.Run(fmt.Sprintf("%s/%s", agentType, tt.name), func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				a := admitter{
+					featureCache: createMockFeatureCache(ctrl, common.SchedulingCustomizationFeatureName, tt.featureEnabled),
 				}
-			}
 
-			if tt.pc != nil {
-				cluster.Spec = v3.ClusterSpec{
-					ClusterSpecBase: v3.ClusterSpecBase{
-						ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
-							SchedulingCustomization: &v3.AgentSchedulingCustomization{
-								PriorityClass: tt.pc,
-							},
-						},
-					},
-				}
-			}
+				oldCluster := newClusterWithPC(tt.oldPC, agentType)
+				newCluster := newClusterWithPC(tt.pc, agentType)
 
-			response, err := a.validatePriorityClass(oldCluster, cluster, admissionv1.Create)
-			assert.Equal(t, tt.shouldSucceed, response.Allowed)
-			assert.NoError(t, err)
+				response, err := a.validatePriorityClass(oldCluster, newCluster, admissionv1.Create)
+				assert.Equal(t, tt.shouldSucceed, response.Allowed)
+				assert.NoError(t, err)
 
-			response, err = a.validatePriorityClass(oldCluster, cluster, admissionv1.Update)
-			assert.Equal(t, tt.shouldSucceed, response.Allowed)
-			assert.NoError(t, err)
-
-		})
+				response, err = a.validatePriorityClass(oldCluster, newCluster, admissionv1.Update)
+				assert.Equal(t, tt.shouldSucceed, response.Allowed)
+				assert.Nil(t, err)
+				assert.NoError(t, err)
+			})
+		}
 	}
+}
+
+func newClusterWithPC(pc *v3.PriorityClassSpec, agentType common.AgentType) *v3.Cluster {
+	c := &v3.Cluster{}
+	if pc == nil {
+		return c
+	}
+	switch agentType {
+	case common.AgentTypeCluster:
+		c.Spec = v3.ClusterSpec{
+			ClusterSpecBase: v3.ClusterSpecBase{
+				ClusterAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
+					SchedulingCustomization: &v3.AgentSchedulingCustomization{
+						PriorityClass: pc,
+					},
+				},
+			},
+		}
+	case common.AgentTypeFleet:
+		c.Spec = v3.ClusterSpec{
+			ClusterSpecBase: v3.ClusterSpecBase{
+				FleetAgentDeploymentCustomization: &v3.AgentDeploymentCustomization{
+					SchedulingCustomization: &v3.AgentSchedulingCustomization{
+						PriorityClass: pc,
+					},
+				},
+			},
+		}
+	}
+	return c
 }
 
 func createMockFeatureCache(ctrl *gomock.Controller, featureName string, enabled bool) *fake.MockNonNamespacedCacheInterface[*v3.Feature] {

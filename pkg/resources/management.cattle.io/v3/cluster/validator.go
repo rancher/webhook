@@ -293,10 +293,6 @@ func (a *admitter) validatePriorityClass(oldCluster, newCluster *apisv3.Cluster,
 		return admission.ResponseAllowed(), nil
 	}
 
-	// Collect PriorityClass specs for all supported agent types. The core
-	// validation logic for a single PriorityClass is delegated to
-	// validateSinglePriorityClass so it can be reused regardless of where the
-	// spec comes from.
 	type agentPC struct {
 		agentType common.AgentType
 		oldPC     *apisv3.PriorityClassSpec
@@ -316,9 +312,6 @@ func (a *admitter) validatePriorityClass(oldCluster, newCluster *apisv3.Cluster,
 			ap.oldPC = oldClusterScheduling.PriorityClass
 		}
 
-		// Only consider agents that have a PriorityClass configured in either the
-		// old or new cluster; if neither has one, this agent is irrelevant for
-		// validation.
 		if ap.newPC != nil || ap.oldPC != nil {
 			pcs = append(pcs, ap)
 		}
@@ -329,21 +322,20 @@ func (a *admitter) validatePriorityClass(oldCluster, newCluster *apisv3.Cluster,
 		return admission.ResponseAllowed(), nil
 	}
 
-	// Validate each configured PriorityClass independently. If any validation
-	// fails, reject the request; otherwise, allow when all are valid.
+	// Validate each configured PriorityClass independently. If any validation fails, reject the request; otherwise,
+	// allow when all are valid.
 	for _, ap := range pcs {
 		resp, err := a.validateSinglePriorityClass(ap.oldPC, ap.newPC)
 		if err != nil || !resp.Allowed {
-			return resp, err
+			return resp, fmt.Errorf("failed to validate Priority Class for agent type %s: %w", ap.agentType, err)
 		}
 	}
 
 	return admission.ResponseAllowed(), nil
 }
 
-// validateSinglePriorityClass contains the core validation logic for a single
-// PriorityClass configuration, including feature-gate handling. It is
-// independent of where the PriorityClass comes from (cluster or fleet agent).
+// validateSinglePriorityClass contains the core validation logic for a single PriorityClass configuration, including
+// feature-gate handling. It is independent of where the PriorityClass comes from (cluster or fleet agent).
 func (a *admitter) validateSinglePriorityClass(oldPC, newPC *apisv3.PriorityClassSpec) (*admissionv1.AdmissionResponse, error) {
 	if newPC == nil {
 		return admission.ResponseAllowed(), nil
@@ -396,9 +388,6 @@ func (a *admitter) validatePodDisruptionBudget(oldCluster, newCluster *apisv3.Cl
 		return admission.ResponseAllowed(), nil
 	}
 
-	// Collect PDBs for all supported agent types. The core validation logic for a
-	// single PDB is delegated to validateSinglePodDisruptionBudget so it can be
-	// reused regardless of where the PDB comes from.
 	type agentPDB struct {
 		agentType common.AgentType
 		oldPDB    *apisv3.PodDisruptionBudgetSpec
@@ -418,33 +407,30 @@ func (a *admitter) validatePodDisruptionBudget(oldCluster, newCluster *apisv3.Cl
 			ap.oldPDB = oldClusterScheduling.PodDisruptionBudget
 		}
 
-		// Only consider agents that have a PDB configured in either the old or new
-		// cluster; if neither has a PDB, this agent is irrelevant for validation.
 		if ap.newPDB != nil || ap.oldPDB != nil {
 			pdbs = append(pdbs, ap)
 		}
 	}
 
-	// If no PDBs are configured for any agent type, allow.
+	// If no pod distruption budgets are configured for any agent type, allow.
 	if len(pdbs) == 0 {
 		return admission.ResponseAllowed(), nil
 	}
 
-	// Validate each configured PDB independently. If any validation fails, reject
-	// the request; otherwise, allow when all are valid.
+	// Validate each configured PriorityClass independently. If any validation fails, reject the request; otherwise,
+	// allow when all are valid.
 	for _, ap := range pdbs {
 		resp, err := a.validateSinglePodDisruptionBudget(ap.oldPDB, ap.newPDB)
 		if err != nil || !resp.Allowed {
-			return resp, err
+			return resp, fmt.Errorf("failed to validate Pod Disruption Budget for agent type %s: %w", ap.agentType, err)
 		}
 	}
 
 	return admission.ResponseAllowed(), nil
 }
 
-// validateSinglePodDisruptionBudget contains the core validation logic for a
-// single PodDisruptionBudget configuration, including feature-gate handling.
-// It is independent of where the PDB comes from (cluster or fleet agent).
+// validateSinglePodDisruptionBudget contains the core validation logic for a single PodDisruptionBudget configuration,
+// including feature-gate handling. It is independent of where the PDB comes from (cluster or fleet agent).
 func (a *admitter) validateSinglePodDisruptionBudget(oldPDB, newPDB *apisv3.PodDisruptionBudgetSpec) (*admissionv1.AdmissionResponse, error) {
 	if newPDB == nil {
 		return admission.ResponseAllowed(), nil
