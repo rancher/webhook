@@ -588,8 +588,18 @@ func (p *provisioningAdmitter) validatePSACT(request *admission.Request, respons
 // configured. The cluster-agent-scheduling-customization feature must be enabled to configure a Priority Class, however an existing
 // Priority Class may be deleted even if the feature is disabled.
 func (p *provisioningAdmitter) validatePriorityClass(oldCluster, cluster *v1.Cluster) (*admissionv1.AdmissionResponse, error) {
-	newClusterScheduling := getSchedulingCustomization(cluster, common.AgentTypeCluster)
-	oldClusterScheduling := getSchedulingCustomization(oldCluster, common.AgentTypeCluster)
+	for _, agentType := range []common.AgentType{common.AgentTypeCluster, common.AgentTypeFleet} {
+		admissionResponse, err := p.validateOnePriorityClass(oldCluster, cluster, agentType)
+		if err != nil || !admissionResponse.Allowed {
+			return admissionResponse, err
+		}
+	}
+	return admission.ResponseAllowed(), nil
+}
+
+func (p *provisioningAdmitter) validateOnePriorityClass(oldCluster, cluster *v1.Cluster, agentType common.AgentType) (*admissionv1.AdmissionResponse, error) {
+	newClusterScheduling := getSchedulingCustomization(cluster, agentType)
+	oldClusterScheduling := getSchedulingCustomization(oldCluster, agentType)
 
 	var newPC, oldPC *v1.PriorityClassSpec
 	if newClusterScheduling != nil {
