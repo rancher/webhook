@@ -986,9 +986,7 @@ func Test_validateAgentSchedulingCustomizationPriorityClass(t *testing.T) {
 
 	t.Parallel()
 	for _, agentType := range []common.AgentType{common.AgentTypeCluster, common.AgentTypeFleet} {
-		agentType := agentType // TODO delete
 		for _, tt := range tests {
-			tt := tt // TODO delete
 			t.Run(fmt.Sprintf("%s/%s", agentType, tt.name), func(t *testing.T) {
 				ctrl := gomock.NewController(t)
 				a := admitter{
