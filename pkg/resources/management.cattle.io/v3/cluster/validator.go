@@ -300,7 +300,7 @@ func (a *admitter) validatePriorityClass(oldCluster, newCluster *apisv3.Cluster,
 	}
 
 	var pcs []agentPC
-	for _, agentType := range []common.AgentType{common.AgentTypeCluster, common.AgentTypeFleet} {
+	for _, agentType := range common.AllAgentTypes {
 		newClusterScheduling := getSchedulingCustomization(newCluster, agentType)
 		oldClusterScheduling := getSchedulingCustomization(oldCluster, agentType)
 
@@ -395,7 +395,7 @@ func (a *admitter) validatePodDisruptionBudget(oldCluster, newCluster *apisv3.Cl
 	}
 
 	var pdbs []agentPDB
-	for _, agentType := range []common.AgentType{common.AgentTypeCluster, common.AgentTypeFleet} {
+	for _, agentType := range common.AllAgentTypes {
 		newClusterScheduling := getSchedulingCustomization(newCluster, agentType)
 		oldClusterScheduling := getSchedulingCustomization(oldCluster, agentType)
 

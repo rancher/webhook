@@ -40,6 +40,13 @@ const (
 	AgentTypeFleet   AgentType = "fleet"
 )
 
+var (
+	AllAgentTypes = []AgentType{
+		AgentTypeCluster,
+		AgentTypeFleet,
+	}
+)
+
 // ConvertAuthnExtras converts authnv1 type extras to authzv1 extras. Technically these are both
 // type alias to string, so the conversion is straightforward
 func ConvertAuthnExtras(extra map[string]authnv1.ExtraValue) map[string]authzv1.ExtraValue {

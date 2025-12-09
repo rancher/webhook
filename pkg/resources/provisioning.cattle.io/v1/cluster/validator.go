@@ -588,7 +588,7 @@ func (p *provisioningAdmitter) validatePSACT(request *admission.Request, respons
 // configured. The cluster-agent-scheduling-customization feature must be enabled to configure a Priority Class, however an existing
 // Priority Class may be deleted even if the feature is disabled.
 func (p *provisioningAdmitter) validatePriorityClass(oldCluster, cluster *v1.Cluster) (*admissionv1.AdmissionResponse, error) {
-	for _, agentType := range []common.AgentType{common.AgentTypeCluster, common.AgentTypeFleet} {
+	for _, agentType := range common.AllAgentTypes {
 		admissionResponse, err := p.validateOnePriorityClass(oldCluster, cluster, agentType)
 		if err != nil || !admissionResponse.Allowed {
 			return admissionResponse, err
@@ -655,7 +655,7 @@ func (p *provisioningAdmitter) validateOnePriorityClass(oldCluster, cluster *v1.
 // configured. The cluster-agent-scheduling-customization feature must be enabled to configure a Pod Disruption Budget, however an existing
 // Pod Disruption Budget may be deleted even if the feature is disabled.
 func (p *provisioningAdmitter) validatePodDisruptionBudget(oldCluster, cluster *v1.Cluster) (*admissionv1.AdmissionResponse, error) {
-	for _, agentType := range []common.AgentType{common.AgentTypeCluster, common.AgentTypeFleet} {
+	for _, agentType := range common.AllAgentTypes {
 		admissionResponse, err := p.validateOnePodDisruptionBudget(oldCluster, cluster, agentType)
 		if err != nil || !admissionResponse.Allowed {
 			return admissionResponse, err
