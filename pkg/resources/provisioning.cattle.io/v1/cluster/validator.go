@@ -589,7 +589,7 @@ func (p *provisioningAdmitter) validatePSACT(request *admission.Request, respons
 // Priority Class may be deleted even if the feature is disabled.
 func (p *provisioningAdmitter) validatePriorityClass(oldCluster, cluster *v1.Cluster) (*admissionv1.AdmissionResponse, error) {
 	for _, agentType := range common.AllAgentTypes {
-		admissionResponse, err := p.validateOnePriorityClass(oldCluster, cluster, agentType)
+		admissionResponse, err := p.validateSinglePriorityClass(oldCluster, cluster, agentType)
 		if err != nil || !admissionResponse.Allowed {
 			return admissionResponse, err
 		}
@@ -597,7 +597,7 @@ func (p *provisioningAdmitter) validatePriorityClass(oldCluster, cluster *v1.Clu
 	return admission.ResponseAllowed(), nil
 }
 
-func (p *provisioningAdmitter) validateOnePriorityClass(oldCluster, cluster *v1.Cluster, agentType common.AgentType) (*admissionv1.AdmissionResponse, error) {
+func (p *provisioningAdmitter) validateSinglePriorityClass(oldCluster, cluster *v1.Cluster, agentType common.AgentType) (*admissionv1.AdmissionResponse, error) {
 	newClusterScheduling := getSchedulingCustomization(cluster, agentType)
 	oldClusterScheduling := getSchedulingCustomization(oldCluster, agentType)
 
@@ -656,7 +656,7 @@ func (p *provisioningAdmitter) validateOnePriorityClass(oldCluster, cluster *v1.
 // Pod Disruption Budget may be deleted even if the feature is disabled.
 func (p *provisioningAdmitter) validatePodDisruptionBudget(oldCluster, cluster *v1.Cluster) (*admissionv1.AdmissionResponse, error) {
 	for _, agentType := range common.AllAgentTypes {
-		admissionResponse, err := p.validateOnePodDisruptionBudget(oldCluster, cluster, agentType)
+		admissionResponse, err := p.validateSinglePodDisruptionBudget(oldCluster, cluster, agentType)
 		if err != nil || !admissionResponse.Allowed {
 			return admissionResponse, err
 		}
@@ -664,7 +664,7 @@ func (p *provisioningAdmitter) validatePodDisruptionBudget(oldCluster, cluster *
 	return admission.ResponseAllowed(), nil
 }
 
-func (p *provisioningAdmitter) validateOnePodDisruptionBudget(oldCluster, cluster *v1.Cluster, agentType common.AgentType) (*admissionv1.AdmissionResponse, error) {
+func (p *provisioningAdmitter) validateSinglePodDisruptionBudget(oldCluster, cluster *v1.Cluster, agentType common.AgentType) (*admissionv1.AdmissionResponse, error) {
 	newClusterScheduling := getSchedulingCustomization(cluster, agentType)
 	oldClusterScheduling := getSchedulingCustomization(oldCluster, agentType)
 
