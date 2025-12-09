@@ -293,41 +293,21 @@ func (a *admitter) validatePriorityClass(oldCluster, newCluster *apisv3.Cluster,
 		return admission.ResponseAllowed(), nil
 	}
 
-	type agentPC struct {
-		agentType common.AgentType
-		oldPC     *apisv3.PriorityClassSpec
-		newPC     *apisv3.PriorityClassSpec
-	}
-
-	var pcs []agentPC
 	for _, agentType := range common.AllAgentTypes {
 		newClusterScheduling := getSchedulingCustomization(newCluster, agentType)
 		oldClusterScheduling := getSchedulingCustomization(oldCluster, agentType)
 
-		ap := agentPC{agentType: agentType}
+		var oldPC, newPC *apisv3.PriorityClassSpec
 		if newClusterScheduling != nil {
-			ap.newPC = newClusterScheduling.PriorityClass
+			newPC = newClusterScheduling.PriorityClass
 		}
 		if oldClusterScheduling != nil {
-			ap.oldPC = oldClusterScheduling.PriorityClass
+			oldPC = oldClusterScheduling.PriorityClass
 		}
 
-		if ap.newPC != nil || ap.oldPC != nil {
-			pcs = append(pcs, ap)
-		}
-	}
-
-	// If no PriorityClasses are configured for any agent type, allow.
-	if len(pcs) == 0 {
-		return admission.ResponseAllowed(), nil
-	}
-
-	// Validate each configured PriorityClass independently. If any validation fails, reject the request; otherwise,
-	// allow when all are valid.
-	for _, ap := range pcs {
-		resp, err := a.validateSinglePriorityClass(ap.oldPC, ap.newPC)
+		resp, err := a.validateSinglePriorityClass(oldPC, newPC)
 		if err != nil || !resp.Allowed {
-			return resp, fmt.Errorf("failed to validate Priority Class for agent type %s: %w", ap.agentType, err)
+			return resp, fmt.Errorf("failed to validate Priority Class for agent type %s: %w", agentType, err)
 		}
 	}
 
@@ -388,41 +368,21 @@ func (a *admitter) validatePodDisruptionBudget(oldCluster, newCluster *apisv3.Cl
 		return admission.ResponseAllowed(), nil
 	}
 
-	type agentPDB struct {
-		agentType common.AgentType
-		oldPDB    *apisv3.PodDisruptionBudgetSpec
-		newPDB    *apisv3.PodDisruptionBudgetSpec
-	}
-
-	var pdbs []agentPDB
 	for _, agentType := range common.AllAgentTypes {
 		newClusterScheduling := getSchedulingCustomization(newCluster, agentType)
 		oldClusterScheduling := getSchedulingCustomization(oldCluster, agentType)
 
-		ap := agentPDB{agentType: agentType}
+		var newPDB, oldPDB *apisv3.PodDisruptionBudgetSpec
 		if newClusterScheduling != nil {
-			ap.newPDB = newClusterScheduling.PodDisruptionBudget
+			newPDB = newClusterScheduling.PodDisruptionBudget
 		}
 		if oldClusterScheduling != nil {
-			ap.oldPDB = oldClusterScheduling.PodDisruptionBudget
+			oldPDB = oldClusterScheduling.PodDisruptionBudget
 		}
 
-		if ap.newPDB != nil || ap.oldPDB != nil {
-			pdbs = append(pdbs, ap)
-		}
-	}
-
-	// If no pod distruption budgets are configured for any agent type, allow.
-	if len(pdbs) == 0 {
-		return admission.ResponseAllowed(), nil
-	}
-
-	// Validate each configured PriorityClass independently. If any validation fails, reject the request; otherwise,
-	// allow when all are valid.
-	for _, ap := range pdbs {
-		resp, err := a.validateSinglePodDisruptionBudget(ap.oldPDB, ap.newPDB)
+		resp, err := a.validateSinglePodDisruptionBudget(oldPDB, newPDB)
 		if err != nil || !resp.Allowed {
-			return resp, fmt.Errorf("failed to validate Pod Disruption Budget for agent type %s: %w", ap.agentType, err)
+			return resp, fmt.Errorf("failed to validate Pod Disruption Budget for agent type %s: %w", agentType, err)
 		}
 	}
 
