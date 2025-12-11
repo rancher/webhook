@@ -14,10 +14,7 @@ else
     VERSION="0.0.0-${COMMIT}${DIRTY}"
 fi
 
-if [ -z "${ARCH:-}" ] ; then
-    ARCH=$(go env GOHOSTARCH)
-fi
-
+# ARCH is now expected to be in the environment, set by the Makefile
 SUFFIX="-${ARCH}"
 
 HELM_TAG="${HELM_TAG:-${TAG:-${VERSION}}}"
