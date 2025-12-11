@@ -307,7 +307,7 @@ func (a *admitter) validatePriorityClass(oldCluster, newCluster *apisv3.Cluster,
 
 		resp, err := a.validateSinglePriorityClass(oldPC, newPC)
 		if err != nil || !resp.Allowed {
-			return resp, fmt.Errorf("failed to validate Priority Class for agent type %s: %w", agentType, err)
+			return resp, err
 		}
 	}
 
@@ -382,7 +382,7 @@ func (a *admitter) validatePodDisruptionBudget(oldCluster, newCluster *apisv3.Cl
 
 		resp, err := a.validateSinglePodDisruptionBudget(oldPDB, newPDB)
 		if err != nil || !resp.Allowed {
-			return resp, fmt.Errorf("failed to validate Pod Disruption Budget for agent type %s: %w", agentType, err)
+			return resp, err
 		}
 	}
 
