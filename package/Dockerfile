@@ -1,7 +1,7 @@
 # ===============
 # Build Stage
 # ===============
-FROM --platform=$BUILDPLATFORM registry.suse.com/bci/golang:1.24 AS build
+FROM --platform=$BUILDPLATFORM registry.suse.com/bci/golang:1.25 AS build
 
 # Set up build cache
 ENV GOMODCACHE=/root/.cache/go/modcache
