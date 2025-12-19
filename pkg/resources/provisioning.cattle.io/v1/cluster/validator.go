@@ -1,13 +1,9 @@
 package cluster
 
 import (
-	"bytes"
-	"compress/gzip"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"path/filepath"
 	"reflect"
@@ -17,6 +13,7 @@ import (
 	"strings"
 
 	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
+	"github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1/snapshotutil"
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/clients"
@@ -826,7 +823,7 @@ func (p *provisioningAdmitter) validateETCDSnapshotRestore(request *admission.Re
 	var decodeErr error
 	// Only parse snapshot metadata if the restore mode requires it.
 	if newRestore.RestoreRKEConfig != "none" {
-		clusterSpec, decodeErr = parseSnapshotClusterSpec(snap)
+		clusterSpec, decodeErr = snapshotutil.ParseSnapshotClusterSpecOrError(snap)
 		if decodeErr != nil {
 			return admission.ResponseBadRequest(
 				fmt.Sprintf("invalid ETCD snapshot metadata for %s/%s: %v", snap.Namespace, snap.Name, decodeErr)), nil
@@ -852,58 +849,6 @@ func (p *provisioningAdmitter) validateETCDSnapshotRestore(request *admission.Re
 	default:
 		return admission.ResponseBadRequest(fmt.Sprintf("unsupported restore mode %s", newRestore.RestoreRKEConfig)), nil
 	}
-}
-
-// parseSnapshotClusterSpec decodes snapshot.SnapshotFile.Metadata into a v1.ClusterSpec.
-// The metadata is stored as a nested, gzipped, base64-encoded structure.
-func parseSnapshotClusterSpec(snap *rkev1.ETCDSnapshot) (*v1.ClusterSpec, error) {
-	if snap == nil {
-		return nil, fmt.Errorf("nil snapshot")
-	}
-	if snap.SnapshotFile.Metadata == "" {
-		return nil, fmt.Errorf("no metadata present")
-	}
-
-	// The top-level metadata string is a base64-encoded JSON map.
-	outerBytes, err := base64.StdEncoding.DecodeString(snap.SnapshotFile.Metadata)
-	if err != nil {
-		return nil, fmt.Errorf("metadata base64 decode failed: %w", err)
-	}
-	var outer map[string]string
-	if err := json.Unmarshal(outerBytes, &outer); err != nil {
-		return nil, fmt.Errorf("metadata JSON decode failed: %w", err)
-	}
-
-	// The actual spec is in a specific key in that map.
-	innerB64, ok := outer["provisioning-cluster-spec"]
-	if !ok || innerB64 == "" {
-		return nil, fmt.Errorf(`metadata missing "provisioning-cluster-spec"`)
-	}
-
-	// This inner value is also base64-encoded, containing gzipped data.
-	innerGz, err := base64.StdEncoding.DecodeString(innerB64)
-	if err != nil {
-		return nil, fmt.Errorf("inner base64 decode failed: %w", err)
-	}
-
-	// Decompress the gzipped data.
-	zr, err := gzip.NewReader(bytes.NewReader(innerGz))
-	if err != nil {
-		return nil, fmt.Errorf("gzip open failed: %w", err)
-	}
-	defer zr.Close()
-
-	raw, err := io.ReadAll(zr)
-	if err != nil {
-		return nil, fmt.Errorf("gzip read failed: %w", err)
-	}
-
-	// The decompressed data is the final cluster spec JSON.
-	var spec v1.ClusterSpec
-	if err := json.Unmarshal(raw, &spec); err != nil {
-		return nil, fmt.Errorf("cluster spec JSON decode failed: %w", err)
-	}
-	return &spec, nil
 }
 
 func validateAgentDeploymentCustomization(customization *v1.AgentDeploymentCustomization, path *field.Path) field.ErrorList {

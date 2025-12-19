@@ -5,6 +5,7 @@ go 1.25.0
 toolchain go1.25.5
 
 replace (
+	github.com/rancher/rancher/pkg/apis => github.com/jferrazbr/rancher/pkg/apis v0.0.0-20251218235239-191c417ee5eb
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.34.1
 	k8s.io/cli-runtime => k8s.io/cli-runtime v0.34.1
 	k8s.io/client-go => k8s.io/client-go v0.34.1
