@@ -1,10 +1,9 @@
 module github.com/rancher/webhook
 
-go 1.24.0
-
-toolchain go1.24.2
+go 1.25.0
 
 replace (
+	github.com/rancher/rancher/pkg/apis => github.com/jferrazbr/rancher/pkg/apis v0.0.0-20251218235239-191c417ee5eb
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.34.1
 	k8s.io/cli-runtime => k8s.io/cli-runtime v0.34.1
 	k8s.io/client-go => k8s.io/client-go v0.34.1
@@ -49,8 +48,8 @@ require (
 	go.uber.org/mock v0.6.0
 	golang.org/x/text v0.30.0
 	golang.org/x/tools v0.37.0
-	k8s.io/api v0.34.1
-	k8s.io/apimachinery v0.34.1
+	k8s.io/api v0.34.3
+	k8s.io/apimachinery v0.34.3
 	k8s.io/apiserver v0.34.1
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/kubernetes v1.34.1
