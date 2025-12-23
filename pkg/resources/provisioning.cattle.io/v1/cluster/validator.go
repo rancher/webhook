@@ -811,11 +811,10 @@ func (p *provisioningAdmitter) validateETCDSnapshotRestore(request *admission.Re
 	}
 
 	snap, err := p.etcdSnapshotCache.Get(newCluster.Namespace, newRestore.Name)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return admission.ResponseBadRequest(
-				fmt.Sprintf("etcd restore references missing snapshot %s in namespace %s", newRestore.Name, newCluster.Namespace)), nil
-		}
+	if apierrors.IsNotFound(err) {
+		return admission.ResponseBadRequest(
+			fmt.Sprintf("etcd restore references missing snapshot %s in namespace %s", newRestore.Name, newCluster.Namespace)), nil
+	} else if err != nil {
 		return nil, fmt.Errorf("failed to get etcd snapshot %s/%s: %w", newCluster.Namespace, newRestore.Name, err)
 	}
 
