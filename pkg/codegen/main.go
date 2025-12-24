@@ -19,6 +19,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	capi "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 type typeInfo struct {
@@ -61,6 +62,12 @@ func main() {
 			"catalog.cattle.io": {
 				Types: []interface{}{
 					&catalogv1.ClusterRepo{},
+				},
+			},
+			"cluster.x-k8s.io": {
+				Types: []any{
+					&capi.MachineDeployment{},
+					&capi.Cluster{},
 				},
 			},
 		},
@@ -114,6 +121,12 @@ func main() {
 		"auditlog.cattle.io": {
 			Types: []interface{}{
 				&auditlogv1.AuditPolicy{},
+			},
+		},
+		"cluster.x-k8s.io": {
+			Types: []any{
+				&capi.MachineDeployment{},
+				&capi.Cluster{},
 			},
 		},
 	}); err != nil {

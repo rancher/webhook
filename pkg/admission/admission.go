@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -108,7 +109,7 @@ func NewDefaultValidatingWebhook(handler WebhookHandler, clientConfig v1.Webhook
 	}
 }
 
-// NewDefaultMutatingWebhook creates a new MutatingWebhook based on the WebhookHandler provided.
+// NewDefaultMutatingWebhook creates a new ValidatingWebhook based on the WebhookHandler provided.
 // The path set on the client config will be appended with the webhooks path.
 // The return webhook will not be nil.
 func NewDefaultMutatingWebhook(handler WebhookHandler, clientConfig v1.WebhookClientConfig, scope v1.ScopeType, ops []v1.OperationType) *v1.MutatingWebhook {
@@ -176,6 +177,8 @@ func Path(basePath string, handler WebhookHandler) string {
 func SubPath(gvr schema.GroupVersionResource) string {
 	if gvr.Resource == "*" {
 		return gvr.Group
+	} else if strings.Contains(gvr.Resource, "/") {
+		return strings.ReplaceAll(gvr.GroupResource().String(), "/", "-")
 	}
 	return gvr.GroupResource().String()
 }
