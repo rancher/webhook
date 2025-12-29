@@ -12,6 +12,7 @@ import (
 	"go.uber.org/mock/gomock"
 	admissionv1 "k8s.io/api/admission/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -19,21 +20,24 @@ import (
 	capi "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
-type MachineDeploymentMutatorSuite struct {
+type MachineDeploymentValidatorSuite struct {
 	suite.Suite
 }
 
-func TestMachineDeploymentMutator(t *testing.T) {
+func TestMachineDeploymentValidator(t *testing.T) {
 	t.Parallel()
-	suite.Run(t, new(MachineDeploymentMutatorSuite))
+	suite.Run(t, new(MachineDeploymentValidatorSuite))
 }
 
-func (suite *MachineDeploymentMutatorSuite) TestHappyPath() {
+func (suite *MachineDeploymentValidatorSuite) TestHappyPath() {
 	ctrl := gomock.NewController(suite.T())
+	defer ctrl.Finish()
 
 	// Create mock caches
 	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
+	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
+	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
 
 	// Set up expected calls for MachineDeployment cache lookup
 	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
@@ -43,14 +47,35 @@ func (suite *MachineDeploymentMutatorSuite) TestHappyPath() {
 			Labels:    map[string]string{},
 		},
 		Spec: capi.MachineDeploymentSpec{
-			Replicas: func() *int32 { v := int32(3); return &v }(),
+			Replicas: admission.Ptr(int32(3)),
 			Template: capi.MachineTemplateSpec{
 				ObjectMeta: capi.ObjectMeta{
 					Labels: map[string]string{
-						"cluster.x-k8s.io/cluster-name":     "test-cluster",
+						capi.ClusterNameLabel:                 "test-cluster",
 						"rke.cattle.io/rke-machine-pool-name": "test-machine-pool",
 					},
 				},
+			},
+		},
+	}, nil)
+
+	// Set up expected call for CAPI cluster cache lookup
+	mockCAPIClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&capi.Cluster{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-namespace",
+			OwnerReferences: []v1.OwnerReference{
+				{
+					APIVersion: "provisioning.cattle.io/v1",
+					Kind:       "Cluster",
+					Name:       "test-cluster",
+				},
+			},
+		},
+		Spec: capi.ClusterSpec{
+			InfrastructureRef: &corev1.ObjectReference{
+				Name:      "test-cluster",
+				Namespace: "test-namespace",
 			},
 		},
 	}, nil)
@@ -66,39 +91,23 @@ func (suite *MachineDeploymentMutatorSuite) TestHappyPath() {
 				MachinePools: []v2prov.RKEMachinePool{
 					{
 						Name:     "test-machine-pool",
-						Quantity: func() *int32 { v := int32(2); return &v }(),
+						Quantity: admission.Ptr(int32(2)),
 					},
 				},
 			},
 		},
 	}, nil)
 
-	// Create mock client and set up expected call for provisioning cluster update
-	mockProvClusterClient := fake.NewMockControllerInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
-	mockProvClusterClient.EXPECT().Update(gomock.Any()).Return(&v2prov.Cluster{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      "test-cluster",
-			Namespace: "test-namespace",
-		},
-		Spec: v2prov.ClusterSpec{
-			RKEConfig: &v2prov.RKEConfig{
-				MachinePools: []v2prov.RKEMachinePool{
-					{
-						Name:     "test-machine-pool",
-						Quantity: func() *int32 { v := int32(3); return &v }(),
-					},
-				},
-			},
-		},
-	}, nil)
+	// Set up expected call for provisioning cluster client update
+	mockProvClusterClient.EXPECT().Update(gomock.Any()).Return(&v2prov.Cluster{}, nil)
 
-	// Create mutator with mock caches and client
-	mutator := NewMachineDeploymentMutator(mockMachineDeploymentCache, mockProvClusterCache, mockProvClusterClient)
+	// Create validator with mock caches
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
 
 	// Create test Scale object with 3 replicas (should trigger update)
 	scale := createTestScale("test-namespace", "test-md", 3)
 
-	resp, err := mutator.Admit(&admission.Request{
+	resp, err := validator.Admit(&admission.Request{
 		Context: context.Background(),
 		AdmissionRequest: admissionv1.AdmissionRequest{
 			Operation: admissionv1.Create,
@@ -109,23 +118,26 @@ func (suite *MachineDeploymentMutatorSuite) TestHappyPath() {
 	suite.True(resp.Allowed, "admission request was denied")
 }
 
-func (suite *MachineDeploymentMutatorSuite) TestClustersNotFound() {
+func (suite *MachineDeploymentValidatorSuite) TestClustersNotFound() {
 	ctrl := gomock.NewController(suite.T())
+	defer ctrl.Finish()
 
 	// Create mock caches
 	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
+	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
+	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
 
 	// Set up expected calls to return not found errors
 	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(nil, apierrors.NewNotFound(schema.GroupResource{Group: "cluster.x-k8s.io", Resource: "machinedeployments"}, "test-md"))
 
-	// Create mutator with mock caches
-	mutator := NewMachineDeploymentMutator(mockMachineDeploymentCache, mockProvClusterCache, nil)
+	// Create validator with mock clients
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
 
 	// Create test Scale object
 	scale := createTestScale("test-namespace", "test-md", 3)
 
-	resp, err := mutator.Admit(&admission.Request{
+	resp, err := validator.Admit(&admission.Request{
 		Context: context.Background(),
 		AdmissionRequest: admissionv1.AdmissionRequest{
 			Operation: admissionv1.Create,
@@ -137,12 +149,15 @@ func (suite *MachineDeploymentMutatorSuite) TestClustersNotFound() {
 	suite.True(resp.Allowed, "admission request should be admitted when MachineDeployment not found")
 }
 
-func (suite *MachineDeploymentMutatorSuite) TestMachinePoolNotFound() {
+func (suite *MachineDeploymentValidatorSuite) TestMachinePoolNotFound() {
 	ctrl := gomock.NewController(suite.T())
+	defer ctrl.Finish()
 
 	// Create mock caches
 	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
+	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
+	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
 
 	// Set up expected calls
 	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
@@ -152,11 +167,11 @@ func (suite *MachineDeploymentMutatorSuite) TestMachinePoolNotFound() {
 			Labels:    map[string]string{},
 		},
 		Spec: capi.MachineDeploymentSpec{
-			Replicas: func() *int32 { v := int32(3); return &v }(),
+			Replicas: admission.Ptr(int32(3)),
 			Template: capi.MachineTemplateSpec{
 				ObjectMeta: capi.ObjectMeta{
 					Labels: map[string]string{
-						"cluster.x-k8s.io/cluster-name":     "test-cluster",
+						capi.ClusterNameLabel:                 "test-cluster",
 						"rke.cattle.io/rke-machine-pool-name": "non-existent-pool",
 					},
 				},
@@ -164,6 +179,27 @@ func (suite *MachineDeploymentMutatorSuite) TestMachinePoolNotFound() {
 		},
 	}, nil)
 
+	mockCAPIClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&capi.Cluster{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-namespace",
+			OwnerReferences: []v1.OwnerReference{
+				{
+					APIVersion: "provisioning.cattle.io/v1",
+					Kind:       "Cluster",
+					Name:       "test-cluster",
+				},
+			},
+		},
+		Spec: capi.ClusterSpec{
+			InfrastructureRef: &corev1.ObjectReference{
+				Name:      "test-cluster",
+				Namespace: "test-namespace",
+			},
+		},
+	}, nil)
+
+	// Set up expected call for provisioning cluster cache lookup
 	mockProvClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&v2prov.Cluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-cluster",
@@ -174,20 +210,20 @@ func (suite *MachineDeploymentMutatorSuite) TestMachinePoolNotFound() {
 				MachinePools: []v2prov.RKEMachinePool{
 					{
 						Name:     "different-machine-pool",
-						Quantity: func() *int32 { v := int32(2); return &v }(),
+						Quantity: admission.Ptr(int32(2)),
 					},
 				},
 			},
 		},
 	}, nil)
 
-	// Create mutator with mock caches
-	mutator := NewMachineDeploymentMutator(mockMachineDeploymentCache, mockProvClusterCache, nil)
+	// Create validator with mock clients
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
 
 	// Create test Scale object with non-existent machine pool
 	scale := createTestScale("test-namespace", "test-md", 3)
 
-	resp, err := mutator.Admit(&admission.Request{
+	resp, err := validator.Admit(&admission.Request{
 		Context: context.Background(),
 		AdmissionRequest: admissionv1.AdmissionRequest{
 			Operation: admissionv1.Create,
@@ -199,12 +235,15 @@ func (suite *MachineDeploymentMutatorSuite) TestMachinePoolNotFound() {
 	suite.True(resp.Allowed, "admission request should be admitted when machine pool not found")
 }
 
-func (suite *MachineDeploymentMutatorSuite) TestMissingLabels() {
+func (suite *MachineDeploymentValidatorSuite) TestMissingLabels() {
 	ctrl := gomock.NewController(suite.T())
+	defer ctrl.Finish()
 
 	// Create mock caches
 	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
+	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
+	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
 
 	// Set up expected call for MachineDeployment cache lookup (will be called but provisioning cluster won't be)
 	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
@@ -214,17 +253,17 @@ func (suite *MachineDeploymentMutatorSuite) TestMissingLabels() {
 			Labels:    map[string]string{}, // No cluster name or machine pool labels
 		},
 		Spec: capi.MachineDeploymentSpec{
-			Replicas: func() *int32 { v := int32(3); return &v }(),
+			Replicas: admission.Ptr(int32(3)),
 		},
 	}, nil)
 
-	// Create mutator with mock caches
-	mutator := NewMachineDeploymentMutator(mockMachineDeploymentCache, mockProvClusterCache, nil)
+	// Create validator with mock clients
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
 
 	// Create test Scale object
 	scale := createTestScale("test-namespace", "test-md", 3)
 
-	resp, err := mutator.Admit(&admission.Request{
+	resp, err := validator.Admit(&admission.Request{
 		Context: context.Background(),
 		AdmissionRequest: admissionv1.AdmissionRequest{
 			Operation: admissionv1.Create,
@@ -235,12 +274,15 @@ func (suite *MachineDeploymentMutatorSuite) TestMissingLabels() {
 	suite.True(resp.Allowed, "admission request was denied")
 }
 
-func (suite *MachineDeploymentMutatorSuite) TestReplicasAlreadyMatch() {
+func (suite *MachineDeploymentValidatorSuite) TestReplicasAlreadyMatch() {
 	ctrl := gomock.NewController(suite.T())
+	defer ctrl.Finish()
 
 	// Create mock caches
 	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
+	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
+	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
 
 	// Set up expected calls
 	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
@@ -250,11 +292,11 @@ func (suite *MachineDeploymentMutatorSuite) TestReplicasAlreadyMatch() {
 			Labels:    map[string]string{},
 		},
 		Spec: capi.MachineDeploymentSpec{
-			Replicas: func() *int32 { v := int32(3); return &v }(),
+			Replicas: admission.Ptr(int32(3)),
 			Template: capi.MachineTemplateSpec{
 				ObjectMeta: capi.ObjectMeta{
 					Labels: map[string]string{
-						"cluster.x-k8s.io/cluster-name":     "test-cluster",
+						capi.ClusterNameLabel:                 "test-cluster",
 						"rke.cattle.io/rke-machine-pool-name": "test-machine-pool",
 					},
 				},
@@ -262,6 +304,27 @@ func (suite *MachineDeploymentMutatorSuite) TestReplicasAlreadyMatch() {
 		},
 	}, nil)
 
+	mockCAPIClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&capi.Cluster{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-namespace",
+			OwnerReferences: []v1.OwnerReference{
+				{
+					APIVersion: "provisioning.cattle.io/v1",
+					Kind:       "Cluster",
+					Name:       "test-cluster",
+				},
+			},
+		},
+		Spec: capi.ClusterSpec{
+			InfrastructureRef: &corev1.ObjectReference{
+				Name:      "test-cluster",
+				Namespace: "test-namespace",
+			},
+		},
+	}, nil)
+
+	// Set up expected call for provisioning cluster cache lookup
 	mockProvClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&v2prov.Cluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-cluster",
@@ -272,24 +335,21 @@ func (suite *MachineDeploymentMutatorSuite) TestReplicasAlreadyMatch() {
 				MachinePools: []v2prov.RKEMachinePool{
 					{
 						Name:     "test-machine-pool",
-						Quantity: func() *int32 { v := int32(3); return &v }(), // Same as MachineDeployment replicas
+						Quantity: admission.Ptr(int32(3)), // Same as MachineDeployment replicas
 					},
 				},
 			},
 		},
 	}, nil)
 
-	// Create mock client
-	mockProvClusterClient := fake.NewMockControllerInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
-
-	// Create mutator with mock caches and client
-	mutator := NewMachineDeploymentMutator(mockMachineDeploymentCache, mockProvClusterCache, mockProvClusterClient)
+	// Create validator with mock clients
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
 
 	// Create test Scale object with 3 replicas (matches machine pool)
 	scale := createTestScale("test-namespace", "test-md", 3)
 	oldScale := createTestScale("test-namespace", "test-md", 3)
 
-	resp, err := mutator.Admit(&admission.Request{
+	resp, err := validator.Admit(&admission.Request{
 		Context: context.Background(),
 		AdmissionRequest: admissionv1.AdmissionRequest{
 			Operation: admissionv1.Update,
@@ -301,22 +361,25 @@ func (suite *MachineDeploymentMutatorSuite) TestReplicasAlreadyMatch() {
 	suite.True(resp.Allowed, "admission request was denied")
 }
 
-func (suite *MachineDeploymentMutatorSuite) TestDryRun() {
+func (suite *MachineDeploymentValidatorSuite) TestDryRun() {
 	ctrl := gomock.NewController(suite.T())
+	defer ctrl.Finish()
 
 	// Create mock caches (should not be called in dry run)
 	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
+	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
+	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
 
-	// Create mutator with mock caches
-	mutator := NewMachineDeploymentMutator(mockMachineDeploymentCache, mockProvClusterCache, nil)
+	// Create validator with mock clients
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
 
 	// Create test Scale object
 	scale := createTestScale("test-namespace", "test-md", 3)
 
 	// Set dry run to true
 	dryRun := true
-	resp, err := mutator.Admit(&admission.Request{
+	resp, err := validator.Admit(&admission.Request{
 		Context: context.Background(),
 		AdmissionRequest: admissionv1.AdmissionRequest{
 			Operation: admissionv1.Create,
@@ -328,12 +391,15 @@ func (suite *MachineDeploymentMutatorSuite) TestDryRun() {
 	suite.True(resp.Allowed, "admission request was denied")
 }
 
-func (suite *MachineDeploymentMutatorSuite) TestUpdateOperation() {
+func (suite *MachineDeploymentValidatorSuite) TestUpdateOperation() {
 	ctrl := gomock.NewController(suite.T())
+	defer ctrl.Finish()
 
 	// Create mock caches
 	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
+	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
+	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
 
 	// Set up expected calls
 	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
@@ -343,11 +409,11 @@ func (suite *MachineDeploymentMutatorSuite) TestUpdateOperation() {
 			Labels:    map[string]string{},
 		},
 		Spec: capi.MachineDeploymentSpec{
-			Replicas: func() *int32 { v := int32(5); return &v }(),
+			Replicas: admission.Ptr(int32(5)),
 			Template: capi.MachineTemplateSpec{
 				ObjectMeta: capi.ObjectMeta{
 					Labels: map[string]string{
-						"cluster.x-k8s.io/cluster-name":     "test-cluster",
+						capi.ClusterNameLabel:                 "test-cluster",
 						"rke.cattle.io/rke-machine-pool-name": "test-machine-pool",
 					},
 				},
@@ -355,6 +421,27 @@ func (suite *MachineDeploymentMutatorSuite) TestUpdateOperation() {
 		},
 	}, nil)
 
+	mockCAPIClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&capi.Cluster{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-namespace",
+			OwnerReferences: []v1.OwnerReference{
+				{
+					APIVersion: "provisioning.cattle.io/v1",
+					Kind:       "Cluster",
+					Name:       "test-cluster",
+				},
+			},
+		},
+		Spec: capi.ClusterSpec{
+			InfrastructureRef: &corev1.ObjectReference{
+				Name:      "test-cluster",
+				Namespace: "test-namespace",
+			},
+		},
+	}, nil)
+
+	// Set up expected call for provisioning cluster cache lookup
 	mockProvClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&v2prov.Cluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-cluster",
@@ -365,41 +452,24 @@ func (suite *MachineDeploymentMutatorSuite) TestUpdateOperation() {
 				MachinePools: []v2prov.RKEMachinePool{
 					{
 						Name:     "test-machine-pool",
-						Quantity: func() *int32 { v := int32(2); return &v }(),
+						Quantity: admission.Ptr(int32(2)),
 					},
 				},
 			},
 		},
 	}, nil)
 
-	// Create mock client
-	mockProvClusterClient := fake.NewMockControllerInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
-	updatedCluster := &v2prov.Cluster{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      "test-cluster",
-			Namespace: "test-namespace",
-		},
-		Spec: v2prov.ClusterSpec{
-			RKEConfig: &v2prov.RKEConfig{
-				MachinePools: []v2prov.RKEMachinePool{
-					{
-						Name:     "test-machine-pool",
-						Quantity: func() *int32 { v := int32(5); return &v }(), // Updated quantity
-					},
-				},
-			},
-		},
-	}
-	mockProvClusterClient.EXPECT().Update(gomock.Any()).Return(updatedCluster, nil)
+	// Set up expected call for provisioning cluster client update
+	mockProvClusterClient.EXPECT().Update(gomock.Any()).Return(&v2prov.Cluster{}, nil)
 
-	// Create mutator with mock caches and client
-	mutator := NewMachineDeploymentMutator(mockMachineDeploymentCache, mockProvClusterCache, mockProvClusterClient)
+	// Create validator with mock clients
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
 
 	// Create test Scale object with 5 replicas (should trigger update)
 	scale := createTestScale("test-namespace", "test-md", 5)
 	oldScale := createTestScale("test-namespace", "test-md", 2)
 
-	resp, err := mutator.Admit(&admission.Request{
+	resp, err := validator.Admit(&admission.Request{
 		Context: context.Background(),
 		AdmissionRequest: admissionv1.AdmissionRequest{
 			Operation: admissionv1.Update,
@@ -409,6 +479,36 @@ func (suite *MachineDeploymentMutatorSuite) TestUpdateOperation() {
 
 	suite.Nil(err)
 	suite.True(resp.Allowed, "admission request was denied")
+}
+func (suite *MachineDeploymentValidatorSuite) TestMachineDeploymentNotFound() {
+	ctrl := gomock.NewController(suite.T())
+	defer ctrl.Finish()
+
+	// Create mock caches
+	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
+	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
+	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
+	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+
+	// Set up expected call to return not found error
+	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "non-existent-md").Return(nil, apierrors.NewNotFound(schema.GroupResource{Group: "cluster.x-k8s.io", Resource: "machinedeployments"}, "non-existent-md"))
+
+	// Create validator with mock clients
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+
+	// Create test Scale object for non-existent MachineDeployment
+	scale := createTestScale("test-namespace", "non-existent-md", 3)
+
+	resp, err := validator.Admit(&admission.Request{
+		Context: context.Background(),
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Create,
+			Object:    runtime.RawExtension{Raw: scale},
+		}})
+
+	// Should return admitted (not error) when MachineDeployment doesn't exist
+	suite.Nil(err)
+	suite.True(resp.Allowed, "admission request should be admitted when MachineDeployment not found")
 }
 
 // Helper functions for creating test data
@@ -426,32 +526,4 @@ func createTestScale(namespace, name string, replicas int32) []byte {
 
 	b, _ := json.Marshal(&scale)
 	return b
-}
-
-func (suite *MachineDeploymentMutatorSuite) TestMachineDeploymentNotFound() {
-	ctrl := gomock.NewController(suite.T())
-
-	// Create mock caches
-	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
-	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
-
-	// Set up expected call to return not found error
-	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "non-existent-md").Return(nil, apierrors.NewNotFound(schema.GroupResource{Group: "cluster.x-k8s.io", Resource: "machinedeployments"}, "non-existent-md"))
-
-	// Create mutator with mock caches
-	mutator := NewMachineDeploymentMutator(mockMachineDeploymentCache, mockProvClusterCache, nil)
-
-	// Create test Scale object for non-existent MachineDeployment
-	scale := createTestScale("test-namespace", "non-existent-md", 3)
-
-	resp, err := mutator.Admit(&admission.Request{
-		Context: context.Background(),
-		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation: admissionv1.Create,
-			Object:    runtime.RawExtension{Raw: scale},
-		}})
-
-	// Should return admitted (not error) when MachineDeployment doesn't exist
-	suite.Nil(err)
-	suite.True(resp.Allowed, "admission request should be admitted when MachineDeployment not found")
 }

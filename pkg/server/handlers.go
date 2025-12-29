@@ -89,6 +89,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			clusterrolebinding.NewValidator(),
 			authconfig.NewValidator(),
 			users.NewValidator(clients.Management.UserAttribute().Cache(), clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.DefaultResolver, clients.Management.User().Cache()),
+			machinedeployment.NewValidator(clients.Provisioning.Cluster().Cache(), clients.Provisioning.Cluster(), clients.CAPI.MachineDeployment().Cache(), clients.CAPI.Cluster().Cache()),
 		)
 	} else {
 		handlers = append(handlers, clusterauthtoken.NewValidator())
@@ -104,7 +105,6 @@ func Mutation(clients *clients.Clients) ([]admission.MutatingAdmissionHandler, e
 		managementCluster.NewManagementClusterMutator(clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache()),
 		fleetworkspace.NewMutator(clients),
 		&machineconfig.Mutator{},
-		machinedeployment.NewMachineDeploymentMutator(clients.CAPI.MachineDeployment().Cache(), clients.Provisioning.Cluster().Cache(), clients.Provisioning.Cluster()),
 	}
 
 	if clients.MultiClusterManagement {
