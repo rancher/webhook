@@ -5,7 +5,7 @@ import (
 
 	"github.com/rancher/webhook/pkg/auth"
 	"github.com/rancher/webhook/pkg/generated/controllers/cluster.x-k8s.io"
-	clusterv1beta1 "github.com/rancher/webhook/pkg/generated/controllers/cluster.x-k8s.io/v1beta1"
+	capicontrollers "github.com/rancher/webhook/pkg/generated/controllers/cluster.x-k8s.io/v1beta1"
 	"github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io"
 	managementv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/generated/controllers/provisioning.cattle.io"
@@ -23,7 +23,7 @@ type Clients struct {
 	MultiClusterManagement bool
 	Management             managementv3.Interface
 	Provisioning           provv1.Interface
-	CAPI                   clusterv1beta1.Interface
+	CAPI                   capicontrollers.Interface
 	RoleTemplateResolver   *auth.RoleTemplateResolver
 	GlobalRoleResolver     *auth.GlobalRoleResolver
 	DefaultResolver        validation.AuthorizationRuleResolver

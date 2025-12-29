@@ -109,7 +109,7 @@ func NewDefaultValidatingWebhook(handler WebhookHandler, clientConfig v1.Webhook
 	}
 }
 
-// NewDefaultMutatingWebhook creates a new ValidatingWebhook based on the WebhookHandler provided.
+// NewDefaultMutatingWebhook creates a new MutatingWebhook based on the WebhookHandler provided.
 // The path set on the client config will be appended with the webhooks path.
 // The return webhook will not be nil.
 func NewDefaultMutatingWebhook(handler WebhookHandler, clientConfig v1.WebhookClientConfig, scope v1.ScopeType, ops []v1.OperationType) *v1.MutatingWebhook {
@@ -178,6 +178,8 @@ func SubPath(gvr schema.GroupVersionResource) string {
 	if gvr.Resource == "*" {
 		return gvr.Group
 	} else if strings.Contains(gvr.Resource, "/") {
+		// this is to handle subresources such as the `scale` subresource,
+		// e.g. webhooks that watch the `deployments/scale` resource
 		return strings.ReplaceAll(gvr.GroupResource().String(), "/", "-")
 	}
 	return gvr.GroupResource().String()

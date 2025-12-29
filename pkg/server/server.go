@@ -43,7 +43,7 @@ const (
 	validationPath          = "/v1/webhook/validation"
 	mutationPath            = "/v1/webhook/mutation"
 	clientPort              = int32(443)
-	webhookHTTPPort         = 8081 // value of 0 indicates we do not want to use http.
+	webhookHTTPPort         = 0 // value of 0 indicates we do not want to use http.
 	defaultWebhookHTTPSPort = 9443
 	webhookPortEnvKey       = "CATTLE_PORT"
 	webhookURLEnvKey        = "CATTLE_WEBHOOK_URL"
