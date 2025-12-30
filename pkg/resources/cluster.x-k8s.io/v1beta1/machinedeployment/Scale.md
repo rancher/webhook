@@ -1,10 +1,10 @@
-# cluster.x-k8s.io/v1beta1
+## cluster.x-k8s.io/v1beta1
 
-## MachineDeployment
+### MachineDeployment
 
-### Validation Checks
+#### Validation Checks
 
-#### On Create and Update
+##### On Create and Update
 
 When a scale operation is performed on a MachineDeployment, the webhook synchronizes the replica count between the MachineDeployment and its corresponding machine pool in the Rancher provisioning cluster if it exists.
 
