@@ -10,6 +10,7 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
@@ -157,7 +158,7 @@ func (v *ReplicaValidator) syncMachinePoolReplicas(md *capi.MachineDeployment, s
 
 	// Find the provisioning cluster through owner references
 	cluster, err := v.findProvisioningClusterOwner(capiCluster)
-	if err != nil {
+	if err != nil || cluster != nil {
 		logrus.Debugf("Provisioning cluster does not exist for CAPI cluster: %s/%s", capiCluster.Namespace, capiCluster.Name)
 		return err
 	}
@@ -169,7 +170,7 @@ func (v *ReplicaValidator) syncMachinePoolReplicas(md *capi.MachineDeployment, s
 	}
 
 	// Find and update the matching machine pool
-	needUpdate, err := v.updateMachinePoolQuantity(cluster, machinePoolName, scale.Spec.Replicas)
+	cluster, needUpdate, err := v.updateMachinePoolQuantity(cluster, machinePoolName, scale.Spec.Replicas)
 	if err != nil {
 		return err
 	}
@@ -179,7 +180,10 @@ func (v *ReplicaValidator) syncMachinePoolReplicas(md *capi.MachineDeployment, s
 		err := wait.ExponentialBackoff(retry.DefaultBackoff, func() (done bool, err error) {
 			_, err = v.clusterClient.Update(cluster)
 			if err != nil {
-				return false, nil
+				if apierrors.IsConflict(err) || apierrors.IsServerTimeout(err) {
+					return false, nil
+				}
+				return false, err
 			}
 			return true, nil
 		})
@@ -216,10 +220,10 @@ func (v *ReplicaValidator) findProvisioningClusterOwner(capiCluster *capi.Cluste
 // if it differs from the target replicas.
 //
 // Returns:
-// - (true, nil) if update was needed and performed
-// - (false, nil) if no update was needed
-// - (false, error) if machine pool not found or other error
-func (v *ReplicaValidator) updateMachinePoolQuantity(cluster *provv1.Cluster, machinePoolName string, targetReplicas int32) (bool, error) {
+// - (modifiedCluster, true, nil) if update was needed and performed
+// - (cluster, false, nil) if no update was needed
+// - (nil, false, error) if machine pool not found or other error
+func (v *ReplicaValidator) updateMachinePoolQuantity(cluster *provv1.Cluster, machinePoolName string, targetReplicas int32) (*provv1.Cluster, bool, error) {
 	machinePoolFound := false
 	cluster = cluster.DeepCopy()
 
@@ -228,20 +232,20 @@ func (v *ReplicaValidator) updateMachinePoolQuantity(cluster *provv1.Cluster, ma
 			continue
 		}
 
-		machinePoolFound = true
-
-		// Skip if quantity or replicas are nil
-		if cluster.Spec.RKEConfig.MachinePools[i].Quantity == nil || targetReplicas == 0 {
+		if cluster.Spec.RKEConfig.MachinePools[i].Quantity == nil {
 			continue
 		}
 
+		machinePoolFound = true
 		currentQuantity := *cluster.Spec.RKEConfig.MachinePools[i].Quantity
+
 		if currentQuantity != targetReplicas {
-			logrus.Infof("Updating cluster %s/%s machine pool %s quantity from %d to %d",
-				cluster.Namespace, cluster.Name, machinePoolName, currentQuantity, targetReplicas)
+			logrus.Infof("Updating cluster %s/%s machine pool %s quantity from %d to %d", cluster.Namespace, cluster.Name, machinePoolName, currentQuantity, targetReplicas)
 			*cluster.Spec.RKEConfig.MachinePools[i].Quantity = targetReplicas
-			return true, nil
+
+			return cluster, true, nil
 		}
+
 		break // Found the matching pool, no need to continue searching
 	}
 
@@ -249,5 +253,5 @@ func (v *ReplicaValidator) updateMachinePoolQuantity(cluster *provv1.Cluster, ma
 		logrus.Debugf("Machine pool %s not found in cluster %s/%s, skipping sync", machinePoolName, cluster.Namespace, cluster.Name)
 	}
 
-	return false, nil
+	return cluster, false, nil
 }
