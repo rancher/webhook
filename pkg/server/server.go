@@ -120,6 +120,7 @@ func ListenAndServe(ctx context.Context, cfg *rest.Config, mcmEnabled bool) erro
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(_ context.Context) {
 				leaderFlag.Store(true)
+				clients.Core.Secret().Enqueue(namespace, caName)
 				logrus.Infof("[%s] elected leader: will manage webhook configurations", id)
 			},
 			OnStoppedLeading: func() {
