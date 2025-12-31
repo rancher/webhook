@@ -15,7 +15,6 @@ set -o pipefail
 
 source ./.github/workflows/scripts/try.sh
 
-set +e
 
 # Wait for rancher to start up
 try --waitmsg "Waiting for rancher to start" --failmsg "No rancher here" kubectl rollout status --watch=true --timeout=10s -n cattle-system deploy/rancher
@@ -45,7 +44,6 @@ crds_exist() {
 try --waitmsg "Waiting for CRDs" crds_exist
 
 # Shut down the core rancher part, but leave the rest of the rancher environment running
-set -e
 echo "Shutting down core rancher"
 kubectl scale deploy rancher -n cattle-system --replicas=0
 kubectl wait pods -l app=rancher --for=delete -n cattle-system
@@ -87,8 +85,6 @@ upgrade_rancher_webhook() {
    try --max 90 --waitmsg "Waiting for webhooks to be registered" --failmsg "Webhooks not registered" check_webhooks
 }
 
-set +e
-
 try --max 3 --delay 2 --waitmsg "Upgrading Webhook" --failmsg "Failed to upgrade webhook" upgrade_rancher_webhook
 
 x=$(kubectl get pods -n cattle-system -l app=rancher-webhook --no-headers --field-selector='status.phase!=RUNNING' --output custom-columns=NODE:.metadata.name | head -n 1)
@@ -100,9 +96,6 @@ if [ -n "$x" ] ; then
   kubectl describe pod/"$x" -n cattle-system
   try --max 4 --failmsg "Couldn't helm upgrade rancher-webhook" upgrade_rancher_webhook
 fi
-
-# Done trying things, so reinstate 'set -e'
-set -e
 
 ./bin/rancher-webhook-integration.test -test.v -test.run IntegrationTest
 

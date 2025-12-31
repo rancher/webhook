@@ -39,8 +39,11 @@ try() {
 
     local count=0
     while true; do
-	$*
-        status=$?
+        if $*; then
+            status=0
+        else
+            status=$?
+        fi
         count=$(expr $count + 1)
         if [[ $status -eq 0 ]]; then
           break
