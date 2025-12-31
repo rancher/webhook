@@ -80,6 +80,10 @@ upgrade_rancher_webhook() {
    helm upgrade rancher-webhook ./dist/artifacts/rancher-webhook-${HELM_CHART_VERSION}.tgz -n cattle-system \
     --wait --timeout=120s --set image.repository="${IMAGE_REPO}" --set image.tag="${IMAGE_TAG}" --reuse-values --debug "$@"
 
+   # Restart the webhook to ensure that the webhook configuration is re-created
+   kubectl rollout restart deployment/rancher-webhook -n cattle-system
+   kubectl rollout status deployment/rancher-webhook -n cattle-system
+
    try --max 90 --waitmsg "Waiting for webhooks to be registered" --failmsg "Webhooks not registered" check_webhooks
 }
 
