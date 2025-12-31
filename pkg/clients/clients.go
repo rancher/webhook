@@ -62,6 +62,10 @@ func New(ctx context.Context, rest *rest.Config, mcmEnabled bool) (*Clients, err
 		return nil, err
 	}
 
+	if err = prov.Start(ctx, 5); err != nil {
+		return nil, err
+	}
+
 	rbacRestGetter := auth.RBACRestGetter{
 		Roles:               clients.RBAC.Role().Cache(),
 		RoleBindings:        clients.RBAC.RoleBinding().Cache(),

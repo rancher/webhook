@@ -3,6 +3,7 @@ package machinedeployment
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	v2prov "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
@@ -118,7 +119,7 @@ func (suite *MachineDeploymentValidatorSuite) TestHappyPath() {
 	suite.True(resp.Allowed, "admission request was denied")
 }
 
-func (suite *MachineDeploymentValidatorSuite) TestClustersNotFound() {
+func (suite *MachineDeploymentValidatorSuite) TestMachineDeploymentNotFoundAdmit() {
 	ctrl := gomock.NewController(suite.T())
 	defer ctrl.Finish()
 
@@ -324,7 +325,7 @@ func (suite *MachineDeploymentValidatorSuite) TestReplicasAlreadyMatch() {
 		},
 	}, nil)
 
-	// Set up expected call for provisioning cluster cache lookup
+	// Set up expected call for provisioning cluster cache lookup (called twice: initial + in retry loop)
 	mockProvClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&v2prov.Cluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-cluster",
@@ -441,7 +442,7 @@ func (suite *MachineDeploymentValidatorSuite) TestUpdateOperation() {
 		},
 	}, nil)
 
-	// Set up expected call for provisioning cluster cache lookup
+	// Set up expected call for provisioning cluster cache lookup (called twice: initial + in retry loop)
 	mockProvClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&v2prov.Cluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-cluster",
@@ -480,7 +481,7 @@ func (suite *MachineDeploymentValidatorSuite) TestUpdateOperation() {
 	suite.Nil(err)
 	suite.True(resp.Allowed, "admission request was denied")
 }
-func (suite *MachineDeploymentValidatorSuite) TestMachineDeploymentNotFound() {
+func (suite *MachineDeploymentValidatorSuite) TestCAPIClusterNotFound() {
 	ctrl := gomock.NewController(suite.T())
 	defer ctrl.Finish()
 
@@ -490,14 +491,34 @@ func (suite *MachineDeploymentValidatorSuite) TestMachineDeploymentNotFound() {
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
 	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
 
-	// Set up expected call to return not found error
-	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "non-existent-md").Return(nil, apierrors.NewNotFound(schema.GroupResource{Group: "cluster.x-k8s.io", Resource: "machinedeployments"}, "non-existent-md"))
+	// Set up expected calls
+	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-md",
+			Namespace: "test-namespace",
+			Labels:    map[string]string{},
+		},
+		Spec: capi.MachineDeploymentSpec{
+			Replicas: admission.Ptr(int32(3)),
+			Template: capi.MachineTemplateSpec{
+				ObjectMeta: capi.ObjectMeta{
+					Labels: map[string]string{
+						capi.ClusterNameLabel:                 "test-cluster",
+						"rke.cattle.io/rke-machine-pool-name": "test-machine-pool",
+					},
+				},
+			},
+		},
+	}, nil)
+
+	// CAPI cluster not found - will be called on each retry attempt
+	mockCAPIClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(nil, apierrors.NewNotFound(schema.GroupResource{Group: "cluster.x-k8s.io", Resource: "clusters"}, "test-cluster")).AnyTimes()
 
 	// Create validator with mock clients
 	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
 
-	// Create test Scale object for non-existent MachineDeployment
-	scale := createTestScale("test-namespace", "non-existent-md", 3)
+	// Create test Scale object
+	scale := createTestScale("test-namespace", "test-md", 3)
 
 	resp, err := validator.Admit(&admission.Request{
 		Context: context.Background(),
@@ -506,9 +527,239 @@ func (suite *MachineDeploymentValidatorSuite) TestMachineDeploymentNotFound() {
 			Object:    runtime.RawExtension{Raw: scale},
 		}})
 
-	// Should return admitted (not error) when MachineDeployment doesn't exist
+	// Should return error when CAPI cluster is not found
 	suite.Nil(err)
-	suite.True(resp.Allowed, "admission request should be admitted when MachineDeployment not found")
+	suite.True(resp.Allowed, "admission request should be allowed when CAPI cluster not found")
+}
+
+func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterOwnerNotFound() {
+	ctrl := gomock.NewController(suite.T())
+	defer ctrl.Finish()
+
+	// Create mock caches
+	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
+	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
+	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
+	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+
+	// Set up expected calls
+	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-md",
+			Namespace: "test-namespace",
+			Labels:    map[string]string{},
+		},
+		Spec: capi.MachineDeploymentSpec{
+			Replicas: admission.Ptr(int32(3)),
+			Template: capi.MachineTemplateSpec{
+				ObjectMeta: capi.ObjectMeta{
+					Labels: map[string]string{
+						capi.ClusterNameLabel:                 "test-cluster",
+						"rke.cattle.io/rke-machine-pool-name": "test-machine-pool",
+					},
+				},
+			},
+		},
+	}, nil)
+
+	// CAPI cluster with no provisioning cluster owner reference
+	mockCAPIClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&capi.Cluster{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-namespace",
+			OwnerReferences: []v1.OwnerReference{
+				{
+					APIVersion: "infrastructure.cluster.x-k8s.io/v1beta1",
+					Kind:       "AWSCluster",
+					Name:       "aws-cluster",
+				},
+			},
+		},
+		Spec: capi.ClusterSpec{
+			InfrastructureRef: &corev1.ObjectReference{
+				Name:      "test-cluster",
+				Namespace: "test-namespace",
+			},
+		},
+	}, nil)
+
+	// Create validator with mock clients
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+
+	// Create test Scale object
+	scale := createTestScale("test-namespace", "test-md", 3)
+
+	resp, err := validator.Admit(&admission.Request{
+		Context: context.Background(),
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Create,
+			Object:    runtime.RawExtension{Raw: scale},
+		}})
+
+	// Should return error when provisioning cluster owner is not found
+	suite.Nil(err)
+	suite.True(resp.Allowed, "admission request should be allowed when provisioning cluster owner not found")
+}
+
+func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterCacheError() {
+	ctrl := gomock.NewController(suite.T())
+	defer ctrl.Finish()
+
+	// Create mock caches
+	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
+	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
+	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
+	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+
+	// Set up expected calls
+	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-md",
+			Namespace: "test-namespace",
+			Labels:    map[string]string{},
+		},
+		Spec: capi.MachineDeploymentSpec{
+			Replicas: admission.Ptr(int32(3)),
+			Template: capi.MachineTemplateSpec{
+				ObjectMeta: capi.ObjectMeta{
+					Labels: map[string]string{
+						capi.ClusterNameLabel:                 "test-cluster",
+						"rke.cattle.io/rke-machine-pool-name": "test-machine-pool",
+					},
+				},
+			},
+		},
+	}, nil)
+
+	mockCAPIClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&capi.Cluster{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-namespace",
+			OwnerReferences: []v1.OwnerReference{
+				{
+					APIVersion: "provisioning.cattle.io/v1",
+					Kind:       "Cluster",
+					Name:       "test-cluster",
+				},
+			},
+		},
+		Spec: capi.ClusterSpec{
+			InfrastructureRef: &corev1.ObjectReference{
+				Name:      "test-cluster",
+				Namespace: "test-namespace",
+			},
+		},
+	}, nil)
+
+	// Provisioning cluster cache returns error
+	mockProvClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(nil, fmt.Errorf("cache error"))
+
+	// Create validator with mock clients
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+
+	// Create test Scale object
+	scale := createTestScale("test-namespace", "test-md", 3)
+
+	resp, err := validator.Admit(&admission.Request{
+		Context: context.Background(),
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Create,
+			Object:    runtime.RawExtension{Raw: scale},
+		}})
+
+	// Should return error when provisioning cluster cache lookup fails
+	suite.NotNil(err)
+	suite.False(resp.Allowed, "admission request should be denied when provisioning cluster cache lookup fails")
+}
+
+func (suite *MachineDeploymentValidatorSuite) TestConflictErrorWithRetry() {
+	ctrl := gomock.NewController(suite.T())
+	defer ctrl.Finish()
+
+	// Create mock caches
+	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
+	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
+	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
+	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+
+	// Set up expected calls for MachineDeployment cache lookup
+	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-md",
+			Namespace: "test-namespace",
+			Labels:    map[string]string{},
+		},
+		Spec: capi.MachineDeploymentSpec{
+			Replicas: admission.Ptr(int32(3)),
+			Template: capi.MachineTemplateSpec{
+				ObjectMeta: capi.ObjectMeta{
+					Labels: map[string]string{
+						capi.ClusterNameLabel:                 "test-cluster",
+						"rke.cattle.io/rke-machine-pool-name": "test-machine-pool",
+					},
+				},
+			},
+		},
+	}, nil)
+
+	// Set up expected call for CAPI cluster cache lookup (called once before retry)
+	mockCAPIClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&capi.Cluster{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-namespace",
+			OwnerReferences: []v1.OwnerReference{
+				{
+					APIVersion: "provisioning.cattle.io/v1",
+					Kind:       "Cluster",
+					Name:       "test-cluster",
+				},
+			},
+		},
+		Spec: capi.ClusterSpec{
+			InfrastructureRef: &corev1.ObjectReference{
+				Name:      "test-cluster",
+				Namespace: "test-namespace",
+			},
+		},
+	}, nil).Times(2)
+
+	// Set up expected call for provisioning cluster cache lookup (called 3 times: initial + first attempt + refetch on conflict)
+	mockProvClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&v2prov.Cluster{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-namespace",
+		},
+		Spec: v2prov.ClusterSpec{
+			RKEConfig: &v2prov.RKEConfig{
+				MachinePools: []v2prov.RKEMachinePool{
+					{
+						Name:     "test-machine-pool",
+						Quantity: admission.Ptr(int32(2)),
+					},
+				},
+			},
+		},
+	}, nil).Times(2)
+
+	// First update call returns conflict error, second update call succeeds
+	mockProvClusterClient.EXPECT().Update(gomock.Any()).Return(nil, apierrors.NewConflict(schema.GroupResource{Group: "", Resource: "clusters"}, "test-cluster", nil)).Times(1)
+	mockProvClusterClient.EXPECT().Update(gomock.Any()).Return(&v2prov.Cluster{}, nil).Times(1)
+
+	// Create validator with mock caches
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+
+	// Create test Scale object with 3 replicas (should trigger update)
+	scale := createTestScale("test-namespace", "test-md", 3)
+
+	resp, err := validator.Admit(&admission.Request{
+		Context: context.Background(),
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Create,
+			Object:    runtime.RawExtension{Raw: scale},
+		}})
+
+	suite.Nil(err)
+	suite.True(resp.Allowed, "admission request was denied")
 }
 
 // Helper functions for creating test data
