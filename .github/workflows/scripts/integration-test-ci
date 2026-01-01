@@ -15,7 +15,6 @@ set -o pipefail
 
 source ./.github/workflows/scripts/try.sh
 
-set +e
 
 # Wait for rancher to start up
 try --waitmsg "Waiting for rancher to start" --failmsg "No rancher here" kubectl rollout status --watch=true --timeout=10s -n cattle-system deploy/rancher
@@ -45,7 +44,6 @@ crds_exist() {
 try --waitmsg "Waiting for CRDs" crds_exist
 
 # Shut down the core rancher part, but leave the rest of the rancher environment running
-set -e
 echo "Shutting down core rancher"
 kubectl scale deploy rancher -n cattle-system --replicas=0
 kubectl wait pods -l app=rancher --for=delete -n cattle-system
@@ -55,13 +53,37 @@ kubectl delete mutatingwebhookconfiguration rancher.cattle.io
 
 echo "Uploading new webhook image"
 
-# Install the webhook chart we just built.
-upgrade_rancher_webhook() {
-   helm upgrade rancher-webhook ./dist/artifacts/rancher-webhook-${HELM_CHART_VERSION}.tgz -n cattle-system \
-    --wait --timeout=120s --set image.repository="${IMAGE_REPO}" --set image.tag="${IMAGE_TAG}" --reuse-values --debug
+check_webhooks() {
+  m_count=$(kubectl get mutatingwebhookconfiguration rancher.cattle.io --no-headers 2>/dev/null | awk '{print $2}')
+  v_count=$(kubectl get validatingwebhookconfiguration rancher.cattle.io --no-headers 2>/dev/null | awk '{print $2}')
+  m_count=${m_count:-0}
+  v_count=${v_count:-0}
+  echo "Webhook counts: Mutating=$m_count, Validating=$v_count"
+  if [[ "$m_count" -gt 0 && "$v_count" -gt 0 ]]; then
+    return 0
+  fi
+  return 1
 }
 
-set +e
+# Install the webhook chart we just built.
+upgrade_rancher_webhook() {
+   # Clear the webhooks to ensure the upgrade repopulates them
+   if kubectl get mutatingwebhookconfiguration rancher.cattle.io > /dev/null 2>&1; then
+     kubectl patch mutatingwebhookconfiguration rancher.cattle.io --type='json' -p='[{"op": "replace", "path": "/webhooks", "value": []}]'
+   fi
+   if kubectl get validatingwebhookconfiguration rancher.cattle.io > /dev/null 2>&1; then
+     kubectl patch validatingwebhookconfiguration rancher.cattle.io --type='json' -p='[{"op": "replace", "path": "/webhooks", "value": []}]'
+   fi
+
+   helm upgrade rancher-webhook ./dist/artifacts/rancher-webhook-${HELM_CHART_VERSION}.tgz -n cattle-system \
+    --wait --timeout=120s --set image.repository="${IMAGE_REPO}" --set image.tag="${IMAGE_TAG}" --reuse-values --debug "$@"
+
+   # Restart the webhook to ensure that the webhook configuration is re-created
+   kubectl rollout restart deployment/rancher-webhook -n cattle-system
+   kubectl rollout status deployment/rancher-webhook -n cattle-system
+
+   try --max 90 --waitmsg "Waiting for webhooks to be registered" --failmsg "Webhooks not registered" check_webhooks
+}
 
 try --max 3 --delay 2 --waitmsg "Upgrading Webhook" --failmsg "Failed to upgrade webhook" upgrade_rancher_webhook
 
@@ -75,14 +97,10 @@ if [ -n "$x" ] ; then
   try --max 4 --failmsg "Couldn't helm upgrade rancher-webhook" upgrade_rancher_webhook
 fi
 
-# Done trying things, so reinstate 'set -e'
-set -e
-
 ./bin/rancher-webhook-integration.test -test.v -test.run IntegrationTest
 
 # Install the webhook chart with new ports.
-helm upgrade rancher-webhook ./dist/artifacts/rancher-webhook-${HELM_CHART_VERSION}.tgz -n cattle-system \
-    --wait --reuse-values --set port=443
+upgrade_rancher_webhook --set port=443
 
 # Test that the ports are set as expected and run a single integration test to verify the webhook is still accessible.
 ./bin/rancher-webhook-integration.test -test.v -test.run PortTest

@@ -81,3 +81,11 @@ jobs:
           CLUSTER_NAME: webhook
           IMAGE_REPO: rancher/webhook
           IMAGE_TAG: "${{ env.IMAGE_TAG }}"
+
+      - name: Dump logs
+        if: failure()
+        run: |
+          kubectl logs -n cattle-system -l app=rancher-webhook --all-containers=true --tail=-1 --timestamps=true || true
+          echo "Dumping webhook configurations:"
+          kubectl get mutatingwebhookconfiguration rancher.cattle.io -o yaml || true
+          kubectl get validatingwebhookconfiguration rancher.cattle.io -o yaml || true
