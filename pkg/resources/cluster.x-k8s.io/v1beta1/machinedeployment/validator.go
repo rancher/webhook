@@ -151,7 +151,6 @@ func (v *ReplicaValidator) reconcileMachinePoolReplicas(md *capi.MachineDeployme
 			return nil
 		}
 
-		logrus.Debugf("Updating cluster %s/%s", cluster.Namespace, cluster.Name)
 		_, err = v.clusterClient.Update(cluster)
 		return err
 	})
