@@ -13,10 +13,12 @@ import (
 	"strings"
 
 	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
+	"github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1/snapshotutil"
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/clients"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
+	rkecontrollers "github.com/rancher/webhook/pkg/generated/controllers/rke.cattle.io/v1"
 	psa "github.com/rancher/webhook/pkg/podsecurityadmission"
 	"github.com/rancher/webhook/pkg/resources/common"
 	corev1controller "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
@@ -25,6 +27,7 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	authv1 "k8s.io/api/authorization/v1"
 	k8sv1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/validation"
@@ -56,6 +59,7 @@ func NewProvisioningClusterValidator(client *clients.Clients) *ProvisioningClust
 			secretCache:       client.Core.Secret().Cache(),
 			psactCache:        client.Management.PodSecurityAdmissionConfigurationTemplate().Cache(),
 			featureCache:      client.Management.Feature().Cache(),
+			etcdSnapshotCache: client.RKE.ETCDSnapshot().Cache(),
 		},
 	}
 }
@@ -91,6 +95,7 @@ type provisioningAdmitter struct {
 	secretCache       corev1controller.SecretCache
 	psactCache        v3.PodSecurityAdmissionConfigurationTemplateCache
 	featureCache      v3.FeatureCache
+	etcdSnapshotCache rkecontrollers.ETCDSnapshotCache
 }
 
 // Admit handles the webhook admission request sent to this webhook.
@@ -161,6 +166,10 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 		}
 
 		if response, err = p.validateS3Secret(oldCluster, cluster); err != nil || !response.Allowed {
+			return response, err
+		}
+
+		if response, err = p.validateETCDSnapshotRestore(request, oldCluster, cluster); err != nil || !response.Allowed {
 			return response, err
 		}
 	}
@@ -769,6 +778,76 @@ func (p *provisioningAdmitter) validateS3Secret(oldCluster, cluster *v1.Cluster)
 	}
 
 	return admission.ResponseAllowed(), nil
+}
+
+// validateETCDSnapshotRestore ensures that any requested ETCD restore
+// (a) references an existing ETCDSnapshot, and
+// (b) contains decodable metadata with a valid "provisioning-cluster-spec".
+func (p *provisioningAdmitter) validateETCDSnapshotRestore(request *admission.Request, oldCluster, newCluster *v1.Cluster) (*admissionv1.AdmissionResponse, error) {
+	if request.Operation != admissionv1.Update {
+		return admission.ResponseAllowed(), nil
+	}
+
+	// No RKEConfig means no restore spec.
+	if newCluster.Spec.RKEConfig == nil {
+		return admission.ResponseAllowed(), nil
+	}
+
+	newRestore := newCluster.Spec.RKEConfig.ETCDSnapshotRestore
+
+	// Allow if restore spec is being cleared or is empty.
+	if newRestore == nil || newRestore.Name == "" || newRestore.RestoreRKEConfig == "" {
+		return admission.ResponseAllowed(), nil
+	}
+
+	var oldRestore *rkev1.ETCDSnapshotRestore
+	if oldCluster.Spec.RKEConfig != nil {
+		oldRestore = oldCluster.Spec.RKEConfig.ETCDSnapshotRestore
+	}
+
+	// Allow if spec is unchanged, to avoid blocking unrelated cluster updates.
+	if equality.Semantic.DeepEqual(oldRestore, newRestore) {
+		return admission.ResponseAllowed(), nil
+	}
+
+	snap, err := p.etcdSnapshotCache.Get(newCluster.Namespace, newRestore.Name)
+	if apierrors.IsNotFound(err) {
+		return admission.ResponseBadRequest(
+			fmt.Sprintf("etcd restore references missing snapshot %s in namespace %s", newRestore.Name, newCluster.Namespace)), nil
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to get etcd snapshot %s/%s: %w", newCluster.Namespace, newRestore.Name, err)
+	}
+
+	var clusterSpec *v1.ClusterSpec
+	var decodeErr error
+	// Only parse snapshot metadata if the restore mode requires it.
+	if newRestore.RestoreRKEConfig != "none" {
+		clusterSpec, decodeErr = snapshotutil.ParseSnapshotClusterSpecOrError(snap)
+		if decodeErr != nil {
+			return admission.ResponseBadRequest(
+				fmt.Sprintf("invalid ETCD snapshot metadata for %s/%s: %v", snap.Namespace, snap.Name, decodeErr)), nil
+		}
+	}
+
+	switch newRestore.RestoreRKEConfig {
+	case "none":
+		return admission.ResponseAllowed(), nil
+
+	case "kubernetesVersion":
+		if clusterSpec.KubernetesVersion == "" {
+			return admission.ResponseBadRequest("snapshot metadata missing KubernetesVersion for kubernetesVersion restore"), nil
+		}
+		return admission.ResponseAllowed(), nil
+
+	case "all":
+		if clusterSpec.RKEConfig == nil || clusterSpec.KubernetesVersion == "" {
+			return admission.ResponseBadRequest("snapshot metadata must include RKEConfig and KubernetesVersion for 'all' restore"), nil
+		}
+		return admission.ResponseAllowed(), nil
+
+	default:
+		return admission.ResponseBadRequest(fmt.Sprintf("unsupported restore mode %s", newRestore.RestoreRKEConfig)), nil
+	}
 }
 
 func validateAgentDeploymentCustomization(customization *v1.AgentDeploymentCustomization, path *field.Path) field.ErrorList {

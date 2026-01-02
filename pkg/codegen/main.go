@@ -13,6 +13,7 @@ import (
 	catalogv1 "github.com/rancher/rancher/pkg/apis/catalog.cattle.io/v1"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
+	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	controllergen "github.com/rancher/wrangler/v3/pkg/controller-gen"
 	"github.com/rancher/wrangler/v3/pkg/controller-gen/args"
 	"golang.org/x/tools/imports"
@@ -61,6 +62,11 @@ func main() {
 			"catalog.cattle.io": {
 				Types: []interface{}{
 					&catalogv1.ClusterRepo{},
+				},
+			},
+			"rke.cattle.io": {
+				Types: []interface{}{
+					&rkev1.ETCDSnapshot{},
 				},
 			},
 		},
@@ -114,6 +120,11 @@ func main() {
 		"auditlog.cattle.io": {
 			Types: []interface{}{
 				&auditlogv1.AuditPolicy{},
+			},
+		},
+		"rke.cattle.io": {
+			Types: []interface{}{
+				&rkev1.ETCDSnapshot{},
 			},
 		},
 	}); err != nil {

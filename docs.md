@@ -664,6 +664,17 @@ The only exception to this check is if the existing cluster already has a `NO_PR
 
 Prevent the update of objects if the secret specified in `.spec.rkeConfig.etcd.s3.cloudCredentialName` does not exist.
 
+##### ETCD Snapshot Restore
+
+Validation for `spec.rkeConfig.etcdSnapshotRestore` is only triggered when this field is changed to a new, non-empty value. This check is intentionally skipped if the field is unchanged, which prevents blocking unrelated cluster updates (e.g., node scaling) if the referenced snapshot is deleted *after* a successful restore.
+
+When triggered, the following checks are performed:
+
+* The referenced snapshot in `etcdSnapshotRestore.name` must exist in the same namespace as the cluster.
+* The `etcdSnapshotRestore.restoreRKEConfig` field must be a supported mode (`"none"`, `"kubernetesVersion"`, or `"all"`).
+* If `restoreRKEConfig` is **`"kubernetesVersion"`**, the snapshot's metadata must be parsable and contain a `kubernetesVersion`.
+* If `restoreRKEConfig` is **`"all"`**, the snapshot's metadata must be parsable and contain both `kubernetesVersion` and `rkeConfig`.
+
 ### Mutation Checks
 
 #### On Create

@@ -1,6 +1,10 @@
 package cluster
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -12,11 +16,13 @@ import (
 	"github.com/rancher/webhook/pkg/resources/common"
 	"github.com/rancher/wrangler/v3/pkg/generic/fake"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	admissionv1 "k8s.io/api/admission/v1"
 	k8sv1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
@@ -2881,6 +2887,326 @@ func Test_ValidateRKEConfigChanged(t *testing.T) {
 				assert.True(t, response.Allowed, "Expected change to be admitted")
 			} else {
 				assert.False(t, response.Allowed, "Expected change not to be admitted")
+			}
+		})
+	}
+}
+
+// generateTestMetadata is a helper to create the nested metadata string
+// as it's stored on the ETCDSnapshot object.
+func generateTestMetadata(clusterSpec *v1.ClusterSpec) (string, error) {
+	specBytes, err := json.Marshal(clusterSpec)
+	if err != nil {
+		return "", err
+	}
+
+	var gzipBuffer bytes.Buffer
+	gzipWriter := gzip.NewWriter(&gzipBuffer)
+	if _, err := gzipWriter.Write(specBytes); err != nil {
+		return "", err
+	}
+	if err := gzipWriter.Close(); err != nil {
+		return "", err
+	}
+
+	innerBase64 := base64.StdEncoding.EncodeToString(gzipBuffer.Bytes())
+
+	outerMap := map[string]string{
+		"provisioning-cluster-spec": innerBase64,
+	}
+
+	outerBytes, err := json.Marshal(outerMap)
+	if err != nil {
+		return "", err
+	}
+
+	return base64.StdEncoding.EncodeToString(outerBytes), nil
+}
+
+func TestValidateETCDSnapshotRestore(t *testing.T) {
+	asserts := assert.New(t)
+	requires := require.New(t)
+
+	const testNamespace = "test-ns"
+	const validAllSnapshotName = "valid-all-snapshot"
+	const validK8sSnapshotName = "valid-k8s-snapshot"
+	const invalidMetadataSnapshotName = "invalid-metadata-snapshot"
+	const missingK8sSnapshotName = "missing-k8s-snapshot"
+	const missingRKEConfigSnapshotName = "missing-rkeconfig-snapshot"
+	const nonExistentSnapshotName = "non-existent-snapshot"
+	const internalErrorSnapshotName = "internal-error-snapshot"
+
+	// Create reusable specs
+	validAllSpec := &v1.ClusterSpec{
+		KubernetesVersion: "v1.25.0",
+		RKEConfig:         &v1.RKEConfig{},
+	}
+	validK8sSpec := &v1.ClusterSpec{
+		KubernetesVersion: "v1.25.0",
+	}
+	missingK8sSpec := &v1.ClusterSpec{
+		RKEConfig: &v1.RKEConfig{},
+	}
+	missingRKEConfigSpec := &v1.ClusterSpec{
+		KubernetesVersion: "v1.25.0",
+	}
+
+	// Create reusable metadata strings
+	validAllMetadata, err := generateTestMetadata(validAllSpec)
+	requires.NoError(err)
+	validK8sMetadata, err := generateTestMetadata(validK8sSpec)
+	requires.NoError(err)
+	missingK8sMetadata, err := generateTestMetadata(missingK8sSpec)
+	requires.NoError(err)
+	missingRKEConfigMetadata, err := generateTestMetadata(missingRKEConfigSpec)
+	requires.NoError(err)
+
+	// Create reusable snapshot objects (fixtures for mock returns)
+	validAllSnapshot := &rkev1.ETCDSnapshot{
+		ObjectMeta:   metav1.ObjectMeta{Name: validAllSnapshotName, Namespace: testNamespace},
+		SnapshotFile: rkev1.ETCDSnapshotFile{Metadata: validAllMetadata},
+	}
+	validK8sSnapshot := &rkev1.ETCDSnapshot{
+		ObjectMeta:   metav1.ObjectMeta{Name: validK8sSnapshotName, Namespace: testNamespace},
+		SnapshotFile: rkev1.ETCDSnapshotFile{Metadata: validK8sMetadata},
+	}
+	invalidMetadataSnapshot := &rkev1.ETCDSnapshot{
+		ObjectMeta:   metav1.ObjectMeta{Name: invalidMetadataSnapshotName, Namespace: testNamespace},
+		SnapshotFile: rkev1.ETCDSnapshotFile{Metadata: "not-valid-at-all"},
+	}
+	missingK8sSnapshot := &rkev1.ETCDSnapshot{
+		ObjectMeta:   metav1.ObjectMeta{Name: missingK8sSnapshotName, Namespace: testNamespace},
+		SnapshotFile: rkev1.ETCDSnapshotFile{Metadata: missingK8sMetadata},
+	}
+	missingRKEConfigSnapshot := &rkev1.ETCDSnapshot{
+		ObjectMeta:   metav1.ObjectMeta{Name: missingRKEConfigSnapshotName, Namespace: testNamespace},
+		SnapshotFile: rkev1.ETCDSnapshotFile{Metadata: missingRKEConfigMetadata},
+	}
+
+	baseRequest := func() *admission.Request {
+		return &admission.Request{
+			AdmissionRequest: admissionv1.AdmissionRequest{
+				Operation: admissionv1.Update,
+				Object:    runtime.RawExtension{},
+				OldObject: runtime.RawExtension{},
+			},
+		}
+	}
+	baseCluster := func() *v1.Cluster {
+		return &v1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace},
+			Spec:       v1.ClusterSpec{},
+		}
+	}
+	withRestore := func(cluster *v1.Cluster, mode string, snapshotName string) *v1.Cluster {
+		cluster.Spec.RKEConfig = &v1.RKEConfig{
+			ETCDSnapshotRestore: &rkev1.ETCDSnapshotRestore{
+				Name:             snapshotName,
+				RestoreRKEConfig: mode,
+			},
+		}
+		return cluster
+	}
+
+	testCases := []struct {
+		name            string
+		request         *admission.Request
+		oldCluster      *v1.Cluster
+		newCluster      *v1.Cluster
+		mockSetup       func(mockCache *fake.MockCacheInterface[*rkev1.ETCDSnapshot])
+		expectAllowed   bool
+		expectedError   string // For internal, non-admission errors
+		expectedDenyMsg string // For admission.ResponseBadRequest
+	}{
+		{
+			name: "should allow on create operation",
+			request: &admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Operation: admissionv1.Create,
+				},
+			},
+			oldCluster:    nil,
+			newCluster:    baseCluster(),
+			expectAllowed: true,
+		},
+		{
+			name:          "should allow if new RKEConfig is nil",
+			request:       baseRequest(),
+			oldCluster:    baseCluster(),
+			newCluster:    baseCluster(), // Spec.RKEConfig is nil
+			expectAllowed: true,
+		},
+		{
+			name:       "should allow if new restore spec is nil",
+			request:    baseRequest(),
+			oldCluster: baseCluster(),
+			newCluster: func() *v1.Cluster {
+				cluster := baseCluster()
+				cluster.Spec.RKEConfig = &v1.RKEConfig{ETCDSnapshotRestore: nil}
+				return cluster
+			}(),
+			expectAllowed: true,
+		},
+		{
+			name:          "should allow if restore spec is unchanged",
+			request:       baseRequest(),
+			oldCluster:    withRestore(baseCluster(), "all", validAllSnapshotName),
+			newCluster:    withRestore(baseCluster(), "all", validAllSnapshotName),
+			expectAllowed: true,
+		},
+		{
+			name:          "should allow if new restore name is empty",
+			request:       baseRequest(),
+			oldCluster:    withRestore(baseCluster(), "all", validAllSnapshotName),
+			newCluster:    withRestore(baseCluster(), "all", ""), // <-- Name is empty
+			expectAllowed: true,
+		},
+		{
+			name:          "should allow if new restore mode is empty",
+			request:       baseRequest(),
+			oldCluster:    withRestore(baseCluster(), "all", validAllSnapshotName),
+			newCluster:    withRestore(baseCluster(), "", validAllSnapshotName), // <-- Mode is empty
+			expectAllowed: true,
+		},
+		{
+			name:          "CRITICAL: should allow unchanged spec even if snapshot is missing",
+			request:       baseRequest(),
+			oldCluster:    withRestore(baseCluster(), "all", nonExistentSnapshotName),
+			newCluster:    withRestore(baseCluster(), "all", nonExistentSnapshotName),
+			expectAllowed: true,
+		},
+		{
+			name:       "should deny if snapshot not found",
+			request:    baseRequest(),
+			oldCluster: baseCluster(),
+			newCluster: withRestore(baseCluster(), "all", nonExistentSnapshotName),
+			mockSetup: func(mockCache *fake.MockCacheInterface[*rkev1.ETCDSnapshot]) {
+				mockCache.EXPECT().Get(testNamespace, nonExistentSnapshotName).
+					Return(nil, apierrors.NewNotFound(rkev1.Resource("etcdsnapshot"), nonExistentSnapshotName))
+			},
+			expectAllowed:   false,
+			expectedDenyMsg: fmt.Sprintf("etcd restore references missing snapshot %s in namespace %s", nonExistentSnapshotName, testNamespace),
+		},
+		{
+			name:       "should return internal error if cache fails",
+			request:    baseRequest(),
+			oldCluster: baseCluster(),
+			newCluster: withRestore(baseCluster(), "all", internalErrorSnapshotName),
+			mockSetup: func(mockCache *fake.MockCacheInterface[*rkev1.ETCDSnapshot]) {
+				mockCache.EXPECT().Get(testNamespace, internalErrorSnapshotName).
+					Return(nil, fmt.Errorf("internal cache error"))
+			},
+			expectAllowed: false,
+			expectedError: "internal cache error",
+		},
+		{
+			name:       "should deny if metadata is invalid",
+			request:    baseRequest(),
+			oldCluster: baseCluster(),
+			newCluster: withRestore(baseCluster(), "all", invalidMetadataSnapshotName),
+			mockSetup: func(mockCache *fake.MockCacheInterface[*rkev1.ETCDSnapshot]) {
+				mockCache.EXPECT().Get(testNamespace, invalidMetadataSnapshotName).
+					Return(invalidMetadataSnapshot, nil)
+			},
+			expectAllowed:   false,
+			expectedDenyMsg: fmt.Sprintf("invalid ETCD snapshot metadata for %s/%s", testNamespace, invalidMetadataSnapshotName),
+		},
+		{
+			name:       "should allow restore mode 'none' even with invalid metadata",
+			request:    baseRequest(),
+			oldCluster: baseCluster(),
+			newCluster: withRestore(baseCluster(), "none", invalidMetadataSnapshotName),
+			mockSetup: func(mockCache *fake.MockCacheInterface[*rkev1.ETCDSnapshot]) {
+				mockCache.EXPECT().Get(testNamespace, invalidMetadataSnapshotName).
+					Return(invalidMetadataSnapshot, nil)
+			},
+			expectAllowed: true,
+		},
+		{
+			name:       "should allow restore mode 'kubernetesVersion' with valid spec",
+			request:    baseRequest(),
+			oldCluster: baseCluster(),
+			newCluster: withRestore(baseCluster(), "kubernetesVersion", validK8sSnapshotName),
+			mockSetup: func(mockCache *fake.MockCacheInterface[*rkev1.ETCDSnapshot]) {
+				mockCache.EXPECT().Get(testNamespace, validK8sSnapshotName).
+					Return(validK8sSnapshot, nil)
+			},
+			expectAllowed: true,
+		},
+		{
+			name:       "should deny restore mode 'kubernetesVersion' with missing k8s version",
+			request:    baseRequest(),
+			oldCluster: baseCluster(),
+			newCluster: withRestore(baseCluster(), "kubernetesVersion", missingK8sSnapshotName),
+			mockSetup: func(mockCache *fake.MockCacheInterface[*rkev1.ETCDSnapshot]) {
+				mockCache.EXPECT().Get(testNamespace, missingK8sSnapshotName).
+					Return(missingK8sSnapshot, nil)
+			},
+			expectAllowed:   false,
+			expectedDenyMsg: "snapshot metadata missing KubernetesVersion for kubernetesVersion restore",
+		},
+		{
+			name:       "should allow restore mode 'all' with valid spec",
+			request:    baseRequest(),
+			oldCluster: baseCluster(),
+			newCluster: withRestore(baseCluster(), "all", validAllSnapshotName),
+			mockSetup: func(mockCache *fake.MockCacheInterface[*rkev1.ETCDSnapshot]) {
+				mockCache.EXPECT().Get(testNamespace, validAllSnapshotName).
+					Return(validAllSnapshot, nil)
+			},
+			expectAllowed: true,
+		},
+		{
+			name:       "should deny restore mode 'all' with missing RKEConfig",
+			request:    baseRequest(),
+			oldCluster: baseCluster(),
+			newCluster: withRestore(baseCluster(), "all", missingRKEConfigSnapshotName),
+			mockSetup: func(mockCache *fake.MockCacheInterface[*rkev1.ETCDSnapshot]) {
+				mockCache.EXPECT().Get(testNamespace, missingRKEConfigSnapshotName).
+					Return(missingRKEConfigSnapshot, nil)
+			},
+			expectAllowed:   false,
+			expectedDenyMsg: "snapshot metadata must include RKEConfig and KubernetesVersion for 'all' restore",
+		},
+		{
+			name:       "should deny unsupported restore mode",
+			request:    baseRequest(),
+			oldCluster: baseCluster(),
+			newCluster: withRestore(baseCluster(), "invalid-mode", validAllSnapshotName),
+			mockSetup: func(mockCache *fake.MockCacheInterface[*rkev1.ETCDSnapshot]) {
+				mockCache.EXPECT().Get(testNamespace, validAllSnapshotName).
+					Return(validAllSnapshot, nil)
+			},
+			expectAllowed:   false,
+			expectedDenyMsg: "unsupported restore mode invalid-mode",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			gomockController := gomock.NewController(t)
+			mockSnapshotCache := fake.NewMockCacheInterface[*rkev1.ETCDSnapshot](gomockController)
+			admitter := &provisioningAdmitter{
+				etcdSnapshotCache: mockSnapshotCache,
+			}
+
+			if testCase.mockSetup != nil {
+				testCase.mockSetup(mockSnapshotCache)
+			}
+
+			response, err := admitter.validateETCDSnapshotRestore(testCase.request, testCase.oldCluster, testCase.newCluster)
+
+			if testCase.expectedError != "" {
+				requires.Error(err)
+				requires.Contains(err.Error(), testCase.expectedError)
+				return
+			}
+
+			asserts.NoError(err, "unexpected internal error")
+
+			asserts.Equal(testCase.expectAllowed, response.Allowed)
+			if !testCase.expectAllowed && testCase.expectedDenyMsg != "" {
+				asserts.Contains(response.Result.Message, testCase.expectedDenyMsg)
 			}
 		})
 	}

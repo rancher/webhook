@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 )
 
 const (
@@ -61,7 +62,9 @@ func (m *IntegrationSuite) TestValidateProject() {
 		result := &v3.Project{}
 		patch, err := createPatch(result, updateUsedLimitObj)
 		m.Require().NoError(err)
-		err = client.Patch(ctx, updateUsedLimitObj.GetNamespace(), updateUsedLimitObj.GetName(), types.JSONPatchType, patch, result, metav1.PatchOptions{})
+		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			return client.Patch(ctx, updateUsedLimitObj.GetNamespace(), updateUsedLimitObj.GetName(), types.JSONPatchType, patch, result, metav1.PatchOptions{})
+		})
 		m.Require().NoError(err)
 		result.Spec.ResourceQuota.Limit.ConfigMaps = "15"
 		return result
