@@ -64,7 +64,7 @@ func (v *ReplicaValidator) GVR() schema.GroupVersionResource {
 // Operations returns list of operations handled by this validator.
 func (v *ReplicaValidator) Operations() []admissionregistrationv1.OperationType {
 	return []admissionregistrationv1.OperationType{
-		admissionregistrationv1.Create,
+		// admissionregistrationv1.Create,
 		admissionregistrationv1.Update,
 	}
 }
@@ -151,7 +151,6 @@ func (v *ReplicaValidator) reconcileMachinePoolReplicas(md *capi.MachineDeployme
 			return nil
 		}
 
-		logrus.Debugf("Updating cluster %s/%s", cluster.Namespace, cluster.Name)
 		_, err = v.clusterClient.Update(cluster)
 		return err
 	})

@@ -8,7 +8,6 @@ import (
 	auditpolicy "github.com/rancher/webhook/pkg/resources/auditlog.cattle.io/v1/auditpolicy"
 	"github.com/rancher/webhook/pkg/resources/catalog.cattle.io/v1/clusterrepo"
 	"github.com/rancher/webhook/pkg/resources/cluster.cattle.io/v3/clusterauthtoken"
-	"github.com/rancher/webhook/pkg/resources/cluster.x-k8s.io/v1beta1/machinedeployment"
 	nshandler "github.com/rancher/webhook/pkg/resources/core/v1/namespace"
 	"github.com/rancher/webhook/pkg/resources/core/v1/secret"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/authconfig"
@@ -89,7 +88,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			clusterrolebinding.NewValidator(),
 			authconfig.NewValidator(),
 			users.NewValidator(clients.Management.UserAttribute().Cache(), clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.DefaultResolver, clients.Management.User().Cache()),
-			machinedeployment.NewValidator(clients.Provisioning.Cluster().Cache(), clients.Provisioning.Cluster(), clients.CAPI.MachineDeployment().Cache(), clients.CAPI.Cluster().Cache()),
+			//machinedeployment.NewValidator(clients.Provisioning.Cluster().Cache(), clients.Provisioning.Cluster(), clients.CAPI.MachineDeployment().Cache(), clients.CAPI.Cluster().Cache(), clients.Dynamic),
 		)
 	} else {
 		handlers = append(handlers, clusterauthtoken.NewValidator())

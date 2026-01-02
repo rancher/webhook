@@ -762,6 +762,279 @@ func (suite *MachineDeploymentValidatorSuite) TestConflictErrorWithRetry() {
 	suite.True(resp.Allowed, "admission request was denied")
 }
 
+func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterMissingRKEConfig() {
+	ctrl := gomock.NewController(suite.T())
+	defer ctrl.Finish()
+
+	// Create mock caches
+	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
+	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
+	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
+	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+
+	// Set up expected calls for MachineDeployment cache lookup
+	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-md",
+			Namespace: "test-namespace",
+			Labels:    map[string]string{},
+		},
+		Spec: capi.MachineDeploymentSpec{
+			Replicas: admission.Ptr(int32(3)),
+			Template: capi.MachineTemplateSpec{
+				ObjectMeta: capi.ObjectMeta{
+					Labels: map[string]string{
+						capi.ClusterNameLabel:                 "test-cluster",
+						"rke.cattle.io/rke-machine-pool-name": "test-machine-pool",
+					},
+				},
+			},
+		},
+	}, nil)
+
+	// Set up expected call for CAPI cluster cache lookup
+	mockCAPIClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&capi.Cluster{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-namespace",
+			OwnerReferences: []v1.OwnerReference{
+				{
+					APIVersion: "provisioning.cattle.io/v1",
+					Kind:       "Cluster",
+					Name:       "test-cluster",
+				},
+			},
+		},
+		Spec: capi.ClusterSpec{
+			InfrastructureRef: &corev1.ObjectReference{
+				Name:      "test-cluster",
+				Namespace: "test-namespace",
+			},
+		},
+	}, nil)
+
+	// Set up expected call for provisioning cluster cache lookup - RKEConfig is nil
+	mockProvClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&v2prov.Cluster{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-namespace",
+		},
+		Spec: v2prov.ClusterSpec{
+			RKEConfig: nil, // RKEConfig is nil
+		},
+	}, nil)
+
+	// Create validator with mock caches (Update should NOT be called since RKEConfig is nil)
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+
+	// Create test Scale object
+	scale := createTestScale("test-namespace", "test-md", 3)
+
+	resp, err := validator.Admit(&admission.Request{
+		Context: context.Background(),
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Create,
+			Object:    runtime.RawExtension{Raw: scale},
+		}})
+
+	suite.Nil(err)
+	suite.True(resp.Allowed, "admission request should be allowed when RKEConfig is nil")
+}
+
+func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterEmptyMachinePools() {
+	ctrl := gomock.NewController(suite.T())
+	defer ctrl.Finish()
+
+	// Create mock caches
+	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
+	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
+	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
+	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+
+	// Set up expected calls for MachineDeployment cache lookup
+	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-md",
+			Namespace: "test-namespace",
+			Labels:    map[string]string{},
+		},
+		Spec: capi.MachineDeploymentSpec{
+			Replicas: admission.Ptr(int32(3)),
+			Template: capi.MachineTemplateSpec{
+				ObjectMeta: capi.ObjectMeta{
+					Labels: map[string]string{
+						capi.ClusterNameLabel:                 "test-cluster",
+						"rke.cattle.io/rke-machine-pool-name": "test-machine-pool",
+					},
+				},
+			},
+		},
+	}, nil)
+
+	// Set up expected call for CAPI cluster cache lookup
+	mockCAPIClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&capi.Cluster{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-namespace",
+			OwnerReferences: []v1.OwnerReference{
+				{
+					APIVersion: "provisioning.cattle.io/v1",
+					Kind:       "Cluster",
+					Name:       "test-cluster",
+				},
+			},
+		},
+		Spec: capi.ClusterSpec{
+			InfrastructureRef: &corev1.ObjectReference{
+				Name:      "test-cluster",
+				Namespace: "test-namespace",
+			},
+		},
+	}, nil)
+
+	// Set up expected call for provisioning cluster cache lookup - MachinePools is empty
+	mockProvClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&v2prov.Cluster{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-namespace",
+		},
+		Spec: v2prov.ClusterSpec{
+			RKEConfig: &v2prov.RKEConfig{
+				MachinePools: []v2prov.RKEMachinePool{}, // Empty MachinePools
+			},
+		},
+	}, nil)
+
+	// Create validator with mock caches (Update should NOT be called since MachinePools is empty)
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+
+	// Create test Scale object
+	scale := createTestScale("test-namespace", "test-md", 3)
+
+	resp, err := validator.Admit(&admission.Request{
+		Context: context.Background(),
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Create,
+			Object:    runtime.RawExtension{Raw: scale},
+		}})
+
+	suite.Nil(err)
+	suite.True(resp.Allowed, "admission request should be allowed when MachinePools is empty")
+}
+
+func (suite *MachineDeploymentValidatorSuite) TestInvalidScaleObject() {
+	ctrl := gomock.NewController(suite.T())
+	defer ctrl.Finish()
+
+	// Create mock caches (should not be called since scale parsing will fail)
+	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
+	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
+	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
+	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+
+	// Create validator with mock clients
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+
+	// Create admission request with invalid JSON that will fail unmarshaling
+	invalidJSON := []byte(`{"spec": {invalid}}`)
+	resp, err := validator.Admit(&admission.Request{
+		Context: context.Background(),
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Create,
+			Object:    runtime.RawExtension{Raw: invalidJSON},
+		}})
+
+	suite.Nil(err)
+	suite.False(resp.Allowed, "admission request should be denied when scale object is invalid")
+	suite.Equal(resp.Result.Code, int32(400), "the request should be a 400 bad request")
+}
+
+func (suite *MachineDeploymentValidatorSuite) TestMissingMachinePoolLabel() {
+	ctrl := gomock.NewController(suite.T())
+	defer ctrl.Finish()
+
+	// Create mock caches
+	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
+	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
+	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
+	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+
+	// Set up expected call for MachineDeployment cache lookup - has cluster name label but missing machine pool label
+	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-md",
+			Namespace: "test-namespace",
+			Labels:    map[string]string{},
+		},
+		Spec: capi.MachineDeploymentSpec{
+			Replicas: admission.Ptr(int32(3)),
+			Template: capi.MachineTemplateSpec{
+				ObjectMeta: capi.ObjectMeta{
+					Labels: map[string]string{
+						capi.ClusterNameLabel: "test-cluster", // Has cluster name label
+						// Missing rke.cattle.io/rke-machine-pool-name label
+					},
+				},
+			},
+		},
+	}, nil)
+
+	// Set up expected call for CAPI cluster cache lookup
+	mockCAPIClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&capi.Cluster{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-namespace",
+			OwnerReferences: []v1.OwnerReference{
+				{
+					APIVersion: "provisioning.cattle.io/v1",
+					Kind:       "Cluster",
+					Name:       "test-cluster",
+				},
+			},
+		},
+		Spec: capi.ClusterSpec{
+			InfrastructureRef: &corev1.ObjectReference{
+				Name:      "test-cluster",
+				Namespace: "test-namespace",
+			},
+		},
+	}, nil)
+
+	// Set up expected call for provisioning cluster cache lookup (will be called but Update won't since machine pool name is empty)
+	mockProvClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&v2prov.Cluster{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-namespace",
+		},
+		Spec: v2prov.ClusterSpec{
+			RKEConfig: &v2prov.RKEConfig{
+				MachinePools: []v2prov.RKEMachinePool{
+					{
+						Name:     "test-machine-pool",
+						Quantity: admission.Ptr(int32(2)),
+					},
+				},
+			},
+		},
+	}, nil)
+
+	// Create validator with mock clients
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+
+	// Create test Scale object
+	scale := createTestScale("test-namespace", "test-md", 3)
+
+	resp, err := validator.Admit(&admission.Request{
+		Context: context.Background(),
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Create,
+			Object:    runtime.RawExtension{Raw: scale},
+		}})
+
+	suite.Nil(err)
+	suite.True(resp.Allowed, "admission request should be allowed when machine pool label is missing")
+}
+
 // Helper functions for creating test data
 
 func createTestScale(namespace, name string, replicas int32) []byte {

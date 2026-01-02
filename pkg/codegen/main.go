@@ -67,8 +67,8 @@ func main() {
 			},
 			"cluster.x-k8s.io": {
 				Types: []any{
-					&capi.MachineDeployment{},
-					&capi.Cluster{},
+					capi.MachineDeployment{},
+					capi.Cluster{},
 				},
 			},
 		},
