@@ -12,7 +12,7 @@ endif
 export ARCH
 PLATFORM ?= linux/$(ARCH)
 
-.PHONY: all build integration-test-binary test validate ci package-helm image clean
+.PHONY: all build integration-test-binary test validate ci package-helm image clean push-image
 
 all: ci
 
@@ -74,6 +74,20 @@ image: build
 	chmod a+rwx dist && \
 	docker save -o dist/rancher-webhook-image.tar rancher/webhook:$${TAG} && \
 	echo IMAGE_TAG=$${TAG} > dist/image_tag'
+
+#push-image is used by the publish-image github action
+push-image:
+	@echo "--- Building and Pushing Image ---"
+	@bash -c 'source scripts/version && \
+	docker buildx build \
+		$${IID_FILE_FLAG} \
+		--file package/Dockerfile \
+		--build-arg VERSION=$${VERSION} \
+		--build-arg COMMIT=$${COMMIT} \
+		--platform=$${TARGET_PLATFORMS} \
+		-t $${REPO}/rancher-webhook:$${TAG} \
+		--push \
+		. '
 
 # ci target is for CI, ensuring tests and validation run first
 ci: test validate image package-helm
