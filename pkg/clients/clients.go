@@ -4,8 +4,6 @@ import (
 	"context"
 
 	"github.com/rancher/webhook/pkg/auth"
-	"github.com/rancher/webhook/pkg/generated/controllers/cluster.x-k8s.io"
-	capicontrollers "github.com/rancher/webhook/pkg/generated/controllers/cluster.x-k8s.io/v1beta1"
 	"github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io"
 	managementv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/generated/controllers/provisioning.cattle.io"
@@ -23,7 +21,6 @@ type Clients struct {
 	MultiClusterManagement bool
 	Management             managementv3.Interface
 	Provisioning           provv1.Interface
-	CAPI                   capicontrollers.Interface
 	RoleTemplateResolver   *auth.RoleTemplateResolver
 	GlobalRoleResolver     *auth.GlobalRoleResolver
 	DefaultResolver        validation.AuthorizationRuleResolver
@@ -49,11 +46,6 @@ func New(ctx context.Context, rest *rest.Config, mcmEnabled bool) (*Clients, err
 		return nil, err
 	}
 
-	capi, err := cluster.NewFactoryFromConfigWithOptions(rest, clients.FactoryOptions)
-	if err != nil {
-		return nil, err
-	}
-
 	if err = mgmt.Start(ctx, 5); err != nil {
 		return nil, err
 	}
@@ -69,7 +61,6 @@ func New(ctx context.Context, rest *rest.Config, mcmEnabled bool) (*Clients, err
 		Clients:                *clients,
 		Management:             mgmt.Management().V3(),
 		Provisioning:           prov.Provisioning().V1(),
-		CAPI:                   capi.Cluster().V1beta1(),
 		MultiClusterManagement: mcmEnabled,
 		DefaultResolver:        validation.NewDefaultRuleResolver(rbacRestGetter, rbacRestGetter, rbacRestGetter, rbacRestGetter),
 	}

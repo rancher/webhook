@@ -21,6 +21,40 @@ import (
 	capi "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
+// MockDynamicController implements the same method signature as *dynamic.Controller
+type MockDynamicController struct {
+	returnValues map[schema.GroupVersionKind]map[string][]interface{}
+}
+
+func NewMockDynamicController() *MockDynamicController {
+	return &MockDynamicController{
+		returnValues: make(map[schema.GroupVersionKind]map[string][]interface{}),
+	}
+}
+
+func (m *MockDynamicController) Get(gvk schema.GroupVersionKind, namespace, name string) (runtime.Object, error) {
+	key := namespace + "/" + name
+	if values, ok := m.returnValues[gvk]; ok {
+		if val, ok := values[key]; ok && len(val) > 0 {
+			result := val[0]
+			values[key] = val[1:]
+			if result == nil {
+				return nil, apierrors.NewNotFound(schema.GroupResource{Group: gvk.Group, Resource: gvk.Kind}, name)
+			}
+			return result.(runtime.Object), nil
+		}
+	}
+	return nil, fmt.Errorf("MockDynamicController: no return value for %s/%s (%s)", namespace, name, gvk.String())
+}
+
+func (m *MockDynamicController) SetReturnValue(gvk schema.GroupVersionKind, namespace, name string, obj interface{}) {
+	key := namespace + "/" + name
+	if _, ok := m.returnValues[gvk]; !ok {
+		m.returnValues[gvk] = make(map[string][]interface{})
+	}
+	m.returnValues[gvk][key] = append(m.returnValues[gvk][key], obj)
+}
+
 type MachineDeploymentValidatorSuite struct {
 	suite.Suite
 }
@@ -35,13 +69,12 @@ func (suite *MachineDeploymentValidatorSuite) TestHappyPath() {
 	defer ctrl.Finish()
 
 	// Create mock caches
-	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
-	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
 	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+	mockDynamic := NewMockDynamicController()
 
-	// Set up expected calls for MachineDeployment cache lookup
-	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
+	// Set up expected calls for MachineDeployment dynamic getter lookup
+	machineDeploymentObj := &capi.MachineDeployment{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-md",
 			Namespace: "test-namespace",
@@ -58,10 +91,11 @@ func (suite *MachineDeploymentValidatorSuite) TestHappyPath() {
 				},
 			},
 		},
-	}, nil)
+	}
+	mockDynamic.SetReturnValue(machineDeploymentGVK, "test-namespace", "test-md", machineDeploymentObj)
 
-	// Set up expected call for CAPI cluster cache lookup
-	mockCAPIClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&capi.Cluster{
+	// Set up expected call for CAPI cluster dynamic getter lookup
+	capiClusterObj := &capi.Cluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "test-namespace",
@@ -79,7 +113,8 @@ func (suite *MachineDeploymentValidatorSuite) TestHappyPath() {
 				Namespace: "test-namespace",
 			},
 		},
-	}, nil)
+	}
+	mockDynamic.SetReturnValue(capiClusterGVK, "test-namespace", "test-cluster", capiClusterObj)
 
 	// Set up expected call for provisioning cluster cache lookup
 	mockProvClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&v2prov.Cluster{
@@ -103,7 +138,7 @@ func (suite *MachineDeploymentValidatorSuite) TestHappyPath() {
 	mockProvClusterClient.EXPECT().Update(gomock.Any()).Return(&v2prov.Cluster{}, nil)
 
 	// Create validator with mock caches
-	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockDynamic)
 
 	// Create test Scale object with 3 replicas (should trigger update)
 	scale := createTestScale("test-namespace", "test-md", 3)
@@ -124,16 +159,15 @@ func (suite *MachineDeploymentValidatorSuite) TestMachineDeploymentNotFoundAdmit
 	defer ctrl.Finish()
 
 	// Create mock caches
-	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
-	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
 	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+	mockDynamic := NewMockDynamicController()
 
 	// Set up expected calls to return not found errors
-	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(nil, apierrors.NewNotFound(schema.GroupResource{Group: "cluster.x-k8s.io", Resource: "machinedeployments"}, "test-md"))
+	mockDynamic.SetReturnValue(machineDeploymentGVK, "test-namespace", "test-md", nil)
 
 	// Create validator with mock clients
-	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockDynamic)
 
 	// Create test Scale object
 	scale := createTestScale("test-namespace", "test-md", 3)
@@ -155,13 +189,12 @@ func (suite *MachineDeploymentValidatorSuite) TestMachinePoolNotFound() {
 	defer ctrl.Finish()
 
 	// Create mock caches
-	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
-	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
 	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+	mockDynamic := NewMockDynamicController()
 
 	// Set up expected calls
-	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
+	machineDeploymentObj := &capi.MachineDeployment{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-md",
 			Namespace: "test-namespace",
@@ -178,9 +211,10 @@ func (suite *MachineDeploymentValidatorSuite) TestMachinePoolNotFound() {
 				},
 			},
 		},
-	}, nil)
+	}
+	mockDynamic.SetReturnValue(machineDeploymentGVK, "test-namespace", "test-md", machineDeploymentObj)
 
-	mockCAPIClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&capi.Cluster{
+	capiClusterObj := &capi.Cluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "test-namespace",
@@ -198,7 +232,8 @@ func (suite *MachineDeploymentValidatorSuite) TestMachinePoolNotFound() {
 				Namespace: "test-namespace",
 			},
 		},
-	}, nil)
+	}
+	mockDynamic.SetReturnValue(capiClusterGVK, "test-namespace", "test-cluster", capiClusterObj)
 
 	// Set up expected call for provisioning cluster cache lookup
 	mockProvClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&v2prov.Cluster{
@@ -219,7 +254,7 @@ func (suite *MachineDeploymentValidatorSuite) TestMachinePoolNotFound() {
 	}, nil)
 
 	// Create validator with mock clients
-	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockDynamic)
 
 	// Create test Scale object with non-existent machine pool
 	scale := createTestScale("test-namespace", "test-md", 3)
@@ -241,13 +276,12 @@ func (suite *MachineDeploymentValidatorSuite) TestMissingLabels() {
 	defer ctrl.Finish()
 
 	// Create mock caches
-	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
-	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
 	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+	mockDynamic := NewMockDynamicController()
 
-	// Set up expected call for MachineDeployment cache lookup (will be called but provisioning cluster won't be)
-	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
+	// Set up expected call for MachineDeployment dynamic getter lookup (will be called but provisioning cluster won't be)
+	machineDeploymentObj := &capi.MachineDeployment{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-md",
 			Namespace: "test-namespace",
@@ -256,10 +290,11 @@ func (suite *MachineDeploymentValidatorSuite) TestMissingLabels() {
 		Spec: capi.MachineDeploymentSpec{
 			Replicas: admission.Ptr(int32(3)),
 		},
-	}, nil)
+	}
+	mockDynamic.SetReturnValue(machineDeploymentGVK, "test-namespace", "test-md", machineDeploymentObj)
 
 	// Create validator with mock clients
-	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockDynamic)
 
 	// Create test Scale object
 	scale := createTestScale("test-namespace", "test-md", 3)
@@ -280,13 +315,12 @@ func (suite *MachineDeploymentValidatorSuite) TestReplicasAlreadyMatch() {
 	defer ctrl.Finish()
 
 	// Create mock caches
-	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
-	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
 	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+	mockDynamic := NewMockDynamicController()
 
 	// Set up expected calls
-	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
+	machineDeploymentObj := &capi.MachineDeployment{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-md",
 			Namespace: "test-namespace",
@@ -303,9 +337,10 @@ func (suite *MachineDeploymentValidatorSuite) TestReplicasAlreadyMatch() {
 				},
 			},
 		},
-	}, nil)
+	}
+	mockDynamic.SetReturnValue(machineDeploymentGVK, "test-namespace", "test-md", machineDeploymentObj)
 
-	mockCAPIClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&capi.Cluster{
+	capiClusterObj := &capi.Cluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "test-namespace",
@@ -323,7 +358,8 @@ func (suite *MachineDeploymentValidatorSuite) TestReplicasAlreadyMatch() {
 				Namespace: "test-namespace",
 			},
 		},
-	}, nil)
+	}
+	mockDynamic.SetReturnValue(capiClusterGVK, "test-namespace", "test-cluster", capiClusterObj)
 
 	// Set up expected call for provisioning cluster cache lookup (called twice: initial + in retry loop)
 	mockProvClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&v2prov.Cluster{
@@ -344,7 +380,7 @@ func (suite *MachineDeploymentValidatorSuite) TestReplicasAlreadyMatch() {
 	}, nil)
 
 	// Create validator with mock clients
-	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockDynamic)
 
 	// Create test Scale object with 3 replicas (matches machine pool)
 	scale := createTestScale("test-namespace", "test-md", 3)
@@ -367,13 +403,12 @@ func (suite *MachineDeploymentValidatorSuite) TestDryRun() {
 	defer ctrl.Finish()
 
 	// Create mock caches (should not be called in dry run)
-	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
-	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
 	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+	mockDynamic := NewMockDynamicController()
 
 	// Create validator with mock clients
-	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockDynamic)
 
 	// Create test Scale object
 	scale := createTestScale("test-namespace", "test-md", 3)
@@ -397,13 +432,12 @@ func (suite *MachineDeploymentValidatorSuite) TestUpdateOperation() {
 	defer ctrl.Finish()
 
 	// Create mock caches
-	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
-	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
 	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+	mockDynamic := NewMockDynamicController()
 
 	// Set up expected calls
-	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
+	machineDeploymentObj := &capi.MachineDeployment{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-md",
 			Namespace: "test-namespace",
@@ -420,9 +454,10 @@ func (suite *MachineDeploymentValidatorSuite) TestUpdateOperation() {
 				},
 			},
 		},
-	}, nil)
+	}
+	mockDynamic.SetReturnValue(machineDeploymentGVK, "test-namespace", "test-md", machineDeploymentObj)
 
-	mockCAPIClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&capi.Cluster{
+	capiClusterObj := &capi.Cluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "test-namespace",
@@ -440,7 +475,8 @@ func (suite *MachineDeploymentValidatorSuite) TestUpdateOperation() {
 				Namespace: "test-namespace",
 			},
 		},
-	}, nil)
+	}
+	mockDynamic.SetReturnValue(capiClusterGVK, "test-namespace", "test-cluster", capiClusterObj)
 
 	// Set up expected call for provisioning cluster cache lookup (called twice: initial + in retry loop)
 	mockProvClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&v2prov.Cluster{
@@ -464,7 +500,7 @@ func (suite *MachineDeploymentValidatorSuite) TestUpdateOperation() {
 	mockProvClusterClient.EXPECT().Update(gomock.Any()).Return(&v2prov.Cluster{}, nil)
 
 	// Create validator with mock clients
-	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockDynamic)
 
 	// Create test Scale object with 5 replicas (should trigger update)
 	scale := createTestScale("test-namespace", "test-md", 5)
@@ -481,18 +517,18 @@ func (suite *MachineDeploymentValidatorSuite) TestUpdateOperation() {
 	suite.Nil(err)
 	suite.True(resp.Allowed, "admission request was denied")
 }
+
 func (suite *MachineDeploymentValidatorSuite) TestCAPIClusterNotFound() {
 	ctrl := gomock.NewController(suite.T())
 	defer ctrl.Finish()
 
 	// Create mock caches
-	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
-	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
 	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+	mockDynamic := NewMockDynamicController()
 
 	// Set up expected calls
-	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
+	machineDeploymentObj := &capi.MachineDeployment{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-md",
 			Namespace: "test-namespace",
@@ -509,13 +545,15 @@ func (suite *MachineDeploymentValidatorSuite) TestCAPIClusterNotFound() {
 				},
 			},
 		},
-	}, nil)
+	}
+	mockDynamic.SetReturnValue(machineDeploymentGVK, "test-namespace", "test-md", machineDeploymentObj)
 
 	// CAPI cluster not found - will be called on each retry attempt
-	mockCAPIClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(nil, apierrors.NewNotFound(schema.GroupResource{Group: "cluster.x-k8s.io", Resource: "clusters"}, "test-cluster")).AnyTimes()
+	mockDynamic.SetReturnValue(capiClusterGVK, "test-namespace", "test-cluster", nil)
+	mockDynamic.SetReturnValue(capiClusterGVK, "test-namespace", "test-cluster", nil)
 
 	// Create validator with mock clients
-	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockDynamic)
 
 	// Create test Scale object
 	scale := createTestScale("test-namespace", "test-md", 3)
@@ -537,13 +575,12 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterOwnerNotFou
 	defer ctrl.Finish()
 
 	// Create mock caches
-	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
-	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
 	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+	mockDynamic := NewMockDynamicController()
 
 	// Set up expected calls
-	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
+	machineDeploymentObj := &capi.MachineDeployment{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-md",
 			Namespace: "test-namespace",
@@ -560,10 +597,11 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterOwnerNotFou
 				},
 			},
 		},
-	}, nil)
+	}
+	mockDynamic.SetReturnValue(machineDeploymentGVK, "test-namespace", "test-md", machineDeploymentObj)
 
 	// CAPI cluster with no provisioning cluster owner reference
-	mockCAPIClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&capi.Cluster{
+	capiClusterObj := &capi.Cluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "test-namespace",
@@ -581,10 +619,11 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterOwnerNotFou
 				Namespace: "test-namespace",
 			},
 		},
-	}, nil)
+	}
+	mockDynamic.SetReturnValue(capiClusterGVK, "test-namespace", "test-cluster", capiClusterObj)
 
 	// Create validator with mock clients
-	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockDynamic)
 
 	// Create test Scale object
 	scale := createTestScale("test-namespace", "test-md", 3)
@@ -606,13 +645,12 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterCacheError(
 	defer ctrl.Finish()
 
 	// Create mock caches
-	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
-	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
 	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+	mockDynamic := NewMockDynamicController()
 
 	// Set up expected calls
-	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
+	machineDeploymentObj := &capi.MachineDeployment{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-md",
 			Namespace: "test-namespace",
@@ -629,9 +667,10 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterCacheError(
 				},
 			},
 		},
-	}, nil)
+	}
+	mockDynamic.SetReturnValue(machineDeploymentGVK, "test-namespace", "test-md", machineDeploymentObj)
 
-	mockCAPIClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&capi.Cluster{
+	capiClusterObj := &capi.Cluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "test-namespace",
@@ -649,13 +688,14 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterCacheError(
 				Namespace: "test-namespace",
 			},
 		},
-	}, nil)
+	}
+	mockDynamic.SetReturnValue(capiClusterGVK, "test-namespace", "test-cluster", capiClusterObj)
 
 	// Provisioning cluster cache returns error
 	mockProvClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(nil, fmt.Errorf("cache error"))
 
 	// Create validator with mock clients
-	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockDynamic)
 
 	// Create test Scale object
 	scale := createTestScale("test-namespace", "test-md", 3)
@@ -677,13 +717,12 @@ func (suite *MachineDeploymentValidatorSuite) TestConflictErrorWithRetry() {
 	defer ctrl.Finish()
 
 	// Create mock caches
-	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
-	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
 	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+	mockDynamic := NewMockDynamicController()
 
-	// Set up expected calls for MachineDeployment cache lookup
-	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
+	// Set up expected calls for MachineDeployment dynamic getter lookup
+	machineDeploymentObj := &capi.MachineDeployment{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-md",
 			Namespace: "test-namespace",
@@ -700,10 +739,11 @@ func (suite *MachineDeploymentValidatorSuite) TestConflictErrorWithRetry() {
 				},
 			},
 		},
-	}, nil)
+	}
+	mockDynamic.SetReturnValue(machineDeploymentGVK, "test-namespace", "test-md", machineDeploymentObj)
 
-	// Set up expected call for CAPI cluster cache lookup (called once before retry)
-	mockCAPIClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&capi.Cluster{
+	// Set up expected call for CAPI cluster dynamic getter lookup (called once before retry)
+	capiClusterObj := &capi.Cluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "test-namespace",
@@ -721,7 +761,9 @@ func (suite *MachineDeploymentValidatorSuite) TestConflictErrorWithRetry() {
 				Namespace: "test-namespace",
 			},
 		},
-	}, nil).Times(2)
+	}
+	mockDynamic.SetReturnValue(capiClusterGVK, "test-namespace", "test-cluster", capiClusterObj)
+	mockDynamic.SetReturnValue(capiClusterGVK, "test-namespace", "test-cluster", capiClusterObj)
 
 	// Set up expected call for provisioning cluster cache lookup (called 3 times: initial + first attempt + refetch on conflict)
 	mockProvClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&v2prov.Cluster{
@@ -746,7 +788,7 @@ func (suite *MachineDeploymentValidatorSuite) TestConflictErrorWithRetry() {
 	mockProvClusterClient.EXPECT().Update(gomock.Any()).Return(&v2prov.Cluster{}, nil).Times(1)
 
 	// Create validator with mock caches
-	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockDynamic)
 
 	// Create test Scale object with 3 replicas (should trigger update)
 	scale := createTestScale("test-namespace", "test-md", 3)
@@ -767,13 +809,12 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterMissingRKEC
 	defer ctrl.Finish()
 
 	// Create mock caches
-	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
-	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
 	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+	mockDynamic := NewMockDynamicController()
 
-	// Set up expected calls for MachineDeployment cache lookup
-	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
+	// Set up expected calls for MachineDeployment dynamic getter lookup
+	machineDeploymentObj := &capi.MachineDeployment{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-md",
 			Namespace: "test-namespace",
@@ -790,10 +831,11 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterMissingRKEC
 				},
 			},
 		},
-	}, nil)
+	}
+	mockDynamic.SetReturnValue(machineDeploymentGVK, "test-namespace", "test-md", machineDeploymentObj)
 
-	// Set up expected call for CAPI cluster cache lookup
-	mockCAPIClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&capi.Cluster{
+	// Set up expected call for CAPI cluster dynamic getter lookup
+	capiClusterObj := &capi.Cluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "test-namespace",
@@ -811,7 +853,8 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterMissingRKEC
 				Namespace: "test-namespace",
 			},
 		},
-	}, nil)
+	}
+	mockDynamic.SetReturnValue(capiClusterGVK, "test-namespace", "test-cluster", capiClusterObj)
 
 	// Set up expected call for provisioning cluster cache lookup - RKEConfig is nil
 	mockProvClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&v2prov.Cluster{
@@ -825,7 +868,7 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterMissingRKEC
 	}, nil)
 
 	// Create validator with mock caches (Update should NOT be called since RKEConfig is nil)
-	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockDynamic)
 
 	// Create test Scale object
 	scale := createTestScale("test-namespace", "test-md", 3)
@@ -846,13 +889,12 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterEmptyMachin
 	defer ctrl.Finish()
 
 	// Create mock caches
-	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
-	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
 	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+	mockDynamic := NewMockDynamicController()
 
-	// Set up expected calls for MachineDeployment cache lookup
-	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
+	// Set up expected calls for MachineDeployment dynamic getter lookup
+	machineDeploymentObj := &capi.MachineDeployment{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-md",
 			Namespace: "test-namespace",
@@ -869,10 +911,11 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterEmptyMachin
 				},
 			},
 		},
-	}, nil)
+	}
+	mockDynamic.SetReturnValue(machineDeploymentGVK, "test-namespace", "test-md", machineDeploymentObj)
 
-	// Set up expected call for CAPI cluster cache lookup
-	mockCAPIClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&capi.Cluster{
+	// Set up expected call for CAPI cluster dynamic getter lookup
+	capiClusterObj := &capi.Cluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "test-namespace",
@@ -890,7 +933,8 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterEmptyMachin
 				Namespace: "test-namespace",
 			},
 		},
-	}, nil)
+	}
+	mockDynamic.SetReturnValue(capiClusterGVK, "test-namespace", "test-cluster", capiClusterObj)
 
 	// Set up expected call for provisioning cluster cache lookup - MachinePools is empty
 	mockProvClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&v2prov.Cluster{
@@ -906,7 +950,7 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterEmptyMachin
 	}, nil)
 
 	// Create validator with mock caches (Update should NOT be called since MachinePools is empty)
-	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockDynamic)
 
 	// Create test Scale object
 	scale := createTestScale("test-namespace", "test-md", 3)
@@ -927,13 +971,12 @@ func (suite *MachineDeploymentValidatorSuite) TestInvalidScaleObject() {
 	defer ctrl.Finish()
 
 	// Create mock caches (should not be called since scale parsing will fail)
-	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
-	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
 	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+	mockDynamic := NewMockDynamicController()
 
 	// Create validator with mock clients
-	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockDynamic)
 
 	// Create admission request with invalid JSON that will fail unmarshaling
 	invalidJSON := []byte(`{"spec": {invalid}}`)
@@ -954,13 +997,12 @@ func (suite *MachineDeploymentValidatorSuite) TestMissingMachinePoolLabel() {
 	defer ctrl.Finish()
 
 	// Create mock caches
-	mockMachineDeploymentCache := fake.NewMockCacheInterface[*capi.MachineDeployment](ctrl)
-	mockCAPIClusterCache := fake.NewMockCacheInterface[*capi.Cluster](ctrl)
 	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
 	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+	mockDynamic := NewMockDynamicController()
 
-	// Set up expected call for MachineDeployment cache lookup - has cluster name label but missing machine pool label
-	mockMachineDeploymentCache.EXPECT().Get("test-namespace", "test-md").Return(&capi.MachineDeployment{
+	// Set up expected call for MachineDeployment dynamic getter lookup - has cluster name label but missing machine pool label
+	machineDeploymentObj := &capi.MachineDeployment{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-md",
 			Namespace: "test-namespace",
@@ -977,10 +1019,11 @@ func (suite *MachineDeploymentValidatorSuite) TestMissingMachinePoolLabel() {
 				},
 			},
 		},
-	}, nil)
+	}
+	mockDynamic.SetReturnValue(machineDeploymentGVK, "test-namespace", "test-md", machineDeploymentObj)
 
-	// Set up expected call for CAPI cluster cache lookup
-	mockCAPIClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&capi.Cluster{
+	// Set up expected call for CAPI cluster dynamic getter lookup
+	capiClusterObj := &capi.Cluster{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      "test-cluster",
 			Namespace: "test-namespace",
@@ -998,7 +1041,8 @@ func (suite *MachineDeploymentValidatorSuite) TestMissingMachinePoolLabel() {
 				Namespace: "test-namespace",
 			},
 		},
-	}, nil)
+	}
+	mockDynamic.SetReturnValue(capiClusterGVK, "test-namespace", "test-cluster", capiClusterObj)
 
 	// Set up expected call for provisioning cluster cache lookup (will be called but Update won't since machine pool name is empty)
 	mockProvClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&v2prov.Cluster{
@@ -1019,7 +1063,7 @@ func (suite *MachineDeploymentValidatorSuite) TestMissingMachinePoolLabel() {
 	}, nil)
 
 	// Create validator with mock clients
-	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockMachineDeploymentCache, mockCAPIClusterCache)
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockDynamic)
 
 	// Create test Scale object
 	scale := createTestScale("test-namespace", "test-md", 3)

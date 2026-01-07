@@ -5,13 +5,13 @@ import (
 
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/webhook/pkg/admission"
-	capicontrollers "github.com/rancher/webhook/pkg/generated/controllers/cluster.x-k8s.io/v1beta1"
 	provcontrollers "github.com/rancher/webhook/pkg/generated/controllers/provisioning.cattle.io/v1"
 	scaling "github.com/rancher/webhook/pkg/generated/objects/autoscaling/v1"
 	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/trace"
@@ -29,28 +29,41 @@ const (
 	provisioningClusterKind = "Cluster"
 )
 
+type dynamicGetter interface {
+	Get(gvk schema.GroupVersionKind, namespace, name string) (runtime.Object, error)
+}
+
 // ReplicaValidator implements admission.ValidatingAdmissionWebhook.
 type ReplicaValidator struct {
-	// MachineDeployment cache for retrieving MachineDeployment objects
-	machineDeploymentCache capicontrollers.MachineDeploymentCache
-	// CAPI cluster cache for retrieving CAPI Cluster objects
-	capiClusterCache capicontrollers.ClusterCache
 	// Provisioning cluster cache for retrieving provisioning Cluster objects
 	clusterCache provcontrollers.ClusterCache
 	// Provisioning cluster client for updating provisioning Cluster objects
 	clusterClient provcontrollers.ClusterClient
+	// dynamicGetter to fetch resources that we might not have the CRDs for
+	dynamic dynamicGetter
 }
 
 // NewValidator returns a new ReplicaValidator populated by the caches and clients passed in.
 func NewValidator(clusterCache provcontrollers.ClusterCache, clusterClient provcontrollers.ClusterClient,
-	machineDeploymentCache capicontrollers.MachineDeploymentCache, capiClusterCache capicontrollers.ClusterCache) *ReplicaValidator {
+	dynamic dynamicGetter) *ReplicaValidator {
 	return &ReplicaValidator{
-		clusterCache:           clusterCache,
-		clusterClient:          clusterClient,
-		machineDeploymentCache: machineDeploymentCache,
-		capiClusterCache:       capiClusterCache,
+		clusterCache:  clusterCache,
+		clusterClient: clusterClient,
+		dynamic:       dynamic,
 	}
 }
+
+// GVK constants for dynamic getter
+var (
+	machineDeploymentGVK = schema.GroupVersion{
+		Group:   "cluster.x-k8s.io",
+		Version: "v1beta1",
+	}.WithKind("MachineDeployment")
+	capiClusterGVK = schema.GroupVersion{
+		Group:   "cluster.x-k8s.io",
+		Version: "v1beta1",
+	}.WithKind("Cluster")
+)
 
 // GVR returns the GroupVersionKind for this Validating Webhook
 func (v *ReplicaValidator) GVR() schema.GroupVersionResource {
@@ -64,7 +77,6 @@ func (v *ReplicaValidator) GVR() schema.GroupVersionResource {
 // Operations returns list of operations handled by this validator.
 func (v *ReplicaValidator) Operations() []admissionregistrationv1.OperationType {
 	return []admissionregistrationv1.OperationType{
-		// admissionregistrationv1.Create,
 		admissionregistrationv1.Update,
 	}
 }
@@ -97,11 +109,12 @@ func (v *ReplicaValidator) Admit(request *admission.Request) (*admissionv1.Admis
 	}
 
 	logrus.Debugf("Admit: Looking up MachineDeployment %s/%s", scale.Namespace, scale.Name)
-	machineDeployment, err := v.machineDeploymentCache.Get(scale.Namespace, scale.Name)
+	machineDeploymentObj, err := v.dynamic.Get(machineDeploymentGVK, scale.Namespace, scale.Name)
 	if err != nil {
 		logrus.Debugf("MachineDeployment %s/%s not found, admitting scale operation", scale.Namespace, scale.Name)
 		return admission.ResponseAllowed(), nil
 	}
+	machineDeployment := machineDeploymentObj.(*capi.MachineDeployment)
 
 	// If MachineDeployment exists, process it through sync pool replicas
 	err = v.reconcileMachinePoolReplicas(machineDeployment, scale.Spec.Replicas)
@@ -123,12 +136,11 @@ func (v *ReplicaValidator) Admit(request *admission.Request) (*admissionv1.Admis
 // Uses Kubernetes built-in retry utilities for conflict/timeout handling.
 //
 // Flow:
+// In a retry loop:
 //  1. Looks up the CAPI cluster
 //  2. Finds the Rancher Provisioning Cluster through owner references on the CAPI Cluster
-//  3. Enters retry loop:
-//     a. Refetches the provisioning cluster from clusterCache only on conflict
-//     b. Locates the matching machine pool in the provisioning Cluster's RKEConfig
-//     c. Updates the machine pool's quantity to match the target replicas
+//  3. Updates the machine pool's quantity to match the target replicas
+//  4. Updates the cluster object with the new machinepool in k8s
 //
 // Returns:
 // - nil if update was successful
@@ -211,7 +223,11 @@ func (v *ReplicaValidator) fetchCAPICluster(md *capi.MachineDeployment) (*capi.C
 	}
 
 	logrus.Debugf("Getting CAPI cluster %s/%s", md.Namespace, clusterName)
-	return v.capiClusterCache.Get(md.Namespace, clusterName)
+	capiClusterObj, err := v.dynamic.Get(capiClusterGVK, md.Namespace, clusterName)
+	if err != nil {
+		return nil, err
+	}
+	return capiClusterObj.(*capi.Cluster), nil
 }
 
 // fetchProvisioningCluster locates the Rancher Provisioning Cluster by checking
