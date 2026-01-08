@@ -85,6 +85,8 @@ push-image:
 		--build-arg VERSION=$${VERSION} \
 		--build-arg COMMIT=$${COMMIT} \
 		--platform=$${TARGET_PLATFORMS} \
+		--sbom=true \
+		--attest type=provenance,mode=max \
 		-t $${REPO}/rancher-webhook:$${TAG} \
 		--push \
 		. '
