@@ -37,10 +37,10 @@ require (
 	github.com/go-ldap/ldap/v3 v3.4.11
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
-	github.com/rancher/dynamiclistener v0.7.3-rc.1
+	github.com/rancher/dynamiclistener v0.7.3
 	github.com/rancher/jsonpath v0.0.0-20250620213443-ad24535cf0c1
 	github.com/rancher/lasso v0.2.5
-	github.com/rancher/rancher/pkg/apis v0.0.0-20251117165157-cf4ff9f62e09
+	github.com/rancher/rancher/pkg/apis v0.0.0-20260108111548-04b287de5e74
 	github.com/rancher/rke v1.8.6
 	github.com/rancher/wrangler/v3 v3.3.1
 	github.com/robfig/cron v1.2.0
@@ -49,8 +49,8 @@ require (
 	go.uber.org/mock v0.6.0
 	golang.org/x/text v0.30.0
 	golang.org/x/tools v0.37.0
-	k8s.io/api v0.34.1
-	k8s.io/apimachinery v0.34.1
+	k8s.io/api v0.34.3
+	k8s.io/apimachinery v0.34.3
 	k8s.io/apiserver v0.34.1
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/kubernetes v1.34.1
@@ -94,10 +94,10 @@ require (
 	github.com/rancher/aks-operator v1.13.0-rc.4 // indirect
 	github.com/rancher/ali-operator v1.13.0-rc.2 // indirect
 	github.com/rancher/eks-operator v1.13.0-rc.4 // indirect
-	github.com/rancher/fleet/pkg/apis v0.14.0-rc.1 // indirect
+	github.com/rancher/fleet/pkg/apis v0.15.0-alpha.4 // indirect
 	github.com/rancher/gke-operator v1.13.0-rc.3 // indirect
 	//TODO: Replace with a tag during un-rc'ing
-	github.com/rancher/norman v0.8.0
+	github.com/rancher/norman v0.8.1
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/otel v1.37.0 // indirect
