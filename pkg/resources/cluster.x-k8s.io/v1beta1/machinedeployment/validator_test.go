@@ -16,8 +16,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	capi "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
@@ -134,8 +136,8 @@ func (suite *MachineDeploymentValidatorSuite) TestHappyPath() {
 		},
 	}, nil)
 
-	// Set up expected call for provisioning cluster client update
-	mockProvClusterClient.EXPECT().Update(gomock.Any()).Return(&v2prov.Cluster{}, nil)
+	// Set up expected call for provisioning cluster client patch
+	mockProvClusterClient.EXPECT().Patch("test-namespace", "test-cluster", types.MergePatchType, gomock.Any(), "").Return(&v2prov.Cluster{}, nil)
 
 	// Create validator with mock caches
 	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockDynamic)
@@ -496,8 +498,8 @@ func (suite *MachineDeploymentValidatorSuite) TestUpdateOperation() {
 		},
 	}, nil)
 
-	// Set up expected call for provisioning cluster client update
-	mockProvClusterClient.EXPECT().Update(gomock.Any()).Return(&v2prov.Cluster{}, nil)
+	// Set up expected call for provisioning cluster client patch
+	mockProvClusterClient.EXPECT().Patch("test-namespace", "test-cluster", types.MergePatchType, gomock.Any(), "").Return(&v2prov.Cluster{}, nil)
 
 	// Create validator with mock clients
 	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockDynamic)
@@ -710,98 +712,6 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterCacheError(
 	// Should return error when provisioning cluster cache lookup fails
 	suite.NotNil(err)
 	suite.False(resp.Allowed, "admission request should be denied when provisioning cluster cache lookup fails")
-}
-
-func (suite *MachineDeploymentValidatorSuite) TestConflictErrorWithRetry() {
-	ctrl := gomock.NewController(suite.T())
-	defer ctrl.Finish()
-
-	// Create mock caches
-	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
-	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
-	mockDynamic := NewMockDynamicController()
-
-	// Set up expected calls for MachineDeployment dynamic getter lookup
-	machineDeploymentObj := &capi.MachineDeployment{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      "test-md",
-			Namespace: "test-namespace",
-			Labels:    map[string]string{},
-		},
-		Spec: capi.MachineDeploymentSpec{
-			Replicas: admission.Ptr(int32(3)),
-			Template: capi.MachineTemplateSpec{
-				ObjectMeta: capi.ObjectMeta{
-					Labels: map[string]string{
-						capi.ClusterNameLabel:                 "test-cluster",
-						"rke.cattle.io/rke-machine-pool-name": "test-machine-pool",
-					},
-				},
-			},
-		},
-	}
-	mockDynamic.SetReturnValue(machineDeploymentGVK, "test-namespace", "test-md", machineDeploymentObj)
-
-	// Set up expected call for CAPI cluster dynamic getter lookup (called once before retry)
-	capiClusterObj := &capi.Cluster{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      "test-cluster",
-			Namespace: "test-namespace",
-			OwnerReferences: []v1.OwnerReference{
-				{
-					APIVersion: "provisioning.cattle.io/v1",
-					Kind:       "Cluster",
-					Name:       "test-cluster",
-				},
-			},
-		},
-		Spec: capi.ClusterSpec{
-			InfrastructureRef: &corev1.ObjectReference{
-				Name:      "test-cluster",
-				Namespace: "test-namespace",
-			},
-		},
-	}
-	mockDynamic.SetReturnValue(capiClusterGVK, "test-namespace", "test-cluster", capiClusterObj)
-	mockDynamic.SetReturnValue(capiClusterGVK, "test-namespace", "test-cluster", capiClusterObj)
-
-	// Set up expected call for provisioning cluster cache lookup (called 3 times: initial + first attempt + refetch on conflict)
-	mockProvClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&v2prov.Cluster{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      "test-cluster",
-			Namespace: "test-namespace",
-		},
-		Spec: v2prov.ClusterSpec{
-			RKEConfig: &v2prov.RKEConfig{
-				MachinePools: []v2prov.RKEMachinePool{
-					{
-						Name:     "test-machine-pool",
-						Quantity: admission.Ptr(int32(2)),
-					},
-				},
-			},
-		},
-	}, nil).Times(2)
-
-	// First update call returns conflict error, second update call succeeds
-	mockProvClusterClient.EXPECT().Update(gomock.Any()).Return(nil, apierrors.NewConflict(schema.GroupResource{Group: "", Resource: "clusters"}, "test-cluster", nil)).Times(1)
-	mockProvClusterClient.EXPECT().Update(gomock.Any()).Return(&v2prov.Cluster{}, nil).Times(1)
-
-	// Create validator with mock caches
-	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockDynamic)
-
-	// Create test Scale object with 3 replicas (should trigger update)
-	scale := createTestScale("test-namespace", "test-md", 3)
-
-	resp, err := validator.Admit(&admission.Request{
-		Context: context.Background(),
-		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation: admissionv1.Update,
-			Object:    runtime.RawExtension{Raw: scale},
-		}})
-
-	suite.Nil(err)
-	suite.True(resp.Allowed, "admission request was denied")
 }
 
 func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterMissingRKEConfig() {
@@ -1077,6 +987,108 @@ func (suite *MachineDeploymentValidatorSuite) TestMissingMachinePoolLabel() {
 
 	suite.Nil(err)
 	suite.True(resp.Allowed, "admission request should be allowed when machine pool label is missing")
+}
+
+func (suite *MachineDeploymentValidatorSuite) TestUnstructuredConversion() {
+	ctrl := gomock.NewController(suite.T())
+	defer ctrl.Finish()
+
+	// Create mock caches
+	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
+	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+	mockDynamic := NewMockDynamicController()
+
+	// Set up MachineDeployment as unstructured object using the converter
+	machineDeploymentTyped := &capi.MachineDeployment{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-md",
+			Namespace: "test-namespace",
+			Labels:    map[string]string{},
+		},
+		Spec: capi.MachineDeploymentSpec{
+			Replicas: admission.Ptr(int32(3)),
+			Template: capi.MachineTemplateSpec{
+				ObjectMeta: capi.ObjectMeta{
+					Labels: map[string]string{
+						capi.ClusterNameLabel:                 "test-cluster",
+						"rke.cattle.io/rke-machine-pool-name": "test-machine-pool",
+					},
+				},
+			},
+		},
+	}
+	machineDeploymentObj := &unstructured.Unstructured{}
+	unstrMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(machineDeploymentTyped)
+	if err != nil {
+		suite.T().Fatalf("failed to convert MachineDeployment to unstructured: %v", err)
+	}
+	machineDeploymentObj.Object = unstrMap
+	mockDynamic.SetReturnValue(machineDeploymentGVK, "test-namespace", "test-md", machineDeploymentObj)
+
+	// Set up CAPI Cluster as unstructured object using the converter
+	capiClusterTyped := &capi.Cluster{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-namespace",
+			OwnerReferences: []v1.OwnerReference{
+				{
+					APIVersion: "provisioning.cattle.io/v1",
+					Kind:       "Cluster",
+					Name:       "test-cluster",
+				},
+			},
+		},
+		Spec: capi.ClusterSpec{
+			InfrastructureRef: &corev1.ObjectReference{
+				Name:      "test-cluster",
+				Namespace: "test-namespace",
+			},
+		},
+	}
+	capiClusterObj := &unstructured.Unstructured{}
+	capiClusterUnstrMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(capiClusterTyped)
+	if err != nil {
+		suite.T().Fatalf("failed to convert CAPI Cluster to unstructured: %v", err)
+	}
+	capiClusterObj.Object = capiClusterUnstrMap
+	mockDynamic.SetReturnValue(capiClusterGVK, "test-namespace", "test-cluster", capiClusterObj)
+
+	// Set up expected call for provisioning cluster cache lookup
+	mockProvClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&v2prov.Cluster{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-namespace",
+		},
+		Spec: v2prov.ClusterSpec{
+			RKEConfig: &v2prov.RKEConfig{
+				MachinePools: []v2prov.RKEMachinePool{
+					{
+						Name:     "test-machine-pool",
+						Quantity: admission.Ptr(int32(2)),
+					},
+				},
+			},
+		},
+	}, nil)
+
+	// Set up expected call for provisioning cluster client patch
+	mockProvClusterClient.EXPECT().Patch("test-namespace", "test-cluster", types.MergePatchType, gomock.Any(), "").Return(&v2prov.Cluster{}, nil)
+
+	// Create validator with mock caches
+	validator := NewValidator(mockProvClusterCache, mockProvClusterClient, mockDynamic)
+
+	// Create test Scale object with 3 replicas (should trigger update)
+	scale := createTestScale("test-namespace", "test-md", 3)
+
+	resp, err := validator.Admit(&admission.Request{
+		Context: context.Background(),
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Update,
+			Object:    runtime.RawExtension{Raw: scale},
+		}})
+
+	suite.Nil(err)
+	suite.True(resp.Allowed, "admission request was denied when using unstructured objects")
 }
 
 // Helper functions for creating test data

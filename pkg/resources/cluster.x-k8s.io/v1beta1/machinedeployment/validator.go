@@ -1,6 +1,7 @@
 package machinedeployment
 
 import (
+	"encoding/json"
 	"fmt"
 
 	provv1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
@@ -8,13 +9,14 @@ import (
 	provcontrollers "github.com/rancher/webhook/pkg/generated/controllers/provisioning.cattle.io/v1"
 	scaling "github.com/rancher/webhook/pkg/generated/objects/autoscaling/v1"
 	"github.com/sirupsen/logrus"
+	jsonpatch "gopkg.in/evanphx/json-patch.v4"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/util/retry"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/trace"
 	capi "sigs.k8s.io/cluster-api/api/v1beta1"
 )
@@ -109,44 +111,21 @@ func (v *ReplicaValidator) Admit(request *admission.Request) (*admissionv1.Admis
 		return admission.ResponseBadRequest(err.Error()), nil
 	}
 
-	logrus.Debugf("Admit: Looking up MachineDeployment %s/%s", scale.Namespace, scale.Name)
-	machineDeploymentObj, err := v.dynamic.Get(machineDeploymentGVK, scale.Namespace, scale.Name)
+	machineDeployment, err := v.getMachineDeployment(scale.Namespace, scale.Name)
 	if err != nil {
 		logrus.Debugf("MachineDeployment %s/%s not found, admitting scale operation", scale.Namespace, scale.Name)
 		return admission.ResponseAllowed(), nil
 	}
 
-	machineDeployment, ok := machineDeploymentObj.(*capi.MachineDeployment)
-	if !ok {
-		// Handle unstructured objects returned by dynamic client when CAPI types are not registered
-		if unstr, ok := machineDeploymentObj.(*unstructured.Unstructured); ok {
-			logrus.Debugf("Converting unstructured object to typed MachineDeployment for %s/%s", scale.Namespace, scale.Name)
-			md := &capi.MachineDeployment{}
-			if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstr.Object, md); err != nil {
-				logrus.Errorf("Failed to convert unstructured to MachineDeployment: %v", err)
-				return admission.ResponseBadRequest(fmt.Sprintf("failed to convert object: %v", err)), nil
-			}
-			machineDeployment = md
-		} else {
-			logrus.Errorf("Unexpected type from dynamic Get: %T", machineDeploymentObj)
-			return admission.ResponseBadRequest(fmt.Sprintf("unexpected object type: %T", machineDeploymentObj)), nil
-		}
-	}
-
 	// If MachineDeployment exists, process it through sync pool replicas
 	err = v.reconcileMachinePoolReplicas(machineDeployment, scale.Spec.Replicas)
-	if err != nil {
-		// something wasn't found or the machinedeployment isn't managed by rancher
-		if apierrors.IsNotFound(err) {
-			return admission.ResponseAllowed(), nil
-		}
-
-		logrus.Errorf("Failed to sync machine pool replicas for MachineDeployment %s/%s: %v",
-			machineDeployment.Namespace, machineDeployment.Name, err)
-		return admission.ResponseBadRequest(err.Error()), err
+	if err == nil || apierrors.IsNotFound(err) {
+		// prov/CAPI cluster do not exist or the machinedeployment isn't managed by rancher
+		return admission.ResponseAllowed(), nil
 	}
 
-	return admission.ResponseAllowed(), nil
+	logrus.Errorf("Failed to sync machine pool replicas for MachineDeployment %s/%s: %v", machineDeployment.Namespace, machineDeployment.Name, err)
+	return admission.ResponseBadRequest(err.Error()), err
 }
 
 // reconcileMachinePoolReplicas performs the lookup and update of machine pool replicas.
@@ -163,26 +142,31 @@ func (v *ReplicaValidator) Admit(request *admission.Request) (*admissionv1.Admis
 // - nil if update was successful
 // - error if cluster or machine pool not found, or update fails after retries
 func (v *ReplicaValidator) reconcileMachinePoolReplicas(md *capi.MachineDeployment, targetReplicas int32) error {
-	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-		cluster, err := v.fetchProvisioningCluster(md)
-		if err != nil {
-			return err
-		}
-
-		if cluster.Spec.RKEConfig == nil || cluster.Spec.RKEConfig.MachinePools == nil || len(cluster.Spec.RKEConfig.MachinePools) == 0 {
-			logrus.Debugf("Provisioning cluster %s/%s does not have required RKEConfig or MachinePools", cluster.Namespace, cluster.Name)
-			return nil
-		}
-
-		// Find and update the matching machine pool
-		cluster, needUpdate := v.setMachinePoolQuantity(md, cluster, targetReplicas)
-		if !needUpdate {
-			return nil
-		}
-
-		_, err = v.clusterClient.Update(cluster)
+	cluster, err := v.fetchProvisioningCluster(md)
+	if err != nil {
 		return err
-	})
+	}
+
+	if cluster.Spec.RKEConfig == nil || cluster.Spec.RKEConfig.MachinePools == nil || len(cluster.Spec.RKEConfig.MachinePools) == 0 {
+		logrus.Debugf("Provisioning cluster %s/%s does not have required RKEConfig or MachinePools", cluster.Namespace, cluster.Name)
+		return nil
+	}
+
+	// Find and update the matching machine pool
+	updatedCluster, needUpdate := v.setMachinePoolQuantity(md, cluster, targetReplicas)
+	if !needUpdate {
+		return nil
+	}
+
+	originalCluster, _ := json.Marshal(cluster)
+	newCluster, _ := json.Marshal(updatedCluster)
+	patch, err := jsonpatch.CreateMergePatch(originalCluster, newCluster)
+	if err != nil {
+		return fmt.Errorf("failed to generate json patch: %v", err)
+	}
+
+	_, err = v.clusterClient.Patch(cluster.Namespace, cluster.Name, types.MergePatchType, patch, "")
+	return err
 }
 
 // setMachinePoolQuantity finds the machine pool by name and updates its quantity
@@ -192,12 +176,12 @@ func (v *ReplicaValidator) reconcileMachinePoolReplicas(md *capi.MachineDeployme
 // - (modifiedCluster, true) if update was needed and performed
 // - (cluster, false) if no update was needed or pool not found
 func (v *ReplicaValidator) setMachinePoolQuantity(md *capi.MachineDeployment, cluster *provv1.Cluster, targetReplicas int32) (*provv1.Cluster, bool) {
-	cluster = cluster.DeepCopy()
-	machinePoolName := v.fetchMachinePoolName(md)
+	machinePoolName := md.Spec.Template.ObjectMeta.Labels[machinePoolNameLabel]
 	if machinePoolName == "" {
 		return nil, false
 	}
 
+	cluster = cluster.DeepCopy()
 	for i := range cluster.Spec.RKEConfig.MachinePools {
 		pool := &cluster.Spec.RKEConfig.MachinePools[i]
 		if pool.Name != machinePoolName {
@@ -206,14 +190,10 @@ func (v *ReplicaValidator) setMachinePoolQuantity(md *capi.MachineDeployment, cl
 
 		// If quantity is nil and targetReplicas is zero, or quantity is non-nil and already
 		// equals targetReplicas, no update is needed.
-		if pool.Quantity == nil {
-			if targetReplicas == 0 {
-				return cluster, false
-			}
-		} else {
-			if *pool.Quantity == targetReplicas {
-				return cluster, false
-			}
+		if pool.Quantity == nil && targetReplicas == 0 {
+			return cluster, false
+		} else if *pool.Quantity == targetReplicas {
+			return cluster, false
 		}
 
 		logrus.Debugf("Updating cluster %s/%s machine pool %s quantity from %d to %d", cluster.Namespace, cluster.Name, machinePoolName, *pool.Quantity, targetReplicas)
@@ -228,12 +208,15 @@ func (v *ReplicaValidator) setMachinePoolQuantity(md *capi.MachineDeployment, cl
 	return cluster, false
 }
 
-// fetchMachinePoolName extracts the RKE machine pool name from the MachineDeployment's labels.
+// getMachineDeployment retrieves a MachineDeployment object using the dynamic client,
+// handling both typed and unstructured objects.
 //
 // Returns:
-// - (string) the RKE machine pool name label
-func (v *ReplicaValidator) fetchMachinePoolName(md *capi.MachineDeployment) string {
-	return md.Spec.Template.ObjectMeta.Labels[machinePoolNameLabel]
+// - (*capi.MachineDeployment, nil) if the MachineDeployment is found
+// - (nil, error) if the lookup fails or conversion fails
+func (v *ReplicaValidator) getMachineDeployment(namespace, name string) (*capi.MachineDeployment, error) {
+	logrus.Debugf("Getting MachineDeployment %s/%s", namespace, name)
+	return fetchGenericObject(v.dynamic, namespace, name, machineDeploymentGVK, &capi.MachineDeployment{})
 }
 
 // fetchCAPICluster retrieves the CAPI Cluster associated with the MachineDeployment
@@ -251,25 +234,7 @@ func (v *ReplicaValidator) fetchCAPICluster(md *capi.MachineDeployment) (*capi.C
 	}
 
 	logrus.Debugf("Getting CAPI cluster %s/%s", md.Namespace, clusterName)
-	capiClusterObj, err := v.dynamic.Get(capiClusterGVK, md.Namespace, clusterName)
-	if err != nil {
-		return nil, err
-	}
-
-	// Handle both typed and unstructured objects
-	capiCluster, ok := capiClusterObj.(*capi.Cluster)
-	if !ok {
-		if unstr, ok := capiClusterObj.(*unstructured.Unstructured); ok {
-			logrus.Debugf("Converting unstructured object to typed CAPI Cluster for %s/%s", md.Namespace, clusterName)
-			cluster := &capi.Cluster{}
-			if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstr.Object, cluster); err != nil {
-				return nil, fmt.Errorf("failed to convert unstructured to CAPI Cluster: %w", err)
-			}
-			return cluster, nil
-		}
-		return nil, fmt.Errorf("unexpected type from dynamic Get for CAPI Cluster: %T", capiClusterObj)
-	}
-	return capiCluster, nil
+	return fetchGenericObject(v.dynamic, md.Namespace, clusterName, capiClusterGVK, &capi.Cluster{})
 }
 
 // fetchProvisioningCluster locates the Rancher Provisioning Cluster by checking
@@ -293,4 +258,44 @@ func (v *ReplicaValidator) fetchProvisioningCluster(md *capi.MachineDeployment) 
 
 	logrus.Debugf("CAPI cluster %s/%s has no provisioning.cattle.io/v1 Cluster owner reference", capiCluster.Namespace, capiCluster.Name)
 	return nil, apierrors.NewNotFound(schema.GroupResource{Group: "provisioning.cattle.io", Resource: "clusters"}, fmt.Sprintf("%s/%s", capiCluster.Namespace, capiCluster.Name))
+}
+
+// fetchGenericObject retrieves a Kubernetes object by its GVK, namespace, and name,
+// then converts it to the specified type T.
+//
+// This function handles two scenarios:
+// 1. The object is already of type T (direct type assertion)
+// 2. The object is an unstructured.Unstructured (conversion via FromUnstructured)
+//
+// Parameters:
+//   - d: dynamicGetter interface for fetching objects dynamically
+//   - namespace: Kubernetes namespace of the object
+//   - name: Name of the object
+//   - gvk: GroupVersionKind identifying the resource type
+//   - out: Zero value of type T used for type conversion
+//
+// Returns:
+//   - (T, nil): Successfully retrieved and converted object
+//   - (*new(T), error): Failed to fetch or convert the object
+func fetchGenericObject[T any](d dynamicGetter, namespace, name string, gvk schema.GroupVersionKind, out T) (T, error) {
+	obj, err := d.Get(gvk, namespace, name)
+	if err != nil {
+		return *new(T), err
+	}
+
+	typedObj, ok := obj.(T)
+	if ok {
+		return typedObj, nil
+	}
+
+	unstr, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return *new(T), fmt.Errorf("type conversion failed for %s/%s: %T", namespace, name, out)
+	}
+
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstr.Object, out); err != nil {
+		return *new(T), fmt.Errorf("failed to convert object: %w", err)
+	}
+
+	return out, nil
 }
