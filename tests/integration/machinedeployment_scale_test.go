@@ -3,6 +3,7 @@ package integration_test
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
@@ -41,6 +42,11 @@ var (
 // Each test case verifies that scaling a MachineDeployment updates the corresponding
 // MachinePool quantity in the Provisioning Cluster.
 func (m *IntegrationSuite) TestMachineDeploymentScaling() {
+	// skipping these for now until we have the CAPI CRDs as part of CI
+	if os.Getenv("TEST_MACHINE_DEPLOYMENTS_SCALE") == "" {
+		m.T().Skip()
+	}
+
 	testCases := []struct {
 		name            string
 		initialReplicas int32
@@ -201,6 +207,11 @@ func (m *IntegrationSuite) testMachineDeploymentScaling(t *testing.T, testSuffix
 // In this scenario, only CAPI resources are created (no Rancher Provisioning Cluster),
 // and the scale operation should be allowed without updating any MachinePool.
 func (m *IntegrationSuite) TestMachineDeploymentScalingWithoutProvisioningCluster() {
+	// skipping these for now until we have the CAPI CRDs as part of CI
+	if os.Getenv("TEST_MACHINE_DEPLOYMENTS_SCALE") == "" {
+		m.T().Skip()
+	}
+
 	testCases := []struct {
 		name            string
 		initialReplicas int32
