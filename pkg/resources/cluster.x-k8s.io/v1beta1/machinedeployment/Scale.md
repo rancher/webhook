@@ -34,8 +34,8 @@ When a scale operation is performed on a MachineDeployment, the webhook synchron
 **Error Handling:**
 - Missing MachineDeployment: Admits the scale operation (not an error)
 - Missing labels: Skips synchronization silently
-- Missing CAPI Cluster: Returns error
-- Missing Provisioning Cluster: Returns error
+- Missing CAPI Cluster: Admits the scale operation (not an error)
+- Missing Provisioning Cluster: Admits the scale operation (not an error)
 - Missing RKEConfig/MachinePools: Skips synchronization silently
 - Machine pool not found: Skips synchronization silently
 - Update failures: Returns error with escalation flag

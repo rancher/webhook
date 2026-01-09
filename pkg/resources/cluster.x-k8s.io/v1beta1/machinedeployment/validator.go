@@ -11,6 +11,7 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/util/retry"
@@ -114,7 +115,23 @@ func (v *ReplicaValidator) Admit(request *admission.Request) (*admissionv1.Admis
 		logrus.Debugf("MachineDeployment %s/%s not found, admitting scale operation", scale.Namespace, scale.Name)
 		return admission.ResponseAllowed(), nil
 	}
-	machineDeployment := machineDeploymentObj.(*capi.MachineDeployment)
+
+	machineDeployment, ok := machineDeploymentObj.(*capi.MachineDeployment)
+	if !ok {
+		// Handle unstructured objects returned by dynamic client when CAPI types are not registered
+		if unstr, ok := machineDeploymentObj.(*unstructured.Unstructured); ok {
+			logrus.Debugf("Converting unstructured object to typed MachineDeployment for %s/%s", scale.Namespace, scale.Name)
+			md := &capi.MachineDeployment{}
+			if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstr.Object, md); err != nil {
+				logrus.Errorf("Failed to convert unstructured to MachineDeployment: %v", err)
+				return admission.ResponseBadRequest(fmt.Sprintf("failed to convert object: %v", err)), nil
+			}
+			machineDeployment = md
+		} else {
+			logrus.Errorf("Unexpected type from dynamic Get: %T", machineDeploymentObj)
+			return admission.ResponseBadRequest(fmt.Sprintf("unexpected object type: %T", machineDeploymentObj)), nil
+		}
+	}
 
 	// If MachineDeployment exists, process it through sync pool replicas
 	err = v.reconcileMachinePoolReplicas(machineDeployment, scale.Spec.Replicas)
@@ -187,11 +204,22 @@ func (v *ReplicaValidator) setMachinePoolQuantity(md *capi.MachineDeployment, cl
 			continue
 		}
 
-		if pool.Quantity == nil || *pool.Quantity == targetReplicas {
-			return cluster, false
+		// If quantity is nil and targetReplicas is zero, or quantity is non-nil and already
+		// equals targetReplicas, no update is needed.
+		if pool.Quantity == nil {
+			if targetReplicas == 0 {
+				return cluster, false
+			}
+		} else {
+			if *pool.Quantity == targetReplicas {
+				return cluster, false
+			}
 		}
 
 		logrus.Debugf("Updating cluster %s/%s machine pool %s quantity from %d to %d", cluster.Namespace, cluster.Name, machinePoolName, *pool.Quantity, targetReplicas)
+		if pool.Quantity == nil {
+			pool.Quantity = new(int32)
+		}
 		*pool.Quantity = targetReplicas
 		return cluster, true
 	}
@@ -227,7 +255,21 @@ func (v *ReplicaValidator) fetchCAPICluster(md *capi.MachineDeployment) (*capi.C
 	if err != nil {
 		return nil, err
 	}
-	return capiClusterObj.(*capi.Cluster), nil
+
+	// Handle both typed and unstructured objects
+	capiCluster, ok := capiClusterObj.(*capi.Cluster)
+	if !ok {
+		if unstr, ok := capiClusterObj.(*unstructured.Unstructured); ok {
+			logrus.Debugf("Converting unstructured object to typed CAPI Cluster for %s/%s", md.Namespace, clusterName)
+			cluster := &capi.Cluster{}
+			if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstr.Object, cluster); err != nil {
+				return nil, fmt.Errorf("failed to convert unstructured to CAPI Cluster: %w", err)
+			}
+			return cluster, nil
+		}
+		return nil, fmt.Errorf("unexpected type from dynamic Get for CAPI Cluster: %T", capiClusterObj)
+	}
+	return capiCluster, nil
 }
 
 // fetchProvisioningCluster locates the Rancher Provisioning Cluster by checking

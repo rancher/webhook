@@ -146,7 +146,7 @@ func (suite *MachineDeploymentValidatorSuite) TestHappyPath() {
 	resp, err := validator.Admit(&admission.Request{
 		Context: context.Background(),
 		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation: admissionv1.Create,
+			Operation: admissionv1.Update,
 			Object:    runtime.RawExtension{Raw: scale},
 		}})
 
@@ -175,7 +175,7 @@ func (suite *MachineDeploymentValidatorSuite) TestMachineDeploymentNotFoundAdmit
 	resp, err := validator.Admit(&admission.Request{
 		Context: context.Background(),
 		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation: admissionv1.Create,
+			Operation: admissionv1.Update,
 			Object:    runtime.RawExtension{Raw: scale},
 		}})
 
@@ -262,7 +262,7 @@ func (suite *MachineDeploymentValidatorSuite) TestMachinePoolNotFound() {
 	resp, err := validator.Admit(&admission.Request{
 		Context: context.Background(),
 		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation: admissionv1.Create,
+			Operation: admissionv1.Update,
 			Object:    runtime.RawExtension{Raw: scale},
 		}})
 
@@ -302,7 +302,7 @@ func (suite *MachineDeploymentValidatorSuite) TestMissingLabels() {
 	resp, err := validator.Admit(&admission.Request{
 		Context: context.Background(),
 		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation: admissionv1.Create,
+			Operation: admissionv1.Update,
 			Object:    runtime.RawExtension{Raw: scale},
 		}})
 
@@ -418,7 +418,7 @@ func (suite *MachineDeploymentValidatorSuite) TestDryRun() {
 	resp, err := validator.Admit(&admission.Request{
 		Context: context.Background(),
 		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation: admissionv1.Create,
+			Operation: admissionv1.Update,
 			Object:    runtime.RawExtension{Raw: scale},
 			DryRun:    &dryRun,
 		}})
@@ -561,7 +561,7 @@ func (suite *MachineDeploymentValidatorSuite) TestCAPIClusterNotFound() {
 	resp, err := validator.Admit(&admission.Request{
 		Context: context.Background(),
 		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation: admissionv1.Create,
+			Operation: admissionv1.Update,
 			Object:    runtime.RawExtension{Raw: scale},
 		}})
 
@@ -631,7 +631,7 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterOwnerNotFou
 	resp, err := validator.Admit(&admission.Request{
 		Context: context.Background(),
 		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation: admissionv1.Create,
+			Operation: admissionv1.Update,
 			Object:    runtime.RawExtension{Raw: scale},
 		}})
 
@@ -703,7 +703,7 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterCacheError(
 	resp, err := validator.Admit(&admission.Request{
 		Context: context.Background(),
 		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation: admissionv1.Create,
+			Operation: admissionv1.Update,
 			Object:    runtime.RawExtension{Raw: scale},
 		}})
 
@@ -796,7 +796,7 @@ func (suite *MachineDeploymentValidatorSuite) TestConflictErrorWithRetry() {
 	resp, err := validator.Admit(&admission.Request{
 		Context: context.Background(),
 		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation: admissionv1.Create,
+			Operation: admissionv1.Update,
 			Object:    runtime.RawExtension{Raw: scale},
 		}})
 
@@ -876,7 +876,7 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterMissingRKEC
 	resp, err := validator.Admit(&admission.Request{
 		Context: context.Background(),
 		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation: admissionv1.Create,
+			Operation: admissionv1.Update,
 			Object:    runtime.RawExtension{Raw: scale},
 		}})
 
@@ -958,7 +958,7 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterEmptyMachin
 	resp, err := validator.Admit(&admission.Request{
 		Context: context.Background(),
 		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation: admissionv1.Create,
+			Operation: admissionv1.Update,
 			Object:    runtime.RawExtension{Raw: scale},
 		}})
 
@@ -983,7 +983,7 @@ func (suite *MachineDeploymentValidatorSuite) TestInvalidScaleObject() {
 	resp, err := validator.Admit(&admission.Request{
 		Context: context.Background(),
 		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation: admissionv1.Create,
+			Operation: admissionv1.Update,
 			Object:    runtime.RawExtension{Raw: invalidJSON},
 		}})
 
@@ -1071,7 +1071,7 @@ func (suite *MachineDeploymentValidatorSuite) TestMissingMachinePoolLabel() {
 	resp, err := validator.Admit(&admission.Request{
 		Context: context.Background(),
 		AdmissionRequest: admissionv1.AdmissionRequest{
-			Operation: admissionv1.Create,
+			Operation: admissionv1.Update,
 			Object:    runtime.RawExtension{Raw: scale},
 		}})
 
