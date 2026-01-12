@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -176,6 +177,10 @@ func Path(basePath string, handler WebhookHandler) string {
 func SubPath(gvr schema.GroupVersionResource) string {
 	if gvr.Resource == "*" {
 		return gvr.Group
+	} else if strings.Contains(gvr.Resource, "/") {
+		// this is to handle subresources such as the `scale` subresource,
+		// e.g. webhooks that watch the `deployments/scale` resource
+		return strings.ReplaceAll(gvr.GroupResource().String(), "/", "-")
 	}
 	return gvr.GroupResource().String()
 }
