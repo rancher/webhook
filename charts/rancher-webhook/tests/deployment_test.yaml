@@ -71,3 +71,8 @@ tests:
           content:
             name: ALLOWED_CNS
             value: kube-apiserver,joe
+
+  - it: should not set resources by default.
+    asserts:
+      - isNull:
+          path: spec.template.spec.containers[0].resources
