@@ -16,6 +16,7 @@ import (
 	controllergen "github.com/rancher/wrangler/v3/pkg/controller-gen"
 	"github.com/rancher/wrangler/v3/pkg/controller-gen/args"
 	"golang.org/x/tools/imports"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -101,6 +102,11 @@ func main() {
 				&unstructured.Unstructured{},
 				&corev1.Secret{},
 				&corev1.Namespace{},
+			},
+		},
+		"autoscaling": {
+			Types: []any{
+				&autoscalingv1.Scale{},
 			},
 		},
 		"rbac.authorization.k8s.io": {
