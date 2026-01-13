@@ -71,3 +71,20 @@ tests:
           content:
             name: ALLOWED_CNS
             value: kube-apiserver,joe
+
+  - it: should enable hostNetwork and set dnsPolicy when hostNetwork is true
+    set:
+      global.hostNetwork: true
+    asserts:
+      - equal:
+          path: spec.template.spec.hostNetwork
+          value: true
+      - equal:
+          path: spec.template.spec.dnsPolicy
+          value: ClusterFirstWithHostNet
+  - it: should not enable hostNetwork by default
+    asserts:
+      - notExists:
+          path: spec.template.spec.hostNetwork
+      - notExists:
+          path: spec.template.spec.dnsPolicy
