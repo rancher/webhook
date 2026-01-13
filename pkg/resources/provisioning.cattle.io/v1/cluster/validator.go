@@ -810,6 +810,12 @@ func (p *provisioningAdmitter) validateETCDSnapshotRestore(request *admission.Re
 		return admission.ResponseAllowed(), nil
 	}
 
+	// For "none" restore mode, the snapshot metadata isn't needed,
+	// so we can allow restores using just the snapshot file name
+	if newRestore.RestoreRKEConfig == "none" {
+		return admission.ResponseAllowed(), nil
+	}
+
 	snap, err := p.etcdSnapshotCache.Get(newCluster.Namespace, newRestore.Name)
 	if apierrors.IsNotFound(err) {
 		return admission.ResponseBadRequest(
@@ -818,21 +824,13 @@ func (p *provisioningAdmitter) validateETCDSnapshotRestore(request *admission.Re
 		return nil, fmt.Errorf("failed to get etcd snapshot %s/%s: %w", newCluster.Namespace, newRestore.Name, err)
 	}
 
-	var clusterSpec *v1.ClusterSpec
-	var decodeErr error
-	// Only parse snapshot metadata if the restore mode requires it.
-	if newRestore.RestoreRKEConfig != "none" {
-		clusterSpec, decodeErr = snapshotutil.ParseSnapshotClusterSpecOrError(snap)
-		if decodeErr != nil {
-			return admission.ResponseBadRequest(
-				fmt.Sprintf("invalid ETCD snapshot metadata for %s/%s: %v", snap.Namespace, snap.Name, decodeErr)), nil
-		}
+	clusterSpec, decodeErr := snapshotutil.ParseSnapshotClusterSpecOrError(snap)
+	if decodeErr != nil {
+		return admission.ResponseBadRequest(
+			fmt.Sprintf("invalid ETCD snapshot metadata for %s/%s: %v", snap.Namespace, snap.Name, decodeErr)), nil
 	}
 
 	switch newRestore.RestoreRKEConfig {
-	case "none":
-		return admission.ResponseAllowed(), nil
-
 	case "kubernetesVersion":
 		if clusterSpec.KubernetesVersion == "" {
 			return admission.ResponseBadRequest("snapshot metadata missing KubernetesVersion for kubernetesVersion restore"), nil

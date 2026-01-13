@@ -3112,14 +3112,10 @@ func TestValidateETCDSnapshotRestore(t *testing.T) {
 			expectedDenyMsg: fmt.Sprintf("invalid ETCD snapshot metadata for %s/%s", testNamespace, invalidMetadataSnapshotName),
 		},
 		{
-			name:       "should allow restore mode 'none' even with invalid metadata",
-			request:    baseRequest(),
-			oldCluster: baseCluster(),
-			newCluster: withRestore(baseCluster(), "none", invalidMetadataSnapshotName),
-			mockSetup: func(mockCache *fake.MockCacheInterface[*rkev1.ETCDSnapshot]) {
-				mockCache.EXPECT().Get(testNamespace, invalidMetadataSnapshotName).
-					Return(invalidMetadataSnapshot, nil)
-			},
+			name:          "should allow restore mode 'none' without fetching snapshot",
+			request:       baseRequest(),
+			oldCluster:    baseCluster(),
+			newCluster:    withRestore(baseCluster(), "none", invalidMetadataSnapshotName),
 			expectAllowed: true,
 		},
 		{
