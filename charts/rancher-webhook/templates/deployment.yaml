@@ -20,6 +20,7 @@ spec:
       {{- end }}
       {{- if .Values.global.hostNetwork }}
       hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       {{- end }}
       nodeSelector: {{ include "linux-node-selector" . | nindent 8 }}
       {{- if .Values.nodeSelector }}
