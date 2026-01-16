@@ -37,10 +37,10 @@ require (
 	github.com/go-ldap/ldap/v3 v3.4.11
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
-	github.com/rancher/dynamiclistener v0.7.3-rc.1
+	github.com/rancher/dynamiclistener v0.7.3
 	github.com/rancher/jsonpath v0.0.0-20250620213443-ad24535cf0c1
 	github.com/rancher/lasso v0.2.5
-	github.com/rancher/rancher/pkg/apis v0.0.0-20260105201356-c4811cb9f2af
+	github.com/rancher/rancher/pkg/apis v0.0.0-20260115233746-6aa34356aa00
 	github.com/rancher/rke v1.8.6
 	github.com/rancher/wrangler/v3 v3.3.1
 	github.com/robfig/cron v1.2.0
@@ -114,7 +114,7 @@ require (
 	golang.org/x/time v0.13.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
-	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
+	gopkg.in/evanphx/json-patch.v4 v4.12.0
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
