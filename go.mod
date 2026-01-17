@@ -49,7 +49,7 @@ require (
 	github.com/rancher/rke v1.7.9
 	github.com/rancher/wrangler/v3 v3.2.1
 	github.com/robfig/cron v1.2.0
-	github.com/sirupsen/logrus v1.9.3
+	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/mock v0.6.0
 	golang.org/x/text v0.28.0
