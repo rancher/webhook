@@ -81,7 +81,7 @@ func (a *admitter) Admit(req *admission.Request) (*admissionv1.AdmissionResponse
 		return nil, fmt.Errorf("failed to validate fields on AuditPolicy")
 	}
 
-	return nil, fmt.Errorf("nyi")
+	return admission.ResponseAllowed(), nil
 }
 
 func (a *admitter) validateFields(policy *auditlogv1.AuditPolicy, path *field.Path) error {
