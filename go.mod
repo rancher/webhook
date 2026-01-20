@@ -40,7 +40,7 @@ replace (
 require (
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/evanphx/json-patch v5.9.11+incompatible
-	github.com/go-ldap/ldap/v3 v3.4.10
+	github.com/go-ldap/ldap/v3 v3.4.12
 	github.com/gorilla/mux v1.8.1
 	github.com/rancher/dynamiclistener v0.7.2-rc1
 	github.com/rancher/jsonpath v0.0.0-20250620213443-ad24535cf0c1
@@ -75,7 +75,7 @@ require (
 	github.com/emicklei/go-restful/v3 v3.12.2 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
-	github.com/go-asn1-ber/asn1-ber v1.5.7 // indirect
+	github.com/go-asn1-ber/asn1-ber v1.5.8-0.20250403174932-29230038a667 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/jsonreference v0.21.0 // indirect
