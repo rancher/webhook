@@ -5,7 +5,7 @@ go 1.23.0
 toolchain go1.23.6
 
 replace (
-	github.com/rancher/rke => github.com/rancher/rke v1.7.8
+	github.com/rancher/rke => github.com/rancher/rke v1.8.10
 	k8s.io/api => k8s.io/api v0.31.1
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.31.1
 	k8s.io/apimachinery => k8s.io/apimachinery v0.31.1
@@ -46,7 +46,7 @@ require (
 	github.com/rancher/dynamiclistener v0.6.1
 	github.com/rancher/lasso v0.2.2
 	github.com/rancher/rancher/pkg/apis v0.0.0-20250919133447-0323fc801622
-	github.com/rancher/rke v1.7.9
+	github.com/rancher/rke v1.8.10
 	github.com/rancher/wrangler/v3 v3.2.1
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.3
@@ -58,8 +58,8 @@ require (
 	k8s.io/apimachinery v0.32.1
 	k8s.io/apiserver v0.32.1
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/kubernetes v1.31.1
-	k8s.io/pod-security-admission v0.31.1
+	k8s.io/kubernetes v1.32.1
+	k8s.io/pod-security-admission v0.32.1
 	k8s.io/utils v0.0.0-20250502105355-0f33e8f1c979
 	sigs.k8s.io/controller-runtime v0.19.7
 	sigs.k8s.io/yaml v1.6.0
@@ -121,14 +121,14 @@ require (
 	github.com/rancher/eks-operator v1.10.9 // indirect
 	github.com/rancher/fleet/pkg/apis v0.11.9 // indirect
 	github.com/rancher/gke-operator v1.10.9 // indirect
-	github.com/rancher/norman v0.4.2 // indirect
+	github.com/rancher/norman v0.5.2 // indirect
 	github.com/spf13/cobra v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	go.etcd.io/etcd/api/v3 v3.5.15 // indirect
-	go.etcd.io/etcd/client/pkg/v3 v3.5.15 // indirect
-	go.etcd.io/etcd/client/v3 v3.5.15 // indirect
+	go.etcd.io/etcd/api/v3 v3.5.16 // indirect
+	go.etcd.io/etcd/client/pkg/v3 v3.5.16 // indirect
+	go.etcd.io/etcd/client/v3 v3.5.16 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.54.0 // indirect
 	go.opentelemetry.io/otel v1.29.0 // indirect
