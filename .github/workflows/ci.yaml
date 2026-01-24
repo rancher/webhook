@@ -33,7 +33,7 @@ jobs:
     steps:
       - name : Checkout repository
         # https://github.com/actions/checkout/releases/tag/v4.1.1
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       # TODO: Pull this next one out once there's a helm-release for rancher 2.9
       - name: Checkout rancher/rancher and build the chart
