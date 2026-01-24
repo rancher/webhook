@@ -1,0 +1,53 @@
+#!/bin/bash
+set -e
+
+# Extract Rancher version for 'main' branch from VERSION.md
+# Expected format: | main | v0.9 | v2.13 |
+RANCHER_VERSION_TAG=$(grep "| main |" VERSION.md | awk -F'|' '{print $4}' | tr -d ' ')
+
+if [ -z "$RANCHER_VERSION_TAG" ]; then
+  echo "Error: Could not find Rancher version for 'main' branch in VERSION.md"
+  exit 1
+fi
+
+# Remove 'v' prefix (e.g., v2.13 -> 2.13)
+VERSION_NO_V=${RANCHER_VERSION_TAG#v}
+
+# Extract major and minor components (2.13 -> 2 and 13)
+MAJOR=$(echo "$VERSION_NO_V" | cut -d. -f1)
+MINOR=$(echo "$VERSION_NO_V" | cut -d. -f2)
+
+if [ -z "$MAJOR" ] || [ -z "$MINOR" ]; then
+  echo "Error: Could not parse version numbers from $RANCHER_VERSION_TAG"
+  exit 1
+fi
+
+# Calculate current and next versions
+CURRENT_VERSION="${MAJOR}.${MINOR}"
+NEXT_MINOR=$((MINOR + 1))
+NEXT_VERSION="${MAJOR}.${NEXT_MINOR}"
+
+# Construct expected annotation string
+# Example: catalog.cattle.io/rancher-version: ">= 2.13.0-0 < 2.14.0-0"
+EXPECTED_STRING="catalog.cattle.io/rancher-version: \">= ${CURRENT_VERSION}.0-0 < ${NEXT_VERSION}.0-0\""
+
+echo "Detected Rancher version for main: $RANCHER_VERSION_TAG"
+echo "Expected annotation in Chart.yaml: $EXPECTED_STRING"
+
+CHART_FILE="charts/rancher-webhook/Chart.yaml"
+
+if [ ! -f "$CHART_FILE" ]; then
+  echo "Error: Chart file not found at $CHART_FILE"
+  exit 1
+fi
+
+# Use grep to verify the presence of the expected string
+# -F for fixed string, -q for quiet
+if grep -Fq "$EXPECTED_STRING" "$CHART_FILE"; then
+  echo "Success: Found expected rancher-version annotation."
+else
+  echo "Error: Expected rancher-version annotation not found in $CHART_FILE."
+  echo "Found:"
+  grep "catalog.cattle.io/rancher-version" "$CHART_FILE" || echo "(Annotation not found)"
+  exit 1
+fi
