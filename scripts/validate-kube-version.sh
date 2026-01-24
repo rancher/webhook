@@ -1,0 +1,49 @@
+#!/bin/bash
+set -e
+
+# Extract version from go.mod
+# We use 'go list -m' to handle 'replace' directive correctly
+CLIENT_GO_VERSION=$(go list -m -f '{{if .Replace}}{{.Replace.Version}}{{else}}{{.Version}}{{end}}' k8s.io/client-go)
+
+if [ -z "$CLIENT_GO_VERSION" ]; then
+  echo "Error: Could not determine k8s.io/client-go version."
+  exit 1
+fi
+
+# Remove 'v' prefix
+VERSION_NO_V=${CLIENT_GO_VERSION#v}
+
+# Extract minor version
+# Assumes format 0.X.Y or similar
+MINOR_VERSION=$(echo "$VERSION_NO_V" | cut -d. -f2)
+
+if [ -z "$MINOR_VERSION" ]; then
+  echo "Error: Could not parse minor version from $CLIENT_GO_VERSION"
+  exit 1
+fi
+
+# Calculate next minor
+NEXT_MINOR=$((MINOR_VERSION + 1))
+
+# Construct expected string
+# "catalog.cattle.io/kube-version: "< 1.35.0-0""
+EXPECTED_STRING="catalog.cattle.io/kube-version: \"< 1.${NEXT_MINOR}.0-0\""
+
+echo "Detected k8s.io/client-go version: $CLIENT_GO_VERSION"
+echo "Expected annotation in Chart.yaml: $EXPECTED_STRING"
+
+CHART_FILE="charts/rancher-webhook/Chart.yaml"
+
+if [ ! -f "$CHART_FILE" ]; then
+  echo "Error: Chart file not found at $CHART_FILE"
+  exit 1
+fi
+
+if grep -Fq "$EXPECTED_STRING" "$CHART_FILE"; then
+  echo "Success: Found expected kube-version annotation."
+else
+  echo "Error: Expected kube-version annotation not found in $CHART_FILE."
+  echo "Found:"
+  grep "catalog.cattle.io/kube-version" "$CHART_FILE" || echo "(Annotation not found)"
+  exit 1
+fi
