@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+cd $(dirname $0)/..
+
 # Extract version from go.mod
 # We use 'go list -m' to handle 'replace' directive correctly
 CLIENT_GO_VERSION=$(go list -m -f '{{if .Replace}}{{.Replace.Version}}{{else}}{{.Version}}{{end}}' k8s.io/client-go)

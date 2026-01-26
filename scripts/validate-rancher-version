@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+cd $(dirname $0)/..
+
 # Extract Rancher version for 'main' branch from VERSION.md
 # Expected format: | main | v0.9 | v2.13 |
 RANCHER_VERSION_TAG=$(grep "| main |" VERSION.md | awk -F'|' '{print $4}' | tr -d ' ')
