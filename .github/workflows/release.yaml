@@ -25,7 +25,7 @@ jobs:
     steps:
 
     - name : Checkout repository
-      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
     - name: Build Binary
       run: make build ARCH=${{ matrix.arch }}
@@ -42,7 +42,7 @@ jobs:
 
     - name: Upload artifacts
       # https://github.com/actions/upload-artifact/commit/65462800fd760344b1a7b4382951275a0abb4808
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
       with:
         name: webhook-artifacts-${{ matrix.arch }}
         path: |
@@ -57,20 +57,20 @@ jobs:
 
     - name : Checkout repository
        # https://github.com/actions/checkout/releases/tag/v4.1.1
-      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
     - name: package-helm
       run: make package-helm
 
     - name: Download the amd64 artifacts
-      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+      uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
       # https://github.com/actions/download-artifact/releases/tag/v4.1.7
       with:
         name: webhook-artifacts-amd64
         path: dist/artifacts
 
     - name: Download the arm64 artifacts
-      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+      uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
       # https://github.com/actions/download-artifact/releases/tag/v4.1.7
       with:
         name: webhook-artifacts-arm64
@@ -96,7 +96,7 @@ jobs:
       id-token: write # Required for cosign signing
     steps:
       - name: Checkout repository
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: "Read vault secrets"
         uses: rancher-eio/read-vault-secrets@main
