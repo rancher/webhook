@@ -6,6 +6,8 @@ cd $(dirname $0)
 ./build
 ./test
 ./validate
+./validate-kube-version
+./validate-rancher-version
 ./validate-ci
 ./package
 ./package-helm
