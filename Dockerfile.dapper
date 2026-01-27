@@ -3,7 +3,7 @@ FROM registry.suse.com/bci/golang:1.23
 ARG DAPPER_HOST_ARCH
 ENV ARCH $DAPPER_HOST_ARCH
 
-ENV HELM_VERSION v3.13.3
+ENV HELM_VERSION v3.20.0
 ENV HELM_UNITTEST_VERSION 0.3.2
 
 RUN zypper -n install git docker vim less file curl wget awk
