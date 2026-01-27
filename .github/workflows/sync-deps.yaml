@@ -33,7 +33,7 @@ jobs:
             secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATE_KEY
 
       # Fetch github token just for the webhook repository
-      - uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
+      - uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2
         id: app-token
         with:
           app-id: ${{ env.APP_ID }}
@@ -42,7 +42,7 @@ jobs:
             webhook
 
       - name : Checkout webhook repository
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: "${{ env.WEBHOOK_REF }}"
           path: webhook
@@ -51,7 +51,7 @@ jobs:
           persist-credentials: true
 
       - name : Checkout rancher repository
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: "${{ github.event.inputs.rancher_repository }}"
           ref: "${{ env.RANCHER_REF }}"
