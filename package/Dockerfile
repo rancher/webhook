@@ -52,8 +52,8 @@ FROM build AS validate
 RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b /usr/local/bin v2.7.1
 COPY . .
 RUN --mount=type=cache,target=/root/.cache,id=rancher golangci-lint run
-RUN ./scripts/validate-kube-version.sh
-RUN ./scripts/validate-rancher-version.sh
+RUN ./scripts/validate-kube-version
+RUN ./scripts/validate-rancher-version
 
 # ===============
 # Integration Test Build Stage
