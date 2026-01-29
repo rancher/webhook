@@ -181,6 +181,7 @@ func (c *ClusterRoleTemplateBindingSuite) Test_PrivilegeEscalation() {
 	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
 	crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
 	crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
+	crtbCache.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 	crtbCache.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(crtbUser, newDefaultCRTB().ClusterName)).Return([]*apisv3.ClusterRoleTemplateBinding{
 		{
 			UserName:         crtbUser,
@@ -197,7 +198,7 @@ func (c *ClusterRoleTemplateBindingSuite) Test_PrivilegeEscalation() {
 	}, nil).AnyTimes()
 
 	crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
-	validator := clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver, nil, clusterCache)
+	validator := clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver, nil, clusterCache, crtbCache)
 	type args struct {
 		oldCRTB  func() *apisv3.ClusterRoleTemplateBinding
 		newCRTB  func() *apisv3.ClusterRoleTemplateBinding
@@ -332,6 +333,7 @@ func (c *ClusterRoleTemplateBindingSuite) Test_UpdateValidation() {
 	crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
 	crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
 	crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	crtbCache.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
 	clusterCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.Cluster](ctrl)
 	clusterCache.EXPECT().Get(defaultClusterID).Return(&apisv3.Cluster{
@@ -341,7 +343,7 @@ func (c *ClusterRoleTemplateBindingSuite) Test_UpdateValidation() {
 	}, nil).AnyTimes()
 
 	crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
-	validator := clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver, nil, clusterCache)
+	validator := clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver, nil, clusterCache, crtbCache)
 	type args struct {
 		oldCRTB  func() *apisv3.ClusterRoleTemplateBinding
 		newCRTB  func() *apisv3.ClusterRoleTemplateBinding
@@ -714,6 +716,7 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 		crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
 		crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
 		crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+		crtbCache.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 		grbCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.GlobalRoleBinding](ctrl)
 		notFoundError := apierrors.NewNotFound(schema.GroupResource{
 			Group:    "management.cattle.io",
@@ -739,7 +742,7 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 		clusterCache.EXPECT().Get(nilCluster).Return(nil, nil).AnyTimes()
 
 		crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
-		return clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver, grbCache, clusterCache)
+		return clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver, grbCache, clusterCache, crtbCache)
 	}
 	type args struct {
 		oldCRTB  func() *apisv3.ClusterRoleTemplateBinding
@@ -1074,6 +1077,118 @@ func (c *ClusterRoleTemplateBindingSuite) Test_Create() {
 				if resp.Allowed != test.allowed {
 					c.Failf("Response was incorrectly validated", "Wanted response.Allowed = '%v' got '%v': result=%+v", test.name, test.allowed, resp.Allowed, resp.Result)
 				}
+			}
+		})
+	}
+}
+
+func (c *ClusterRoleTemplateBindingSuite) Test_Create_DuplicateCRTB() {
+	const memberRole = "member"
+	const clusterName = defaultClusterID
+	const userName = "user1"
+	dummyDefaultResolver, _ := validation.NewTestRuleResolver(nil, nil, nil, nil)
+
+	tests := []struct {
+		name           string
+		setupCRTBMocks func(crtbCache *fake.MockCacheInterface[*apisv3.ClusterRoleTemplateBinding])
+		newCRTB        *apisv3.ClusterRoleTemplateBinding
+		allowed        bool
+	}{
+		{
+			name: "no duplicate exists",
+			setupCRTBMocks: func(crtbCache *fake.MockCacheInterface[*apisv3.ClusterRoleTemplateBinding]) {
+				crtbCache.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*apisv3.ClusterRoleTemplateBinding{}, nil).AnyTimes()
+			},
+			newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+				crtb := newDefaultCRTB()
+				crtb.UserName = userName
+				crtb.RoleTemplateName = memberRole
+				crtb.ClusterName = clusterName
+				return crtb
+			}(),
+			allowed: true,
+		},
+		{
+			name: "exact duplicate exists",
+			setupCRTBMocks: func(crtbCache *fake.MockCacheInterface[*apisv3.ClusterRoleTemplateBinding]) {
+				existing := newDefaultCRTB()
+				existing.Name = "existing-crtb"
+				existing.UserName = userName
+				existing.RoleTemplateName = memberRole
+				existing.ClusterName = clusterName
+				crtbCache.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*apisv3.ClusterRoleTemplateBinding{existing}, nil).AnyTimes()
+			},
+			newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+				crtb := newDefaultCRTB()
+				crtb.UserName = userName
+				crtb.RoleTemplateName = memberRole
+				crtb.ClusterName = clusterName
+				return crtb
+			}(),
+			allowed: false,
+		},
+		{
+			name: "duplicate exists but is being deleted",
+			setupCRTBMocks: func(crtbCache *fake.MockCacheInterface[*apisv3.ClusterRoleTemplateBinding]) {
+				deleting := newDefaultCRTB()
+				deleting.Name = "deleting-crtb"
+				deleting.UserName = userName
+				deleting.RoleTemplateName = memberRole
+				deleting.ClusterName = clusterName
+				deleting.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+				crtbCache.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*apisv3.ClusterRoleTemplateBinding{deleting}, nil).AnyTimes()
+			},
+			newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+				crtb := newDefaultCRTB()
+				crtb.UserName = userName
+				crtb.RoleTemplateName = memberRole
+				crtb.ClusterName = clusterName
+				return crtb
+			}(),
+			allowed: true,
+		},
+	}
+
+	for _, test := range tests {
+		c.Run(test.name, func() {
+			// Each subtest needs its own gomock controller for isolation
+			subCtrl := gomock.NewController(c.T())
+			defer subCtrl.Finish()
+
+			crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](subCtrl)
+			crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any()).AnyTimes()
+			crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
+			// This is where the List expectation is set for each test case
+			test.setupCRTBMocks(crtbCache)
+
+			roleTemplate := &apisv3.RoleTemplate{
+				ObjectMeta: metav1.ObjectMeta{Name: memberRole},
+				Context:    "cluster",
+			}
+			roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](subCtrl)
+			roleTemplateCache.EXPECT().Get(memberRole).Return(roleTemplate, nil).AnyTimes()
+			roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, nil)
+
+			clusterCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.Cluster](subCtrl)
+			clusterCache.EXPECT().Get(clusterName).Return(&apisv3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName},
+			}, nil).AnyTimes()
+
+			crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
+			validator := clusterroletemplatebinding.NewValidator(crtbResolver, dummyDefaultResolver, roleResolver, nil, clusterCache, crtbCache)
+
+			req := createCRTBRequest(c.T(), nil, test.newCRTB, "admin_user_id")
+			admitters := validator.Admitters()
+			c.Require().NotEmpty(admitters, "Expected at least one admitter")
+			resp, err := admitters[0].Admit(req)
+
+			c.NoError(err)
+			if test.allowed {
+				c.True(resp.Allowed)
+			} else {
+				c.False(resp.Allowed)
+				c.Contains(resp.Result.Message, "duplicate crtb not allowed")
 			}
 		})
 	}

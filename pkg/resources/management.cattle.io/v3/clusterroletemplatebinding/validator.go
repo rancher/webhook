@@ -14,6 +14,8 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	k8validation "k8s.io/kubernetes/pkg/registry/rbac/validation"
@@ -32,7 +34,7 @@ const (
 
 // NewValidator will create a newly allocated Validator.
 func NewValidator(crtb *resolvers.CRTBRuleResolver, defaultResolver k8validation.AuthorizationRuleResolver,
-	roleTemplateResolver *auth.RoleTemplateResolver, grbCache v3.GlobalRoleBindingCache, clusterCache v3.ClusterCache) *Validator {
+	roleTemplateResolver *auth.RoleTemplateResolver, grbCache v3.GlobalRoleBindingCache, clusterCache v3.ClusterCache, crtbCache v3.ClusterRoleTemplateBindingCache) *Validator {
 	resolver := resolvers.NewAggregateRuleResolver(defaultResolver, crtb)
 	return &Validator{
 		admitter: admitter{
@@ -40,6 +42,7 @@ func NewValidator(crtb *resolvers.CRTBRuleResolver, defaultResolver k8validation
 			roleTemplateResolver: roleTemplateResolver,
 			grbCache:             grbCache,
 			clusterCache:         clusterCache,
+			crtbCache:            crtbCache,
 		},
 	}
 }
@@ -74,6 +77,7 @@ type admitter struct {
 	roleTemplateResolver *auth.RoleTemplateResolver
 	grbCache             v3.GlobalRoleBindingCache
 	clusterCache         v3.ClusterCache
+	crtbCache            v3.ClusterRoleTemplateBindingCache
 }
 
 // Admit is the entrypoint for the validator. Admit will return an error if it unable to process the request.
@@ -107,6 +111,17 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 				return admission.ResponseBadRequest(fieldErr.Error()), nil
 			}
 			return nil, fmt.Errorf("failed to validate fields on create: %w", err)
+		}
+		if err = a.validateDuplicates(crtb); err != nil {
+			return &admissionv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: err.Error(),
+					Status:  metav1.StatusFailure,
+					Reason:  metav1.StatusReasonConflict,
+					Code:    409,
+				},
+			}, nil
 		}
 	}
 
@@ -224,4 +239,51 @@ func (a *admitter) validateCreateFields(newCRTB *apisv3.ClusterRoleTemplateBindi
 	}
 
 	return nil
+}
+
+func (a *admitter) validateDuplicates(newCRTB *apisv3.ClusterRoleTemplateBinding) error {
+	roleTemplate, err := a.roleTemplateResolver.RoleTemplateCache().Get(newCRTB.RoleTemplateName)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			// If the role template doesn't exist, let it pass. The create validation will catch it.
+			return nil
+		}
+		return fmt.Errorf("failed to get RoleTemplate %s: %w", newCRTB.RoleTemplateName, err)
+	}
+	if roleTemplate.Context != "cluster" {
+		return nil
+	}
+
+	// Check existing CRTBs in the cluster
+	existingCRTBs, err := a.crtbCache.List(newCRTB.ClusterName, labels.Everything())
+	if err != nil {
+		return fmt.Errorf("failed to list CRTBs: %w", err)
+	}
+	for _, existingCRTB := range existingCRTBs {
+		// Ignore the CRTB being created/updated itself
+		if existingCRTB.Name == newCRTB.Name && existingCRTB.Namespace == newCRTB.Namespace {
+			continue
+		}
+		// Handle the UI Race Condition (Critical Edge Case #1)
+		// If a conflicting CRTB is found, but it's already being deleted, ignore it as a conflict.
+		if existingCRTB.DeletionTimestamp != nil {
+			continue
+		}
+
+		if existingCRTB.RoleTemplateName == newCRTB.RoleTemplateName && isDuplicate(existingCRTB, newCRTB) {
+			return fmt.Errorf("duplicate crtb not allowed")
+		}
+	}
+	return nil
+}
+
+// isDuplicate checks if the given newCRTB and existingCRTB target the same user or group.
+// It returns true if both bindings have the same non-empty user principal name, user name,
+// group principal name, or group name. This is used to prevent duplicate bindings for the
+// same subject (user or group) within a cluster.
+func isDuplicate(existingCRTB *apisv3.ClusterRoleTemplateBinding, newCRTB *apisv3.ClusterRoleTemplateBinding) bool {
+	return (newCRTB.UserPrincipalName != "" && existingCRTB.UserPrincipalName != "" && newCRTB.UserPrincipalName == existingCRTB.UserPrincipalName) ||
+		(newCRTB.UserName != "" && existingCRTB.UserName != "" && newCRTB.UserName == existingCRTB.UserName) ||
+		(newCRTB.GroupPrincipalName != "" && existingCRTB.GroupPrincipalName != "" && newCRTB.GroupPrincipalName == existingCRTB.GroupPrincipalName) ||
+		(newCRTB.GroupName != "" && existingCRTB.GroupName != "" && newCRTB.GroupName == existingCRTB.GroupName)
 }
