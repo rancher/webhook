@@ -293,18 +293,30 @@ func (a *admitter) validatePriorityClass(oldCluster, newCluster *apisv3.Cluster,
 		return admission.ResponseAllowed(), nil
 	}
 
-	newClusterScheduling := getSchedulingCustomization(newCluster)
-	oldClusterScheduling := getSchedulingCustomization(oldCluster)
+	for _, agentType := range common.AllAgentTypes {
+		newClusterScheduling := getSchedulingCustomization(newCluster, agentType)
+		oldClusterScheduling := getSchedulingCustomization(oldCluster, agentType)
 
-	var newPC, oldPC *apisv3.PriorityClassSpec
-	if newClusterScheduling != nil {
-		newPC = newClusterScheduling.PriorityClass
+		var oldPC, newPC *apisv3.PriorityClassSpec
+		if newClusterScheduling != nil {
+			newPC = newClusterScheduling.PriorityClass
+		}
+		if oldClusterScheduling != nil {
+			oldPC = oldClusterScheduling.PriorityClass
+		}
+
+		resp, err := a.validateSinglePriorityClass(oldPC, newPC)
+		if err != nil || !resp.Allowed {
+			return resp, err
+		}
 	}
 
-	if oldClusterScheduling != nil {
-		oldPC = oldClusterScheduling.PriorityClass
-	}
+	return admission.ResponseAllowed(), nil
+}
 
+// validateSinglePriorityClass contains the core validation logic for a single PriorityClass configuration, including
+// feature-gate handling. It is independent of where the PriorityClass comes from (cluster or fleet agent).
+func (a *admitter) validateSinglePriorityClass(oldPC, newPC *apisv3.PriorityClassSpec) (*admissionv1.AdmissionResponse, error) {
 	if newPC == nil {
 		return admission.ResponseAllowed(), nil
 	}
@@ -319,7 +331,8 @@ func (a *admitter) validatePriorityClass(oldCluster, newCluster *apisv3.Cluster,
 		enabled = *featuredEnabled.Spec.Value
 	}
 
-	// if the feature is disabled then we should not permit any changes between the old and new clusters other than deletion
+	// if the feature is disabled then we should not permit any changes between the old
+	// and new PriorityClass other than deletion
 	if !enabled && oldPC != nil {
 		if reflect.DeepEqual(*oldPC, *newPC) {
 			return admission.ResponseAllowed(), nil
@@ -354,18 +367,31 @@ func (a *admitter) validatePodDisruptionBudget(oldCluster, newCluster *apisv3.Cl
 	if op != admissionv1.Create && op != admissionv1.Update {
 		return admission.ResponseAllowed(), nil
 	}
-	newClusterScheduling := getSchedulingCustomization(newCluster)
-	oldClusterScheduling := getSchedulingCustomization(oldCluster)
 
-	var newPDB, oldPDB *apisv3.PodDisruptionBudgetSpec
-	if newClusterScheduling != nil {
-		newPDB = newClusterScheduling.PodDisruptionBudget
+	for _, agentType := range common.AllAgentTypes {
+		newClusterScheduling := getSchedulingCustomization(newCluster, agentType)
+		oldClusterScheduling := getSchedulingCustomization(oldCluster, agentType)
+
+		var newPDB, oldPDB *apisv3.PodDisruptionBudgetSpec
+		if newClusterScheduling != nil {
+			newPDB = newClusterScheduling.PodDisruptionBudget
+		}
+		if oldClusterScheduling != nil {
+			oldPDB = oldClusterScheduling.PodDisruptionBudget
+		}
+
+		resp, err := a.validateSinglePodDisruptionBudget(oldPDB, newPDB)
+		if err != nil || !resp.Allowed {
+			return resp, err
+		}
 	}
 
-	if oldClusterScheduling != nil {
-		oldPDB = oldClusterScheduling.PodDisruptionBudget
-	}
+	return admission.ResponseAllowed(), nil
+}
 
+// validateSinglePodDisruptionBudget contains the core validation logic for a single PodDisruptionBudget configuration,
+// including feature-gate handling. It is independent of where the PDB comes from (cluster or fleet agent).
+func (a *admitter) validateSinglePodDisruptionBudget(oldPDB, newPDB *apisv3.PodDisruptionBudgetSpec) (*admissionv1.AdmissionResponse, error) {
 	if newPDB == nil {
 		return admission.ResponseAllowed(), nil
 	}
@@ -380,7 +406,8 @@ func (a *admitter) validatePodDisruptionBudget(oldCluster, newCluster *apisv3.Cl
 		enabled = *featuredEnabled.Spec.Value
 	}
 
-	// if the feature is disabled then we should not permit any changes between the old and new clusters other than deletion
+	// if the feature is disabled then we should not permit any changes between the old
+	// and new PDBs other than deletion
 	if !enabled && oldPDB != nil {
 		if reflect.DeepEqual(*oldPDB, *newPDB) {
 			return admission.ResponseAllowed(), nil
@@ -479,20 +506,37 @@ func (a *admitter) checkPSAConfigOnCluster(cluster *apisv3.Cluster) (*admissionv
 	return admission.ResponseAllowed(), nil
 }
 
-func getSchedulingCustomization(cluster *apisv3.Cluster) *apisv3.AgentSchedulingCustomization {
+func getSchedulingCustomization(cluster *apisv3.Cluster, agent common.AgentType) *apisv3.AgentSchedulingCustomization {
 	if cluster == nil {
 		return nil
 	}
 
-	if cluster.Spec.ClusterAgentDeploymentCustomization == nil {
+	switch agent {
+	case common.AgentTypeCluster:
+		if cluster.Spec.ClusterAgentDeploymentCustomization == nil {
+			return nil
+		}
+
+		if cluster.Spec.ClusterAgentDeploymentCustomization.SchedulingCustomization == nil {
+			return nil
+		}
+
+		return cluster.Spec.ClusterAgentDeploymentCustomization.SchedulingCustomization
+
+	case common.AgentTypeFleet:
+		if cluster.Spec.FleetAgentDeploymentCustomization == nil {
+			return nil
+		}
+
+		if cluster.Spec.FleetAgentDeploymentCustomization.SchedulingCustomization == nil {
+			return nil
+		}
+
+		return cluster.Spec.FleetAgentDeploymentCustomization.SchedulingCustomization
+
+	default:
 		return nil
 	}
-
-	if cluster.Spec.ClusterAgentDeploymentCustomization.SchedulingCustomization == nil {
-		return nil
-	}
-
-	return cluster.Spec.ClusterAgentDeploymentCustomization.SchedulingCustomization
 }
 
 // validateVersionManagementFeature validates the annotation for the version management feature is set with valid value on the imported RKE2/K3s cluster;
