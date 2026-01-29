@@ -39,10 +39,10 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/rancher/dynamiclistener v0.7.3
 	github.com/rancher/jsonpath v0.0.0-20250620213443-ad24535cf0c1
-	github.com/rancher/lasso v0.2.6
-	github.com/rancher/rancher/pkg/apis v0.0.0-20260115233746-6aa34356aa00
+	github.com/rancher/lasso v0.2.5
+	github.com/rancher/rancher/pkg/apis v0.0.0-20260129092249-bb0625fd1896
 	github.com/rancher/rke v1.8.6
-	github.com/rancher/wrangler/v3 v3.3.2-rc.1
+	github.com/rancher/wrangler/v3 v3.3.1
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.11.1
