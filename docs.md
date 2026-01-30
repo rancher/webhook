@@ -287,6 +287,20 @@ Users can update the following fields if they have not been set, but after they 
 
 In addition, as in the create validation, both a user subject and a group subject cannot be specified.
 
+#### Duplicate ClusterRoleTemplateBinding Prevention
+
+On creation, the webhook prevents the creation of a `ClusterRoleTemplateBinding` if another one already exists with the same subject and role in the same cluster. 
+This ensures that a user or group is not granted the same cluster-level role multiple times.
+
+A binding is considered a duplicate if another `ClusterRoleTemplateBinding` exists with the exact same values for:
+- `clusterName`
+- `roleTemplateName`
+- The subject, which is determined by one of the following fields:
+  - `userName`
+  - `userPrincipalName`
+  - `groupName`
+  - `groupPrincipalName`
+
 ## Feature
 
 ### Validation Checks
