@@ -67,7 +67,7 @@ A `Toleration` is matched to a regex which is provided by upstream [apimachinery
 
 For the `Affinity` based rules, the `podAffinity`/`podAntiAffinity` are validated via label selectors via [this apimachinery function](https://github.com/kubernetes/apimachinery/blob/02a41040d88da08de6765573ae2b1a51f424e1ca/pkg/apis/meta/v1/validation/validation.go#L56) whereas the `nodeAffinity` `nodeSelectorTerms` are validated via the same `Toleration` function.
 
-#### cluster.spec.clusterAgentDeploymentCustomization.schedulingCustomization
+#### cluster.spec.clusterAgentDeploymentCustomization.schedulingCustomization and cluster.spec.fleetAgentDeploymentCustomization.schedulingCustomization
 
 The `SchedulingCustomization` subfield of the `DeploymentCustomization` field defines the properties of a Pod Disruption Budget and Priority Class which will be automatically deployed by Rancher for the cattle-cluster-agent.
 

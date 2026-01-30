@@ -544,10 +544,10 @@ When settings are updated, the following additional checks take place:
   annotation `cattle.io/force=true`.
 
 
-- `cluster-agent-default-priority-class` must contain a valid JSON object which matches the format of a `v1.PriorityClassSpec` object. The Value field must be greater than or equal to negative 1 billion and less than or equal to 1 billion. The Preemption field must be a string value set to either `PreemptLowerPriority` or `Never`.
+- `cluster-agent-default-priority-class` and `fleet-agent-default-priority-class` must contain a valid JSON object which matches the format of a `v1.PriorityClassSpec` object. The Value field must be greater than or equal to negative 1 billion and less than or equal to 1 billion. The Preemption field must be a string value set to either `PreemptLowerPriority` or `Never`.
 
 
-- `cluster-agent-default-pod-disruption-budget` must contain a valid JSON object which matches the format of a `v1.PodDisruptionBudgetSpec` object. The `minAvailable` and `maxUnavailable` fields must have a string value that is either a non-negative whole number, or a non-negative whole number percentage value less than or equal to `100%`.
+- `cluster-agent-default-pod-disruption-budget` and `fleet-agent-default-pod-disruption-budget` must contain a valid JSON object which matches the format of a `v1.PodDisruptionBudgetSpec` object. The `minAvailable` and `maxUnavailable` fields must have a string value that is either a non-negative whole number, or a non-negative whole number percentage value less than or equal to `100%`.
 
 ## Token
 
@@ -680,7 +680,7 @@ A `Toleration` is matched to a regex which is provided by upstream [apimachinery
 
 For the `Affinity` based rules, the `podAffinity`/`podAntiAffinity` are validated via label selectors via [this apimachinery function](https://github.com/kubernetes/apimachinery/blob/02a41040d88da08de6765573ae2b1a51f424e1ca/pkg/apis/meta/v1/validation/validation.go#L56) whereas the `nodeAffinity` `nodeSelectorTerms` are validated via the same `Toleration` function.
 
-##### cluster.spec.clusterAgentDeploymentCustomization.schedulingCustomization
+##### cluster.spec.clusterAgentDeploymentCustomization.schedulingCustomization and cluster.spec.fleetAgentDeploymentCustomization.schedulingCustomization
 
 The `SchedulingCustomization` subfield of the `DeploymentCustomization` field defines the properties of a Pod Disruption Budget and Priority Class which will be automatically deployed by Rancher for the cattle-cluster-agent.
 
