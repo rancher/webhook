@@ -34,6 +34,8 @@ const (
 	AgentTLSMode                          = "agent-tls-mode"
 	CattleClusterAgentPriorityClass       = "cluster-agent-default-priority-class"
 	CattleClusterAgentPodDisruptionBudget = "cluster-agent-default-pod-disruption-budget"
+	FleetAgentPriorityClass               = "fleet-agent-default-priority-class"
+	FleetAgentPodDisruptionBudget         = "fleet-agent-default-pod-disruption-budget"
 )
 
 // MinDeleteInactiveUserAfter is the minimum duration for delete-inactive-user-after setting.
@@ -121,10 +123,10 @@ func (a *admitter) admitUpdate(oldSetting, newSetting *v3.Setting) (*admissionv1
 	switch newSetting.Name {
 	case AgentTLSMode:
 		err = a.validateAgentTLSMode(oldSetting, newSetting)
-	case CattleClusterAgentPriorityClass:
-		err = a.validateClusterAgentPriorityClass(newSetting)
-	case CattleClusterAgentPodDisruptionBudget:
-		err = a.validateClusterAgentPodDisruptionBudget(newSetting)
+	case CattleClusterAgentPriorityClass, FleetAgentPriorityClass:
+		err = a.validateAgentPriorityClass(newSetting)
+	case CattleClusterAgentPodDisruptionBudget, FleetAgentPodDisruptionBudget:
+		err = a.validateAgentPodDisruptionBudget(newSetting)
 	default:
 	}
 
@@ -399,7 +401,7 @@ func (a *admitter) validateAgentTLSMode(oldSetting, newSetting *v3.Setting) erro
 	return nil
 }
 
-func (a *admitter) validateClusterAgentPriorityClass(newSetting *v3.Setting) error {
+func (a *admitter) validateAgentPriorityClass(newSetting *v3.Setting) error {
 	if newSetting.Value == "" {
 		return nil
 	}
@@ -426,7 +428,7 @@ func (a *admitter) validateClusterAgentPriorityClass(newSetting *v3.Setting) err
 	return nil
 }
 
-func (a *admitter) validateClusterAgentPodDisruptionBudget(newSetting *v3.Setting) error {
+func (a *admitter) validateAgentPodDisruptionBudget(newSetting *v3.Setting) error {
 	if newSetting.Value == "" {
 		return nil
 	}

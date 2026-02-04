@@ -431,23 +431,24 @@ func (s *SettingSuite) TestValidateClusterAgentSchedulingPriorityClass() {
 		},
 	}
 
-	for _, test := range tests {
-		test := test
-		s.T().Run(test.name, func(t *testing.T) {
-			t.Parallel()
+	for _, settingName := range []string{setting.CattleClusterAgentPriorityClass, setting.FleetAgentPriorityClass} {
+		for _, test := range tests {
+			s.T().Run(test.name, func(t *testing.T) {
+				t.Parallel()
 
-			validator := setting.NewValidator(nil, nil)
-			s.testAdmit(t, validator, nil, &v3.Setting{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: setting.CattleClusterAgentPriorityClass,
-				},
-				Value: test.newValue,
-			}, v1.Update, test.allowed)
-		})
+				validator := setting.NewValidator(nil, nil)
+				s.testAdmit(t, validator, nil, &v3.Setting{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: settingName,
+					},
+					Value: test.newValue,
+				}, v1.Update, test.allowed)
+			})
+		}
 	}
 }
 
-func (s *SettingSuite) TestValidateClusterAgentSchedulingPodDisruptionBudget() {
+func (s *SettingSuite) TestValidateAgentSchedulingPodDisruptionBudget() {
 	tests := []struct {
 		name     string
 		newValue string
@@ -549,19 +550,20 @@ func (s *SettingSuite) TestValidateClusterAgentSchedulingPodDisruptionBudget() {
 		},
 	}
 
-	for _, test := range tests {
-		test := test
-		s.T().Run(test.name, func(t *testing.T) {
-			t.Parallel()
+	for _, settingName := range []string{setting.CattleClusterAgentPodDisruptionBudget, setting.FleetAgentPodDisruptionBudget} {
+		for _, test := range tests {
+			s.T().Run(test.name, func(t *testing.T) {
+				t.Parallel()
 
-			validator := setting.NewValidator(nil, nil)
-			s.testAdmit(t, validator, nil, &v3.Setting{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: setting.CattleClusterAgentPodDisruptionBudget,
-				},
-				Value: test.newValue,
-			}, v1.Update, test.allowed)
-		})
+				validator := setting.NewValidator(nil, nil)
+				s.testAdmit(t, validator, nil, &v3.Setting{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: settingName,
+					},
+					Value: test.newValue,
+				}, v1.Update, test.allowed)
+			})
+		}
 	}
 }
 
