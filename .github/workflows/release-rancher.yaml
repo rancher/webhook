@@ -32,7 +32,7 @@ jobs:
       - name: Install dependencies
         run: sudo snap install yq --channel=v4/stable
 
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: "${{ env.WEBHOOK_REF }}"
           path: webhook
@@ -53,7 +53,7 @@ jobs:
             rancher
 
       - name: Checkout rancher repository
-        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           repository: ${{ github.repository_owner }}/rancher
           ref: "${{ env.RANCHER_REF }}"
@@ -71,7 +71,7 @@ jobs:
           charts_branch=$(grep '"chart-default-branch"' pkg/settings/setting.go | cut -d'"' -f4)
           echo "charts_branch=$charts_branch" >> $GITHUB_OUTPUT
 
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           repository: ${{ github.repository_owner }}/charts
           ref: "${{ steps.find_charts_branch.outputs.charts_branch }}"
