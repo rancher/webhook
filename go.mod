@@ -40,7 +40,7 @@ require (
 	github.com/rancher/dynamiclistener v0.7.4-rc.2
 	github.com/rancher/jsonpath v0.0.0-20250620213443-ad24535cf0c1
 	github.com/rancher/lasso v0.2.6
-	github.com/rancher/rancher/pkg/apis v0.0.0-20260115233746-6aa34356aa00
+	github.com/rancher/rancher/pkg/apis v0.0.0-20260211194119-d0c9ffaf3cb0
 	github.com/rancher/rke v1.8.6
 	github.com/rancher/wrangler/v3 v3.4.0
 	github.com/robfig/cron v1.2.0
@@ -141,7 +141,7 @@ require (
 	k8s.io/kube-aggregator v0.35.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20251125145642-4e65d59e963e // indirect
 	k8s.io/kubelet v0.35.0 // indirect
-	sigs.k8s.io/cluster-api v1.10.6
+	sigs.k8s.io/cluster-api v1.11.5
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.1 // indirect

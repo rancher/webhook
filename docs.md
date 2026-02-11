@@ -621,6 +621,22 @@ When a UserAttribute is updated, the following checks take place:
 - If set, `disableAfter` must be zero or a positive duration (e.g. `240h`).
 - If set, `deleteAfter` must be zero or a positive duration (e.g. `240h`).
 
+## ProxyEndpoint
+
+### Validation Checks
+
+#### On Create
+
+##### Domain Route Broadness
+
+Any domain included in a ProxyEndpoint Route entry must not be overly broad. If the domain includes an overly broad wildcard (e.g. `*.com`, `*.example.%.co.uk`, `%.co.uk`, etc.) it will be denied.
+
+#### On Update
+
+##### Domain Route Broadness
+
+Any domain included in a ProxyEndpoint Route entry must not be overly broad. If the domain includes an overly broad wildcard (e.g. `*.com`, `*.example.%.co.uk`, `%.co.uk`, etc.) it will be denied.
+
 # provisioning.cattle.io/v1
 
 ## Cluster

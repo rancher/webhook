@@ -15,7 +15,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	capi "sigs.k8s.io/cluster-api/api/v1beta1"
+	capi "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 // GVK constants for CAPI types
@@ -147,11 +147,11 @@ func (m *IntegrationSuite) testMachineDeploymentScaling(t *testing.T, testSuffix
 				Spec: capi.MachineSpec{
 					ClusterName: capiClusterName,
 					Bootstrap: capi.Bootstrap{
-						ConfigRef: &corev1.ObjectReference{
+						ConfigRef: capi.ContractVersionedObjectReference{
 							Name: "bootstrap-secret",
 						},
 					},
-					InfrastructureRef: corev1.ObjectReference{
+					InfrastructureRef: capi.ContractVersionedObjectReference{
 						Name: "infra-machine",
 					},
 				},
@@ -277,11 +277,11 @@ func (m *IntegrationSuite) testMachineDeploymentScalingWithoutProvisioningCluste
 				Spec: capi.MachineSpec{
 					ClusterName: capiClusterName,
 					Bootstrap: capi.Bootstrap{
-						ConfigRef: &corev1.ObjectReference{
+						ConfigRef: capi.ContractVersionedObjectReference{
 							Name: "bootstrap-secret",
 						},
 					},
-					InfrastructureRef: corev1.ObjectReference{
+					InfrastructureRef: capi.ContractVersionedObjectReference{
 						Name: "infra-machine",
 					},
 				},
