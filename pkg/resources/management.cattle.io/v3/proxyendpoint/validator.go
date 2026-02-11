@@ -22,7 +22,7 @@ type Validator struct {
 	admitter admitter
 }
 
-func NewProxyEndpointValidator() admission.ValidatingAdmissionHandler {
+func NewValidator() admission.ValidatingAdmissionHandler {
 	return &Validator{
 		admitter: admitter{},
 	}

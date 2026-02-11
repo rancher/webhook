@@ -91,7 +91,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			authconfig.NewValidator(),
 			users.NewValidator(clients.Management.UserAttribute().Cache(), clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.DefaultResolver, clients.Management.User().Cache()),
 			machinedeployment.NewValidator(clients.Provisioning.Cluster().Cache(), clients.Provisioning.Cluster(), clients.Dynamic),
-			proxyendpoint.NewProxyEndpointValidator(),
+			proxyendpoint.NewValidator(),
 		)
 	} else {
 		handlers = append(handlers, clusterauthtoken.NewValidator())
