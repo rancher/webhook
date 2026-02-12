@@ -13,14 +13,13 @@ import (
 	"go.uber.org/mock/gomock"
 	admissionv1 "k8s.io/api/admission/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	capi "sigs.k8s.io/cluster-api/api/v1beta1"
+	capi "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 // MockDynamicController implements the same method signature as *dynamic.Controller
@@ -110,9 +109,8 @@ func (suite *MachineDeploymentValidatorSuite) TestHappyPath() {
 			},
 		},
 		Spec: capi.ClusterSpec{
-			InfrastructureRef: &corev1.ObjectReference{
-				Name:      "test-cluster",
-				Namespace: "test-namespace",
+			InfrastructureRef: capi.ContractVersionedObjectReference{
+				Name: "test-cluster",
 			},
 		},
 	}
@@ -229,9 +227,8 @@ func (suite *MachineDeploymentValidatorSuite) TestMachinePoolNotFound() {
 			},
 		},
 		Spec: capi.ClusterSpec{
-			InfrastructureRef: &corev1.ObjectReference{
-				Name:      "test-cluster",
-				Namespace: "test-namespace",
+			InfrastructureRef: capi.ContractVersionedObjectReference{
+				Name: "test-cluster",
 			},
 		},
 	}
@@ -355,9 +352,8 @@ func (suite *MachineDeploymentValidatorSuite) TestReplicasAlreadyMatch() {
 			},
 		},
 		Spec: capi.ClusterSpec{
-			InfrastructureRef: &corev1.ObjectReference{
-				Name:      "test-cluster",
-				Namespace: "test-namespace",
+			InfrastructureRef: capi.ContractVersionedObjectReference{
+				Name: "test-cluster",
 			},
 		},
 	}
@@ -472,9 +468,8 @@ func (suite *MachineDeploymentValidatorSuite) TestUpdateOperation() {
 			},
 		},
 		Spec: capi.ClusterSpec{
-			InfrastructureRef: &corev1.ObjectReference{
-				Name:      "test-cluster",
-				Namespace: "test-namespace",
+			InfrastructureRef: capi.ContractVersionedObjectReference{
+				Name: "test-cluster",
 			},
 		},
 	}
@@ -616,9 +611,8 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterOwnerNotFou
 			},
 		},
 		Spec: capi.ClusterSpec{
-			InfrastructureRef: &corev1.ObjectReference{
-				Name:      "test-cluster",
-				Namespace: "test-namespace",
+			InfrastructureRef: capi.ContractVersionedObjectReference{
+				Name: "test-cluster",
 			},
 		},
 	}
@@ -685,9 +679,8 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterCacheError(
 			},
 		},
 		Spec: capi.ClusterSpec{
-			InfrastructureRef: &corev1.ObjectReference{
-				Name:      "test-cluster",
-				Namespace: "test-namespace",
+			InfrastructureRef: capi.ContractVersionedObjectReference{
+				Name: "test-cluster",
 			},
 		},
 	}
@@ -758,9 +751,8 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterMissingRKEC
 			},
 		},
 		Spec: capi.ClusterSpec{
-			InfrastructureRef: &corev1.ObjectReference{
-				Name:      "test-cluster",
-				Namespace: "test-namespace",
+			InfrastructureRef: capi.ContractVersionedObjectReference{
+				Name: "test-cluster",
 			},
 		},
 	}
@@ -838,9 +830,8 @@ func (suite *MachineDeploymentValidatorSuite) TestProvisioningClusterEmptyMachin
 			},
 		},
 		Spec: capi.ClusterSpec{
-			InfrastructureRef: &corev1.ObjectReference{
-				Name:      "test-cluster",
-				Namespace: "test-namespace",
+			InfrastructureRef: capi.ContractVersionedObjectReference{
+				Name: "test-cluster",
 			},
 		},
 	}
@@ -946,9 +937,8 @@ func (suite *MachineDeploymentValidatorSuite) TestMissingMachinePoolLabel() {
 			},
 		},
 		Spec: capi.ClusterSpec{
-			InfrastructureRef: &corev1.ObjectReference{
-				Name:      "test-cluster",
-				Namespace: "test-namespace",
+			InfrastructureRef: capi.ContractVersionedObjectReference{
+				Name: "test-cluster",
 			},
 		},
 	}
@@ -1039,9 +1029,8 @@ func (suite *MachineDeploymentValidatorSuite) TestUnstructuredConversion() {
 			},
 		},
 		Spec: capi.ClusterSpec{
-			InfrastructureRef: &corev1.ObjectReference{
-				Name:      "test-cluster",
-				Namespace: "test-namespace",
+			InfrastructureRef: capi.ContractVersionedObjectReference{
+				Name: "test-cluster",
 			},
 		},
 	}

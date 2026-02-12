@@ -749,3 +749,50 @@ func UserFromRequest(request *admissionv1.AdmissionRequest) (*v3.User, error) {
 
 	return object, nil
 }
+
+func ProxyEndpointFromRequest(request *admissionv1.AdmissionRequest) (*v3.ProxyEndpoint, error) {
+	if request == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	obj := &v3.ProxyEndpoint{}
+	raw := request.Object.Raw
+
+	if request.Operation == admissionv1.Delete {
+		raw = request.OldObject.Raw
+	}
+
+	err := json.Unmarshal(raw, obj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal request object: %w", err)
+	}
+
+	return obj, nil
+}
+
+func ProxyEndpointOldAndNewFromRequest(request *admissionv1.AdmissionRequest) (*v3.ProxyEndpoint, *v3.ProxyEndpoint, error) {
+	if request == nil {
+		return nil, nil, fmt.Errorf("nil request")
+	}
+
+	object := &v3.ProxyEndpoint{}
+	oldObject := &v3.ProxyEndpoint{}
+
+	if request.Operation != admissionv1.Delete {
+		err := json.Unmarshal(request.Object.Raw, object)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to unmarshal request object: %w", err)
+		}
+	}
+
+	if request.Operation == admissionv1.Create {
+		return oldObject, object, nil
+	}
+
+	err := json.Unmarshal(request.OldObject.Raw, oldObject)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal request oldObject: %w", err)
+	}
+
+	return oldObject, object, nil
+}

@@ -23,6 +23,7 @@ import (
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/podsecurityadmissionconfigurationtemplate"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/project"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/projectroletemplatebinding"
+	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/proxyendpoint"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/roletemplate"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/setting"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/token"
@@ -90,6 +91,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			authconfig.NewValidator(),
 			users.NewValidator(clients.Management.UserAttribute().Cache(), clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.DefaultResolver, clients.Management.User().Cache()),
 			machinedeployment.NewValidator(clients.Provisioning.Cluster().Cache(), clients.Provisioning.Cluster(), clients.Dynamic),
+			proxyendpoint.NewValidator(),
 		)
 	} else {
 		handlers = append(handlers, clusterauthtoken.NewValidator())
