@@ -37,7 +37,7 @@ require (
 	github.com/go-ldap/ldap/v3 v3.4.11
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
-	github.com/rancher/dynamiclistener v0.7.4-rc.2
+	github.com/rancher/dynamiclistener v1.27.5
 	github.com/rancher/jsonpath v0.0.0-20250620213443-ad24535cf0c1
 	github.com/rancher/lasso v0.2.6
 	github.com/rancher/rancher/pkg/apis v0.0.0-20260211194119-d0c9ffaf3cb0
@@ -72,6 +72,7 @@ require (
 	github.com/go-openapi/swag/stringutils v0.25.4 // indirect
 	github.com/go-openapi/swag/typeutils v0.25.4 // indirect
 	github.com/go-openapi/swag/yamlutils v0.25.4 // indirect
+	github.com/rancher/wrangler v1.1.1 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 )
 
