@@ -15,6 +15,9 @@ app: rancher-webhook
   value: "linux"
   effect: "NoSchedule"
   operator: "Equal"
+- key: "CriticalAddonsOnly"
+  effect: "NoSchedule"
+  operator: "Exists"
 {{- end -}}
 
 {{- define "linux-node-selector" -}}
