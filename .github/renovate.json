@@ -7,10 +7,7 @@
     "release/v0.9",
     "release/v0.8",
     "release/v0.7",
-    "release/v0.6",
-    "release/v0.5",
-    "release/v0.4",
-    "release/v0.3"
+    "release/v0.6"
   ],
   "prHourlyLimit": 2,
   "enabledManagers": [
@@ -27,7 +24,10 @@
       "matchPackageNames": [
         "/go.opentelemetry.io/*/",
         "/github.com/prometheus/*/",
-        "/github.com/rancher/rancher/pkg/apis/"
+        "/github.com/rancher/rancher/pkg/apis/",
+        "github.com/rancher/lasso",
+        "github.com/rancher/wrangler/v3",
+        "github.com/rancher/dynamiclistener"
       ]
     },
     {
