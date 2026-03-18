@@ -49,6 +49,42 @@
         "/k8s.io/*/",
         "/sigs.k8s.io/*/"
       ]
+    },
+    {
+      "description": "Disable major updates on release branches",
+      "matchUpdateTypes": ["major"],
+      "matchBaseBranches": ["/^release\\//"],
+      "enabled": false
+    },
+    {
+      "description": "Group all GitHub Actions updates into a single PR per branch",
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions",
+      "separateMajorMinor": false
+    },
+    {
+      "description": "Group Go dev tooling (Go version, golangci-lint, helm) into a single PR per branch",
+      "matchPackageNames": [
+        "go",
+        "golangci/golangci-lint",
+        "helm/helm"
+      ],
+      "groupName": "Go dev tools",
+      "separateMajorMinor": false
+    },
+    {
+      "description": "Group golang.org/x/* packages into a single PR per branch",
+      "matchPackageNames": [
+        "/golang.org/x/*/"
+      ],
+      "groupName": "golang.org/x packages"
+    },
+    {
+      "description": "Group SUSE BCI base image updates into a single PR per branch",
+      "matchPackageNames": [
+        "/registry.suse.com/bci/*/"
+      ],
+      "groupName": "BCI base images"
     }
   ]
 }
