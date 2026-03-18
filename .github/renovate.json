@@ -75,14 +75,14 @@
     {
       "description": "Group golang.org/x/* packages into a single PR per branch",
       "matchPackageNames": [
-        "/golang.org/x/*/"
+        "/^golang\\.org\\/x\\//"
       ],
       "groupName": "golang.org/x packages"
     },
     {
       "description": "Group SUSE BCI base image updates into a single PR per branch",
       "matchPackageNames": [
-        "/registry.suse.com/bci/*/"
+        "/^registry\\.suse\\.com\\/bci\\//"
       ],
       "groupName": "BCI base images"
     }
