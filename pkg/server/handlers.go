@@ -8,7 +8,7 @@ import (
 	auditpolicy "github.com/rancher/webhook/pkg/resources/auditlog.cattle.io/v1/auditpolicy"
 	"github.com/rancher/webhook/pkg/resources/catalog.cattle.io/v1/clusterrepo"
 	"github.com/rancher/webhook/pkg/resources/cluster.cattle.io/v3/clusterauthtoken"
-	"github.com/rancher/webhook/pkg/resources/cluster.x-k8s.io/v1beta1/machinedeployment"
+	"github.com/rancher/webhook/pkg/resources/cluster.x-k8s.io/v1beta2/machinedeployment"
 	nshandler "github.com/rancher/webhook/pkg/resources/core/v1/namespace"
 	"github.com/rancher/webhook/pkg/resources/core/v1/secret"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/authconfig"
