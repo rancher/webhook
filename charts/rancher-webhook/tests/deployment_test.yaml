@@ -88,3 +88,68 @@ tests:
           path: spec.template.spec.hostNetwork
       - notExists:
           path: spec.template.spec.dnsPolicy
+
+  - it: should default to 1 replica
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 1
+
+  - it: should set replica count when replicaCount is specified
+    set:
+      replicaCount: 3
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 3
+
+  - it: should set default podAntiAffinity
+    asserts:
+      - isNotNull:
+          path: spec.template.spec.affinity.podAntiAffinity
+      - isNotNull:
+          path: spec.template.spec.affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution
+
+  - it: should allow overriding affinity
+    values:
+      - ./fixtures/affinity-override.yaml
+    asserts:
+      - isNotNull:
+          path: spec.template.spec.affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution
+      - isNull:
+          path: spec.template.spec.affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution
+
+  - it: should allow disabling affinity by setting it to null
+    values:
+      - ./fixtures/affinity-disabled.yaml
+    asserts:
+      - notExists:
+          path: spec.template.spec.affinity
+
+  - it: should not set resources by default
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].resources
+
+  - it: should set resources when specified
+    set:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.cpu
+          value: 100m
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.memory
+          value: 128Mi
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.cpu
+          value: 500m
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 256Mi
