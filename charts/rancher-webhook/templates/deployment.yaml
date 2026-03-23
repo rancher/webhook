@@ -4,6 +4,7 @@ kind: Deployment
 metadata:
   name: rancher-webhook
 spec:
+  replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
       app: rancher-webhook
@@ -49,6 +50,10 @@ spec:
         image: '{{ template "system_default_registry" . }}{{ .Values.image.repository }}:{{ .Values.image.tag }}'
         name: rancher-webhook
         imagePullPolicy: "{{ .Values.image.imagePullPolicy }}"
+        {{- with .Values.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
         ports:
         - name: https
           containerPort: {{ .Values.port | default 9443 }}
@@ -80,4 +85,8 @@ spec:
       serviceAccountName: rancher-webhook
       {{- if .Values.priorityClassName }}
       priorityClassName: "{{.Values.priorityClassName}}"
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
       {{- end }}
