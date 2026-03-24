@@ -22,11 +22,11 @@ import (
 var (
 	capiClusterGVK = schema.GroupVersion{
 		Group:   "cluster.x-k8s.io",
-		Version: "v1beta1",
+		Version: "v1beta2",
 	}.WithKind("Cluster")
 	capiMachineDeploymentGVK = schema.GroupVersion{
 		Group:   "cluster.x-k8s.io",
-		Version: "v1beta1",
+		Version: "v1beta2",
 	}.WithKind("MachineDeployment")
 )
 
@@ -105,7 +105,7 @@ func (m *IntegrationSuite) testMachineDeploymentScaling(t *testing.T, testSuffix
 	// Step 2: Create the CAPI Cluster
 	capiCluster := &capi.Cluster{
 		TypeMeta: v1.TypeMeta{
-			APIVersion: "cluster.x-k8s.io/v1beta1",
+			APIVersion: "cluster.x-k8s.io/v1beta2",
 			Kind:       "Cluster",
 		},
 		ObjectMeta: v1.ObjectMeta{
@@ -127,7 +127,7 @@ func (m *IntegrationSuite) testMachineDeploymentScaling(t *testing.T, testSuffix
 	// Step 3: Create the MachineDeployment with labels pointing to CAPI Cluster and MachinePool
 	machineDeployment := &capi.MachineDeployment{
 		TypeMeta: v1.TypeMeta{
-			APIVersion: "cluster.x-k8s.io/v1beta1",
+			APIVersion: "cluster.x-k8s.io/v1beta2",
 			Kind:       "MachineDeployment",
 		},
 		ObjectMeta: v1.ObjectMeta{
@@ -239,7 +239,7 @@ func (m *IntegrationSuite) testMachineDeploymentScalingWithoutProvisioningCluste
 	// Step 1: Create the CAPI Cluster WITHOUT an owner reference to a Provisioning Cluster
 	capiCluster := &capi.Cluster{
 		TypeMeta: v1.TypeMeta{
-			APIVersion: "cluster.x-k8s.io/v1beta1",
+			APIVersion: "cluster.x-k8s.io/v1beta2",
 			Kind:       "Cluster",
 		},
 		ObjectMeta: v1.ObjectMeta{
@@ -257,7 +257,7 @@ func (m *IntegrationSuite) testMachineDeploymentScalingWithoutProvisioningCluste
 	// Note: No machine pool name label, so no MachinePool update will be attempted
 	machineDeployment := &capi.MachineDeployment{
 		TypeMeta: v1.TypeMeta{
-			APIVersion: "cluster.x-k8s.io/v1beta1",
+			APIVersion: "cluster.x-k8s.io/v1beta2",
 			Kind:       "MachineDeployment",
 		},
 		ObjectMeta: v1.ObjectMeta{
