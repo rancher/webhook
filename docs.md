@@ -58,11 +58,11 @@ When a ClusterAuthToken is updated, the following checks take place:
 
 - If set, `lastUsedAt` must be a valid date time according to RFC3339 (e.g. `2023-11-29T00:00:00Z`).
 
-# cluster.x-k8s.io/v1beta1
+# cluster.x-k8s.io/v1beta2
 
 ## Scale
 
-### cluster.x-k8s.io/v1beta1
+### cluster.x-k8s.io/v1beta2
 
 #### MachineDeployment
 
