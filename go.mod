@@ -108,7 +108,7 @@ require (
 	github.com/rancher/eks-operator v1.13.0-rc.4 // indirect
 	github.com/rancher/fleet/pkg/apis v0.15.0-alpha.6 // indirect
 	github.com/rancher/gke-operator v1.13.0-rc.3 // indirect
-	github.com/rancher/norman v0.9.0
+	github.com/rancher/norman v0.9.1
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
