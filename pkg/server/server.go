@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 	"github.com/rancher/dynamiclistener"
 	"github.com/rancher/dynamiclistener/server"
 	"github.com/rancher/webhook/pkg/admission"
@@ -160,23 +159,24 @@ func setCertificateExpirationDays() error {
 }
 
 func listenAndServe(ctx context.Context, clients *clients.Clients, validators []admission.ValidatingAdmissionHandler, mutators []admission.MutatingAdmissionHandler) (rErr error) {
-	router := mux.NewRouter()
-	errChecker := health.NewErrorChecker("Config Applied")
+	router := http.NewServeMux()
+	errChecker := health.NewErrorChecker("config-applied")
 	health.RegisterHealthCheckers(router, errChecker)
 	errChecker.Store(errors.New("webhook configuration not yet applied"))
-	router.Use(certAuth())
 
 	logrus.Debug("Creating Webhook routes")
 	for _, webhook := range validators {
-		route := router.HandleFunc(admission.Path(validationPath, webhook), admission.NewValidatingHandlerFunc(webhook))
-		path, _ := route.GetPathTemplate()
+		path := admission.Path(validationPath, webhook)
+		router.HandleFunc(path, admission.NewValidatingHandlerFunc(webhook))
 		logrus.Debugf("creating route: %s", path)
 	}
 	for _, webhook := range mutators {
-		route := router.HandleFunc(admission.Path(mutationPath, webhook), admission.NewMutatingHandlerFunc(webhook))
-		path, _ := route.GetPathTemplate()
+		path := admission.Path(mutationPath, webhook)
+		router.HandleFunc(path, admission.NewMutatingHandlerFunc(webhook))
 		logrus.Debugf("creating route: %s", path)
 	}
+
+	routerHandler := certAuth()(router)
 
 	handler := &secretHandler{
 		validators:           validators,
@@ -204,7 +204,7 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, validators []
 			return fmt.Errorf("failed to decode webhook port value '%s': %w", portStr, err)
 		}
 	}
-	return server.ListenAndServe(ctx, webhookHTTPSPort, webhookHTTPPort, router, &server.ListenOpts{
+	return server.ListenAndServe(ctx, webhookHTTPSPort, webhookHTTPPort, routerHandler, &server.ListenOpts{
 		Secrets:       clients.Core.Secret(),
 		CertNamespace: namespace,
 		CertName:      certName,
