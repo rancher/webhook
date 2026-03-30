@@ -141,6 +141,26 @@ Validation ensures that the limits for cpu/memory must not be less than the requ
 A secret cannot be deleted if its deletion request has an orphan policy,
 and the secret has roles or role bindings dependent on it.
 
+#### Cloud Credential Validation
+
+Secrets in the `cattle-cloud-credentials` namespace with a type prefix of `rke.cattle.io/cloud-credential-`
+are validated against their corresponding DynamicSchema. The credential type is extracted from the secret
+type suffix (e.g., `rke.cattle.io/cloud-credential-amazonec2` -> `amazonec2`), and the schema is looked up
+as `<type>credentialconfig` (e.g., `amazonec2credentialconfig`).
+
+Validation checks:
+- All required fields defined in the DynamicSchema are present and non-empty.
+- Field values conform to MinLength and MaxLength constraints.
+- Field values match allowed Options (enum values) if defined.
+- Extra fields not in the schema are allowed.
+- Type/format validation beyond these checks is not currently enforced by this webhook.
+
+Special cases:
+- Generic credentials require the `generic-cloud-credentials` feature flag when no DynamicSchema exists.
+- When that feature is enabled, schema-less credential types must use the `x-` prefix, while the backing Secret type `generic` is also allowed.
+- DELETE operations check if the credential is referenced by provisioning clusters, machine pools, or ETCD S3 config.
+  If the credential is in use, deletion is denied unless `GracePeriodSeconds=0` (force-delete) is set.
+
 ### Mutation Checks
 
 #### On create
@@ -495,6 +515,21 @@ changed:
 
 In addition, as in the create validation, both a user subject and a group subject cannot be specified.
 
+## ProxyEndpoint
+
+### Validation Checks
+
+#### Overly Broad Wildcard Check
+
+Users may only create route entries within a ProxyEndpoint CR which
+
++ Are Absolute domains (`www.myapi.com`)
++ Are partial, inline, wildcards (`www.%.myapi.com`)
++ Are prefix wildcards (`*.myapi.com`, `*myapi.com`)
++ Do not include protocols (`https://`, etc.)
+
+Some of these checks are also done before a request is sent to the webhook, using kubebuilder Pattern comments on the CRD itself. Others, such as the overly broad wildcard check (e.g. `%.com`, `subdomain.%.com`), are done in the webhook as a regular expression would not be sufficient. In the event that the webhook is not running, the Rancher proxy also verifies that the route is not overly broad and silently ignores it if it is.  
+
 ## RoleTemplate
 
 ### Validation Checks
@@ -620,22 +655,6 @@ When a UserAttribute is updated, the following checks take place:
 - If set, `lastLogin` must be a valid date time according to RFC3339 (e.g. `2023-11-29T00:00:00Z`).
 - If set, `disableAfter` must be zero or a positive duration (e.g. `240h`).
 - If set, `deleteAfter` must be zero or a positive duration (e.g. `240h`).
-
-## ProxyEndpoint
-
-### Validation Checks
-
-#### On Create
-
-##### Domain Route Broadness
-
-Any domain included in a ProxyEndpoint Route entry must not be overly broad. If the domain includes an overly broad wildcard (e.g. `*.com`, `*.example.%.co.uk`, `%.co.uk`, etc.) it will be denied.
-
-#### On Update
-
-##### Domain Route Broadness
-
-Any domain included in a ProxyEndpoint Route entry must not be overly broad. If the domain includes an overly broad wildcard (e.g. `*.com`, `*.example.%.co.uk`, `%.co.uk`, etc.) it will be denied.
 
 # provisioning.cattle.io/v1
 

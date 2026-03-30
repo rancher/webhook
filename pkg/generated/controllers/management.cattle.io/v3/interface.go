@@ -34,6 +34,7 @@ type Interface interface {
 	Cluster() ClusterController
 	ClusterProxyConfig() ClusterProxyConfigController
 	ClusterRoleTemplateBinding() ClusterRoleTemplateBindingController
+	DynamicSchema() DynamicSchemaController
 	Feature() FeatureController
 	GlobalRole() GlobalRoleController
 	GlobalRoleBinding() GlobalRoleBindingController
@@ -67,6 +68,10 @@ func (v *version) ClusterProxyConfig() ClusterProxyConfigController {
 
 func (v *version) ClusterRoleTemplateBinding() ClusterRoleTemplateBindingController {
 	return generic.NewController[*v3.ClusterRoleTemplateBinding, *v3.ClusterRoleTemplateBindingList](schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "ClusterRoleTemplateBinding"}, "clusterroletemplatebindings", true, v.controllerFactory)
+}
+
+func (v *version) DynamicSchema() DynamicSchemaController {
+	return generic.NewNonNamespacedController[*v3.DynamicSchema, *v3.DynamicSchemaList](schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "DynamicSchema"}, "dynamicschemas", v.controllerFactory)
 }
 
 func (v *version) Feature() FeatureController {

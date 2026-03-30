@@ -53,6 +53,7 @@ func main() {
 					v3.Setting{},
 					v3.User{},
 					v3.UserAttribute{},
+					v3.DynamicSchema{},
 				},
 			},
 			"provisioning.cattle.io": {
@@ -96,6 +97,7 @@ func main() {
 				&v3.Setting{},
 				&v3.AuthConfig{},
 				&v3.User{},
+				&v3.ProxyEndpoint{},
 			},
 		},
 		"provisioning.cattle.io": {

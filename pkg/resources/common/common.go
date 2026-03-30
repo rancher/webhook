@@ -27,6 +27,8 @@ const (
 	// SchedulingCustomizationFeatureName is the feature name for enabling customization of PDBs and PCs for the
 	// cattle-cluster-agent
 	SchedulingCustomizationFeatureName = "cluster-agent-scheduling-customization"
+	// GenericCloudCredentialsFeatureName gates schema-less generic cloud credentials.
+	GenericCloudCredentialsFeatureName = "generic-cloud-credentials"
 )
 
 // PdbPercentageRegex ensures that a given string is a properly formatted percentage value
