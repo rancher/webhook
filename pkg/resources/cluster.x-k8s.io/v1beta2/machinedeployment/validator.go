@@ -60,11 +60,11 @@ func NewValidator(clusterCache provcontrollers.ClusterCache, clusterClient provc
 var (
 	machineDeploymentGVK = schema.GroupVersion{
 		Group:   "cluster.x-k8s.io",
-		Version: "v1beta1",
+		Version: "v1beta2",
 	}.WithKind("MachineDeployment")
 	capiClusterGVK = schema.GroupVersion{
 		Group:   "cluster.x-k8s.io",
-		Version: "v1beta1",
+		Version: "v1beta2",
 	}.WithKind("Cluster")
 )
 
@@ -72,7 +72,7 @@ var (
 func (v *ReplicaValidator) GVR() schema.GroupVersionResource {
 	return schema.GroupVersionResource{
 		Group:    "cluster.x-k8s.io",
-		Version:  "v1beta1",
+		Version:  "v1beta2",
 		Resource: "machinedeployments/scale",
 	}
 }
