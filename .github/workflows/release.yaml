@@ -123,6 +123,7 @@ jobs:
           push-to-prime: true
           prime-repo: rancher
           prime-make-target: push-prime-image
+          identity-registry: ${{ vars.PRIME_REGISTRY_HOSTNAME }}
           prime-registry: ${{ env.PRIME_STG_REGISTRY }}
           prime-username: ${{ env.PRIME_STG_REGISTRY_USERNAME }}
           prime-password: ${{ env.PRIME_STG_REGISTRY_PASSWORD }}
