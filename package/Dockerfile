@@ -1,7 +1,7 @@
 # ===============
 # Build Stage
 # ===============
-FROM --platform=$BUILDPLATFORM registry.suse.com/bci/golang:1.24 AS build
+FROM --platform=$BUILDPLATFORM registry.suse.com/bci/golang:1.24@sha256:ae722bb8954485d10eb26d90c14d521d90810d8b0c84c3c72b58cbb1fc1ee284 AS build
 
 # Set up build cache
 ENV GOMODCACHE=/root/.cache/go/modcache
@@ -49,7 +49,26 @@ RUN cat coverage.out | awk 'BEGIN {cov=0; stat=0;} $3!="" { cov+=($3==1?$2:0); s
 # Validate Stage
 # ===============
 FROM build AS validate
-RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b /usr/local/bin v1.64.8
+# renovate: datasource=github-releases depName=golangci/golangci-lint
+ARG GOLANGCI_LINT_VERSION=1.64.6
+# renovate: datasource=github-release-attachments depName=golangci/golangci-lint digestVersion=v1.64.6
+ARG GOLANGCI_LINT_SUM_amd64=71e290acbacb7b3ba4f68f0540fb74dc180c4336ac8a6f3bdcd7fcc48b15148d
+# renovate: datasource=github-release-attachments depName=golangci/golangci-lint digestVersion=v1.64.6
+ARG GOLANGCI_LINT_SUM_arm64=99a7ff13dec7a8781a68408b6ecb8a1c5e82786cba3189eaa91d5cdcc24362ce
+RUN set -e; \
+    ARCH=$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/'); \
+    TARBALL="golangci-lint-${GOLANGCI_LINT_VERSION}-linux-${ARCH}.tar.gz"; \
+    URL="https://github.com/golangci/golangci-lint/releases/download/v${GOLANGCI_LINT_VERSION}/${TARBALL}"; \
+    case "${ARCH}" in \
+      amd64) SUM="${GOLANGCI_LINT_SUM_amd64}" ;; \
+      arm64) SUM="${GOLANGCI_LINT_SUM_arm64}" ;; \
+      *) echo "Unsupported arch: ${ARCH}" >&2; exit 1 ;; \
+    esac; \
+    curl -sSfL -o "/tmp/${TARBALL}" "${URL}"; \
+    echo "${SUM}  /tmp/${TARBALL}" | sha256sum --check; \
+    tar -xzf "/tmp/${TARBALL}" -C /tmp "golangci-lint-${GOLANGCI_LINT_VERSION}-linux-${ARCH}/golangci-lint"; \
+    mv "/tmp/golangci-lint-${GOLANGCI_LINT_VERSION}-linux-${ARCH}/golangci-lint" /usr/local/bin/golangci-lint; \
+    rm -rf "/tmp/${TARBALL}" "/tmp/golangci-lint-${GOLANGCI_LINT_VERSION}-linux-${ARCH}"
 COPY . .
 RUN --mount=type=cache,target=/root/.cache,id=rancher golangci-lint run
 RUN ./scripts/validate-kube-version
@@ -71,7 +90,7 @@ COPY --from=integration-test-build /dist/rancher-webhook-integration.test /ranch
 # ===============
 # Final Stage
 # ===============
-FROM registry.suse.com/bci/bci-micro:15.7
+FROM registry.suse.com/bci/bci-micro:15.7@sha256:5ca1a44ca5be8afd3e4abc721abf1efe6b0fe69b83cf01a0c204c16160913edc
 
 ARG user=webhook
 
