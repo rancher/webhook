@@ -4,6 +4,9 @@ set -eu
 cd $(dirname $0)/../../..
 DIST_DIR="$PWD"/dist
 
+# Build the integration test binary
+make integration-test-binary ARCH=${ARCH}
+
 source ./scripts/version
 # Source tags file to get the last built tags
 source ./dist/tags
