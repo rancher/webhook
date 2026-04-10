@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
@@ -190,6 +191,7 @@ func (p *ProjectRoleTemplateBindingSuite) TestPrivilegeEscalation() {
 	},
 	}, nil).AnyTimes()
 	prtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	prtbCache.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*apisv3.ProjectRoleTemplateBinding{}, nil).AnyTimes()
 	crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
 	crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
 	crtbCache.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(crtbUser, clusterID)).Return([]*apisv3.ClusterRoleTemplateBinding{
@@ -220,7 +222,7 @@ func (p *ProjectRoleTemplateBindingSuite) TestPrivilegeEscalation() {
 			ClusterName: clusterID,
 		},
 	}, nil).AnyTimes()
-	validator := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, resolver, roleResolver, clusterCache, projectCache)
+	validator := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, resolver, roleResolver, clusterCache, projectCache, prtbCache)
 	type args struct {
 		oldPRTB  func() *apisv3.ProjectRoleTemplateBinding
 		newPRTB  func() *apisv3.ProjectRoleTemplateBinding
@@ -395,7 +397,7 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnUpdate() {
 		},
 	}, nil).AnyTimes()
 
-	validator := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, resolver, roleResolver, clusterCache, projectCache)
+	validator := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, resolver, roleResolver, clusterCache, projectCache, prtbCache)
 	type args struct {
 		oldPRTB  func() *apisv3.ProjectRoleTemplateBinding
 		newPRTB  func() *apisv3.ProjectRoleTemplateBinding
@@ -768,6 +770,7 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnCreate() {
 		prtbCache := fake.NewMockCacheInterface[*apisv3.ProjectRoleTemplateBinding](ctrl)
 		prtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
 		prtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+		prtbCache.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*apisv3.ProjectRoleTemplateBinding{}, nil).AnyTimes()
 		crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
 		crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
 		crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
@@ -814,7 +817,7 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnCreate() {
 			},
 		}, nil).AnyTimes()
 
-		return projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, resolver, roleResolver, clusterCache, projectCache)
+		return projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, resolver, roleResolver, clusterCache, projectCache, prtbCache)
 	}
 
 	type args struct {
@@ -1213,6 +1216,116 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnCreate() {
 			p.Require().NoError(err, "Admit failed")
 			if resp.Allowed != test.allowed {
 				p.Failf("Response was incorrectly validated", "Wanted response.Allowed = %v got %v: result=%+v", test.allowed, resp.Allowed, resp.Result)
+			}
+		})
+	}
+}
+
+func (p *ProjectRoleTemplateBindingSuite) TestValidateDuplicates() {
+	const adminUser = "admin-userid"
+	const memberRole = "read-role"
+
+	tests := []struct {
+		name           string
+		setupPRTBMocks func(prtbCache *fake.MockCacheInterface[*apisv3.ProjectRoleTemplateBinding])
+		newPRTB        *apisv3.ProjectRoleTemplateBinding
+		allowed        bool
+	}{
+		{
+			name: "no duplicate exists",
+			setupPRTBMocks: func(prtbCache *fake.MockCacheInterface[*apisv3.ProjectRoleTemplateBinding]) {
+				prtbCache.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*apisv3.ProjectRoleTemplateBinding{}, nil).AnyTimes()
+			},
+			newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+				prtb := newBasePRTB()
+				prtb.RoleTemplateName = memberRole
+				return prtb
+			}(),
+			allowed: true,
+		},
+		{
+			name: "exact duplicate exists",
+			setupPRTBMocks: func(prtbCache *fake.MockCacheInterface[*apisv3.ProjectRoleTemplateBinding]) {
+				existing := newBasePRTB()
+				existing.Name = "existing-prtb"
+				existing.RoleTemplateName = memberRole
+				prtbCache.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*apisv3.ProjectRoleTemplateBinding{existing}, nil).AnyTimes()
+			},
+			newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+				prtb := newBasePRTB()
+				prtb.RoleTemplateName = memberRole
+				return prtb
+			}(),
+			allowed: false,
+		},
+		{
+			name: "duplicate exists but is being deleted",
+			setupPRTBMocks: func(prtbCache *fake.MockCacheInterface[*apisv3.ProjectRoleTemplateBinding]) {
+				deleting := newBasePRTB()
+				deleting.Name = "deleting-prtb"
+				deleting.RoleTemplateName = memberRole
+				deleting.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+				prtbCache.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*apisv3.ProjectRoleTemplateBinding{deleting}, nil).AnyTimes()
+			},
+			newPRTB: func() *apisv3.ProjectRoleTemplateBinding {
+				prtb := newBasePRTB()
+				prtb.RoleTemplateName = memberRole
+				return prtb
+			}(),
+			allowed: true,
+		},
+	}
+
+	for _, test := range tests {
+		p.Run(test.name, func() {
+			subCtrl := gomock.NewController(p.T())
+			defer subCtrl.Finish()
+
+			prtbCache := fake.NewMockCacheInterface[*apisv3.ProjectRoleTemplateBinding](subCtrl)
+			prtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any()).AnyTimes()
+			prtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+			test.setupPRTBMocks(prtbCache)
+
+			roleTemplate := &apisv3.RoleTemplate{
+				ObjectMeta: metav1.ObjectMeta{Name: memberRole},
+				Context:    "project",
+			}
+			roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](subCtrl)
+			roleTemplateCache.EXPECT().Get(memberRole).Return(roleTemplate, nil).AnyTimes()
+			roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, nil)
+
+			crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](subCtrl)
+			crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any()).AnyTimes()
+			crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
+			clusterCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.Cluster](subCtrl)
+			clusterCache.EXPECT().Get(clusterID).Return(&apisv3.Cluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterID},
+			}, nil).AnyTimes()
+
+			projectCache := fake.NewMockCacheInterface[*apisv3.Project](subCtrl)
+			projectCache.EXPECT().Get(clusterID, projectID).Return(&apisv3.Project{
+				ObjectMeta: metav1.ObjectMeta{Namespace: clusterID, Name: projectID},
+				Spec:       apisv3.ProjectSpec{ClusterName: clusterID},
+			}, nil).AnyTimes()
+
+			crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
+			prtbResolver := resolvers.NewPRTBRuleResolver(prtbCache, roleResolver)
+
+			dummyDefaultResolver, _ := validation.NewTestRuleResolver(nil, nil, nil, nil)
+			validator := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, dummyDefaultResolver, roleResolver, clusterCache, projectCache, prtbCache)
+
+			req := createPRTBRequest(p.T(), nil, test.newPRTB, adminUser)
+			admitters := validator.Admitters()
+			p.Require().NotEmpty(admitters)
+			resp, err := admitters[0].Admit(req)
+
+			p.NoError(err)
+			if test.allowed {
+				p.True(resp.Allowed)
+			} else {
+				p.False(resp.Allowed)
+				p.Contains(resp.Result.Message, "duplicate prtb not allowed")
 			}
 		})
 	}

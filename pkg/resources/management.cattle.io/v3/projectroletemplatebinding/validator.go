@@ -15,6 +15,8 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	k8validation "k8s.io/kubernetes/pkg/registry/rbac/validation"
@@ -30,7 +32,7 @@ var gvr = schema.GroupVersionResource{
 // NewValidator returns a new validator used for validation PRTB.
 func NewValidator(prtb *resolvers.PRTBRuleResolver, crtb *resolvers.CRTBRuleResolver,
 	defaultResolver k8validation.AuthorizationRuleResolver, roleTemplateResolver *auth.RoleTemplateResolver,
-	clusterCache v3.ClusterCache, projectCache v3.ProjectCache) *Validator {
+	clusterCache v3.ClusterCache, projectCache v3.ProjectCache, prtbCache v3.ProjectRoleTemplateBindingCache) *Validator {
 	clusterResolver := resolvers.NewAggregateRuleResolver(defaultResolver, crtb)
 	projectResolver := resolvers.NewAggregateRuleResolver(defaultResolver, prtb)
 	return &Validator{
@@ -40,6 +42,7 @@ func NewValidator(prtb *resolvers.PRTBRuleResolver, crtb *resolvers.CRTBRuleReso
 			roleTemplateResolver: roleTemplateResolver,
 			clusterCache:         clusterCache,
 			projectCache:         projectCache,
+			prtbCache:            prtbCache,
 		},
 	}
 }
@@ -75,6 +78,7 @@ type admitter struct {
 	roleTemplateResolver *auth.RoleTemplateResolver
 	clusterCache         v3.ClusterCache
 	projectCache         v3.ProjectCache
+	prtbCache            v3.ProjectRoleTemplateBindingCache
 }
 
 // Admit is the entrypoint for the validator. Admit will return an error if it's unable to process the request.
@@ -107,6 +111,17 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 				return admission.ResponseBadRequest(err.Error()), nil
 			}
 			return nil, fmt.Errorf("failed to validate fields on create: %w", err)
+		}
+		if err := a.validateDuplicates(prtb); err != nil {
+			return &admissionv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: err.Error(),
+					Status:  metav1.StatusFailure,
+					Reason:  metav1.StatusReasonConflict,
+					Code:    409,
+				},
+			}, nil
 		}
 	}
 
@@ -248,4 +263,44 @@ func onlyOneTrue(values ...bool) bool {
 		}
 	}
 	return trueCount == 1
+}
+
+func (a *admitter) validateDuplicates(newPRTB *apisv3.ProjectRoleTemplateBinding) error {
+	roleTemplate, err := a.roleTemplateResolver.RoleTemplateCache().Get(newPRTB.RoleTemplateName)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			// If the role template doesn't exist, let it pass. The create validation will catch it.
+			return nil
+		}
+		return fmt.Errorf("failed to get RoleTemplate %s: %w", newPRTB.RoleTemplateName, err)
+	}
+	if roleTemplate.Context != "project" {
+		return nil
+	}
+
+	existingPRTBs, err := a.prtbCache.List(newPRTB.Namespace, labels.Everything())
+	if err != nil {
+		return fmt.Errorf("failed to list PRTBs: %w", err)
+	}
+	for _, existingPRTB := range existingPRTBs {
+		if existingPRTB.Name == newPRTB.Name && existingPRTB.Namespace == newPRTB.Namespace {
+			continue
+		}
+		if existingPRTB.DeletionTimestamp != nil {
+			continue
+		}
+		if existingPRTB.RoleTemplateName == newPRTB.RoleTemplateName && isPRTBDuplicate(existingPRTB, newPRTB) {
+			return fmt.Errorf("duplicate prtb not allowed")
+		}
+	}
+
+	return nil
+}
+
+// isPRTBDuplicate checks if the given newPRTB and existingPRTB target the same user or group.
+func isPRTBDuplicate(existingPRTB *apisv3.ProjectRoleTemplateBinding, newPRTB *apisv3.ProjectRoleTemplateBinding) bool {
+	return (newPRTB.UserPrincipalName != "" && existingPRTB.UserPrincipalName != "" && newPRTB.UserPrincipalName == existingPRTB.UserPrincipalName) ||
+		(newPRTB.UserName != "" && existingPRTB.UserName != "" && newPRTB.UserName == existingPRTB.UserName) ||
+		(newPRTB.GroupPrincipalName != "" && existingPRTB.GroupPrincipalName != "" && newPRTB.GroupPrincipalName == existingPRTB.GroupPrincipalName) ||
+		(newPRTB.GroupName != "" && existingPRTB.GroupName != "" && newPRTB.GroupName == existingPRTB.GroupName)
 }

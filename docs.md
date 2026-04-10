@@ -495,6 +495,48 @@ changed:
 
 In addition, as in the create validation, both a user subject and a group subject cannot be specified.
 
+#### Duplicate ProjectRoleTemplateBinding Prevention
+
+On creation, the webhook prevents the creation of a `ProjectRoleTemplateBinding` if another one already exists with the same subject and role in the same project.
+This ensures that a user or group is not granted the same project-level role multiple times.
+
+A binding is considered a duplicate if another non-deleting `ProjectRoleTemplateBinding` exists in the same namespace with the exact same values for:
+- `roleTemplateName`
+- The subject, which is determined by one of the following fields:
+  - `userName`
+  - `userPrincipalName`
+  - `groupName`
+  - `groupPrincipalName`
+
+If a conflicting binding exists but is already marked for deletion (has a non-nil `DeletionTimestamp`), it is ignored, allowing the creation to proceed.
+
+### Mutation Checks
+
+#### On create
+
+When a `ProjectRoleTemplateBinding` is created using the `generateName` pattern (i.e. `metadata.name` is empty), the webhook replaces the server-generated random name with a deterministic `metadata.name` based on a hash of the binding's content.
+
+When the client sets an explicit `metadata.name`, the mutator does nothing. This preserves backward compatibility for public API consumers and customer automations that depend on specific resource names. The validating webhook's [duplicate check](#duplicate-projectroletemplatebinding-prevention) provides additional protection against duplicate bindings created with different explicit names.
+
+The deterministic name is computed as:
+
+```
+prefix + lowercase(base32(sha256(subject + "/" + roleTemplateName + "/" + projectName))[:10])
+```
+
+The prefix is taken from `metadata.generateName` if set, otherwise defaults to `prtb-`.
+
+The subject is resolved using the following priority order:
+1. `UserPrincipalName`
+2. `UserName`
+3. `GroupPrincipalName`
+4. `GroupName`
+5. `ServiceAccount`
+
+If no subject is set, the mutator passes the request through without modification (the validating webhook will reject it).
+
+This ensures that two identical concurrent requests produce the same resource name. The Kubernetes API server will reject the second request with a `409 Conflict`, preventing duplicate bindings even when requests race past the validating webhook.
+
 ## RoleTemplate
 
 ### Validation Checks

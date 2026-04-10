@@ -75,7 +75,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			podsecurityadmissionconfigurationtemplate.NewValidator(clients.Management.Cluster().Cache(), clients.Provisioning.Cluster().Cache()),
 			globalrole.NewValidator(clients.DefaultResolver, grbResolvers, clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.GlobalRoleResolver),
 			globalrolebinding.NewValidator(clients.DefaultResolver, grbResolvers, clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.GlobalRoleResolver),
-			projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver, clients.Management.Cluster().Cache(), clients.Management.Project().Cache()),
+			projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver, clients.Management.Cluster().Cache(), clients.Management.Project().Cache(), clients.Management.ProjectRoleTemplateBinding().Cache()),
 			clusterroletemplatebinding.NewValidator(crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver, clients.Management.GlobalRoleBinding().Cache(), clients.Management.Cluster().Cache(), clients.Management.ClusterRoleTemplateBinding().Cache()),
 			roletemplate.NewValidator(clients.DefaultResolver, clients.RoleTemplateResolver, clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.Management.GlobalRole().Cache()),
 			secret.NewValidator(clients.RBAC.Role().Cache(), clients.RBAC.RoleBinding().Cache()),
@@ -113,7 +113,8 @@ func Mutation(clients *clients.Clients) ([]admission.MutatingAdmissionHandler, e
 		secrets := secret.NewMutator(clients.RBAC.Role(), clients.RBAC.RoleBinding(), clients.Management.Setting().Cache(), clients.Management.User().Cache())
 		projects := project.NewMutator(clients.Core.Namespace().Cache(), clients.Management.RoleTemplate().Cache(), clients.Management.Project().Cache())
 		grbs := globalrolebinding.NewMutator(clients.Management.GlobalRole().Cache())
-		mutators = append(mutators, secrets, projects, grbs)
+		prtbs := projectroletemplatebinding.NewMutator()
+		mutators = append(mutators, secrets, projects, grbs, prtbs)
 	}
 
 	return mutators, nil

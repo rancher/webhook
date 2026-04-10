@@ -27,15 +27,16 @@ func (m *IntegrationSuite) TestProjectRoleTemplateBinding() {
 	m.Require().NotEmpty(projectName, "could not find a non-system project to put prtbs in")
 	m.Require().NoError(err)
 	const rtName = "rt-testprtb"
+	fullProjectName := fmt.Sprintf("%s:%s", clusterName, projectName)
 	newObj := func() *v3.ProjectRoleTemplateBinding { return &v3.ProjectRoleTemplateBinding{} }
 	validCreateObj := &v3.ProjectRoleTemplateBinding{
 		ObjectMeta: v1.ObjectMeta{
-			Name:      "test-projectroletemplatebinding",
+			Name:      "test-prtb",
 			Namespace: projectName,
 		},
 		UserName:         "bruce-wayne",
 		RoleTemplateName: rtName,
-		ProjectName:      fmt.Sprintf("%s:%s", clusterName, projectName),
+		ProjectName:      fullProjectName,
 	}
 	invalidCreate := func() *v3.ProjectRoleTemplateBinding {
 		invalidCreate := validCreateObj.DeepCopy()
