@@ -114,7 +114,8 @@ func Mutation(clients *clients.Clients) ([]admission.MutatingAdmissionHandler, e
 		projects := project.NewMutator(clients.Core.Namespace().Cache(), clients.Management.RoleTemplate().Cache(), clients.Management.Project().Cache())
 		grbs := globalrolebinding.NewMutator(clients.Management.GlobalRole().Cache())
 		prtbs := projectroletemplatebinding.NewMutator()
-		mutators = append(mutators, secrets, projects, grbs, prtbs)
+		crtbs := clusterroletemplatebinding.NewMutator()
+		mutators = append(mutators, secrets, projects, grbs, prtbs, crtbs)
 	}
 
 	return mutators, nil
