@@ -13,7 +13,6 @@
   ],
   "prHourlyLimit": 2,
   "enabledManagers": [
-    "droneci",
     "dockerfile",
     "github-actions",
     "helm-values",
