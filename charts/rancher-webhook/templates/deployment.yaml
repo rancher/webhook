@@ -71,10 +71,10 @@ spec:
           mountPath: /tmp/k8s-webhook-server/client-ca
           readOnly: true
         {{- end }}
-        {{- if .Values.capNetBindService }}
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
+        {{- if .Values.capNetBindService }}
           capabilities:
             add:
             - NET_BIND_SERVICE
