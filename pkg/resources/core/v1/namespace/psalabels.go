@@ -108,7 +108,7 @@ func (p *psaLabelAdmitter) Admit(request *admission.Request) (*admissionv1.Admis
 		response.Result = &metav1.Status{
 			Status:  "Failure",
 			Message: resp.Status.Reason,
-			Reason:  metav1.StatusReasonUnauthorized,
+			Reason:  metav1.StatusReasonForbidden,
 			Code:    http.StatusForbidden,
 		}
 	}
