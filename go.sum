@@ -142,8 +142,8 @@ github.com/rancher/aks-operator v1.13.0-rc.4 h1:tc7p2gZmRg4c6VBwWTQJYwmh1hlN68kf
 github.com/rancher/aks-operator v1.13.0-rc.4/go.mod h1:1ZjZB6zGHK+NGchN9KLplq+xPxRRi+q6Uzet5bjFwxo=
 github.com/rancher/ali-operator v1.13.0-rc.2 h1:a0biHGez+Np9XybJVh3yKN4RGPdaCzfM6D6cAXJac6o=
 github.com/rancher/ali-operator v1.13.0-rc.2/go.mod h1:s5HznpxsN9LsgtX6u5UoW9dZNKnDLuXcwzQRAEoDcog=
-github.com/rancher/dynamiclistener v0.8.1-rc.2 h1:kKur81JjP+zNafjejlPrhixi9emZ8YsU2S7vMPPPDDo=
-github.com/rancher/dynamiclistener v0.8.1-rc.2/go.mod h1:lFKNRb/MdXv8uFdUgUyFWg89xe3jlB6+w7M3fpmNmoc=
+github.com/rancher/dynamiclistener v0.8.1 h1:3F+NO4BzfNokyxk9YwklIuoqXjwaAp9rE5KsUyPKGFE=
+github.com/rancher/dynamiclistener v0.8.1/go.mod h1:5MQbIxCYXROxeXaagcx2dvlV0+j7pKOcMMQoI1wHRDA=
 github.com/rancher/eks-operator v1.13.0-rc.4 h1:XowN8+m3QZTIBOBLzar4frtz0xtREb9kcX6KXhF4eas=
 github.com/rancher/eks-operator v1.13.0-rc.4/go.mod h1:SbaKX2ttFWCxGOYkrKYeWH/6E4oToq2rRTcrMa2Mmdk=
 github.com/rancher/fleet/pkg/apis v0.15.0-alpha.6 h1:T9ELFwdKQMgkvSEfxxIGQu0G/ek3hqZb97iwUX6AcuY=
@@ -160,8 +160,8 @@ github.com/rancher/rancher/pkg/apis v0.0.0-20260211194119-d0c9ffaf3cb0 h1:ZH9VeY
 github.com/rancher/rancher/pkg/apis v0.0.0-20260211194119-d0c9ffaf3cb0/go.mod h1:fEL3ATWhwqdn7VYVAQBhmdpKehY5lDeGNlq2NnOpUPk=
 github.com/rancher/rke v1.8.6 h1:JHVWweWOUYFGirt5an7jmOZDRrrE6aU3ZpV1a1jSeSs=
 github.com/rancher/rke v1.8.6/go.mod h1:EaAkq796bgmmx/s15Xz0TvCkBOfepMOqO8tFockOmis=
-github.com/rancher/wrangler/v3 v3.5.1-rc.1 h1:OWnBCu4KdYfh4icTSBKI2+3e1xmqMF+s2HVY+7jahX8=
-github.com/rancher/wrangler/v3 v3.5.1-rc.1/go.mod h1:G5moxB9PpU5MUXavc89NS6Mpfgr8Nfmf9DZ3BkGgeYM=
+github.com/rancher/wrangler/v3 v3.5.1 h1:o2iLDoqTTkwVenZ521YhcH/0N2CFktp8aXb0f96aYMU=
+github.com/rancher/wrangler/v3 v3.5.1/go.mod h1:G5moxB9PpU5MUXavc89NS6Mpfgr8Nfmf9DZ3BkGgeYM=
 github.com/robfig/cron v1.2.0 h1:ZjScXvvxeQ63Dbyxy76Fj3AT3Ut0aKsyd2/tl3DTMuQ=
 github.com/robfig/cron v1.2.0/go.mod h1:JGuDeoQd7Z6yL4zQhZ3OPEVHB7fL6Ka6skscFHfmt2k=
 github.com/robfig/cron/v3 v3.0.1 h1:WdRxkvbJztn8LMz/QEvLN5sBU+xKpSqwwUO1Pjr4qDs=
