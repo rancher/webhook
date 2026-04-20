@@ -71,6 +71,18 @@ jobs:
           RANCHER_IMAGE_TAG: "head"
           VERSION: "main"
 
+      - if: always()
+        name: Troubleshoot
+        run: |
+          kubectl -n cattle-system get pods
+          kubectl -n cattle-system describe pods
+          kubectl -n cattle-system logs -l app=rancher
+          kubectl get apiservice v1.ext.cattle.io -o yaml
+        env:
+          CHART_PATH: "${{ runner.temp }}/rancher.tgz"
+          RANCHER_IMAGE_TAG: "head"
+          VERSION: "main"
+
       - name: get vars
         run: cat dist/image_tag >> $GITHUB_ENV
 
