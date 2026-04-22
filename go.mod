@@ -13,12 +13,12 @@ replace (
 	k8s.io/code-generator => k8s.io/code-generator v0.35.3
 	k8s.io/component-helpers => k8s.io/component-helpers v0.35.3
 	k8s.io/controller-manager => k8s.io/controller-manager v0.35.3
-	k8s.io/cri-api => k8s.io/cri-api v0.35.3
+	k8s.io/cri-api => k8s.io/cri-api v0.35.4
 	k8s.io/cri-client => k8s.io/cri-client v0.35.3
 	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.35.3
 	k8s.io/dynamic-resource-allocation => k8s.io/dynamic-resource-allocation v0.35.3
 	k8s.io/endpointslice => k8s.io/endpointslice v0.35.3
-	k8s.io/externaljwt => k8s.io/externaljwt v0.35.3
+	k8s.io/externaljwt => k8s.io/externaljwt v0.35.4
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.35.3
 	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.35.3
 	k8s.io/kube-proxy => k8s.io/kube-proxy v0.35.3
@@ -49,7 +49,7 @@ require (
 	golang.org/x/text v0.36.0
 	golang.org/x/tools v0.44.0
 	k8s.io/api v0.35.3
-	k8s.io/apimachinery v0.35.3
+	k8s.io/apimachinery v0.35.4
 	k8s.io/apiserver v0.35.3
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/kubernetes v1.35.3
