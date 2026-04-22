@@ -1,7 +1,7 @@
 # ===============
 # Build Stage
 # ===============
-FROM --platform=$BUILDPLATFORM registry.suse.com/bci/golang:1.25@sha256:3190609b31bbdbd4396ecba6c17ef71ccd282ec6973dba7c106b391b3edb1807 AS build
+FROM --platform=$BUILDPLATFORM registry.suse.com/bci/golang:1.25@sha256:feeb8b4f66de0a8ba333ee6a3f0e97b4cefbaf638b2873b29fb270ab5ca8722b AS build
 
 # Set up build cache
 ENV GOMODCACHE=/root/.cache/go/modcache
@@ -90,7 +90,7 @@ COPY --from=integration-test-build /dist/rancher-webhook-integration.test /ranch
 # ===============
 # Final Stage
 # ===============
-FROM registry.suse.com/bci/bci-micro:15.7@sha256:590f1bead5a54cfd3cee7b7d4459f874f3e1b2789a7d2149a2d80b35a43ac9cf
+FROM registry.suse.com/bci/bci-micro:15.7@sha256:bda48a632ca318ff8b38ac3374b8928283c4e4145bcb2b046fd0369f97865fb9
 
 ARG user=webhook
 
