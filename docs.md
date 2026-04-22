@@ -301,6 +301,26 @@ A binding is considered a duplicate if another `ClusterRoleTemplateBinding` exis
   - `groupName`
   - `groupPrincipalName`
 
+### Mutations
+
+#### Deterministic Name Generation
+
+On `CREATE`, when `metadata.generateName` is set and `metadata.name` is empty, the mutating webhook replaces the server-side random name generation with a deterministic name derived from the binding's content. The generated name is:
+
+```
+<generateName prefix> + lowercase(base32(sha256(subject + "/" + roleTemplateName + "/" + clusterName))[:10])
+```
+
+The subject is selected using the following priority order:
+1. `userPrincipalName`
+2. `userName`
+3. `groupPrincipalName`
+4. `groupName`
+
+This ensures that two identical concurrent requests produce the same `metadata.name`, causing the Kubernetes API server to reject the second request with a `409 Conflict`. This prevents duplicate `ClusterRoleTemplateBinding` resources from being created by race conditions.
+
+If `metadata.name` is already set (i.e. the caller explicitly chose a name), no mutation is performed.
+
 ## Feature
 
 ### Validation Checks
