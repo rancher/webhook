@@ -74,6 +74,30 @@ func Test_Admit(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 
+	// Behaviour for verification of checks invoked for a disabled local auth provider
+	disabledLocalAuthProvider := func() controllerv3.SettingCache {
+		mock := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
+		mock.EXPECT().Get(disabledLocalAuthProviderSetting).Return(&v3.Setting{
+			Value: "true",
+		}, nil)
+		return mock
+	}
+
+	// Default behaviour for the setting `disabled local auth provider`: not disabled
+	enabledLocalAuthProvider := func() controllerv3.SettingCache {
+		mock := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
+		mock.EXPECT().Get(disabledLocalAuthProviderSetting).Return(&v3.Setting{
+			Value: "false",
+		}, nil)
+		return mock
+	}
+
+	singleLocalID := []string{"local://..."}
+	nonLocalIDs := []string{
+		"system://...",
+		"local://...",
+	}
+
 	tests := []struct {
 		name             string
 		oldUser          *v3.User
@@ -346,6 +370,128 @@ func Test_Admit(t *testing.T) {
 			},
 			allowed: true,
 		},
+		{
+			name: "create rejects new local user (no principal ids) for local auth provider disabled",
+			newUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "a-local-user",
+				},
+			},
+			mockSettingCache: disabledLocalAuthProvider,
+			allowed:          false,
+		},
+		{
+			name: "create rejects new local user (single principal id local:*) for local auth provider disabled",
+			newUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "a-local-user",
+				},
+				PrincipalIDs: singleLocalID,
+			},
+			mockSettingCache: disabledLocalAuthProvider,
+			allowed:          false,
+		},
+		{
+			name: "create passes non-local user, username already exists",
+			newUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: defaultUserName,
+				},
+				Username:     defaultUserName,
+				PrincipalIDs: nonLocalIDs,
+			},
+			requestUserName: defaultUserName,
+			mockUserCache: func() controllerv3.UserCache {
+				mock := fake.NewMockNonNamespacedCacheInterface[*v3.User](ctrl)
+				mock.EXPECT().List(labels.Everything()).Return([]*v3.User{
+					{
+						Username: defaultUserName,
+					},
+				}, nil)
+
+				return mock
+			},
+
+			allowed: false,
+		},
+		{
+			name: "update rejects change to local user (no principal ids) for local auth provider disabled",
+			oldUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "a-local-user",
+				},
+				PrincipalIDs: nonLocalIDs,
+			},
+			newUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "a-local-user",
+				},
+			},
+			mockSettingCache: disabledLocalAuthProvider,
+			allowed:          false,
+		},
+		{
+			name: "update rejects change to local user (single principal id local:*) for local auth provider disabled",
+			oldUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "a-local-user",
+				},
+			},
+			newUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "a-local-user",
+				},
+				PrincipalIDs: singleLocalID,
+			},
+			mockSettingCache: disabledLocalAuthProvider,
+			allowed:          false,
+		},
+		{
+			name:    "update pass non-local user, changing the username not allowed",
+			oldUser: defaultUser.DeepCopy(),
+			newUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: defaultUserName,
+				},
+				Username:     "new-username",
+				PrincipalIDs: nonLocalIDs,
+			},
+			requestUserName: requesterUserName,
+			allowed:         false,
+		},
+		{
+			name: "delete rejects removal of local user (no principal ids) for local auth provider disabled",
+			oldUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "a-local-user",
+				},
+			},
+			mockSettingCache: disabledLocalAuthProvider,
+			allowed:          false,
+		},
+		{
+			name: "delete rejects removal local user (single principal id local:*) for local auth provider disabled",
+			oldUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "a-local-user",
+				},
+				PrincipalIDs: singleLocalID,
+			},
+			mockSettingCache: disabledLocalAuthProvider,
+			allowed:          false,
+		},
+		{
+			name: "delete pass non-local local user, cannot delete yourself",
+			oldUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "non-local-user",
+				},
+				PrincipalIDs: nonLocalIDs,
+			},
+			requestUserName:  "non-local-user",
+			mockSettingCache: disabledLocalAuthProvider,
+			allowed:          false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -372,15 +518,7 @@ func Test_Admit(t *testing.T) {
 			if tt.mockSettingCache != nil {
 				a.settingCache = tt.mockSettingCache()
 			} else {
-				// Default behaviour for the setting `disabled local auth provider`:
-				//	false - not disabled
-				a.settingCache = func() controllerv3.SettingCache {
-					mock := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
-					mock.EXPECT().Get(disabledLocalAuthProviderSetting).Return(&v3.Setting{
-						Value: "false",
-					}, nil)
-					return mock
-				}()
+				a.settingCache = enabledLocalAuthProvider()
 			}
 
 			got, err := a.Admit(req)
