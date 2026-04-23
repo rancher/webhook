@@ -18,6 +18,10 @@ spec:
         secret:
           secretName: client-ca
       {{- end }}
+{{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml .Values.imagePullSecrets | indent 6 }}
+      {{- end }}
       {{- if .Values.global.hostNetwork }}
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
