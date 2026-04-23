@@ -3,12 +3,15 @@ package users
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
 	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
+	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -21,6 +24,8 @@ import (
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
 	"k8s.io/utils/ptr"
 )
+
+const disabledLocalAuthProviderSetting = "disable-local-auth-provider"
 
 var (
 	gvr = schema.GroupVersionResource{
@@ -36,21 +41,23 @@ type admitter struct {
 	sar                authorizationv1.SubjectAccessReviewInterface
 	userAttributeCache controllerv3.UserAttributeCache
 	userCache          controllerv3.UserCache
+	settingCache       controllerv3.SettingCache
 }
 
-// Validator validates tokens.
+// Validator validates users.
 type Validator struct {
 	admitter admitter
 }
 
 // NewValidator returns a new Validator instance.
-func NewValidator(userAttributeCache controllerv3.UserAttributeCache, sar authorizationv1.SubjectAccessReviewInterface, defaultResolver validation.AuthorizationRuleResolver, userCache controllerv3.UserCache) *Validator {
+func NewValidator(userAttributeCache controllerv3.UserAttributeCache, sar authorizationv1.SubjectAccessReviewInterface, defaultResolver validation.AuthorizationRuleResolver, userCache controllerv3.UserCache, settingCache controllerv3.SettingCache) *Validator {
 	return &Validator{
 		admitter: admitter{
 			resolver:           defaultResolver,
 			userAttributeCache: userAttributeCache,
 			sar:                sar,
 			userCache:          userCache,
+			settingCache:       settingCache,
 		},
 	}
 }
@@ -82,15 +89,34 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, fmt.Errorf("failed to get current User from request: %w", err)
 	}
 
-	if request.Operation == admissionv1.Create && newUser.Username != "" {
-		if resp, err := a.checkUsernameUniqueness(newUser.Username); err != nil || resp != nil {
-			return resp, err
+	if request.Operation == admissionv1.Create {
+		response, err := a.isRejectedLocalUser("create", newUser)
+		if err != nil {
+			return nil, err
 		}
-		return &admissionv1.AdmissionResponse{Allowed: true}, nil
+		if response != nil {
+			return response, nil
+		}
+
+		// Verify that the chosen name, if any, is unique.
+		if newUser.Username != "" {
+			if resp, err := a.checkUsernameUniqueness(newUser.Username); err != nil || resp != nil {
+				return resp, err
+			}
+			return &admissionv1.AdmissionResponse{Allowed: true}, nil
+		}
 	}
 
 	fieldPath := field.NewPath("user")
 	if request.Operation == admissionv1.Update {
+		response, err := a.isRejectedLocalUser("update", newUser)
+		if err != nil {
+			return nil, err
+		}
+		if response != nil {
+			return response, nil
+		}
+
 		if err := validateUpdateFields(oldUser, newUser, fieldPath); err != nil {
 			return admission.ResponseBadRequest(err.Error()), nil
 		}
@@ -108,6 +134,14 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		}
 	}
 	if request.Operation == admissionv1.Delete {
+		response, err := a.isRejectedLocalUser("delete", oldUser)
+		if err != nil {
+			return nil, err
+		}
+		if response != nil {
+			return response, nil
+		}
+
 		if oldUser.Name == request.UserInfo.Username {
 			return admission.ResponseBadRequest("can't delete yourself"), nil
 		}
@@ -171,6 +205,56 @@ func (a *admitter) checkUsernameUniqueness(username string) (*admissionv1.Admiss
 		}
 	}
 	return nil, nil
+}
+
+func (a *admitter) isRejectedLocalUser(operation string, user *v3.User) (*admissionv1.AdmissionResponse, error) {
+	// Check state of `local` auth provider. we are only relevant when it is disabled
+	disabled, err := a.isLocalAuthProviderDisabled()
+	if err != nil {
+		return nil, err
+	}
+
+	logrus.Debugf("[user-validation] %s: local auth disabled = %v", operation, disabled)
+
+	if !disabled {
+		return nil, nil
+	}
+
+	logrus.Debugf("[user-validation] %s: checking user %q", operation, user.Name)
+
+	if len(user.PrincipalIDs) == 0 {
+		// reject local user (dashboard)
+		logrus.Debugf("[user-validation] %s: rejected local user %q (no principals)", operation, user.Name)
+		return admission.ResponseBadRequest("can't " + operation + " user '" + user.Name + "' for disabled local provider"), nil
+	}
+	if len(user.PrincipalIDs) == 1 && strings.HasPrefix(user.PrincipalIDs[0], "local:") {
+		// reject other local user in creation
+		logrus.Debugf("[user-validation] %s: rejected local user %q (local principal)", operation, user.Name)
+		return admission.ResponseBadRequest("can't " + operation + " user '" + user.Name + "' for disabled local provider"), nil
+	}
+	// user is not local (default admin or system). pass to regular checks.
+	logrus.Debugf("[user-validation] %s: continue for non-local user %q", operation, user.Name)
+	return nil, nil
+}
+
+func (a *admitter) isLocalAuthProviderDisabled() (bool, error) {
+	setting, err := a.settingCache.Get(disabledLocalAuthProviderSetting)
+	if err != nil {
+		return false, err
+	}
+	var disabled bool
+	if setting.Value != "" {
+		disabled, err = strconv.ParseBool(setting.Value)
+		if err != nil {
+			return false, err
+		}
+	} else {
+		disabled, err = strconv.ParseBool(setting.Default)
+		if err != nil {
+			return false, err
+		}
+	}
+	return disabled, nil
 }
 
 // getGroupsFromUserAttributes gets the list of group principals from a UserAttribute.

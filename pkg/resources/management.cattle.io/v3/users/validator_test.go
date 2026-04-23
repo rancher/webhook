@@ -82,6 +82,7 @@ func Test_Admit(t *testing.T) {
 		requestUserName  string
 		allowed          bool
 		mockUserCache    func() controllerv3.UserCache
+		mockSettingCache func() controllerv3.SettingCache
 		wantErr          bool
 	}{
 		{
@@ -367,6 +368,21 @@ func Test_Admit(t *testing.T) {
 			}
 
 			req := createUserRequest(t, tt.oldUser, tt.newUser, tt.requestUserName)
+
+			if tt.mockSettingCache != nil {
+				a.settingCache = tt.mockSettingCache()
+			} else {
+				// Default behaviour for the setting `disabled local auth provider`:
+				//	false - not disabled
+				a.settingCache = func() controllerv3.SettingCache {
+					mock := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
+					mock.EXPECT().Get(disabledLocalAuthProviderSetting).Return(&v3.Setting{
+						Value: "false",
+					}, nil)
+					return mock
+				}()
+			}
+
 			got, err := a.Admit(req)
 			if tt.wantErr {
 				assert.Error(t, err)

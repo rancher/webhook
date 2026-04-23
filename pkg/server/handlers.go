@@ -89,7 +89,13 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			clusterrole.NewValidator(),
 			clusterrolebinding.NewValidator(),
 			authconfig.NewValidator(),
-			users.NewValidator(clients.Management.UserAttribute().Cache(), clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.DefaultResolver, clients.Management.User().Cache()),
+			users.NewValidator(
+				clients.Management.UserAttribute().Cache(),
+				clients.K8s.AuthorizationV1().SubjectAccessReviews(),
+				clients.DefaultResolver,
+				clients.Management.User().Cache(),
+				clients.Management.Setting().Cache(),
+			),
 			machinedeployment.NewValidator(clients.Provisioning.Cluster().Cache(), clients.Provisioning.Cluster(), clients.Dynamic),
 			proxyendpoint.NewValidator(),
 		)
