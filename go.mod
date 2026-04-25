@@ -41,7 +41,7 @@ require (
 	github.com/rancher/jsonpath v0.0.0-20250620213443-ad24535cf0c1
 	github.com/rancher/lasso v0.2.8
 	github.com/rancher/rancher/pkg/apis v0.0.0-20260424150843-2234d06ced8c
-	github.com/rancher/rke v1.8.6
+	github.com/rancher/rke v1.8.13
 	github.com/rancher/wrangler/v3 v3.5.1
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.4
