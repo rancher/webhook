@@ -6,8 +6,6 @@ image:
 global:
   cattle:
     systemDefaultRegistry: ""
-    # imagePullSecrets:
-    #   - name: secret1
     imagePullSecrets: []
   hostNetwork: false
 
