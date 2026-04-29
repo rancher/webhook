@@ -240,6 +240,9 @@ func (a *admitter) isRejectedLocalUser(operation string, user *v3.User) (*admiss
 func (a *admitter) isLocalAuthProviderDisabled() (bool, error) {
 	setting, err := a.settingCache.Get(disabledLocalAuthProviderSetting)
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
 		return false, err
 	}
 	var disabled bool
