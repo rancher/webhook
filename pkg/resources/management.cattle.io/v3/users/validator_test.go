@@ -17,9 +17,11 @@ import (
 	authenticationv1 "k8s.io/api/authentication/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/authentication/user"
 	authorizationFake "k8s.io/client-go/kubernetes/typed/authorization/v1/fake"
 	k8testing "k8s.io/client-go/testing"
@@ -55,6 +57,10 @@ var (
 		},
 	}
 )
+
+func newNotFound(name string) error {
+	return apierrors.NewNotFound(schema.GroupResource{Group: "management.cattle.io", Resource: "settings"}, name)
+}
 
 func Test_Admit(t *testing.T) {
 	k8Fake := &k8testing.Fake{}
@@ -92,6 +98,14 @@ func Test_Admit(t *testing.T) {
 		return mock
 	}
 
+	// Default behaviour for the setting `disabled local auth provider` missing
+	missingLocalAuthProvider := func() controllerv3.SettingCache {
+		mock := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
+		mock.EXPECT().Get(disabledLocalAuthProviderSetting).Return(nil,
+			newNotFound(disabledLocalAuthProviderSetting))
+		return mock
+	}
+
 	singleLocalID := []string{"local://..."}
 	nonLocalIDs := []string{
 		"system://...",
@@ -114,6 +128,13 @@ func Test_Admit(t *testing.T) {
 			oldUser:         defaultUser.DeepCopy(),
 			requestUserName: managerUserName,
 			allowed:         true,
+		},
+		{
+			name:             "User has manage-users verb. delete operation, missing setting",
+			oldUser:          defaultUser.DeepCopy(),
+			requestUserName:  managerUserName,
+			allowed:          true,
+			mockSettingCache: missingLocalAuthProvider,
 		},
 		{
 			name:            "User has manage-users verb. update operation",
