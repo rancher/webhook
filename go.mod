@@ -37,7 +37,7 @@ require (
 	github.com/go-ldap/ldap/v3 v3.4.13
 	github.com/google/uuid v1.6.0
 	github.com/rancher/dynamiclistener v0.8.0
-	github.com/rancher/jsonpath v0.0.0-20250620213443-ad24535cf0c1
+	github.com/rancher/jsonpath v0.0.0-20260423141252-c4e0c565a09f
 	github.com/rancher/lasso v0.2.7
 	github.com/rancher/rancher/pkg/apis v0.0.0-20260211194119-d0c9ffaf3cb0
 	github.com/rancher/rke v1.8.13
