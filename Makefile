@@ -81,15 +81,18 @@ push-image:
 	@bash -c 'source scripts/version && \
 	docker buildx build \
 		$${IID_FILE_FLAG} \
+		$(BUILDX_ARGS) \
 		--file package/Dockerfile \
 		--build-arg VERSION=$${VERSION} \
 		--build-arg COMMIT=$${COMMIT} \
 		--platform=$${TARGET_PLATFORMS} \
-		--sbom=true \
-		--attest type=provenance,mode=max \
 		-t $${REPO}/rancher-webhook:$${TAG} \
 		--push \
 		. '
+
+push-prime-image:
+	BUILDX_ARGS="--sbom=true --attest type=provenance,mode=max" \
+	$(MAKE) push-image
 
 # ci target is for CI, ensuring tests and validation run first
 ci: test validate image package-helm
