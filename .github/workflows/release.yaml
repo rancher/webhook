@@ -1,12 +1,7 @@
-name: Release
+name: On release
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to release (e.g. v0.5.1)'
-        required: true
-        type: string
 
 permissions: {}
 
@@ -15,85 +10,18 @@ env:
   REPO: rancher
 
 jobs:
-  validate:
+  guard:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
-          fetch-tags: true
-          persist-credentials: false
-
-      - name: Validate version format
-        env:
-          VERSION: ${{ inputs.version }}
+      - name: Ensure ref is a tag
         run: |
-          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
-            echo "::error::Version '$VERSION' must match v<major>.<minor>.<patch>[-prerelease]"
-            exit 1
-          fi
-
-      - name: Resolve allowed minor from VERSION.md
-        id: minor
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          table=$(gh api "repos/$GITHUB_REPOSITORY/contents/VERSION.md" --jq .content | base64 -d)
-          allowed=$(grep -F "| $GITHUB_REF_NAME |" <<< "$table" | cut -d'|' -f3 | tr -d ' ')
-          if [ -z "$allowed" ]; then
-            echo "::error::Branch '$GITHUB_REF_NAME' not found in default-branch VERSION.md"
-            exit 1
-          fi
-          echo "Branch '$GITHUB_REF_NAME' is allowed minor '$allowed'"
-          echo "allowed=$allowed" >> "$GITHUB_OUTPUT"
-
-      - name: Validate version matches branch's allowed minor
-        env:
-          VERSION: ${{ inputs.version }}
-          ALLOWED: ${{ steps.minor.outputs.allowed }}
-        run: |
-          if [[ "$VERSION" != "${ALLOWED}."* ]]; then
-            echo "::error::Version $VERSION does not belong to branch $GITHUB_REF_NAME (allowed minor: $ALLOWED)"
-            exit 1
-          fi
-
-      - name: Validate version is next-sequential
-        env:
-          VERSION: ${{ inputs.version }}
-          ALLOWED: ${{ steps.minor.outputs.allowed }}
-        run: |
-          v_core="${VERSION%%-*}"
-          latest=$(git tag -l "${ALLOWED}.*" | grep -v -- '-' | sort --version-sort | tail -n1 || true)
-          if [ -z "$latest" ]; then
-            if [ "$v_core" != "${ALLOWED}.0" ]; then
-              echo "::error::No prior ${ALLOWED} tags; first version must be ${ALLOWED}.0 (got $v_core)"
-              exit 1
-            fi
-            echo "First release on ${ALLOWED} line: OK"
-          else
-            patch="${latest##*.}"
-            expected="${ALLOWED}.$((patch + 1))"
-            if [ "$v_core" != "$expected" ]; then
-              echo "::error::Latest ${ALLOWED} tag is $latest; next must be $expected (got $v_core)"
-              exit 1
-            fi
-            echo "Next sequential after $latest: OK"
-          fi
-
-      - name: Validate tag does not already exist
-        env:
-          VERSION: ${{ inputs.version }}
-        run: |
-          if git rev-parse "$VERSION" >/dev/null 2>&1; then
-            echo "::error::Tag '$VERSION' already exists"
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then
+            echo "::error::This workflow must be dispatched on a tag ref (got ${GITHUB_REF_TYPE} '${GITHUB_REF}')"
             exit 1
           fi
 
   build:
-    needs: validate
+    needs: guard
     name: build and package
     runs-on: ubuntu-latest
     strategy:
@@ -108,12 +36,12 @@ jobs:
 
     - name: Build Binary
       env:
-        GIT_TAG: ${{ inputs.version }}
+        GIT_TAG: ${{ github.ref_name }}
       run: make build ARCH=${{ matrix.arch }}
 
     - name: Package Helm Chart
       env:
-        GIT_TAG: ${{ inputs.version }}
+        GIT_TAG: ${{ github.ref_name }}
       run: make package-helm
 
     - name: Prepare Artifacts
@@ -134,7 +62,7 @@ jobs:
           dist/artifacts/rancher-webhook-*.tgz
 
   release:
-    needs: [validate, build]
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -146,7 +74,7 @@ jobs:
 
     - name: Package Helm Chart
       env:
-        GIT_TAG: ${{ inputs.version }}
+        GIT_TAG: ${{ github.ref_name }}
       run: make package-helm
 
     - name: Download the amd64 artifacts
@@ -163,22 +91,10 @@ jobs:
         name: webhook-artifacts-arm64
         path: dist/artifacts
 
-    - name: Configure git identity
-      run: |
-        git config user.name 'github-actions[bot]'
-        git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-
-    - name: Create and push tag
-      env:
-        VERSION: ${{ inputs.version }}
-      run: |
-        git tag -a "$VERSION" -m "Release $VERSION"
-        git push origin "$VERSION"
-
     - name: Upload the files
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        VERSION: ${{ inputs.version }}
+        VERSION: ${{ github.ref_name }}
       run: |
         ls -lR dist
         cd dist/artifacts
@@ -187,7 +103,7 @@ jobs:
         gh --repo "$GITHUB_REPOSITORY" release create "$VERSION" $flags webhook-linux-* sha256sum-*.txt rancher-webhook*.tgz
 
   publish:
-    needs: validate
+    needs: guard
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -210,7 +126,7 @@ jobs:
         uses: rancher/ecm-distro-tools/actions/publish-image@dcb1a0f50ca91f9f9a1f34fa335a9182686234d5 # v0.66.3
         with:
           image: rancher-webhook
-          tag: ${{ inputs.version }}
+          tag: ${{ github.ref_name }}
           platforms: linux/amd64,linux/arm64
 
           public-registry: docker.io
