@@ -93,6 +93,7 @@ func main() {
 				&v3.ProjectRoleTemplateBinding{},
 				&v3.NodeDriver{},
 				&v3.Project{},
+				&v3.ProxyEndpoint{},
 				&v3.Setting{},
 				&v3.AuthConfig{},
 				&v3.User{},

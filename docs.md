@@ -555,7 +555,22 @@ The subject is resolved using the following priority order:
 
 If no subject is set, the mutator passes the request through without modification (the validating webhook will reject it).
 
-This ensures that two identical concurrent requests produce the same resource name. The Kubernetes API server will reject the second request with a `409 Conflict`, preventing duplicate bindings even when requests race past the validating webhook.
+This ensures that two identical concurrent requests using `generateName` produce the same resource name. The Kubernetes API server will reject the second request with a `409 Conflict`, preventing duplicate bindings even when requests race past the validating webhook.
+
+## ProxyEndpoint
+
+### Validation Checks
+
+#### Overly Broad Wildcard Check
+
+Users may only create route entries within a ProxyEndpoint CR which
+
++ Are Absolute domains (`www.myapi.com`)
++ Are partial, inline, wildcards (`www.%.myapi.com`)
++ Are prefix wildcards (`*.myapi.com`, `*myapi.com`)
++ Do not include protocols (`https://`, etc.)
+
+Some of these checks are also done before a request is sent to the webhook, using kubebuilder Pattern comments on the CRD itself. Others, such as the overly broad wildcard check (e.g. `%.com`, `subdomain.%.com`), are done in the webhook as a regular expression would not be sufficient. In the event that the webhook is not running, the Rancher proxy also verifies that the route is not overly broad and silently ignores it if it is.  
 
 ## RoleTemplate
 
@@ -682,22 +697,6 @@ When a UserAttribute is updated, the following checks take place:
 - If set, `lastLogin` must be a valid date time according to RFC3339 (e.g. `2023-11-29T00:00:00Z`).
 - If set, `disableAfter` must be zero or a positive duration (e.g. `240h`).
 - If set, `deleteAfter` must be zero or a positive duration (e.g. `240h`).
-
-## ProxyEndpoint
-
-### Validation Checks
-
-#### On Create
-
-##### Domain Route Broadness
-
-Any domain included in a ProxyEndpoint Route entry must not be overly broad. If the domain includes an overly broad wildcard (e.g. `*.com`, `*.example.%.co.uk`, `%.co.uk`, etc.) it will be denied.
-
-#### On Update
-
-##### Domain Route Broadness
-
-Any domain included in a ProxyEndpoint Route entry must not be overly broad. If the domain includes an overly broad wildcard (e.g. `*.com`, `*.example.%.co.uk`, `%.co.uk`, etc.) it will be denied.
 
 # provisioning.cattle.io/v1
 
