@@ -11,6 +11,11 @@ global:
 mcm:
   enabled: true
 
+# caBundle is populated at runtime by needacert (wrangler/pkg/needacert)
+# once the cattle-webhook-tls secret has been generated. Override only
+# when running this chart standalone without needacert.
+caBundle: ""
+
 # tolerations for the webhook deployment. See https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/ for more info
 tolerations: []
 nodeSelector: {}
