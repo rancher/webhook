@@ -138,10 +138,10 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, validators []
 	}()
 
 	logrus.Infof("listening on :%d serving certs from %s", webhookHTTPSPort, certDir)
-	// Pre-load once so a missing/unreadable cert surfaces at startup rather than per-request.
 	if _, err := tls.LoadX509KeyPair(certPath, keyPath); err != nil {
 		return fmt.Errorf("failed to load serving cert from %s: %w", certDir, err)
 	}
+	errChecker.Store(nil)
 	if err := server.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("webhook server stopped: %w", err)
 	}
