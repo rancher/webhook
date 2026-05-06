@@ -25,7 +25,8 @@ const (
 
 // Validator implements admission.ValidatingAdmissionWebhook.
 type Validator struct {
-	admitter admitter
+	admitter     admitter
+	planAdmitter planAdmitter
 }
 
 // NewValidator creates a new secret validator which ensures secrets which own rbac objects aren't deleted with options
@@ -42,6 +43,7 @@ func NewValidator(roleCache v1.RoleCache, roleBindingCache v1.RoleBindingCache) 
 			roleCache:        roleCache,
 			roleBindingCache: roleBindingCache,
 		},
+		planAdmitter: planAdmitter{},
 	}
 }
 
@@ -63,7 +65,11 @@ func (v *Validator) GVR() schema.GroupVersionResource {
 
 // Operations returns list of operations handled by this validator.
 func (v *Validator) Operations() []admissionregistrationv1.OperationType {
-	return []admissionregistrationv1.OperationType{admissionregistrationv1.Delete}
+	return []admissionregistrationv1.OperationType{
+		admissionregistrationv1.Delete,
+		admissionregistrationv1.Create,
+		admissionregistrationv1.Update,
+	}
 }
 
 // ValidatingWebhook returns the ValidatingWebhook used for this CRD.
@@ -75,7 +81,7 @@ func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.Webho
 
 // Admitters returns the admitter objects used to validate secrets.
 func (v *Validator) Admitters() []admission.Admitter {
-	return []admission.Admitter{&v.admitter}
+	return []admission.Admitter{&v.admitter, &v.planAdmitter}
 }
 
 type admitter struct {
@@ -87,6 +93,10 @@ type admitter struct {
 func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	listTrace := trace.New("secret Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
+
+	if request.Operation != admissionv1.Delete {
+		return admission.ResponseAllowed(), nil
+	}
 
 	var deleteOpts metav1.DeleteOptions
 	err := json.Unmarshal(request.Options.Raw, &deleteOpts)

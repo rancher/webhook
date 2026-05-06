@@ -214,7 +214,7 @@ func TestAdmit(t *testing.T) {
 			validator := NewValidator(roleCache, roleBindingCache)
 
 			admitters := validator.Admitters()
-			assert.Len(t, admitters, 1)
+			assert.Len(t, admitters, 2)
 			response, err := admitters[0].Admit(&req)
 			if test.wantError {
 				assert.Error(t, err)

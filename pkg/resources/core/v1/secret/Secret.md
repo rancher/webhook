@@ -1,7 +1,14 @@
 ## Validation Checks
 
+### On delete
+
 A secret cannot be deleted if its deletion request has an orphan policy,
 and the secret has roles or role bindings dependent on it.
+
+### On create and update
+
+For Secrets of type `rke.cattle.io/machine-plan`, if `data.plan` is present, its value is parsed using the shared plan schema from `pkg/plan`.
+If the value is not valid JSON or does not conform to the plan schema, the request is rejected.
 
 ## Mutation Checks
 
