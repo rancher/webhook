@@ -64,15 +64,7 @@ func ListenAndServe(ctx context.Context, cfg *rest.Config, mcmEnabled bool) erro
 		return err
 	}
 
-	if err = listenAndServe(ctx, clients, validators, mutators); err != nil {
-		return err
-	}
-
-	if err = clients.Start(ctx); err != nil {
-		return fmt.Errorf("failed to start client: %w", err)
-	}
-
-	return nil
+	return listenAndServe(ctx, clients, validators, mutators)
 }
 
 func listenAndServe(ctx context.Context, clients *clients.Clients, validators []admission.ValidatingAdmissionHandler, mutators []admission.MutatingAdmissionHandler) (rErr error) {
@@ -93,13 +85,6 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, validators []
 	}
 
 	routerHandler := certAuth()(router)
-
-	defer func() {
-		if rErr != nil {
-			return
-		}
-		rErr = clients.Start(ctx)
-	}()
 
 	webhookHTTPSPort := defaultWebhookHTTPSPort
 	if portStr := os.Getenv(webhookPortEnvKey); portStr != "" {
@@ -142,9 +127,18 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, validators []
 		return fmt.Errorf("failed to load serving cert from %s: %w", certDir, err)
 	}
 	errChecker.Store(nil)
-	if err := server.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("webhook server stopped: %w", err)
+
+	go func() {
+		if err := server.ListenAndServeTLS("", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logrus.Fatalf("webhook server stopped: %v", err)
+		}
+	}()
+
+	if err := clients.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start clients: %w", err)
 	}
+
+	<-ctx.Done()
 	return nil
 }
 
