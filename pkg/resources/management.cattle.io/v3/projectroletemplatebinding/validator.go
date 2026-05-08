@@ -127,11 +127,6 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 
 	roleTemplate, err := a.roleTemplateResolver.RoleTemplateCache().Get(prtb.RoleTemplateName)
 	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return &admissionv1.AdmissionResponse{
-				Allowed: true,
-			}, nil
-		}
 		return nil, fmt.Errorf("failed to get referenced roleTemplate '%s' for PRTB: %w", roleTemplate.Name, err)
 	}
 
@@ -207,6 +202,9 @@ func (a *admitter) validateCreateFields(newPRTB *apisv3.ProjectRoleTemplateBindi
 
 	roleTemplate, err := a.roleTemplateResolver.RoleTemplateCache().Get(newPRTB.RoleTemplateName)
 	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return field.Invalid(fieldPath.Child("roleTemplateName"), newPRTB.RoleTemplateName, "the referenced role template was not found")
+		}
 		return err
 	}
 
