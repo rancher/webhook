@@ -38,7 +38,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/rancher/dynamiclistener v0.8.0
 	github.com/rancher/jsonpath v0.0.0-20260423141252-c4e0c565a09f
-	github.com/rancher/lasso v0.2.7
+	github.com/rancher/lasso v0.2.8
 	github.com/rancher/rancher/pkg/apis v0.0.0-20260211194119-d0c9ffaf3cb0
 	github.com/rancher/rancher/pkg/plan v0.0.0-20260413094914-0404acf59a23
 	github.com/rancher/rke v1.8.13
@@ -108,7 +108,7 @@ require (
 	github.com/rancher/eks-operator v1.13.0-rc.4 // indirect
 	github.com/rancher/fleet/pkg/apis v0.15.0-alpha.6 // indirect
 	github.com/rancher/gke-operator v1.13.0-rc.3 // indirect
-	github.com/rancher/norman v0.9.2
+	github.com/rancher/norman v0.9.3
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
