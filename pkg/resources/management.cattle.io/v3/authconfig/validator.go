@@ -86,7 +86,49 @@ func (a *admitter) admitCreate(request *admission.Request, newAuthConfig *v3.Aut
 }
 
 func (a *admitter) admitUpdate(request *admission.Request, oldAuthConfig, newAuthConfig *v3.AuthConfig) (*admissionv1.AdmissionResponse, error) {
+	if oldAuthConfig.Enabled && newAuthConfig.Enabled {
+		if err := validateIDAttributeImmutability(oldAuthConfig.Type, request); err != nil {
+			return admission.ResponseBadRequest(err.Error()), nil
+		}
+	}
 	return a.admitCommonCreateUpdate(request, oldAuthConfig, newAuthConfig)
+}
+
+func validateIDAttributeImmutability(authConfigType string, request *admission.Request) error {
+	var err error
+
+	switch authConfigType {
+	case "openLdapConfig", "freeIpaConfig":
+		var oldConfig, newConfig v3.LdapConfig
+		if e := json.Unmarshal(request.OldObject.Raw, &oldConfig); e != nil {
+			return fmt.Errorf("failed to unmarshal old %T: %w", oldConfig, e)
+		}
+		if e := json.Unmarshal(request.Object.Raw, &newConfig); e != nil {
+			return fmt.Errorf("failed to unmarshal new %T: %w", newConfig, e)
+		}
+		if oldConfig.UserIDAttribute != newConfig.UserIDAttribute {
+			err = errors.Join(err, field.Invalid(field.NewPath("userIDAttribute"), newConfig.UserIDAttribute, "field is immutable when the provider is enabled"))
+		}
+		if oldConfig.GroupIDAttribute != newConfig.GroupIDAttribute {
+			err = errors.Join(err, field.Invalid(field.NewPath("groupIDAttribute"), newConfig.GroupIDAttribute, "field is immutable when the provider is enabled"))
+		}
+	case "activeDirectoryConfig":
+		var oldConfig, newConfig v3.ActiveDirectoryConfig
+		if e := json.Unmarshal(request.OldObject.Raw, &oldConfig); e != nil {
+			return fmt.Errorf("failed to unmarshal old %T: %w", oldConfig, e)
+		}
+		if e := json.Unmarshal(request.Object.Raw, &newConfig); e != nil {
+			return fmt.Errorf("failed to unmarshal new %T: %w", newConfig, e)
+		}
+		if oldConfig.UserIDAttribute != newConfig.UserIDAttribute {
+			err = errors.Join(err, field.Invalid(field.NewPath("userIDAttribute"), newConfig.UserIDAttribute, "field is immutable when the provider is enabled"))
+		}
+		if oldConfig.GroupIDAttribute != newConfig.GroupIDAttribute {
+			err = errors.Join(err, field.Invalid(field.NewPath("groupIDAttribute"), newConfig.GroupIDAttribute, "field is immutable when the provider is enabled"))
+		}
+	}
+
+	return err
 }
 
 func (a *admitter) admitCommonCreateUpdate(request *admission.Request, _, newAuthConfig *v3.AuthConfig) (*admissionv1.AdmissionResponse, error) {
@@ -166,6 +208,12 @@ func validateLDAPConfig(request *admission.Request) error {
 	if config.GroupMemberMappingAttribute != "" && !IsValidLdapAttr(config.GroupMemberMappingAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupMemberMappingAttribute"), "invalid value"))
 	}
+	if config.UserIDAttribute != "" && !IsValidLdapAttr(config.UserIDAttribute) {
+		err = errors.Join(err, field.Forbidden(field.NewPath("userIDAttribute"), "invalid value"))
+	}
+	if config.GroupIDAttribute != "" && !IsValidLdapAttr(config.GroupIDAttribute) {
+		err = errors.Join(err, field.Forbidden(field.NewPath("groupIDAttribute"), "invalid value"))
+	}
 
 	if config.UserLoginFilter != "" {
 		if _, fieldErr := ldapv3.CompileFilter(config.UserLoginFilter); fieldErr != nil {
@@ -236,6 +284,12 @@ func validateActiveDirectoryConfig(request *admission.Request) error {
 	}
 	if config.GroupMemberMappingAttribute != "" && !IsValidLdapAttr(config.GroupMemberMappingAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupMemberMappingAttribute"), "invalid value"))
+	}
+	if config.UserIDAttribute != "" && !IsValidLdapAttr(config.UserIDAttribute) {
+		err = errors.Join(err, field.Forbidden(field.NewPath("userIDAttribute"), "invalid value"))
+	}
+	if config.GroupIDAttribute != "" && !IsValidLdapAttr(config.GroupIDAttribute) {
+		err = errors.Join(err, field.Forbidden(field.NewPath("groupIDAttribute"), "invalid value"))
 	}
 
 	if config.UserLoginFilter != "" {

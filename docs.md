@@ -192,10 +192,21 @@ When an LDAP (`openldap`, `freeipa`) or ActiveDirectory (`activedirectory`) auth
   - `groupDNAttribute`
   - `groupMemberUserAttribute`
   - `groupMemberMappingAttribute`
+  - `userIDAttribute`
+  - `groupIDAttribute`
 - If set, the following fields should have a valid LDAP filter expression according to RFC4515
   - `userLoginFilter`
   - `userSearchFilter`
   - `groupSearchFilter`
+
+#### Update
+
+When an enabled LDAP or ActiveDirectory authconfig is updated and remains enabled, the following fields cannot be changed:
+
+- `userIDAttribute`
+- `groupIDAttribute`
+
+To change these fields, first disable the provider, apply the change, then re-enable it.
 
 ## Cluster
 

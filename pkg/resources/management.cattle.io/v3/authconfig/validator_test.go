@@ -39,6 +39,8 @@ func TestValidateLdapConfig(t *testing.T) {
 		GroupDNAttribute:            "entryDN",
 		GroupMemberUserAttribute:    "entryDN",
 		GroupMemberMappingAttribute: "member",
+		UserIDAttribute:             "uid",
+		GroupIDAttribute:            "cn",
 		UserLoginFilter:             "(&(status=active)(canLogin=true))",
 		UserSearchFilter:            "(status=active)",
 		GroupSearchFilter:           "(depNo=123)",
@@ -180,6 +182,22 @@ func TestValidateLdapConfig(t *testing.T) {
 			},
 		},
 		{
+			desc: "invalid UserIDAttribute",
+			fields: func() v3.LdapFields {
+				fields := fields
+				fields.UserIDAttribute = invalidAttr
+				return fields
+			},
+		},
+		{
+			desc: "invalid GroupIDAttribute",
+			fields: func() v3.LdapFields {
+				fields := fields
+				fields.GroupIDAttribute = invalidAttr
+				return fields
+			},
+		},
+		{
 			desc: "invalid UserLoginFilter",
 			fields: func() v3.LdapFields {
 				fields := fields
@@ -240,6 +258,8 @@ func TestValidateActiveDirectoryConfig(t *testing.T) {
 		GroupDNAttribute:            "distinguishedName",
 		GroupMemberUserAttribute:    "member",
 		GroupMemberMappingAttribute: "distinguishedName",
+		UserIDAttribute:             "sAMAccountName",
+		GroupIDAttribute:            "sAMAccountName",
 		UserLoginFilter:             "(&(status=active)(canLogin=true))",
 		UserSearchFilter:            "(status=active)",
 		GroupSearchFilter:           "(depNo=123)",
@@ -376,6 +396,22 @@ func TestValidateActiveDirectoryConfig(t *testing.T) {
 			},
 		},
 		{
+			desc: "invalid UserIDAttribute",
+			config: func() v3.ActiveDirectoryConfig {
+				config := config
+				config.UserIDAttribute = invalidAttr
+				return config
+			},
+		},
+		{
+			desc: "invalid GroupIDAttribute",
+			config: func() v3.ActiveDirectoryConfig {
+				config := config
+				config.GroupIDAttribute = invalidAttr
+				return config
+			},
+		},
+		{
 			desc: "invalid UserLoginFilter",
 			config: func() v3.ActiveDirectoryConfig {
 				config := config
@@ -414,6 +450,356 @@ func TestValidateActiveDirectoryConfig(t *testing.T) {
 				testActiveDirectoryAdmit(t, validator, op, config, test.allowed)
 			})
 		}
+	}
+}
+
+func TestIDAttributeImmutability(t *testing.T) {
+	t.Parallel()
+	validator := authconfig.NewValidator()
+
+	t.Run("ActiveDirectory", func(t *testing.T) {
+		t.Parallel()
+		base := v3.ActiveDirectoryConfig{
+			Servers:          []string{"ad.example.com"},
+			UserIDAttribute:  "sAMAccountName",
+			GroupIDAttribute: "sAMAccountName",
+		}
+		base.Name = "activedirectory"
+		base.Type = "activeDirectoryConfig"
+
+		tests := []struct {
+			desc    string
+			old     v3.ActiveDirectoryConfig
+			new     v3.ActiveDirectoryConfig
+			allowed bool
+		}{
+			{
+				desc: "set UserIDAttribute on first enable",
+				old: func() v3.ActiveDirectoryConfig {
+					c := base
+					c.Enabled = false
+					c.UserIDAttribute = ""
+					return c
+				}(),
+				new: func() v3.ActiveDirectoryConfig {
+					c := base
+					c.Enabled = true
+					return c
+				}(),
+				allowed: true,
+			},
+			{
+				desc: "unchanged UserIDAttribute on enabled provider",
+				old: func() v3.ActiveDirectoryConfig {
+					c := base
+					c.Enabled = true
+					return c
+				}(),
+				new: func() v3.ActiveDirectoryConfig {
+					c := base
+					c.Enabled = true
+					return c
+				}(),
+				allowed: true,
+			},
+			{
+				desc: "changed UserIDAttribute on enabled provider",
+				old: func() v3.ActiveDirectoryConfig {
+					c := base
+					c.Enabled = true
+					return c
+				}(),
+				new: func() v3.ActiveDirectoryConfig {
+					c := base
+					c.Enabled = true
+					c.UserIDAttribute = "uid"
+					return c
+				}(),
+			},
+			{
+				desc: "changed UserIDAttribute while disabling provider",
+				old: func() v3.ActiveDirectoryConfig {
+					c := base
+					c.Enabled = true
+					return c
+				}(),
+				new: func() v3.ActiveDirectoryConfig {
+					c := base
+					c.Enabled = false
+					c.UserIDAttribute = "uid"
+					return c
+				}(),
+				allowed: true,
+			},
+			{
+				desc: "cleared UserIDAttribute on enabled provider",
+				old: func() v3.ActiveDirectoryConfig {
+					c := base
+					c.Enabled = true
+					return c
+				}(),
+				new: func() v3.ActiveDirectoryConfig {
+					c := base
+					c.Enabled = true
+					c.UserIDAttribute = ""
+					return c
+				}(),
+			},
+			{
+				desc: "set GroupIDAttribute on first enable",
+				old: func() v3.ActiveDirectoryConfig {
+					c := base
+					c.Enabled = false
+					c.GroupIDAttribute = ""
+					return c
+				}(),
+				new: func() v3.ActiveDirectoryConfig {
+					c := base
+					c.Enabled = true
+					return c
+				}(),
+				allowed: true,
+			},
+			{
+				desc: "unchanged GroupIDAttribute on enabled provider",
+				old: func() v3.ActiveDirectoryConfig {
+					c := base
+					c.Enabled = true
+					return c
+				}(),
+				new: func() v3.ActiveDirectoryConfig {
+					c := base
+					c.Enabled = true
+					return c
+				}(),
+				allowed: true,
+			},
+			{
+				desc: "changed GroupIDAttribute on enabled provider",
+				old: func() v3.ActiveDirectoryConfig {
+					c := base
+					c.Enabled = true
+					return c
+				}(),
+				new: func() v3.ActiveDirectoryConfig {
+					c := base
+					c.Enabled = true
+					c.GroupIDAttribute = "cn"
+					return c
+				}(),
+			},
+			{
+				desc: "changed GroupIDAttribute while disabling provider",
+				old: func() v3.ActiveDirectoryConfig {
+					c := base
+					c.Enabled = true
+					return c
+				}(),
+				new: func() v3.ActiveDirectoryConfig {
+					c := base
+					c.Enabled = false
+					c.GroupIDAttribute = "cn"
+					return c
+				}(),
+				allowed: true,
+			},
+			{
+				desc: "cleared GroupIDAttribute on enabled provider",
+				old: func() v3.ActiveDirectoryConfig {
+					c := base
+					c.Enabled = true
+					return c
+				}(),
+				new: func() v3.ActiveDirectoryConfig {
+					c := base
+					c.Enabled = true
+					c.GroupIDAttribute = ""
+					return c
+				}(),
+			},
+		}
+
+		for _, test := range tests {
+			t.Run(test.desc, func(t *testing.T) {
+				testAdmit(t, validator, v1.Update, test.old, test.new, test.allowed)
+			})
+		}
+	})
+
+	for _, provider := range []struct {
+		name     string
+		typeName string
+	}{
+		{"OpenLDAP", "openLdapConfig"},
+		{"FreeIPA", "freeIpaConfig"},
+	} {
+		t.Run(provider.name, func(t *testing.T) {
+			t.Parallel()
+			base := v3.OpenLdapConfig{}
+			base.Name = provider.name
+			base.Type = provider.typeName
+			base.Servers = []string{"ldap.example.com"}
+			base.UserIDAttribute = "uid"
+			base.GroupIDAttribute = "cn"
+
+			tests := []struct {
+				desc    string
+				old     v3.OpenLdapConfig
+				new     v3.OpenLdapConfig
+				allowed bool
+			}{
+				{
+					desc: "set UserIDAttribute on first enable",
+					old: func() v3.OpenLdapConfig {
+						c := base
+						c.Enabled = false
+						c.UserIDAttribute = ""
+						return c
+					}(),
+					new: func() v3.OpenLdapConfig {
+						c := base
+						c.Enabled = true
+						return c
+					}(),
+					allowed: true,
+				},
+				{
+					desc: "unchanged UserIDAttribute on enabled provider",
+					old: func() v3.OpenLdapConfig {
+						c := base
+						c.Enabled = true
+						return c
+					}(),
+					new: func() v3.OpenLdapConfig {
+						c := base
+						c.Enabled = true
+						return c
+					}(),
+					allowed: true,
+				},
+				{
+					desc: "changed UserIDAttribute on enabled provider",
+					old: func() v3.OpenLdapConfig {
+						c := base
+						c.Enabled = true
+						return c
+					}(),
+					new: func() v3.OpenLdapConfig {
+						c := base
+						c.Enabled = true
+						c.UserIDAttribute = "sAMAccountName"
+						return c
+					}(),
+				},
+				{
+					desc: "changed UserIDAttribute while disabling provider",
+					old: func() v3.OpenLdapConfig {
+						c := base
+						c.Enabled = true
+						return c
+					}(),
+					new: func() v3.OpenLdapConfig {
+						c := base
+						c.Enabled = false
+						c.UserIDAttribute = "sAMAccountName"
+						return c
+					}(),
+					allowed: true,
+				},
+				{
+					desc: "cleared UserIDAttribute on enabled provider",
+					old: func() v3.OpenLdapConfig {
+						c := base
+						c.Enabled = true
+						return c
+					}(),
+					new: func() v3.OpenLdapConfig {
+						c := base
+						c.Enabled = true
+						c.UserIDAttribute = ""
+						return c
+					}(),
+				},
+				{
+					desc: "set GroupIDAttribute on first enable",
+					old: func() v3.OpenLdapConfig {
+						c := base
+						c.Enabled = false
+						c.GroupIDAttribute = ""
+						return c
+					}(),
+					new: func() v3.OpenLdapConfig {
+						c := base
+						c.Enabled = true
+						return c
+					}(),
+					allowed: true,
+				},
+				{
+					desc: "unchanged GroupIDAttribute on enabled provider",
+					old: func() v3.OpenLdapConfig {
+						c := base
+						c.Enabled = true
+						return c
+					}(),
+					new: func() v3.OpenLdapConfig {
+						c := base
+						c.Enabled = true
+						return c
+					}(),
+					allowed: true,
+				},
+				{
+					desc: "changed GroupIDAttribute on enabled provider",
+					old: func() v3.OpenLdapConfig {
+						c := base
+						c.Enabled = true
+						return c
+					}(),
+					new: func() v3.OpenLdapConfig {
+						c := base
+						c.Enabled = true
+						c.GroupIDAttribute = "entryDN"
+						return c
+					}(),
+				},
+				{
+					desc: "changed GroupIDAttribute while disabling provider",
+					old: func() v3.OpenLdapConfig {
+						c := base
+						c.Enabled = true
+						return c
+					}(),
+					new: func() v3.OpenLdapConfig {
+						c := base
+						c.Enabled = false
+						c.GroupIDAttribute = "entryDN"
+						return c
+					}(),
+					allowed: true,
+				},
+				{
+					desc: "cleared GroupIDAttribute on enabled provider",
+					old: func() v3.OpenLdapConfig {
+						c := base
+						c.Enabled = true
+						return c
+					}(),
+					new: func() v3.OpenLdapConfig {
+						c := base
+						c.Enabled = true
+						c.GroupIDAttribute = ""
+						return c
+					}(),
+				},
+			}
+
+			for _, test := range tests {
+				t.Run(test.desc, func(t *testing.T) {
+					testAdmit(t, validator, v1.Update, test.old, test.new, test.allowed)
+				})
+			}
+		})
 	}
 }
 
