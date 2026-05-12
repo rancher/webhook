@@ -127,9 +127,6 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 
 	roleTemplate, err := a.roleTemplateResolver.RoleTemplateCache().Get(crtb.RoleTemplateName)
 	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return &admissionv1.AdmissionResponse{Allowed: true}, nil
-		}
 		return nil, fmt.Errorf("failed to get roletemplate '%s': %w", crtb.RoleTemplateName, err)
 	}
 
