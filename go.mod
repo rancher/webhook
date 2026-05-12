@@ -42,13 +42,13 @@ require (
 	github.com/rancher/lasso v0.2.8
 	github.com/rancher/rancher/pkg/apis v0.0.0-20260424150843-2234d06ced8c
 	github.com/rancher/rke v1.8.6
-	github.com/rancher/wrangler/v3 v3.5.1
+	github.com/rancher/wrangler/v3 v3.6.0
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
 	golang.org/x/text v0.36.0
-	golang.org/x/tools v0.43.0
+	golang.org/x/tools v0.44.0
 	k8s.io/api v0.35.3
 	k8s.io/apimachinery v0.35.3
 	k8s.io/apiserver v0.35.3
@@ -117,7 +117,7 @@ require (
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.50.0 // indirect
-	golang.org/x/mod v0.34.0 // indirect
+	golang.org/x/mod v0.35.0 // indirect
 	golang.org/x/net v0.53.0
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
