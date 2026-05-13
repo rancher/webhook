@@ -41,7 +41,7 @@ require (
 	github.com/rancher/lasso v0.2.5
 	github.com/rancher/rancher/pkg/apis v0.0.0-20260115212751-7e496edc167e
 	github.com/rancher/rke v1.8.6
-	github.com/rancher/wrangler/v3 v3.3.4
+	github.com/rancher/wrangler/v3 v3.3.5
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.11.1
@@ -97,7 +97,7 @@ require (
 	github.com/rancher/fleet/pkg/apis v0.14.2-beta.1 // indirect
 	github.com/rancher/gke-operator v1.13.1 // indirect
 	//TODO: Replace with a tag during un-rc'ing
-	github.com/rancher/norman v0.7.2 // indirect
+	github.com/rancher/norman v0.7.3 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/otel v1.37.0 // indirect
