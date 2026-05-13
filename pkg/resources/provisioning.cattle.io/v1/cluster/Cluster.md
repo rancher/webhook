@@ -86,6 +86,22 @@ Both `minAvailable` and `maxUnavailable` must be a string which represents a non
 ^([0-9]|[1-9][0-9]|100)%$
 ```
 
+#### cluster.spec.webhookDeploymentCustomization
+
+The `WebhookDeploymentCustomization` field configures the rancher-webhook deployment on downstream clusters. The following sub-fields are validated:
+
+- `replicaCount`: If set, must be at least 1.
+- `appendTolerations`: Toleration keys are validated against the same upstream apimachinery label name regex used for agent deployment customizations:
+  ```regex
+  ([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]
+  ```
+- `overrideAffinity`: Node affinity `nodeSelectorTerms` are validated via label name validation. Pod affinity and pod anti-affinity are validated via label selectors using the [apimachinery label selector validation](https://github.com/kubernetes/apimachinery/blob/02a41040d88da08de6765573ae2b1a51f424e1ca/pkg/apis/meta/v1/validation/validation.go#L56).
+- `podDisruptionBudget.minAvailable` and `podDisruptionBudget.maxUnavailable`: Each must be a non-negative whole integer or a whole number percentage between `0%` and `100%`. Only one of the two fields can have a non-zero or non-empty value at a given time. These fields use the following regex when assessing if a given percentage value is valid:
+  ```regex
+  ^([0-9]|[1-9][0-9]|100)%$
+  ```
+- `overrideResourceRequirements`: Not validated by the webhook — the Kubernetes API server validates `ResourceRequirements` natively.
+
 #### NO_PROXY value
 
 Prevent the update of objects with an env var (under `spec.agentEnvVars`) with a name of `NO_PROXY` if its value contains one or more spaces. This ensures that the provided value adheres to
