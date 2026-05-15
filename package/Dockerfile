@@ -1,7 +1,7 @@
 # ===============
 # Build Stage
 # ===============
-FROM --platform=$BUILDPLATFORM registry.suse.com/bci/golang:1.25@sha256:6ab7d7eb4a23076273da5e885ea71a1f9c72923da07f41fb53fb02e914123c11 AS build
+FROM --platform=$BUILDPLATFORM rancher/hardened-build-base:v1.25.10b1@sha256:92ecda122083602ae6e698244dbc91e7108a37d636486325e00940d8e98ab858 AS build
 
 # Set up build cache
 ENV GOMODCACHE=/root/.cache/go/modcache
