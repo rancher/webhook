@@ -133,10 +133,6 @@ func (a *admitter) admitUpdate(oldSetting, newSetting *v3.Setting) (*admissionv1
 		return admission.ResponseBadRequest("setting is read only"), nil
 	}
 
-	if newSetting.Value == "" {
-		return admission.ResponseBadRequest("setting value must not be empty"), nil
-	}
-
 	var err error
 
 	switch newSetting.Name {

@@ -66,16 +66,6 @@ func (s *SettingSuite) TestAdmitUpdateGuards() {
 			},
 		},
 		{
-			name: "reject empty value on update",
-			oldSetting: &v3.Setting{
-				ObjectMeta: metav1.ObjectMeta{Name: setting.UserRetentionCron},
-			},
-			newSetting: &v3.Setting{
-				ObjectMeta: metav1.ObjectMeta{Name: setting.UserRetentionCron},
-				Value:      "",
-			},
-		},
-		{
 			name: "allow normal valid update",
 			oldSetting: &v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{Name: setting.UserRetentionCron},
