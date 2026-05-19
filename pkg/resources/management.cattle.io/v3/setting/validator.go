@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"time"
 
@@ -25,17 +26,19 @@ import (
 )
 
 const (
+	AgentTLSMode                          = "agent-tls-mode"
+	AuthUserInfoResyncCron                = "auth-user-info-resync-cron"
+	AuthUserInfoMaxAgeSeconds             = "auth-user-info-max-age-seconds"
+	AuthUserSessionIdleTTLMinutes         = "auth-user-session-idle-ttl-minutes"
+	AuthUserSessionTTLMinutes             = "auth-user-session-ttl-minutes"
+	CattleClusterAgentPodDisruptionBudget = "cluster-agent-default-pod-disruption-budget"
+	CattleClusterAgentPriorityClass       = "cluster-agent-default-priority-class"
 	DeleteInactiveUserAfter               = "delete-inactive-user-after"
 	DisableInactiveUserAfter              = "disable-inactive-user-after"
-	AuthUserSessionTTLMinutes             = "auth-user-session-ttl-minutes"
-	AuthUserSessionIdleTTLMinutes         = "auth-user-session-idle-ttl-minutes"
+	FleetAgentPodDisruptionBudget         = "fleet-agent-default-pod-disruption-budget"
+	FleetAgentPriorityClass               = "fleet-agent-default-priority-class"
 	UserLastLoginDefault                  = "user-last-login-default"
 	UserRetentionCron                     = "user-retention-cron"
-	AgentTLSMode                          = "agent-tls-mode"
-	CattleClusterAgentPriorityClass       = "cluster-agent-default-priority-class"
-	CattleClusterAgentPodDisruptionBudget = "cluster-agent-default-pod-disruption-budget"
-	FleetAgentPriorityClass               = "fleet-agent-default-priority-class"
-	FleetAgentPodDisruptionBudget         = "fleet-agent-default-pod-disruption-budget"
 )
 
 // MinDeleteInactiveUserAfter is the minimum duration for delete-inactive-user-after setting.
@@ -117,7 +120,23 @@ func (a *admitter) admitCreate(newSetting *v3.Setting) (*admissionv1.AdmissionRe
 	return a.admitCommonCreateUpdate(nil, newSetting)
 }
 
+var ReadOnlySettings = []string{
+	"cacerts",
+}
+
 func (a *admitter) admitUpdate(oldSetting, newSetting *v3.Setting) (*admissionv1.AdmissionResponse, error) {
+	if oldSetting.Source == "env" {
+		return admission.ResponseBadRequest("setting cannot be updated since its value is sourced from an environment variable"), nil
+	}
+
+	if slices.Contains(ReadOnlySettings, oldSetting.Name) {
+		return admission.ResponseBadRequest("setting is read only"), nil
+	}
+
+	if newSetting.Value == "" {
+		return admission.ResponseBadRequest("setting value must not be empty"), nil
+	}
+
 	var err error
 
 	switch newSetting.Name {
@@ -153,6 +172,10 @@ func (a *admitter) admitCommonCreateUpdate(_, newSetting *v3.Setting) (*admissio
 		err = a.validateAuthUserSessionTTLMinutes(newSetting)
 	case AuthUserSessionIdleTTLMinutes:
 		err = a.validateAuthUserSessionIdleTTLMinutes(newSetting)
+	case AuthUserInfoMaxAgeSeconds:
+		err = a.validateAuthUserInfoMaxAgeSeconds(newSetting)
+	case AuthUserInfoResyncCron:
+		err = a.validateAuthUserInfoResyncCron(newSetting)
 	default:
 	}
 
@@ -330,6 +353,32 @@ func (a *admitter) validateDeleteInactiveUserAfter(s *v3.Setting) error {
 // validateUserRetentionCron validates the user-retention-cron setting
 // to make sure it's a valid standard cron expression.
 func (a *admitter) validateUserRetentionCron(s *v3.Setting) error {
+	if s.Value == "" {
+		return nil
+	}
+
+	if _, err := cron.ParseStandard(s.Value); err != nil {
+		return field.TypeInvalid(valuePath, s.Value, err.Error())
+	}
+
+	return nil
+}
+
+// validateAuthUserInfoMaxAgeSeconds validates the auth-user-info-max-age-seconds setting
+// to make sure it's a valid duration in seconds.
+func (a *admitter) validateAuthUserInfoMaxAgeSeconds(s *v3.Setting) error {
+	// We cannot use the validateDuration func since it does not allow for negative durations
+	// which are valid for the auth-user-info-max-age-seconds setting.
+	if _, err := time.ParseDuration(s.Value + "s"); err != nil {
+		return field.TypeInvalid(valuePath, s.Value, err.Error())
+	}
+
+	return nil
+}
+
+// validateAuthUserInfoResyncCron validates the auth-user-info-resync-cron setting
+// to make sure it's a valid cron string as defined in https://en.wikipedia.org/wiki/Cron.
+func (a *admitter) validateAuthUserInfoResyncCron(s *v3.Setting) error {
 	if s.Value == "" {
 		return nil
 	}
