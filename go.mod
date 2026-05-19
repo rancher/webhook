@@ -40,7 +40,7 @@ require (
 	github.com/rancher/dynamiclistener v0.8.2
 	github.com/rancher/jsonpath v0.0.0-20250620213443-ad24535cf0c1
 	github.com/rancher/lasso v0.2.8
-	github.com/rancher/rancher/pkg/apis v0.0.0-20260424150843-2234d06ced8c
+	github.com/rancher/rancher/pkg/apis v0.0.0-20260519163436-0e721adc9f56
 	github.com/rancher/rke v1.8.6
 	github.com/rancher/wrangler/v3 v3.6.0
 	github.com/robfig/cron v1.2.0
@@ -49,9 +49,9 @@ require (
 	go.uber.org/mock v0.6.0
 	golang.org/x/text v0.37.0
 	golang.org/x/tools v0.44.0
-	k8s.io/api v0.35.3
-	k8s.io/apimachinery v0.35.3
-	k8s.io/apiserver v0.35.3
+	k8s.io/api v0.35.4
+	k8s.io/apimachinery v0.35.4
+	k8s.io/apiserver v0.35.4
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/kubernetes v1.35.3
 	k8s.io/pod-security-admission v0.35.3
@@ -103,11 +103,11 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.67.5 // indirect
 	github.com/prometheus/procfs v0.19.2 // indirect
-	github.com/rancher/aks-operator v1.14.1 // indirect
-	github.com/rancher/ali-operator v1.14.0 // indirect
-	github.com/rancher/eks-operator v1.14.1 // indirect
+	github.com/rancher/aks-operator v1.14.2-rc.1 // indirect
+	github.com/rancher/ali-operator v1.14.1-rc.1 // indirect
+	github.com/rancher/eks-operator v1.14.2-rc.2 // indirect
 	github.com/rancher/fleet/pkg/apis v0.15.0 // indirect
-	github.com/rancher/gke-operator v1.14.1 // indirect
+	github.com/rancher/gke-operator v1.14.2-rc.1 // indirect
 	github.com/rancher/norman v0.8.7
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
@@ -132,7 +132,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/apiextensions-apiserver v0.35.1 // indirect
 	k8s.io/code-generator v0.35.3 // indirect
-	k8s.io/component-base v0.35.3 // indirect
+	k8s.io/component-base v0.35.4 // indirect
 	k8s.io/component-helpers v0.35.0 // indirect
 	k8s.io/controller-manager v0.35.0 // indirect
 	k8s.io/gengo v0.0.0-20250130153323-76c5745d3511 // indirect
