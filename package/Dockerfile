@@ -90,7 +90,7 @@ COPY --from=integration-test-build /dist/rancher-webhook-integration.test /ranch
 # ===============
 # Final Stage
 # ===============
-FROM registry.suse.com/bci/bci-micro:16.1@sha256:c1088d71b9e6aaf08ba379e72fb7750996411cc599aee5754a4e083217ebff83
+FROM registry.suse.com/bci/bci-micro:16.1@sha256:d0013375faa98197f39f1ace81a47af54bf85307ee1fc02937f6a647f669e0a3
 
 ARG user=webhook
 
