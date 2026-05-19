@@ -632,10 +632,18 @@ When settings are created or updated, the following common checks take place:
 - If set, `user-retention-cron` must be a valid standard cron expression (e.g. `0 0 * * 0`).
 - The `auth-user-session-ttl-minutes` must be a positive integer and can't be greater than `disable-inactive-user-after` or `delete-inactive-user-after` if those values are set.
 - The `auth-user-session-idle-ttl-minutes` must be a positive integer and can't be greater than `auth-user-session-ttl-minutes`.
+- The `auth-user-info-max-age-seconds` must be a valid duration value.
+- The `auth-user-info-resync-cron` must be a valid cron expression.
 
 #### Update
 
 When settings are updated, the following additional checks take place:
+
+- Settings with a source of `env` may not be updated
+
+- Read only settings like `cacerts` must not be updated.
+
+- The new value for the setting must not be ""
 
 - If `agent-tls-mode` has `default` or `value` updated from `system-store` to `strict`, then all non-local clusters must
   have a status condition `AgentTlsStrictCheck` set to `True`, unless the new setting has an overriding
