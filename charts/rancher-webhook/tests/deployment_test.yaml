@@ -88,3 +88,38 @@ tests:
           path: spec.template.spec.hostNetwork
       - notExists:
           path: spec.template.spec.dnsPolicy
+
+  - it: should not set imagePullSecrets by default
+    asserts:
+      - notExists:
+          path: spec.template.spec.imagePullSecrets
+
+  - it: should set imagePullSecrets when configured with plain strings
+    set:
+      global.cattle.imagePullSecrets:
+        - my-registry-secret
+        - another-secret
+    asserts:
+      - contains:
+          path: spec.template.spec.imagePullSecrets
+          content:
+            name: my-registry-secret
+      - contains:
+          path: spec.template.spec.imagePullSecrets
+          content:
+            name: another-secret
+
+  - it: should set imagePullSecrets when configured with object references
+    set:
+      global.cattle.imagePullSecrets:
+        - name: my-registry-secret
+        - name: another-secret
+    asserts:
+      - contains:
+          path: spec.template.spec.imagePullSecrets
+          content:
+            name: my-registry-secret
+      - contains:
+          path: spec.template.spec.imagePullSecrets
+          content:
+            name: another-secret

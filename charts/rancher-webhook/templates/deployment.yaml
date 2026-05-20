@@ -83,3 +83,4 @@ spec:
       {{- if .Values.priorityClassName }}
       priorityClassName: "{{.Values.priorityClassName}}"
       {{- end }}
+      {{- include "rancher-webhook.imagePullSecrets" . | nindent 6 }}
