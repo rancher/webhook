@@ -37,6 +37,58 @@ var (
 	gvr = metav1.GroupVersionResource{Group: "management.cattle.io", Version: "v3", Resource: "settings"}
 )
 
+func (s *SettingSuite) TestAdmitUpdateGuards() {
+	tests := []struct {
+		name       string
+		oldSetting *v3.Setting
+		newSetting *v3.Setting
+		allowed    bool
+	}{
+		{
+			name: "reject update when sourced from env",
+			oldSetting: &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{Name: setting.UserRetentionCron},
+				Source:     "env",
+			},
+			newSetting: &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{Name: setting.UserRetentionCron},
+				Value:      "0 0 * * *",
+			},
+		},
+		{
+			name: "reject read-only setting",
+			oldSetting: &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{Name: "cacerts"},
+			},
+			newSetting: &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{Name: "cacerts"},
+				Value:      "new-certs",
+			},
+		},
+		{
+			name: "allow normal valid update",
+			oldSetting: &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{Name: setting.UserRetentionCron},
+			},
+			newSetting: &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{Name: setting.UserRetentionCron},
+				Value:      "0 0 * * *",
+			},
+			allowed: true,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		s.T().Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			validator := setting.NewValidator(nil, nil)
+			s.testAdmit(t, validator, test.oldSetting, test.newSetting, v1.Update, test.allowed)
+		})
+	}
+}
+
 func (s *SettingSuite) TestValidateDisableInactiveUserAfterOnUpdate() {
 	s.validateDisableInactiveUserAfter(v1.Update)
 }
@@ -301,6 +353,105 @@ func (s *SettingSuite) TestValidateUserLastLoginDefaultOnUpdate() {
 
 func (s *SettingSuite) TestValidateUserLastLoginDefaultOnCreate() {
 	s.validateUserLastLoginDefault(v1.Create)
+}
+
+func (s *SettingSuite) TestValidateAuthUserInfoMaxAgeSecondsOnUpdate() {
+	s.validateAuthUserInfoMaxAgeSeconds(v1.Update)
+}
+
+func (s *SettingSuite) TestValidateAuthUserInfoMaxAgeSecondsOnCreate() {
+	s.validateAuthUserInfoMaxAgeSeconds(v1.Create)
+}
+
+func (s *SettingSuite) validateAuthUserInfoMaxAgeSeconds(op v1.Operation) {
+	tests := []struct {
+		desc    string
+		value   string
+		allowed bool
+	}{
+		{
+			desc:    "valid max age",
+			value:   "3600",
+			allowed: true,
+		},
+		{
+			desc:    "valid negative max age",
+			value:   "-1",
+			allowed: true,
+		},
+		{
+			desc:  "invalid max age",
+			value: "foo",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		s.T().Run(test.desc, func(t *testing.T) {
+			t.Parallel()
+
+			validator := setting.NewValidator(nil, nil)
+			s.testAdmit(t, validator, &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: setting.AuthUserInfoMaxAgeSeconds,
+				},
+			}, &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: setting.AuthUserInfoMaxAgeSeconds,
+				},
+				Value: test.value,
+			}, op, test.allowed)
+		})
+	}
+}
+
+func (s *SettingSuite) TestValidateAuthUserInfoResyncCronOnUpdate() {
+	s.validateAuthUserInfoResyncCron(v1.Update)
+}
+
+func (s *SettingSuite) TestValidateAuthUserInfoResyncCronOnCreate() {
+	s.validateAuthUserInfoResyncCron(v1.Create)
+}
+
+func (s *SettingSuite) validateAuthUserInfoResyncCron(op v1.Operation) {
+	tests := []struct {
+		desc    string
+		value   string
+		allowed bool
+	}{
+		{
+			desc:    "valid cron expression",
+			value:   "0 0 * * *",
+			allowed: true,
+		},
+		{
+			desc:  "non-standard cron expression",
+			value: "* * * * * *",
+		},
+		{
+			desc:  "nonsensical value",
+			value: "foo",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		s.T().Run(test.desc, func(t *testing.T) {
+			t.Parallel()
+
+			validator := setting.NewValidator(nil, nil)
+			s.testAdmit(t, validator, &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: setting.AuthUserInfoResyncCron,
+				},
+			}, &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: setting.AuthUserInfoResyncCron,
+				},
+				Value: test.value,
+			}, op, test.allowed)
+		})
+	}
 }
 
 func (s *SettingSuite) validateUserLastLoginDefault(op v1.Operation) {
