@@ -39,7 +39,7 @@ require (
 	github.com/rancher/dynamiclistener v0.7.6
 	github.com/rancher/jsonpath v0.0.0-20250620213443-ad24535cf0c1
 	github.com/rancher/lasso v0.2.5
-	github.com/rancher/rancher/pkg/apis v0.0.0-20260519173444-fdef143b5f8c
+	github.com/rancher/rancher/pkg/apis v0.0.0-20260520213924-73aa8664faaa
 	github.com/rancher/rke v1.8.6
 	github.com/rancher/wrangler/v3 v3.3.5
 	github.com/robfig/cron v1.2.0
@@ -48,8 +48,8 @@ require (
 	go.uber.org/mock v0.6.0
 	golang.org/x/text v0.33.0
 	golang.org/x/tools v0.41.0
-	k8s.io/api v0.34.7
-	k8s.io/apimachinery v0.34.7
+	k8s.io/api v0.34.8
+	k8s.io/apimachinery v0.34.8
 	k8s.io/apiserver v0.34.6
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/kubernetes v1.34.6
@@ -94,7 +94,7 @@ require (
 	github.com/rancher/aks-operator v1.13.6-rc.1 // indirect
 	github.com/rancher/ali-operator v1.13.3-rc.1 // indirect
 	github.com/rancher/eks-operator v1.13.6-rc.1 // indirect
-	github.com/rancher/fleet/pkg/apis v0.14.6-rc.2 // indirect
+	github.com/rancher/fleet/pkg/apis v0.14.6-rc.3 // indirect
 	github.com/rancher/gke-operator v1.13.6-rc.1 // indirect
 	//TODO: Replace with a tag during un-rc'ing
 	github.com/rancher/norman v0.7.3 // indirect
