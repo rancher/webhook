@@ -11,10 +11,29 @@ on:
         description: "Repository for rancher/rancher"
         required: true
         default: "rancher/rancher"
+  workflow_call:
+    inputs:
+      webhook_ref:
+        description: "Webhook branch to sync"
+        required: true
+        type: string
+      rancher_ref:
+        description: "Version of rancher/rancher to compare"
+        required: true
+        type: string
+      rancher_repository:
+        description: "Repository for rancher/rancher"
+        required: false
+        type: string
+        default: "rancher/rancher"
 
 env:
-  RANCHER_REF: "${{ github.event.inputs.rancher_ref }}"
-  WEBHOOK_REF: "${{ github.ref_name }}"
+  RANCHER_REF: "${{ inputs.rancher_ref }}"
+  WEBHOOK_REF: "${{ inputs.webhook_ref || github.ref_name }}"
+
+concurrency:
+  group: sync-deps-${{ inputs.webhook_ref || github.ref_name }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -53,7 +72,7 @@ jobs:
       - name : Checkout rancher repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          repository: "${{ github.event.inputs.rancher_repository }}"
+          repository: "${{ inputs.rancher_repository }}"
           ref: "${{ env.RANCHER_REF }}"
           path: rancher
 
@@ -73,14 +92,15 @@ jobs:
       - name: Run sync-deps script
         run: |
           cd webhook
-          BRANCH="sync-deps-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          safe_ref=$(echo "$WEBHOOK_REF" | tr '/' '-')
+          BRANCH="automation/sync-deps-${safe_ref}"
           echo "BRANCH=${BRANCH}" >> $GITHUB_ENV
-          git checkout -b "$BRANCH"
+          git checkout -B "$BRANCH" "origin/$WEBHOOK_REF"
           ./.github/workflows/scripts/sync-deps.sh ../rancher "changes.md"
           if [ -f changes.md ]; then
             git add go.mod go.sum
             git commit -m "Sync dependencies"
-            git push origin "$BRANCH"
+            git push --force origin "$BRANCH"
           fi
 
       - name: Create PR
@@ -97,12 +117,22 @@ jobs:
           The workflow was triggered by $GITHUB_TRIGGERING_ACTOR.
           EOF
           )
-          gh pr create \
-            --title "[$WEBHOOK_REF] Sync webhook dependencies" \
-            --body "$body" \
-            --reviewer "$GITHUB_TRIGGERING_ACTOR" \
+          existing=$(gh pr list \
             --repo "${{ github.repository }}" \
-            --head "${{ github.repository_owner }}:$BRANCH" \
-            --base "$WEBHOOK_REF"
+            --head "$BRANCH" \
+            --base "$WEBHOOK_REF" \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --body "$body"
+          else
+            gh pr create \
+              --title "[$WEBHOOK_REF] Sync webhook dependencies" \
+              --body "$body" \
+              --repo "${{ github.repository }}" \
+              --head "${{ github.repository_owner }}:$BRANCH" \
+              --base "$WEBHOOK_REF"
+          fi
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}

@@ -1,0 +1,46 @@
+name: Sync dependencies (scheduled)
+
+on:
+  schedule:
+    # 09:00 UTC daily
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: sync-deps-scheduled
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  compute-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      include: ${{ steps.build.outputs.include }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Build matrix from VERSION.md
+        id: build
+        run: |
+          include=$(awk -F'[|[:space:]]+' '
+            $2 == "main" || $2 ~ /^release\// {
+              rancher = ($2 == "main") ? "main" : "release/" $4
+              printf "{\"webhook_ref\":\"%s\",\"rancher_ref\":\"%s\"}\n", $2, rancher
+              if (++n >= 6) exit
+            }' VERSION.md | jq -cs .)
+          echo "include=$include" >> "$GITHUB_OUTPUT"
+          echo "Computed matrix: [$include]"
+
+  sync:
+    needs: compute-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.compute-matrix.outputs.include) }}
+    uses: ./.github/workflows/sync-deps.yaml
+    with:
+      webhook_ref: ${{ matrix.webhook_ref }}
+      rancher_ref: ${{ matrix.rancher_ref }}
