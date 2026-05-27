@@ -3,12 +3,15 @@ package users
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
 	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/resources/common"
+	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -93,15 +96,27 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, fmt.Errorf("failed to get current User from request: %w", err)
 	}
 
-	if request.Operation == admissionv1.Create && newUser.Username != "" {
-		if resp, err := a.checkUsernameUniqueness(newUser.Username); err != nil || resp != nil {
-			return resp, err
+	if request.Operation == admissionv1.Create {
+		response, err := a.checkLocalUser("create", newUser)
+		if response != nil || err != nil {
+			return response, err
+		}
+
+		if newUser.Username != "" {
+			if resp, err := a.checkUsernameUniqueness(newUser.Username); err != nil || resp != nil {
+				return resp, err
+			}
 		}
 		return &admissionv1.AdmissionResponse{Allowed: true}, nil
 	}
 
 	fieldPath := field.NewPath("user")
 	if request.Operation == admissionv1.Update {
+		response, err := a.checkLocalUser("update", newUser)
+		if response != nil || err != nil {
+			return response, err
+		}
+
 		if err := validateUpdateFields(oldUser, newUser, fieldPath); err != nil {
 			return admission.ResponseBadRequest(err.Error()), nil
 		}
@@ -119,6 +134,11 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		}
 	}
 	if request.Operation == admissionv1.Delete {
+		response, err := a.checkLocalUser("delete", oldUser)
+		if response != nil || err != nil {
+			return response, err
+		}
+
 		if oldUser.Name == request.UserInfo.Username {
 			return admission.ResponseBadRequest("can't delete yourself"), nil
 		}
@@ -182,6 +202,88 @@ func (a *admitter) checkUsernameUniqueness(username string) (*admissionv1.Admiss
 		}
 	}
 	return nil, nil
+}
+
+// checkLocalUser rejects the user in the request if it is linked to the local
+// auth provider and the local auth provider is hidden.
+func (a *admitter) checkLocalUser(operation string, user *v3.User) (*admissionv1.AdmissionResponse, error) {
+	hidden, err := a.hiddenLocalAuthProvider()
+	if err != nil {
+		return nil, err
+	}
+
+	logrus.Debugf("[user-validation] %s: hide local auth = %v", operation, hidden)
+
+	if !hidden {
+		return nil, nil
+	}
+
+	logrus.Debugf("[user-validation] %s: checking user %q", operation, user.Name)
+
+	if len(user.PrincipalIDs) == 0 {
+		// reject local user (dashboard)
+		logrus.Debugf("[user-validation] %s: rejected local user %q (no principals)", operation, user.Name)
+		return admission.ResponseBadRequest("can't " + operation + " user '" + user.Name + "' for disabled local provider"), nil
+	}
+	if len(user.PrincipalIDs) == 1 && strings.HasPrefix(user.PrincipalIDs[0], "local:") {
+		// reject other local user in creation
+		logrus.Debugf("[user-validation] %s: rejected local user %q (local principal)", operation, user.Name)
+		return admission.ResponseBadRequest("can't " + operation + " user '" + user.Name + "' for disabled local provider"), nil
+	}
+	// user is not local (default admin or system). pass to regular checks.
+	logrus.Debugf("[user-validation] %s: continue for non-local user %q", operation, user.Name)
+	return nil, nil
+}
+
+// hiddenLocalAuthProvider determines if the local auth provider is hidden or
+// not. It is hidden when both the auto-hide policy and an external auth
+// provider are active.
+func (a *admitter) hiddenLocalAuthProvider() (bool, error) {
+	// Check policy first, fast
+	hide, err := a.autoHideLocalAuthProvider()
+	if err != nil {
+		return false, err
+	}
+	if !hide {
+		return false, nil
+	}
+
+	// Check for active external auth provider, query etcd
+	acList, err := a.authConfigCache.List(nil)
+	if err != nil {
+		return false, err
+	}
+
+	externalActive := false
+	for _, ac := range acList {
+		if ac.Enabled && ac.Name != "local" {
+			externalActive = true
+			break
+		}
+	}
+
+	return externalActive, nil
+}
+
+// autoHideLocalAuthProvider retrieves the current value of the auto-hide policy
+// feature. A missing feature is treated as off. This can happen if the new
+// webhook is run against an older rancher backend.
+func (a *admitter) autoHideLocalAuthProvider() (bool, error) {
+	feature, err := a.featureCache.Get(common.AutoHideLocalAuthProvider)
+	if err != nil {
+		// treat `feature not found` as `feature exists with (default) value OFF`
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to determine status of '%s' feature: %w", common.AutoHideLocalAuthProvider, err)
+	}
+
+	enabled := feature.Status.Default
+	if feature.Spec.Value != nil {
+		enabled = *feature.Spec.Value
+	}
+
+	return enabled, nil
 }
 
 // getGroupsFromUserAttributes gets the list of group principals from a UserAttribute.
