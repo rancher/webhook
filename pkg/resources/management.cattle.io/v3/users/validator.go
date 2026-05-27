@@ -36,6 +36,8 @@ type admitter struct {
 	sar                authorizationv1.SubjectAccessReviewInterface
 	userAttributeCache controllerv3.UserAttributeCache
 	userCache          controllerv3.UserCache
+	featureCache       controllerv3.FeatureCache
+	authConfigCache    controllerv3.AuthConfigCache
 }
 
 // Validator validates tokens.
@@ -44,13 +46,22 @@ type Validator struct {
 }
 
 // NewValidator returns a new Validator instance.
-func NewValidator(userAttributeCache controllerv3.UserAttributeCache, sar authorizationv1.SubjectAccessReviewInterface, defaultResolver validation.AuthorizationRuleResolver, userCache controllerv3.UserCache) *Validator {
+func NewValidator(
+	userAttributeCache controllerv3.UserAttributeCache,
+	sar authorizationv1.SubjectAccessReviewInterface,
+	defaultResolver validation.AuthorizationRuleResolver,
+	userCache controllerv3.UserCache,
+	featureCache controllerv3.FeatureCache,
+	authConfigCache controllerv3.AuthConfigCache,
+) *Validator {
 	return &Validator{
 		admitter: admitter{
 			resolver:           defaultResolver,
 			userAttributeCache: userAttributeCache,
 			sar:                sar,
 			userCache:          userCache,
+			featureCache:       featureCache,
+			authConfigCache:    authConfigCache,
 		},
 	}
 }
