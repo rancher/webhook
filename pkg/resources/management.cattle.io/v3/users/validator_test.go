@@ -348,8 +348,13 @@ func Test_Admit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			mockFeature := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+			mockFeature.EXPECT().Get("auto-hide-local-auth-provider").Return(&v3.Feature{
+				Status: v3.FeatureStatus{Default: false},
+			}, nil)
 			a := &admitter{
-				sar: fakeSAR,
+				sar:          fakeSAR,
+				featureCache: mockFeature,
 			}
 
 			// Handle fake resolver
