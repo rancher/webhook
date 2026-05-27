@@ -39,6 +39,7 @@ func main() {
 		Groups: map[string]args.Group{
 			"management.cattle.io": {
 				Types: []interface{}{
+					v3.AuthConfig{},
 					v3.Cluster{},
 					v3.GlobalRole{},
 					v3.GlobalRoleBinding{},
