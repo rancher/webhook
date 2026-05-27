@@ -1,6 +1,6 @@
 ## Validation Checks
 
-### Create and Delete
+### Create
 
 Verifies there aren't any other users with the same username.
 
