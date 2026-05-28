@@ -53,7 +53,7 @@ jobs:
 
     - name: Upload artifacts
       # https://github.com/actions/upload-artifact/commit/65462800fd760344b1a7b4382951275a0abb4808
-      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: webhook-artifacts-${{ matrix.arch }}
         path: |
@@ -123,7 +123,7 @@ jobs:
             secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials password | PRIME_STG_REGISTRY_PASSWORD
 
       - name: Publish image
-        uses: rancher/ecm-distro-tools/actions/publish-image@dcb1a0f50ca91f9f9a1f34fa335a9182686234d5 # v0.66.3
+        uses: rancher/ecm-distro-tools/actions/publish-image@0e1697ecc955e85ec73970b66c8984241fa84a28 # v0.69.0
         with:
           image: rancher-webhook
           tag: ${{ github.ref_name }}
