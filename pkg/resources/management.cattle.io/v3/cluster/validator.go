@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/blang/semver"
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -22,7 +23,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/validation"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 )
 
@@ -135,6 +138,11 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 
 	if response, err = a.validatePriorityClass(oldCluster, newCluster, request.Operation); err != nil || !response.Allowed {
 		return response, err
+	}
+
+	if response.Result = errorListToStatus(validateWebhookDeploymentCustomization(newCluster.Spec.WebhookDeploymentCustomization,
+		field.NewPath("spec", "webhookDeploymentCustomization"))); response.Result != nil {
+		return response, nil
 	}
 
 	response, err = a.validatePSACT(oldCluster, newCluster, request.Operation)
@@ -619,4 +627,178 @@ func (a *admitter) versionManagementEnabled(cluster *apisv3.Cluster) (bool, erro
 		return false, fmt.Errorf("the value (%s) of the %s setting is invalid", actual, VersionManagementSetting)
 	}
 	return false, fmt.Errorf("the value of the %s annotation is invalid", VersionManagementAnno)
+}
+
+func validateWebhookDeploymentCustomization(customization *apisv3.WebhookDeploymentCustomization, path *field.Path) field.ErrorList {
+	if customization == nil {
+		return nil
+	}
+	var errList field.ErrorList
+
+	if customization.ReplicaCount != nil && *customization.ReplicaCount < 1 {
+		errList = append(errList, field.Invalid(path.Child("replicaCount"), *customization.ReplicaCount, "must be at least 1"))
+	}
+
+	errList = append(errList, validateAppendToleration(customization.AppendTolerations, path.Child("appendTolerations"))...)
+	errList = append(errList, validateAffinity(customization.OverrideAffinity, path.Child("overrideAffinity"))...)
+	errList = append(errList, validateWebhookPDB(customization.PodDisruptionBudget, path.Child("podDisruptionBudget"))...)
+
+	return errList
+}
+
+func validateWebhookPDB(pdb *apisv3.PodDisruptionBudgetSpec, path *field.Path) field.ErrorList {
+	if pdb == nil {
+		return nil
+	}
+	var errList field.ErrorList
+
+	minAvailStr := pdb.MinAvailable
+	maxUnavailStr := pdb.MaxUnavailable
+
+	if (minAvailStr == "" && maxUnavailStr == "") ||
+		(minAvailStr == "0" && maxUnavailStr == "0") ||
+		(minAvailStr != "" && minAvailStr != "0") && (maxUnavailStr != "" && maxUnavailStr != "0") {
+		errList = append(errList, field.Invalid(path, pdb, "both minAvailable and maxUnavailable cannot be set to a non-zero value, at least one must be omitted or set to zero"))
+		return errList
+	}
+
+	if minAvailStr != "" {
+		minAvailInt, err := strconv.Atoi(minAvailStr)
+		if err != nil {
+			if !common.PdbPercentageRegex.MatchString(minAvailStr) {
+				errList = append(errList, field.Invalid(path.Child("minAvailable"), minAvailStr,
+					fmt.Sprintf("must be a non-negative whole integer or a percentage value between 0 and 100, regex used is '%s'", common.PdbPercentageRegex.String())))
+			}
+		} else if minAvailInt < 0 {
+			errList = append(errList, field.Invalid(path.Child("minAvailable"), minAvailStr, "cannot be a negative integer"))
+		}
+	}
+
+	if maxUnavailStr != "" {
+		maxUnavailInt, err := strconv.Atoi(maxUnavailStr)
+		if err != nil {
+			if !common.PdbPercentageRegex.MatchString(maxUnavailStr) {
+				errList = append(errList, field.Invalid(path.Child("maxUnavailable"), maxUnavailStr,
+					fmt.Sprintf("must be a non-negative whole integer or a percentage value between 0 and 100, regex used is '%s'", common.PdbPercentageRegex.String())))
+			}
+		} else if maxUnavailInt < 0 {
+			errList = append(errList, field.Invalid(path.Child("maxUnavailable"), maxUnavailStr, "cannot be a negative integer"))
+		}
+	}
+
+	return errList
+}
+
+func validateAppendToleration(tolerations []corev1.Toleration, path *field.Path) field.ErrorList {
+	var errList field.ErrorList
+	for k, s := range tolerations {
+		errList = append(errList, validation.ValidateLabelName(s.Key, path.Index(k))...)
+	}
+	return errList
+}
+
+func validateAffinity(overrideAffinity *corev1.Affinity, path *field.Path) field.ErrorList {
+	if overrideAffinity == nil {
+		return nil
+	}
+	var errList field.ErrorList
+
+	if affinity := overrideAffinity.NodeAffinity; affinity != nil {
+		errList = append(errList, validateNodeAffinity(affinity, path.Child("nodeAffinity"))...)
+	}
+	if affinity := overrideAffinity.PodAffinity; affinity != nil {
+		errList = append(errList, validatePodAffinity(affinity, path.Child("podAffinity"))...)
+	}
+	if affinity := overrideAffinity.PodAntiAffinity; affinity != nil {
+		errList = append(errList, validatePodAntiAffinity(affinity, path.Child("podAntiAffinity"))...)
+	}
+
+	return errList
+}
+
+func validateNodeAffinity(affinity *corev1.NodeAffinity, path *field.Path) field.ErrorList {
+	var errList field.ErrorList
+	if affinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
+		for i, term := range affinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms {
+			for j, expr := range term.MatchExpressions {
+				errList = append(errList, validation.ValidateLabelName(expr.Key,
+					path.Child("requiredDuringSchedulingIgnoredDuringExecution", "nodeSelectorTerms").Index(i).Child("matchExpressions").Index(j).Child("key"))...)
+			}
+			for j, f := range term.MatchFields {
+				errList = append(errList, validation.ValidateLabelName(f.Key,
+					path.Child("requiredDuringSchedulingIgnoredDuringExecution", "nodeSelectorTerms").Index(i).Child("matchFields").Index(j).Child("key"))...)
+			}
+		}
+	}
+	for i, preferred := range affinity.PreferredDuringSchedulingIgnoredDuringExecution {
+		for j, expr := range preferred.Preference.MatchExpressions {
+			errList = append(errList, validation.ValidateLabelName(expr.Key,
+				path.Child("preferredDuringSchedulingIgnoredDuringExecution").Index(i).Child("preference", "matchExpressions").Index(j).Child("key"))...)
+		}
+		for j, f := range preferred.Preference.MatchFields {
+			errList = append(errList, validation.ValidateLabelName(f.Key,
+				path.Child("preferredDuringSchedulingIgnoredDuringExecution").Index(i).Child("preference", "matchFields").Index(j).Child("key"))...)
+		}
+	}
+	return errList
+}
+
+func validatePodAffinity(affinity *corev1.PodAffinity, path *field.Path) field.ErrorList {
+	var errList field.ErrorList
+	for i, term := range affinity.RequiredDuringSchedulingIgnoredDuringExecution {
+		errList = append(errList, validateLabelSelector(term.LabelSelector,
+			path.Child("requiredDuringSchedulingIgnoredDuringExecution").Index(i).Child("labelSelector"))...)
+	}
+	for i, term := range affinity.PreferredDuringSchedulingIgnoredDuringExecution {
+		errList = append(errList, validateLabelSelector(term.PodAffinityTerm.LabelSelector,
+			path.Child("preferredDuringSchedulingIgnoredDuringExecution").Index(i).Child("podAffinityTerm", "labelSelector"))...)
+	}
+	return errList
+}
+
+func validatePodAntiAffinity(affinity *corev1.PodAntiAffinity, path *field.Path) field.ErrorList {
+	var errList field.ErrorList
+	for i, term := range affinity.RequiredDuringSchedulingIgnoredDuringExecution {
+		errList = append(errList, validateLabelSelector(term.LabelSelector,
+			path.Child("requiredDuringSchedulingIgnoredDuringExecution").Index(i).Child("labelSelector"))...)
+	}
+	for i, term := range affinity.PreferredDuringSchedulingIgnoredDuringExecution {
+		errList = append(errList, validateLabelSelector(term.PodAffinityTerm.LabelSelector,
+			path.Child("preferredDuringSchedulingIgnoredDuringExecution").Index(i).Child("podAffinityTerm", "labelSelector"))...)
+	}
+	return errList
+}
+
+func validateLabelSelector(selector *metav1.LabelSelector, path *field.Path) field.ErrorList {
+	if selector == nil {
+		return nil
+	}
+	var errList field.ErrorList
+	for key := range selector.MatchLabels {
+		errList = append(errList, validation.ValidateLabelName(key, path.Child("matchLabels"))...)
+	}
+	for i, expr := range selector.MatchExpressions {
+		errList = append(errList, validation.ValidateLabelName(expr.Key, path.Child("matchExpressions").Index(i))...)
+	}
+	return errList
+}
+
+func errorListToStatus(errList field.ErrorList) *metav1.Status {
+	if len(errList) == 0 {
+		return nil
+	}
+	var builder strings.Builder
+	builder.WriteString("* ")
+	for i, fieldErr := range errList {
+		builder.WriteString(fieldErr.Error())
+		if i != len(errList)-1 {
+			builder.WriteString("\n* ")
+		}
+	}
+	return &metav1.Status{
+		Status:  "Failure",
+		Message: builder.String(),
+		Reason:  metav1.StatusReasonInvalid,
+		Code:    http.StatusUnprocessableEntity,
+	}
 }

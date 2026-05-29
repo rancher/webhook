@@ -3010,3 +3010,226 @@ func TestValidateETCDSnapshotRestore(t *testing.T) {
 		})
 	}
 }
+
+func Test_validateWebhookDeploymentCustomization(t *testing.T) {
+	replicaCount := func(n int32) *int32 { return &n }
+
+	tests := []struct {
+		name         string
+		customization *v1.WebhookDeploymentCustomization
+		validateFunc func(t *testing.T, err field.ErrorList)
+	}{
+		{
+			name:          "nil customization",
+			customization: nil,
+			validateFunc:  validateFailedPaths([]string{}),
+		},
+		{
+			name:          "empty customization",
+			customization: &v1.WebhookDeploymentCustomization{},
+			validateFunc:  validateFailedPaths([]string{}),
+		},
+		{
+			name: "valid replicaCount",
+			customization: &v1.WebhookDeploymentCustomization{
+				ReplicaCount: replicaCount(3),
+			},
+			validateFunc: validateFailedPaths([]string{}),
+		},
+		{
+			name: "replicaCount of 1 is valid",
+			customization: &v1.WebhookDeploymentCustomization{
+				ReplicaCount: replicaCount(1),
+			},
+			validateFunc: validateFailedPaths([]string{}),
+		},
+		{
+			name: "replicaCount of 0 is invalid",
+			customization: &v1.WebhookDeploymentCustomization{
+				ReplicaCount: replicaCount(0),
+			},
+			validateFunc: validateFailedPaths([]string{"test.replicaCount"}),
+		},
+		{
+			name: "negative replicaCount is invalid",
+			customization: &v1.WebhookDeploymentCustomization{
+				ReplicaCount: replicaCount(-1),
+			},
+			validateFunc: validateFailedPaths([]string{"test.replicaCount"}),
+		},
+		{
+			name: "valid tolerations",
+			customization: &v1.WebhookDeploymentCustomization{
+				AppendTolerations: []k8sv1.Toleration{
+					{Key: "cattle.io/node", Operator: k8sv1.TolerationOpExists},
+				},
+			},
+			validateFunc: validateFailedPaths([]string{}),
+		},
+		{
+			name: "invalid toleration key",
+			customization: &v1.WebhookDeploymentCustomization{
+				AppendTolerations: []k8sv1.Toleration{
+					{Key: "-invalid-key"},
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.appendTolerations[0]"}),
+		},
+		{
+			name: "valid affinity",
+			customization: &v1.WebhookDeploymentCustomization{
+				OverrideAffinity: &k8sv1.Affinity{
+					NodeAffinity: &k8sv1.NodeAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &k8sv1.NodeSelector{
+							NodeSelectorTerms: []k8sv1.NodeSelectorTerm{
+								{
+									MatchExpressions: []k8sv1.NodeSelectorRequirement{
+										{Key: "kubernetes.io/arch", Operator: k8sv1.NodeSelectorOpIn, Values: []string{"amd64"}},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			validateFunc: validateFailedPaths([]string{}),
+		},
+		{
+			name: "invalid affinity label key",
+			customization: &v1.WebhookDeploymentCustomization{
+				OverrideAffinity: &k8sv1.Affinity{
+					NodeAffinity: &k8sv1.NodeAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &k8sv1.NodeSelector{
+							NodeSelectorTerms: []k8sv1.NodeSelectorTerm{
+								{
+									MatchExpressions: []k8sv1.NodeSelectorRequirement{
+										{Key: "-bad-key"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			validateFunc: validateFailedPaths([]string{
+				"test.overrideAffinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchExpressions[0].key",
+			}),
+		},
+		{
+			name: "valid PDB with minAvailable only",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MinAvailable: "1",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{}),
+		},
+		{
+			name: "valid PDB with maxUnavailable only",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MaxUnavailable: "1",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{}),
+		},
+		{
+			name: "valid PDB with percentage",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MinAvailable: "50%",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{}),
+		},
+		{
+			name: "PDB both minAvailable and maxUnavailable set",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MinAvailable:   "1",
+					MaxUnavailable: "1",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget"}),
+		},
+		{
+			name: "PDB both set to zero",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MinAvailable:   "0",
+					MaxUnavailable: "0",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget"}),
+		},
+		{
+			name: "PDB both empty",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget"}),
+		},
+		{
+			name: "PDB negative minAvailable",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MinAvailable: "-1",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.minAvailable"}),
+		},
+		{
+			name: "PDB invalid percentage",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MinAvailable: "200%",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.minAvailable"}),
+		},
+		{
+			name: "PDB negative maxUnavailable",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MaxUnavailable: "-5",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
+		},
+		{
+			name: "full valid customization",
+			customization: &v1.WebhookDeploymentCustomization{
+				ReplicaCount: replicaCount(3),
+				AppendTolerations: []k8sv1.Toleration{
+					{Key: "cattle.io/node", Operator: k8sv1.TolerationOpExists},
+				},
+				OverrideAffinity: &k8sv1.Affinity{
+					PodAntiAffinity: &k8sv1.PodAntiAffinity{
+						PreferredDuringSchedulingIgnoredDuringExecution: []k8sv1.WeightedPodAffinityTerm{
+							{
+								Weight: 100,
+								PodAffinityTerm: k8sv1.PodAffinityTerm{
+									LabelSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"app": "rancher-webhook"},
+									},
+									TopologyKey: "kubernetes.io/hostname",
+								},
+							},
+						},
+					},
+				},
+				OverrideResourceRequirements: &k8sv1.ResourceRequirements{},
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MinAvailable: "1",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{}),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := validateWebhookDeploymentCustomization(tt.customization, field.NewPath("test"))
+			tt.validateFunc(t, got)
+		})
+	}
+}

@@ -145,6 +145,11 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 			return response, nil
 		}
 
+		if response.Result = errorListToStatus(validateWebhookDeploymentCustomization(cluster.Spec.WebhookDeploymentCustomization,
+			field.NewPath("spec", "webhookDeploymentCustomization"))); response.Result != nil {
+			return response, nil
+		}
+
 		if err := p.validateCloudCredentialAccess(request, response, oldCluster, cluster); err != nil || response.Result != nil {
 			return response, err
 		}
@@ -879,6 +884,67 @@ func validateAgentDeploymentCustomization(customization *v1.AgentDeploymentCusto
 
 	return errList
 }
+
+func validateWebhookDeploymentCustomization(customization *v1.WebhookDeploymentCustomization, path *field.Path) field.ErrorList {
+	if customization == nil {
+		return nil
+	}
+	var errList field.ErrorList
+
+	if customization.ReplicaCount != nil && *customization.ReplicaCount < 1 {
+		errList = append(errList, field.Invalid(path.Child("replicaCount"), *customization.ReplicaCount, "must be at least 1"))
+	}
+
+	errList = append(errList, validateAppendToleration(customization.AppendTolerations, path.Child("appendTolerations"))...)
+	errList = append(errList, validateAffinity(customization.OverrideAffinity, path.Child("overrideAffinity"))...)
+	errList = append(errList, validateWebhookPDB(customization.PodDisruptionBudget, path.Child("podDisruptionBudget"))...)
+
+	return errList
+}
+
+func validateWebhookPDB(pdb *v1.PodDisruptionBudgetSpec, path *field.Path) field.ErrorList {
+	if pdb == nil {
+		return nil
+	}
+	var errList field.ErrorList
+
+	minAvailStr := pdb.MinAvailable
+	maxUnavailStr := pdb.MaxUnavailable
+
+	if (minAvailStr == "" && maxUnavailStr == "") ||
+		(minAvailStr == "0" && maxUnavailStr == "0") ||
+		(minAvailStr != "" && minAvailStr != "0") && (maxUnavailStr != "" && maxUnavailStr != "0") {
+		errList = append(errList, field.Invalid(path, pdb, "both minAvailable and maxUnavailable cannot be set to a non-zero value, at least one must be omitted or set to zero"))
+		return errList
+	}
+
+	if minAvailStr != "" {
+		minAvailInt, err := strconv.Atoi(minAvailStr)
+		if err != nil {
+			if !common.PdbPercentageRegex.MatchString(minAvailStr) {
+				errList = append(errList, field.Invalid(path.Child("minAvailable"), minAvailStr,
+					fmt.Sprintf("must be a non-negative whole integer or a percentage value between 0 and 100, regex used is '%s'", common.PdbPercentageRegex.String())))
+			}
+		} else if minAvailInt < 0 {
+			errList = append(errList, field.Invalid(path.Child("minAvailable"), minAvailStr, "cannot be a negative integer"))
+		}
+	}
+
+	if maxUnavailStr != "" {
+		maxUnavailInt, err := strconv.Atoi(maxUnavailStr)
+		if err != nil {
+			if !common.PdbPercentageRegex.MatchString(maxUnavailStr) {
+				errList = append(errList, field.Invalid(path.Child("maxUnavailable"), maxUnavailStr,
+					fmt.Sprintf("must be a non-negative whole integer or a percentage value between 0 and 100, regex used is '%s'", common.PdbPercentageRegex.String())))
+			}
+		} else if maxUnavailInt < 0 {
+			errList = append(errList, field.Invalid(path.Child("maxUnavailable"), maxUnavailStr, "cannot be a negative integer"))
+		}
+	}
+
+	return errList
+}
+
 func validateAffinity(overrideAffinity *k8sv1.Affinity, path *field.Path) field.ErrorList {
 	if overrideAffinity == nil {
 		return nil
