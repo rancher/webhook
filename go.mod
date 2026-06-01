@@ -39,8 +39,8 @@ require (
 	github.com/rancher/dynamiclistener v0.9.0-rc.1
 	github.com/rancher/jsonpath v0.0.0-20260423141252-c4e0c565a09f
 	github.com/rancher/lasso v0.2.9
-	github.com/rancher/rancher/pkg/apis v0.0.0-20260211194119-d0c9ffaf3cb0
-	github.com/rancher/rancher/pkg/plan v0.0.0-20260413094914-0404acf59a23
+	github.com/rancher/rancher/pkg/apis v0.0.0-20260530215348-f9a5f4ac673a
+	github.com/rancher/rancher/pkg/plan v0.0.0-20260428222332-2696373f4152
 	github.com/rancher/rke v1.8.13
 	github.com/rancher/wrangler/v3 v3.7.0
 	github.com/robfig/cron v1.2.0
@@ -102,11 +102,11 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.67.5 // indirect
 	github.com/prometheus/procfs v0.19.2 // indirect
-	github.com/rancher/aks-operator v1.13.0-rc.4 // indirect
-	github.com/rancher/ali-operator v1.13.0-rc.2 // indirect
-	github.com/rancher/eks-operator v1.13.0-rc.4 // indirect
-	github.com/rancher/fleet/pkg/apis v0.15.0-alpha.6 // indirect
-	github.com/rancher/gke-operator v1.13.0-rc.3 // indirect
+	github.com/rancher/aks-operator v1.15.0-rc.1 // indirect
+	github.com/rancher/ali-operator v1.15.0-rc.1 // indirect
+	github.com/rancher/eks-operator v1.15.0-rc.1 // indirect
+	github.com/rancher/fleet/pkg/apis v0.15.0 // indirect
+	github.com/rancher/gke-operator v1.15.0-rc.1 // indirect
 	github.com/rancher/norman v0.9.5
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
@@ -122,14 +122,14 @@ require (
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/term v0.43.0 // indirect
-	golang.org/x/time v0.14.0 // indirect
+	golang.org/x/time v0.15.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/evanphx/json-patch.v5 v5.9.11
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/apiextensions-apiserver v0.36.0 // indirect
+	k8s.io/apiextensions-apiserver v0.36.1 // indirect
 	k8s.io/code-generator v0.36.1 // indirect
 	k8s.io/component-base v0.36.1 // indirect
 	k8s.io/component-helpers v0.35.0 // indirect
