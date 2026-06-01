@@ -1,8 +1,8 @@
 module github.com/rancher/webhook
 
-go 1.23.0
+go 1.24.0
 
-toolchain go1.23.6
+toolchain go1.24.13
 
 replace (
 	github.com/rancher/rke => github.com/rancher/rke v1.7.8
@@ -45,7 +45,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/rancher/dynamiclistener v0.6.1
 	github.com/rancher/lasso v0.2.2
-	github.com/rancher/rancher/pkg/apis v0.0.0-20250919133447-0323fc801622
+	github.com/rancher/rancher/pkg/apis v0.0.0-20260529205850-fbb8f65e5212
 	github.com/rancher/rke v1.7.9
 	github.com/rancher/wrangler/v3 v3.2.1
 	github.com/robfig/cron v1.2.0
@@ -58,7 +58,7 @@ require (
 	k8s.io/apimachinery v0.32.1
 	k8s.io/apiserver v0.32.1
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/kubernetes v1.31.1
+	k8s.io/kubernetes v1.31.11
 	k8s.io/pod-security-admission v0.31.1
 	k8s.io/utils v0.0.0-20250502105355-0f33e8f1c979
 	sigs.k8s.io/controller-runtime v0.19.7
@@ -119,7 +119,7 @@ require (
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/rancher/aks-operator v1.10.9 // indirect
 	github.com/rancher/eks-operator v1.10.9 // indirect
-	github.com/rancher/fleet/pkg/apis v0.11.9 // indirect
+	github.com/rancher/fleet/pkg/apis v0.11.12 // indirect
 	github.com/rancher/gke-operator v1.10.9 // indirect
 	github.com/rancher/norman v0.4.2 // indirect
 	github.com/spf13/cobra v1.8.1 // indirect
