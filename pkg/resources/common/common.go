@@ -27,6 +27,10 @@ const (
 	// SchedulingCustomizationFeatureName is the feature name for enabling customization of PDBs and PCs for the
 	// cattle-cluster-agent
 	SchedulingCustomizationFeatureName = "cluster-agent-scheduling-customization"
+	// AutoHideLocalAuthProvider is the feature name for enabling automatic
+	// hiding of the local auth provider when an external auth provider is
+	// activate
+	AutoHideLocalAuthProvider = "auto-hide-local-auth-provider"
 )
 
 // PdbPercentageRegex ensures that a given string is a properly formatted percentage value

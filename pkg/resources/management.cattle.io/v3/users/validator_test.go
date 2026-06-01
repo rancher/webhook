@@ -10,6 +10,7 @@ import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
 	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/resources/common"
 	"github.com/rancher/wrangler/v3/pkg/generic/fake"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
@@ -17,9 +18,11 @@ import (
 	authenticationv1 "k8s.io/api/authentication/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/authentication/user"
 	authorizationFake "k8s.io/client-go/kubernetes/typed/authorization/v1/fake"
 	k8testing "k8s.io/client-go/testing"
@@ -56,6 +59,391 @@ var (
 	}
 )
 
+func Test_CheckUsernameUniqueness(t *testing.T) {
+	ctrl := gomock.NewController(t)
+
+	tests := map[string]struct {
+		userCache      func() controllerv3.UserCache
+		expectResponse *admissionv1.AdmissionResponse
+		expectErr      bool
+		userName       string
+	}{
+		"empty user name, ok": {
+			userCache:      func() controllerv3.UserCache { return nil },
+			expectResponse: nil,
+			expectErr:      false,
+		},
+		"user list error passes": {
+			userCache: func() controllerv3.UserCache {
+				uc := fake.NewMockNonNamespacedCacheInterface[*v3.User](ctrl)
+				uc.EXPECT().List(gomock.Any()).Return(nil, fmt.Errorf("some error"))
+				return uc
+			},
+			expectResponse: nil,
+			expectErr:      true,
+			userName:       "this-user",
+		},
+		"empty user list, ok": {
+			userCache: func() controllerv3.UserCache {
+				uc := fake.NewMockNonNamespacedCacheInterface[*v3.User](ctrl)
+				uc.EXPECT().List(gomock.Any()).Return([]*v3.User{}, nil)
+				return uc
+			},
+			expectResponse: nil,
+			expectErr:      false,
+			userName:       "this-user",
+		},
+		"non-empty user list, no match, ok": {
+			userCache: func() controllerv3.UserCache {
+				uc := fake.NewMockNonNamespacedCacheInterface[*v3.User](ctrl)
+				uc.EXPECT().List(gomock.Any()).Return([]*v3.User{
+					{Username: "other-user"},
+				}, nil)
+				return uc
+			},
+			expectResponse: nil,
+			expectErr:      false,
+			userName:       "this-user",
+		},
+		"non-empty user list, match, reject": {
+			userCache: func() controllerv3.UserCache {
+				uc := fake.NewMockNonNamespacedCacheInterface[*v3.User](ctrl)
+				uc.EXPECT().List(gomock.Any()).Return([]*v3.User{
+					{Username: "this-user"},
+				}, nil)
+				return uc
+			},
+			expectResponse: admission.ResponseBadRequest("username already exists"),
+			expectErr:      false,
+			userName:       "this-user",
+		},
+	}
+
+	for name, spec := range tests {
+		t.Run(name, func(t *testing.T) {
+			a := &admitter{
+				userCache: spec.userCache(),
+			}
+			response, err := a.checkUsernameUniqueness(spec.userName)
+			if spec.expectErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, spec.expectResponse, response)
+			}
+		})
+	}
+}
+
+func Test_CheckLocalUser(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	feature := common.AutoHideLocalAuthProvider
+
+	policyOn := func() controllerv3.FeatureCache {
+		fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+		fc.EXPECT().Get(feature).Return(&v3.Feature{
+			Spec:   v3.FeatureSpec{Value: ptr.To(true)},
+			Status: v3.FeatureStatus{Default: false},
+		}, nil)
+		return fc
+	}
+
+	eapActive := func() controllerv3.AuthConfigCache {
+		ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
+		ac.EXPECT().List(gomock.Any()).Return([]*v3.AuthConfig{
+			{ObjectMeta: metav1.ObjectMeta{Name: "oidc"}, Enabled: true},
+		}, nil)
+		return ac
+	}
+
+	rejectResponse := admission.ResponseBadRequest("can't dummy ops user '' for disabled local provider")
+
+	tests := map[string]struct {
+		featureCache    func() controllerv3.FeatureCache
+		authConfigCache func() controllerv3.AuthConfigCache
+		user            *v3.User
+		expectResponse  *admissionv1.AdmissionResponse
+		expectErr       bool
+	}{
+		"policy query error, passed up": {
+			featureCache: func() controllerv3.FeatureCache {
+				fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+				fc.EXPECT().Get(feature).Return(nil, fmt.Errorf("some error"))
+				return fc
+			},
+			authConfigCache: func() controllerv3.AuthConfigCache { return nil },
+			expectResponse:  nil,
+			expectErr:       true,
+		},
+		"local auth provider visible, no checks, ok": {
+			featureCache: func() controllerv3.FeatureCache {
+				fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+				fc.EXPECT().Get(feature).Return(&v3.Feature{
+					Spec:   v3.FeatureSpec{Value: ptr.To(false)},
+					Status: v3.FeatureStatus{Default: false},
+				}, nil)
+				return fc
+			},
+			authConfigCache: func() controllerv3.AuthConfigCache { return nil },
+			expectResponse:  nil,
+			expectErr:       false,
+		},
+		"local auth provider hidden, user without principals, is local, rejected": {
+			featureCache:    policyOn,
+			authConfigCache: eapActive,
+			expectResponse:  rejectResponse,
+			expectErr:       false,
+			user:            &v3.User{},
+		},
+		"local auth provider hidden, user with single principal id `local://*`, is local, rejected": {
+			featureCache:    policyOn,
+			authConfigCache: eapActive,
+			expectResponse:  rejectResponse,
+			expectErr:       false,
+			user:            &v3.User{PrincipalIDs: []string{"local://..."}},
+		},
+		"local auth provider hidden, user with multiple principal ids, not local, accepted": {
+			featureCache:    policyOn,
+			authConfigCache: eapActive,
+			expectResponse:  nil,
+			expectErr:       false,
+			user:            &v3.User{PrincipalIDs: []string{"local://...", "oidc://..."}},
+		},
+		"local auth provider hidden, user with single principal id not matching `local://*`, not local, accepted": {
+			featureCache:    policyOn,
+			authConfigCache: eapActive,
+			expectResponse:  nil,
+			expectErr:       false,
+			user:            &v3.User{PrincipalIDs: []string{"oidc://..."}},
+		},
+	}
+
+	for name, spec := range tests {
+		t.Run(name, func(t *testing.T) {
+			a := &admitter{
+				featureCache:    spec.featureCache(),
+				authConfigCache: spec.authConfigCache(),
+			}
+			response, err := a.checkLocalUser("dummy ops", spec.user)
+			if spec.expectErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, spec.expectResponse, response)
+			}
+		})
+	}
+}
+
+func Test_HiddenLocalAuthProvider(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	feature := common.AutoHideLocalAuthProvider
+
+	policyOff := func() controllerv3.FeatureCache {
+		fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+		fc.EXPECT().Get(feature).Return(&v3.Feature{
+			Spec:   v3.FeatureSpec{Value: ptr.To(false)},
+			Status: v3.FeatureStatus{Default: false},
+		}, nil)
+		return fc
+	}
+
+	policyOn := func() controllerv3.FeatureCache {
+		fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+		fc.EXPECT().Get(feature).Return(&v3.Feature{
+			Spec:   v3.FeatureSpec{Value: ptr.To(true)},
+			Status: v3.FeatureStatus{Default: false},
+		}, nil)
+		return fc
+	}
+
+	policyError := func() controllerv3.FeatureCache {
+		fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+		fc.EXPECT().Get(feature).Return(nil, fmt.Errorf("some error"))
+		return fc
+	}
+
+	tests := map[string]struct {
+		featureCache    func() controllerv3.FeatureCache
+		authConfigCache func() controllerv3.AuthConfigCache
+		hide            bool
+		expectErr       bool
+	}{
+		"policy error passes": {
+			featureCache:    policyError,
+			authConfigCache: func() controllerv3.AuthConfigCache { return nil },
+			hide:            false,
+			expectErr:       true,
+		},
+		"policy is off, local auth not hidden": {
+			featureCache:    policyOff,
+			authConfigCache: func() controllerv3.AuthConfigCache { return nil },
+			hide:            false,
+			expectErr:       false,
+		},
+		"policy on, authconfig list error passes": {
+			featureCache: policyOn,
+			authConfigCache: func() controllerv3.AuthConfigCache {
+				ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
+				ac.EXPECT().List(gomock.Any()).Return(nil, fmt.Errorf("some error"))
+				return ac
+			},
+			hide:      false,
+			expectErr: true,
+		},
+		"policy on, no authconfigs, local auth not hidden": {
+			featureCache: policyOn,
+			authConfigCache: func() controllerv3.AuthConfigCache {
+				ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
+				ac.EXPECT().List(gomock.Any()).Return([]*v3.AuthConfig{}, nil)
+				return ac
+			},
+			hide:      false,
+			expectErr: false,
+		},
+		"policy on, just enabled local authconfig, local auth not hidden": {
+			featureCache: policyOn,
+			authConfigCache: func() controllerv3.AuthConfigCache {
+				ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
+				ac.EXPECT().List(gomock.Any()).Return([]*v3.AuthConfig{
+					{ObjectMeta: metav1.ObjectMeta{Name: "local"}, Enabled: true},
+				}, nil)
+				return ac
+			},
+			hide:      false,
+			expectErr: false,
+		},
+		"policy on, no enabled authconfig, local auth not hidden": {
+			featureCache: policyOn,
+			authConfigCache: func() controllerv3.AuthConfigCache {
+				ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
+				ac.EXPECT().List(gomock.Any()).Return([]*v3.AuthConfig{
+					{ObjectMeta: metav1.ObjectMeta{Name: "oidc"}, Enabled: false},
+				}, nil)
+				return ac
+			},
+			hide:      false,
+			expectErr: false,
+		},
+		"policy on, enabled non-local authconfig, local auth hidden": {
+			featureCache: policyOn,
+			authConfigCache: func() controllerv3.AuthConfigCache {
+				ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
+				ac.EXPECT().List(gomock.Any()).Return([]*v3.AuthConfig{
+					{ObjectMeta: metav1.ObjectMeta{Name: "local"}, Enabled: true},
+					{ObjectMeta: metav1.ObjectMeta{Name: "oidc"}, Enabled: true},
+				}, nil)
+				return ac
+			},
+			hide:      true,
+			expectErr: false,
+		},
+	}
+
+	for name, spec := range tests {
+		t.Run(name, func(t *testing.T) {
+			a := &admitter{
+				featureCache:    spec.featureCache(),
+				authConfigCache: spec.authConfigCache(),
+			}
+			hide, err := a.hiddenLocalAuthProvider()
+			if spec.expectErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, spec.hide, hide)
+			}
+		})
+	}
+}
+
+func Test_AutoHideLocalAuthProvider(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	feature := common.AutoHideLocalAuthProvider
+
+	tests := map[string]struct {
+		featureCache func() controllerv3.FeatureCache
+		hide         bool
+		expectErr    bool
+	}{
+		"feature access error is error": {
+			featureCache: func() controllerv3.FeatureCache {
+				fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+				fc.EXPECT().Get(feature).Return(nil, fmt.Errorf("some error"))
+				return fc
+			},
+			hide:      false,
+			expectErr: true,
+		},
+		"feature not found error is treated as present and off": {
+			featureCache: func() controllerv3.FeatureCache {
+				fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+				fc.EXPECT().Get(feature).
+					Return(nil, apierrors.NewNotFound(schema.GroupResource{}, feature))
+				return fc
+			},
+			hide:      false,
+			expectErr: false,
+		},
+		"feature without value is default (on for this test)": {
+			featureCache: func() controllerv3.FeatureCache {
+				fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+				fc.EXPECT().Get(feature).Return(&v3.Feature{
+					Status: v3.FeatureStatus{Default: true},
+				}, nil)
+				return fc
+			},
+			hide:      true,
+			expectErr: false,
+		},
+		"feature is active": {
+			featureCache: func() controllerv3.FeatureCache {
+				fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+				// note: value and default have different values
+				// to ensure that we can distinguish value from
+				// default in the return.
+				fc.EXPECT().Get(feature).Return(&v3.Feature{
+					Spec:   v3.FeatureSpec{Value: ptr.To(true)},
+					Status: v3.FeatureStatus{Default: false},
+				}, nil)
+				return fc
+			},
+			hide:      true,
+			expectErr: false,
+		},
+		"feature is off": {
+			featureCache: func() controllerv3.FeatureCache {
+				fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+				// note: value and default have different values
+				// to ensure that we can distinguish value from
+				// default in the return.
+				fc.EXPECT().Get(feature).Return(&v3.Feature{
+					Spec:   v3.FeatureSpec{Value: ptr.To(false)},
+					Status: v3.FeatureStatus{Default: true},
+				}, nil)
+				return fc
+			},
+			hide:      false,
+			expectErr: false,
+		},
+	}
+
+	for name, spec := range tests {
+		t.Run(name, func(t *testing.T) {
+			a := &admitter{
+				featureCache: spec.featureCache(),
+			}
+			hide, err := a.autoHideLocalAuthProvider()
+			if spec.expectErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, spec.hide, hide)
+			}
+		})
+	}
+}
+
 func Test_Admit(t *testing.T) {
 	k8Fake := &k8testing.Fake{}
 	fakeAuthz := &authorizationFake.FakeAuthorizationV1{Fake: k8Fake}
@@ -83,6 +471,7 @@ func Test_Admit(t *testing.T) {
 		allowed          bool
 		mockUserCache    func() controllerv3.UserCache
 		wantErr          bool
+		lapHidden        bool
 	}{
 		{
 			name:            "User has manage-users verb. delete operation",
@@ -345,11 +734,71 @@ func Test_Admit(t *testing.T) {
 			},
 			allowed: true,
 		},
+		// verify that `checkLocalUser` is in the code paths for create,
+		// update and delete requests.  the full set of checks done by
+		// `checkLocalUser` is tested separately, see `Test_CheckLocalUser`.
+		{
+			name: "create rejects new local user (no principal ids) for hidden local auth provider",
+			newUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "a-local-user",
+				},
+			},
+			lapHidden: true,
+			allowed:   false,
+		},
+		{
+			name: "update rejects change to local user (no principal ids) for hidden local auth provider",
+			oldUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "a-local-user",
+				},
+				PrincipalIDs: []string{"system://...", "local://..."},
+			},
+			newUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "a-local-user",
+				},
+			},
+			lapHidden: true,
+			allowed:   false,
+		},
+		{
+			name: "delete rejects removal of local user (no principal ids) for hidden local auth provider",
+			oldUser: &v3.User{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "a-local-user",
+				},
+			},
+			lapHidden: true,
+			allowed:   false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &admitter{
 				sar: fakeSAR,
+			}
+			if tt.lapHidden {
+				// policy on, eap active, hiding local auth provider
+				mockFeature := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+				mockFeature.EXPECT().Get(common.AutoHideLocalAuthProvider).Return(&v3.Feature{
+					Status: v3.FeatureStatus{Default: true},
+				}, nil)
+				mockAuthConfig := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
+				mockAuthConfig.EXPECT().List(gomock.Any()).Return([]*v3.AuthConfig{
+					{ObjectMeta: metav1.ObjectMeta{Name: "oidc"}, Enabled: true},
+				}, nil)
+				a.featureCache = mockFeature
+				a.authConfigCache = mockAuthConfig
+			} else {
+				// policy off, authconfigs not queried, visible local auth provider
+				mockFeature := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+				mockFeature.EXPECT().Get(common.AutoHideLocalAuthProvider).Return(&v3.Feature{
+					Status: v3.FeatureStatus{Default: false},
+				}, nil)
+				a.featureCache = mockFeature
+				a.authConfigCache = nil
 			}
 
 			// Handle fake resolver
