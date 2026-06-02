@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -338,7 +337,7 @@ func certAuth() func(next http.Handler) http.Handler {
 }
 
 func getVerifyOptions() *x509.VerifyOptions {
-	caCert, err := ioutil.ReadFile(caFile)
+	caCert, err := os.ReadFile(caFile)
 	if err != nil {
 		logrus.Infof("could not read client CA file at %s, incoming requests will not be authenticated", caFile)
 		return nil
