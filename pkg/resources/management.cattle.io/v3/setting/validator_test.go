@@ -45,7 +45,7 @@ func (s *SettingSuite) TestAdmitUpdateGuards() {
 		allowed    bool
 	}{
 		{
-			name: "reject update when sourced from env",
+			name: "reject update on setting with source env when new source is not env",
 			oldSetting: &v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{Name: setting.UserRetentionCron},
 				Source:     "env",
@@ -54,6 +54,19 @@ func (s *SettingSuite) TestAdmitUpdateGuards() {
 				ObjectMeta: metav1.ObjectMeta{Name: setting.UserRetentionCron},
 				Value:      "0 0 * * *",
 			},
+		},
+		{
+			name: "allow update on setting with source env when new source is env",
+			oldSetting: &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{Name: setting.UserRetentionCron},
+				Source:     "env",
+			},
+			newSetting: &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{Name: setting.UserRetentionCron},
+				Value:      "0 0 * * *",
+				Source:     "env",
+			},
+			allowed: true,
 		},
 		{
 			name: "reject read-only setting",
