@@ -125,8 +125,8 @@ var ReadOnlySettings = []string{
 }
 
 func (a *admitter) admitUpdate(oldSetting, newSetting *v3.Setting) (*admissionv1.AdmissionResponse, error) {
-	if oldSetting.Source == "env" {
-		return admission.ResponseBadRequest("setting cannot be updated since its value is sourced from an environment variable"), nil
+	if oldSetting.Source == "env" && newSetting.Source != "env" {
+		return admission.ResponseBadRequest(fmt.Sprintf("setting with source \"%s\" cannot update setting with source \"env\"", newSetting.Source)), nil
 	}
 
 	if slices.Contains(ReadOnlySettings, oldSetting.Name) {
