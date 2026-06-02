@@ -1,7 +1,7 @@
 # ===============
 # Build Stage
 # ===============
-FROM --platform=$BUILDPLATFORM rancher/hardened-build-base:v1.24.13b1@sha256:82181c7e36e07a0e91dc5332b0e9e2ce384eb947e0bbd364f3dc5eb78cb1bcba AS build
+FROM --platform=$BUILDPLATFORM rancher/hardened-build-base:v1.25.10b1@sha256:92ecda122083602ae6e698244dbc91e7108a37d636486325e00940d8e98ab858 AS build
 
 # Set up build cache
 ENV GOMODCACHE=/root/.cache/go/modcache
