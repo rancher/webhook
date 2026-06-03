@@ -31,6 +31,7 @@ func init() {
 }
 
 type Interface interface {
+	AuthConfig() AuthConfigController
 	Cluster() ClusterController
 	ClusterProxyConfig() ClusterProxyConfigController
 	ClusterRoleTemplateBinding() ClusterRoleTemplateBindingController
@@ -55,6 +56,10 @@ func New(controllerFactory controller.SharedControllerFactory) Interface {
 
 type version struct {
 	controllerFactory controller.SharedControllerFactory
+}
+
+func (v *version) AuthConfig() AuthConfigController {
+	return generic.NewNonNamespacedController[*v3.AuthConfig, *v3.AuthConfigList](schema.GroupVersionKind{Group: "management.cattle.io", Version: "v3", Kind: "AuthConfig"}, "authconfigs", v.controllerFactory)
 }
 
 func (v *version) Cluster() ClusterController {
