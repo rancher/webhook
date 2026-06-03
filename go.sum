@@ -152,8 +152,8 @@ github.com/rancher/jsonpath v0.0.0-20260423141252-c4e0c565a09f h1:eXPhsmHBuA6Xro
 github.com/rancher/jsonpath v0.0.0-20260423141252-c4e0c565a09f/go.mod h1:xavYr3cNyyAeA72nMVB60+q/EJ8Anu+loQWFJyXOeP8=
 github.com/rancher/lasso v0.2.9 h1:5Xk9Qid+YDOLpa6s5xalcSR0cA5BMbgWcaOZ8kdNU7k=
 github.com/rancher/lasso v0.2.9/go.mod h1:PMtxoVahRQvhEAi1HVOfyLDe1CrtGwTqOtkPVjSSkns=
-github.com/rancher/norman v0.9.6 h1:XrFfJVeaahznTccsvu5ugQVYSwK6pq6qNybNqqa6b+o=
-github.com/rancher/norman v0.9.6/go.mod h1:XPdQnSdaiDrQ130ueYppMKIquQz5Ob1tnI6+lcraqqo=
+github.com/rancher/norman v0.9.7 h1:za9JjsWBUi+0rY3EJ3JdAZFQsadu7fpfC3MHi9a21uE=
+github.com/rancher/norman v0.9.7/go.mod h1:XPdQnSdaiDrQ130ueYppMKIquQz5Ob1tnI6+lcraqqo=
 github.com/rancher/rancher/pkg/apis v0.0.0-20260211194119-d0c9ffaf3cb0 h1:ZH9VeY2iUVZN0YFU59dhBiHbdOpFJMvVo91k0fwwMME=
 github.com/rancher/rancher/pkg/apis v0.0.0-20260211194119-d0c9ffaf3cb0/go.mod h1:fEL3ATWhwqdn7VYVAQBhmdpKehY5lDeGNlq2NnOpUPk=
 github.com/rancher/rancher/pkg/plan v0.0.0-20260413094914-0404acf59a23 h1:dDz+8F29pcBC6RtXxr4nYl0fdsWu4ZFdNL4oVchytSo=
