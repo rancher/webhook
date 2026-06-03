@@ -43,7 +43,7 @@ type admitter struct {
 	authConfigCache    controllerv3.AuthConfigCache
 }
 
-// Validator validates tokens.
+// Validator validates users.
 type Validator struct {
 	admitter admitter
 }
