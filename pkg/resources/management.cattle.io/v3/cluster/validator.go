@@ -1,26 +1,21 @@
 package cluster
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"reflect"
 	"strconv"
 
-	"github.com/blang/semver"
 	apisv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
-	psa "github.com/rancher/webhook/pkg/podsecurityadmission"
 	"github.com/rancher/webhook/pkg/resources/common"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	v1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
@@ -31,8 +26,6 @@ const (
 	VersionManagementAnno    = "rancher.io/imported-cluster-version-management"
 	VersionManagementSetting = "imported-cluster-version-management"
 )
-
-var parsedRangeLessThan123 = semver.MustParseRange("< 1.23.0-rancher0")
 
 // NewValidator returns a new validator for management clusters.
 func NewValidator(
@@ -137,14 +130,6 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return response, err
 	}
 
-	response, err = a.validatePSACT(oldCluster, newCluster, request.Operation)
-	if err != nil {
-		return nil, fmt.Errorf("failed to validate PodSecurityAdmissionConfigurationTemplate(PSACT): %w", err)
-	}
-	if !response.Allowed {
-		return response, nil
-	}
-
 	if a.settingCache != nil {
 		// The following checks don't make sense for downstream clusters (settingCache == nil)
 		response, err = a.validateVersionManagementFeature(oldCluster, newCluster, request.Operation)
@@ -221,65 +206,6 @@ func (a *admitter) validateFleetPermissions(request *admission.Request, oldClust
 			},
 			Allowed: false,
 		}, nil
-	}
-
-	return admission.ResponseAllowed(), nil
-}
-
-// validatePSACT validates the cluster spec when PodSecurityAdmissionConfigurationTemplate is used.
-func (a *admitter) validatePSACT(oldCluster, newCluster *apisv3.Cluster, op admissionv1.Operation) (*admissionv1.AdmissionResponse, error) {
-	if op != admissionv1.Create && op != admissionv1.Update {
-		return admission.ResponseAllowed(), nil
-	}
-	// no need to validate the PodSecurityAdmissionConfigurationTemplate on a local cluster,
-	// or imported cluster which represents a KEv2 cluster (GKE/EKS/AKS) or v1 Provisioning Cluster
-	if newCluster.Name == localCluster || newCluster.Spec.RancherKubernetesEngineConfig == nil {
-		return admission.ResponseAllowed(), nil
-	}
-
-	newTemplateName := newCluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName
-	oldTemplateName := oldCluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName
-
-	parsedVersion, err := psa.GetClusterVersion(newCluster.Spec.RancherKubernetesEngineConfig.Version)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse cluster version: %w", err)
-	}
-
-	if parsedRangeLessThan123(parsedVersion) && newTemplateName != "" {
-		return admission.ResponseBadRequest("PodSecurityAdmissionConfigurationTemplate(PSACT) is only supported in k8s version 1.23 and above"), nil
-	}
-
-	if newTemplateName != "" {
-		response, err := a.checkPSAConfigOnCluster(newCluster)
-		if err != nil {
-			return nil, fmt.Errorf("failed to check the PodSecurity Config in the cluster %s: %w", newCluster.Name, err)
-		}
-		if !response.Allowed {
-			return response, nil
-		}
-	} else {
-		switch op {
-		case admissionv1.Create:
-			return admission.ResponseAllowed(), nil
-		case admissionv1.Update:
-			// In the case of unsetting DefaultPodSecurityAdmissionConfigurationTemplateName,
-			// validate that the configuration for PodSecurityAdmission under the kube-api.admission_configuration section
-			// is different between the new and old clusters.
-			// It is possible that user drops DefaultPodSecurityAdmissionConfigurationTemplateName and set the config
-			// under kube-api.admission_configuration at the same time.
-			if oldTemplateName != "" {
-				newConfig, found := psa.GetPluginConfigFromCluster(newCluster)
-				if !found {
-					// not found means the kube-api.admission_configuration section is also removed, which is good
-					return admission.ResponseAllowed(), nil
-				}
-				oldConfig, _ := psa.GetPluginConfigFromCluster(oldCluster)
-				if reflect.DeepEqual(newConfig, oldConfig) {
-					return admission.ResponseBadRequest("The Plugin Config for PodSecurity under kube-api.admission_configuration is the same as the previously-set PodSecurityAdmissionConfigurationTemplate." +
-						" Please either change the Plugin Config or set the DefaultPodSecurityAdmissionConfigurationTemplateName."), nil
-				}
-			}
-		}
 	}
 
 	return admission.ResponseAllowed(), nil
@@ -456,51 +382,6 @@ func (a *admitter) validateSinglePodDisruptionBudget(oldPDB, newPDB *apisv3.PodD
 
 	if maxUnavailIsString && maxUnavailStr != "" && !common.PdbPercentageRegex.Match([]byte(maxUnavailStr)) {
 		return admission.ResponseBadRequest(fmt.Sprintf("minAvailable must be a non-negative whole integer or a percentage value between 0 and 100, regex used is '%s'", common.PdbPercentageRegex.String())), nil
-	}
-
-	return admission.ResponseAllowed(), nil
-}
-
-// checkPSAConfigOnCluster validates the cluster spec when DefaultPodSecurityAdmissionConfigurationTemplateName is set.
-func (a *admitter) checkPSAConfigOnCluster(cluster *apisv3.Cluster) (*admissionv1.AdmissionResponse, error) {
-	// validate that extra_args.admission-control-config-file is not set at the same time
-	_, found := cluster.Spec.RancherKubernetesEngineConfig.Services.KubeAPI.ExtraArgs["admission-control-config-file"]
-	if found {
-		return admission.ResponseBadRequest("could not use external admission control configuration file when using PodSecurityAdmissionConfigurationTemplate"), nil
-	}
-	// validate that the configuration for PodSecurityAdmission under the kube-api.admission_configuration section
-	// matches the content of the PodSecurityAdmissionConfigurationTemplate specified in the cluster
-	name := cluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName
-	template, err := a.psact.Get(name)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return admission.ResponseBadRequest(err.Error()), nil
-		}
-		return nil, fmt.Errorf("failed to get PodSecurityAdmissionConfigurationTemplate [%s]: %w", name, err)
-	}
-
-	fromTemplate, err := psa.GetPluginConfigFromTemplate(template, cluster.Spec.RancherKubernetesEngineConfig.Version)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get the PluginConfig: %w", err)
-	}
-	fromAdmissionConfig, found := psa.GetPluginConfigFromCluster(cluster)
-	if !found {
-		return admission.ResponseBadRequest("PodSecurity Configuration is not found under kube-api.admission_configuration"), nil
-	}
-
-	var psaConfig, psaConfig2 any
-	err = json.Unmarshal(fromTemplate.Configuration.Raw, &psaConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal PodSecurityConfiguration from template: %w", err)
-	}
-	err = json.Unmarshal(fromAdmissionConfig.Configuration.Raw, &psaConfig2)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal PodSecurityConfiguration from admissionConfig: %w", err)
-	}
-
-	if !equality.Semantic.DeepEqual(psaConfig, psaConfig2) {
-		return admission.ResponseBadRequest("PodSecurity Configuration under kube-api.admission_configuration " +
-			"does not match the content of the PodSecurityAdmissionConfigurationTemplate"), nil
 	}
 
 	return admission.ResponseAllowed(), nil
