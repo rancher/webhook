@@ -333,11 +333,6 @@ func Test_GetRuntime(t *testing.T) {
 		expected   string
 	}{
 		{
-			name:       "rke",
-			k8sVersion: "v1.24.5-rancher1-1",
-			expected:   runtimeRKE,
-		},
-		{
 			name:       "rke2",
 			k8sVersion: "v1.25.5-rke2r2",
 			expected:   runtimeRKE2,
