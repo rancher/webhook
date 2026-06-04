@@ -47,7 +47,6 @@ const (
 	allowDynamicSchemaDropAnnotation = "provisioning.cattle.io/allow-dynamic-schema-drop"
 	runtimeK3S                       = "k3s"
 	runtimeRKE2                      = "rke2"
-	runtimeRKE                       = "rke"
 )
 
 var (
@@ -419,8 +418,6 @@ func getRuntime(kubernetesVersion string) string {
 		return runtimeK3S
 	case strings.Contains(kubernetesVersion, runtimeRKE2):
 		return runtimeRKE2
-	case strings.Contains(kubernetesVersion, "-rancher"):
-		return runtimeRKE
 	default:
 		return ""
 	}
