@@ -18,6 +18,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 )
 
@@ -128,6 +129,18 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 
 	if response, err = a.validatePriorityClass(oldCluster, newCluster, request.Operation); err != nil || !response.Allowed {
 		return response, err
+	}
+
+	if wdc := newCluster.Spec.WebhookDeploymentCustomization; wdc != nil {
+		var pdb *common.PDB
+		if wdc.PodDisruptionBudget != nil {
+			pdb = &common.PDB{MinAvailable: wdc.PodDisruptionBudget.MinAvailable, MaxUnavailable: wdc.PodDisruptionBudget.MaxUnavailable}
+		}
+		if response.Result = common.ErrorListToStatus(common.ValidateWebhookDeploymentCustomization(
+			wdc.ReplicaCount, wdc.AppendTolerations, wdc.OverrideAffinity, pdb,
+			field.NewPath("spec", "webhookDeploymentCustomization"))); response.Result != nil {
+			return response, nil
+		}
 	}
 
 	if a.settingCache != nil {
