@@ -14,38 +14,6 @@ import (
 	psav1beta1 "k8s.io/pod-security-admission/admission/api/v1beta1"
 )
 
-func TestGetAdmissionConfigFromCluster(t *testing.T) {
-	tests := []struct {
-		testName string
-		source   *v3.Cluster
-		expected *v1.AdmissionConfiguration
-	}{
-		{
-			testName: "cluster with Admission Config",
-			source:   getClusterWithAdmissionConfig(),
-			expected: getAdmissionPluginConfiguration(),
-		},
-		{
-			testName: "cluster without Admission Config",
-			source:   getClusterBasic(),
-			expected: &v1.AdmissionConfiguration{
-				TypeMeta: metav1.TypeMeta{
-					APIVersion: v1.SchemeGroupVersion.String(),
-					Kind:       "AdmissionConfiguration",
-				},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.testName, func(t *testing.T) {
-			output := GetAdmissionConfigFromCluster(tt.source)
-			if !reflect.DeepEqual(output, tt.expected) {
-				t.Errorf("failed in the test case: [%v]; get: [%v], expected: [%v]", tt.testName, output, tt.expected)
-			}
-		})
-	}
-}
-
 func TestGetPluginConfigFromTemplate(t *testing.T) {
 	tests := []struct {
 		testName       string
@@ -89,84 +57,6 @@ func TestGetPluginConfigFromTemplate(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestGetPluginConfigFromCluster(t *testing.T) {
-	clusterNoPluginConfigPodSecurity := getClusterBasic()
-	clusterNoPluginConfigPodSecurity.Spec.RancherKubernetesEngineConfig.Services.KubeAPI.AdmissionConfiguration =
-		&v1.AdmissionConfiguration{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: v1.SchemeGroupVersion.String(),
-				Kind:       "AdmissionConfiguration",
-			},
-			Plugins: []v1.AdmissionPluginConfiguration{
-				{
-					Name: "EventRateLimit",
-				},
-			},
-		}
-	tests := []struct {
-		testName    string
-		source      *v3.Cluster
-		expected    v1.AdmissionPluginConfiguration
-		expectFound bool
-	}{
-		{
-			testName:    "Cluster with AdmissionConfig for PodSecurity",
-			source:      getClusterWithAdmissionConfig(),
-			expected:    getAdmissionPluginConfigurationRestricted(),
-			expectFound: true,
-		},
-		{
-			testName:    "Cluster with AdmissionConfig but not for PodSecurity",
-			source:      clusterNoPluginConfigPodSecurity,
-			expected:    getApcBasic(),
-			expectFound: false,
-		},
-		{
-			testName:    "Cluster without AdmissionConfig",
-			source:      getClusterBasic(),
-			expected:    getApcBasic(),
-			expectFound: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.testName, func(t *testing.T) {
-			output, found := GetPluginConfigFromCluster(tt.source)
-			if found != tt.expectFound {
-				t.Errorf("failed in the test case: [%v]; get: [%v], expected: [%v]", tt.testName, found, tt.expectFound)
-			}
-			if !reflect.DeepEqual(output, tt.expected) {
-				t.Errorf("failed in the test case: [%v]; get: [%v], expected: [%v]", tt.testName, output, tt.expected)
-			}
-		})
-	}
-}
-
-func getClusterBasic() *v3.Cluster {
-	var data v3.Cluster
-	// Use a json-encoded representation of the desired data
-	// to avoid loading the RKE types module.
-	s := `{
-"spec": {
-    "rancherKubernetesEngineConfig": {
-      "services": {
-       "kubeApi": { }
-      }
-    }
-  }
-}`
-	err := json.Unmarshal([]byte(s), &data)
-	if err != nil {
-		panic(err)
-	}
-	return &data
-}
-
-func getClusterWithAdmissionConfig() *v3.Cluster {
-	cluster := getClusterBasic()
-	cluster.Spec.RancherKubernetesEngineConfig.Services.KubeAPI.AdmissionConfiguration = getAdmissionPluginConfiguration()
-	return cluster
 }
 
 func getAdmissionPluginConfigurationRestricted() v1.AdmissionPluginConfiguration {

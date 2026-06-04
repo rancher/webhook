@@ -79,7 +79,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			clusterroletemplatebinding.NewValidator(crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver, clients.Management.GlobalRoleBinding().Cache(), clients.Management.Cluster().Cache(), clients.Management.ClusterRoleTemplateBinding().Cache()),
 			roletemplate.NewValidator(clients.DefaultResolver, clients.RoleTemplateResolver, clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.Management.GlobalRole().Cache()),
 			secret.NewValidator(clients.RBAC.Role().Cache(), clients.RBAC.RoleBinding().Cache()),
-			nodedriver.NewValidator(clients.Management.Node().Cache(), clients.Dynamic),
+			nodedriver.NewValidator(clients.Dynamic),
 			project.NewValidator(clients.Management.Cluster().Cache(), clients.Management.User().Cache()),
 			role.NewValidator(),
 			rolebinding.NewValidator(),
@@ -111,7 +111,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 func Mutation(clients *clients.Clients) ([]admission.MutatingAdmissionHandler, error) {
 	mutators := []admission.MutatingAdmissionHandler{
 		provisioningCluster.NewProvisioningClusterMutator(clients.Core.Secret(), clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache()),
-		managementCluster.NewManagementClusterMutator(clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache()),
+		managementCluster.NewManagementClusterMutator(),
 		fleetworkspace.NewMutator(clients),
 		&machineconfig.Mutator{},
 	}

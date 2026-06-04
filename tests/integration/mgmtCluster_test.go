@@ -2,7 +2,6 @@ package integration_test
 
 import (
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
-	"github.com/rancher/rke/types"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -12,11 +11,7 @@ func (m *IntegrationSuite) TestManagementCluster() {
 		ObjectMeta: v1.ObjectMeta{
 			Name: "test-cluster",
 		},
-		Spec: v3.ClusterSpec{
-			ClusterSpecBase: v3.ClusterSpecBase{
-				RancherKubernetesEngineConfig: &types.RancherKubernetesEngineConfig{},
-			},
-		},
+		Spec: v3.ClusterSpec{},
 	}
 
 	validDelete := func() *v3.Cluster {
