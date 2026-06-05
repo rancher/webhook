@@ -97,7 +97,7 @@ require (
 	github.com/rancher/fleet/pkg/apis v0.14.6 // indirect
 	github.com/rancher/gke-operator v1.13.6 // indirect
 	//TODO: Replace with a tag during un-rc'ing
-	github.com/rancher/norman v0.7.3 // indirect
+	github.com/rancher/norman v0.7.4 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/otel v1.41.0 // indirect
