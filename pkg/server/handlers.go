@@ -5,12 +5,14 @@ import (
 	"github.com/rancher/webhook/pkg/clients"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/resolvers"
-	auditpolicy "github.com/rancher/webhook/pkg/resources/auditlog.cattle.io/v1/auditpolicy"
+	"github.com/rancher/webhook/pkg/resources/auditlog.cattle.io/v1/auditpolicy"
 	"github.com/rancher/webhook/pkg/resources/catalog.cattle.io/v1/clusterrepo"
 	"github.com/rancher/webhook/pkg/resources/cluster.cattle.io/v3/clusterauthtoken"
 	"github.com/rancher/webhook/pkg/resources/cluster.x-k8s.io/v1beta2/machinedeployment"
 	nshandler "github.com/rancher/webhook/pkg/resources/core/v1/namespace"
 	"github.com/rancher/webhook/pkg/resources/core/v1/secret"
+	"github.com/rancher/webhook/pkg/resources/infrastructure.cluster.x-k8s.io/v1beta2/awscluster"
+	"github.com/rancher/webhook/pkg/resources/infrastructure.cluster.x-k8s.io/v1beta2/awsclusterstaticidentity"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/authconfig"
 	managementCluster "github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/cluster"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/clusterproxyconfig"
@@ -99,6 +101,8 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			),
 			machinedeployment.NewValidator(clients.Provisioning.Cluster().Cache(), clients.Provisioning.Cluster(), clients.Dynamic),
 			proxyendpoint.NewValidator(),
+			awscluster.NewValidator(clients.Dynamic, clients.K8s.AuthorizationV1().SubjectAccessReviews()),
+			awsclusterstaticidentity.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews()),
 		)
 	} else {
 		handlers = append(handlers, clusterauthtoken.NewValidator())
