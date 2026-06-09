@@ -14,7 +14,7 @@ import (
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 )
 
-// mockSAR implements authorizationv1client.SubjectAccessReviewInterface for testing.
+// mockSAR implements k8s.io/client-go/kubernetes/typed/authorization/v1.SubjectAccessReviewInterface for testing.
 type mockSAR struct {
 	allowed bool
 	calls   int
