@@ -483,6 +483,35 @@ func TestAdmit(t *testing.T) {
 			},
 			expectAllowed: false,
 		},
+		{
+			name:      "Create with invalid WebhookDeploymentCustomization",
+			operation: admissionv1.Create,
+			newCluster: v3.Cluster{
+				Spec: v3.ClusterSpec{
+					ClusterSpecBase: v3.ClusterSpecBase{
+						WebhookDeploymentCustomization: &v3.WebhookDeploymentCustomization{
+							ReplicaCount: &[]int32{0}[0],
+						},
+					},
+				},
+			},
+			expectAllowed:  false,
+			expectedReason: metav1.StatusReasonInvalid,
+		},
+		{
+			name:      "Create with valid WebhookDeploymentCustomization",
+			operation: admissionv1.Create,
+			newCluster: v3.Cluster{
+				Spec: v3.ClusterSpec{
+					ClusterSpecBase: v3.ClusterSpecBase{
+						WebhookDeploymentCustomization: &v3.WebhookDeploymentCustomization{
+							ReplicaCount: &[]int32{3}[0],
+						},
+					},
+				},
+			},
+			expectAllowed: true,
+		},
 	}
 
 	for _, tt := range tests {
