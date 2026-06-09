@@ -131,16 +131,8 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return response, err
 	}
 
-	if wdc := newCluster.Spec.WebhookDeploymentCustomization; wdc != nil {
-		var pdb *common.PDB
-		if wdc.PodDisruptionBudget != nil {
-			pdb = &common.PDB{MinAvailable: wdc.PodDisruptionBudget.MinAvailable, MaxUnavailable: wdc.PodDisruptionBudget.MaxUnavailable}
-		}
-		if response.Result = common.ErrorListToStatus(common.ValidateWebhookDeploymentCustomization(
-			wdc.ReplicaCount, wdc.AppendTolerations, wdc.OverrideAffinity, pdb,
-			field.NewPath("spec", "webhookDeploymentCustomization"))); response.Result != nil {
-			return response, nil
-		}
+	if response, err = a.validateWebhookDeploymentCustomization(newCluster); err != nil || !response.Allowed {
+		return response, err
 	}
 
 	if a.settingCache != nil {
@@ -395,6 +387,29 @@ func (a *admitter) validateSinglePodDisruptionBudget(oldPDB, newPDB *apisv3.PodD
 
 	if maxUnavailIsString && maxUnavailStr != "" && !common.PdbPercentageRegex.Match([]byte(maxUnavailStr)) {
 		return admission.ResponseBadRequest(fmt.Sprintf("minAvailable must be a non-negative whole integer or a percentage value between 0 and 100, regex used is '%s'", common.PdbPercentageRegex.String())), nil
+	}
+
+	return admission.ResponseAllowed(), nil
+}
+
+func (a *admitter) validateWebhookDeploymentCustomization(cluster *apisv3.Cluster) (*admissionv1.AdmissionResponse, error) {
+	wdc := cluster.Spec.WebhookDeploymentCustomization
+	if wdc == nil {
+		return admission.ResponseAllowed(), nil
+	}
+
+	var pdb *common.PDB
+	if wdc.PodDisruptionBudget != nil {
+		pdb = &common.PDB{MinAvailable: wdc.PodDisruptionBudget.MinAvailable, MaxUnavailable: wdc.PodDisruptionBudget.MaxUnavailable}
+	}
+
+	if errStatus := common.ErrorListToStatus(common.ValidateWebhookDeploymentCustomization(
+		wdc.ReplicaCount, wdc.AppendTolerations, wdc.OverrideAffinity, pdb,
+		field.NewPath("spec", "webhookDeploymentCustomization"))); errStatus != nil {
+		return &admissionv1.AdmissionResponse{
+			Result:  errStatus,
+			Allowed: false,
+		}, nil
 	}
 
 	return admission.ResponseAllowed(), nil
