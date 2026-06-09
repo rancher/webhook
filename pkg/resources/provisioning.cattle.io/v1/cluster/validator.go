@@ -144,16 +144,8 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 			return response, nil
 		}
 
-		if wdc := cluster.Spec.WebhookDeploymentCustomization; wdc != nil {
-			var pdb *common.PDB
-			if wdc.PodDisruptionBudget != nil {
-				pdb = &common.PDB{MinAvailable: wdc.PodDisruptionBudget.MinAvailable, MaxUnavailable: wdc.PodDisruptionBudget.MaxUnavailable}
-			}
-			if response.Result = common.ErrorListToStatus(common.ValidateWebhookDeploymentCustomization(
-				wdc.ReplicaCount, wdc.AppendTolerations, wdc.OverrideAffinity, pdb,
-				field.NewPath("spec", "webhookDeploymentCustomization"))); response.Result != nil {
-				return response, nil
-			}
+		if response.Result = validateWebhookDeploymentCustomization(cluster); response.Result != nil {
+			return response, nil
 		}
 
 		if err := p.validateCloudCredentialAccess(request, response, oldCluster, cluster); err != nil || response.Result != nil {
@@ -920,6 +912,22 @@ func getSchedulingCustomization(cluster *v1.Cluster, agentType common.AgentType)
 	}
 
 	return nil
+}
+
+func validateWebhookDeploymentCustomization(cluster *v1.Cluster) *metav1.Status {
+	wdc := cluster.Spec.WebhookDeploymentCustomization
+	if wdc == nil {
+		return nil
+	}
+
+	var pdb *common.PDB
+	if wdc.PodDisruptionBudget != nil {
+		pdb = &common.PDB{MinAvailable: wdc.PodDisruptionBudget.MinAvailable, MaxUnavailable: wdc.PodDisruptionBudget.MaxUnavailable}
+	}
+
+	return common.ErrorListToStatus(common.ValidateWebhookDeploymentCustomization(
+		wdc.ReplicaCount, wdc.AppendTolerations, wdc.OverrideAffinity, pdb,
+		field.NewPath("spec", "webhookDeploymentCustomization")))
 }
 
 func validateACEConfig(cluster *v1.Cluster) *metav1.Status {
