@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/rancher/webhook/pkg/admission"
+	"github.com/rancher/webhook/pkg/resources/infrastructure.cluster.x-k8s.io/v1beta2/capautils"
 	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
@@ -62,13 +63,22 @@ func makeCluster(identityKind infrav1.AWSIdentityKind, identityName string) *inf
 	return cluster
 }
 
-func makeStaticIdentity(secretRef string) *infrav1.AWSClusterStaticIdentity {
-	return &infrav1.AWSClusterStaticIdentity{
+// makeStaticIdentity builds an AWSClusterStaticIdentity. When annotated=true
+// the Rancher Turtles source annotation is added, making it subject to
+// credential access checks.
+func makeStaticIdentity(secretRef string, annotated bool) *infrav1.AWSClusterStaticIdentity {
+	identity := &infrav1.AWSClusterStaticIdentity{
 		ObjectMeta: metav1.ObjectMeta{Name: "my-static-id"},
 		Spec: infrav1.AWSClusterStaticIdentitySpec{
 			SecretRef: secretRef,
 		},
 	}
+	if annotated {
+		identity.Annotations = map[string]string{
+			capautils.AnnotationSourceID: "some-id",
+		}
+	}
+	return identity
 }
 
 func makeRequest(t *testing.T, op admissionv1.Operation, newObj, oldObj *infrav1.AWSCluster) *admission.Request {
@@ -87,6 +97,7 @@ func makeRequest(t *testing.T, op admissionv1.Operation, newObj, oldObj *infrav1
 }
 
 func TestAWSClusterValidator_Admit(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		operation    admissionv1.Operation
@@ -98,6 +109,7 @@ func TestAWSClusterValidator_Admit(t *testing.T) {
 		wantAllowed  bool
 		wantSARCalls int
 	}{
+		// --- No identityRef or non-static identity kind ---
 		{
 			name:         "CREATE no identityRef, allowed without SAR",
 			operation:    admissionv1.Create,
@@ -119,24 +131,57 @@ func TestAWSClusterValidator_Admit(t *testing.T) {
 			wantAllowed:  true,
 			wantSARCalls: 0,
 		},
+
+		// --- Static identity, annotation absent: always allowed, SAR never called ---
 		{
-			name:         "CREATE identityRef kind=AWSClusterStaticIdentity, user has access",
+			name:         "CREATE static identity without annotation, allowed without SAR",
 			operation:    admissionv1.Create,
 			newCluster:   makeCluster(infrav1.ClusterStaticIdentityKind, "my-static-id"),
-			dynamicObj:   makeStaticIdentity("my-secret"),
+			dynamicObj:   makeStaticIdentity("my-secret", false),
+			wantAllowed:  true,
+			wantSARCalls: 0,
+		},
+		{
+			name:         "UPDATE static identity without annotation, allowed without SAR",
+			operation:    admissionv1.Update,
+			newCluster:   makeCluster(infrav1.ClusterStaticIdentityKind, "new-id"),
+			oldCluster:   makeCluster(infrav1.ClusterStaticIdentityKind, "old-id"),
+			dynamicObj:   makeStaticIdentity("my-secret", false),
+			wantAllowed:  true,
+			wantSARCalls: 0,
+		},
+
+		// --- Static identity with annotation, empty secretRef ---
+		{
+			name:         "CREATE annotated identity, empty secretRef, allowed without SAR",
+			operation:    admissionv1.Create,
+			newCluster:   makeCluster(infrav1.ClusterStaticIdentityKind, "my-static-id"),
+			dynamicObj:   makeStaticIdentity("", true),
+			wantAllowed:  true,
+			wantSARCalls: 0,
+		},
+
+		// --- Static identity with annotation, SAR enforced ---
+		{
+			name:         "CREATE annotated identity, user has access",
+			operation:    admissionv1.Create,
+			newCluster:   makeCluster(infrav1.ClusterStaticIdentityKind, "my-static-id"),
+			dynamicObj:   makeStaticIdentity("my-secret", true),
 			sarAllowed:   true,
 			wantAllowed:  true,
 			wantSARCalls: 1,
 		},
 		{
-			name:         "CREATE identityRef kind=AWSClusterStaticIdentity, user lacks access",
+			name:         "CREATE annotated identity, user lacks access",
 			operation:    admissionv1.Create,
 			newCluster:   makeCluster(infrav1.ClusterStaticIdentityKind, "my-static-id"),
-			dynamicObj:   makeStaticIdentity("my-secret"),
+			dynamicObj:   makeStaticIdentity("my-secret", true),
 			sarAllowed:   false,
 			wantAllowed:  false,
 			wantSARCalls: 1,
 		},
+
+		// --- Dynamic lookup errors ---
 		{
 			name:         "CREATE identity not found, BadRequest",
 			operation:    admissionv1.Create,
@@ -153,14 +198,8 @@ func TestAWSClusterValidator_Admit(t *testing.T) {
 			wantAllowed:  false,
 			wantSARCalls: 0,
 		},
-		{
-			name:         "CREATE identity found, empty secretRef, allowed without SAR",
-			operation:    admissionv1.Create,
-			newCluster:   makeCluster(infrav1.ClusterStaticIdentityKind, "my-static-id"),
-			dynamicObj:   makeStaticIdentity(""),
-			wantAllowed:  true,
-			wantSARCalls: 0,
-		},
+
+		// --- UPDATE: identityRef unchanged → skip dynamic lookup and SAR ---
 		{
 			name:         "UPDATE identityRef unchanged, allowed without dynamic lookup or SAR",
 			operation:    admissionv1.Update,
@@ -170,30 +209,30 @@ func TestAWSClusterValidator_Admit(t *testing.T) {
 			wantAllowed:  true,
 			wantSARCalls: 0,
 		},
+
+		// --- UPDATE: identityRef changed → lookup and SAR run ---
 		{
-			name:         "UPDATE identityRef name changed, SAR performed, allowed",
+			name:         "UPDATE identityRef name changed, annotated, user has access",
 			operation:    admissionv1.Update,
 			newCluster:   makeCluster(infrav1.ClusterStaticIdentityKind, "new-id"),
 			oldCluster:   makeCluster(infrav1.ClusterStaticIdentityKind, "old-id"),
-			dynamicObj:   makeStaticIdentity("my-secret"),
+			dynamicObj:   makeStaticIdentity("my-secret", true),
 			sarAllowed:   true,
 			wantAllowed:  true,
 			wantSARCalls: 1,
 		},
 		{
-			name: "UPDATE identityRef kind changed to ClusterStaticIdentityKind, " +
-				"non-existing AWSClusterStaticIdentity, SAR performed, denied",
+			name:         "UPDATE identityRef kind changed to static, annotated, user lacks access",
 			operation:    admissionv1.Update,
 			newCluster:   makeCluster(infrav1.ClusterStaticIdentityKind, "my-id"),
 			oldCluster:   makeCluster(infrav1.ClusterRoleIdentityKind, "my-id"),
-			dynamicObj:   makeStaticIdentity("my-secret"),
+			dynamicObj:   makeStaticIdentity("my-secret", true),
 			sarAllowed:   false,
 			wantAllowed:  false,
 			wantSARCalls: 1,
 		},
 	}
 
-	t.Parallel()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sar := &mockSAR{allowed: tt.sarAllowed}

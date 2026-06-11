@@ -3,15 +3,13 @@ package awscluster
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 
 	"github.com/rancher/webhook/pkg/admission"
-	"github.com/rancher/webhook/pkg/auth"
+	"github.com/rancher/webhook/pkg/resources/infrastructure.cluster.x-k8s.io/v1beta2/capautils"
 	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -19,8 +17,6 @@ import (
 	"k8s.io/utils/trace"
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 )
-
-const rancherCredentialsNamespace = "cattle-global-data"
 
 var (
 	awsClusterGVR = schema.GroupVersionResource{
@@ -33,12 +29,6 @@ var (
 		Group:   "infrastructure.cluster.x-k8s.io",
 		Version: "v1beta2",
 		Kind:    "AWSClusterStaticIdentity",
-	}
-
-	secretGVR = schema.GroupVersionResource{
-		Group:    "",
-		Version:  "v1",
-		Resource: "secrets",
 	}
 )
 
@@ -86,14 +76,19 @@ func (v *Validator) Admitters() []admission.Admitter {
 // Admit handles the admission request for AWSCluster.
 //
 // When spec.identityRef references an AWSClusterStaticIdentity, the webhook
-// fetches that identity and verifies that the requesting user has GET permission
-// on the Rancher Cloud Credential Secret (in cattle-global-data) named by
-// spec.secretRef on the identity.
+// fetches that identity and checks whether it carries the annotation
+// "cluster-api.cattle.io/source-id". Only Rancher-managed identities (those
+// with the annotation) trigger a credential access check.
+//
+// When enforced, the webhook verifies that the requesting user has GET
+// permission on the Rancher Cloud Credential Secret (in cattle-global-data)
+// named by spec.secretRef on the identity.
 //
 // Other identity kinds (AWSClusterRoleIdentity, AWSClusterControllerIdentity)
 // are out of scope and are allowed through without a check.
 func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
-	listTrace := trace.New("awsClusterValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
+	listTrace := trace.New("awsClusterValidator Admit",
+		trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
 	newCluster, err := decodeCluster(request.Object.Raw)
@@ -116,7 +111,7 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 
 	identityName := newCluster.Spec.IdentityRef.Name
 
-	// On UPDATE, skip SAR if identityRef has not changed.
+	// On UPDATE, skip if identityRef has not changed.
 	if request.Operation == admissionv1.Update {
 		oldCluster, err := decodeCluster(request.OldObject.Raw)
 		if err != nil {
@@ -141,32 +136,20 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 			fmt.Sprintf("failed to look up referenced AWSClusterStaticIdentity %q: %v", identityName, err)), nil
 	}
 
+	// Only enforce for Rancher-managed identities.
+	if !capautils.HasSourceIDAnnotation(identity) {
+		logrus.Debugf("awsClusterValidator: AWSClusterStaticIdentity %s has no %s annotation, allowing",
+			identityName, capautils.AnnotationSourceID)
+		return admission.ResponseAllowed(), nil
+	}
+
 	secretName := identity.Spec.SecretRef
 	if secretName == "" {
 		logrus.Debugf("awsClusterValidator: AWSClusterStaticIdentity %s has no secretRef, allowing", identityName)
 		return admission.ResponseAllowed(), nil
 	}
 
-	// SAR: check user can GET the Rancher cloud credential secret.
-	allowed, err := auth.RequestUserHasVerb(request, secretGVR, v.sar, "get", secretName, rancherCredentialsNamespace)
-	if err != nil {
-		return nil, fmt.Errorf("failed to perform access review for secret %s/%s: %w", rancherCredentialsNamespace, secretName, err)
-	}
-
-	if !allowed {
-		return &admissionv1.AdmissionResponse{
-			Allowed: false,
-			Result: &metav1.Status{
-				Status: "Failure",
-				Message: fmt.Sprintf("user %q does not have permission to get secret %s/%s referenced by AWSClusterStaticIdentity %q",
-					request.UserInfo.Username, rancherCredentialsNamespace, secretName, identityName),
-				Reason: metav1.StatusReasonForbidden,
-				Code:   http.StatusForbidden,
-			},
-		}, nil
-	}
-
-	return admission.ResponseAllowed(), nil
+	return capautils.CheckSecretAccess(request, secretName, v.sar)
 }
 
 // fetchStaticIdentity retrieves an AWSClusterStaticIdentity via the dynamic controller.
@@ -177,10 +160,12 @@ func fetchStaticIdentity(d dynamicGetter, name string) (*infrav1.AWSClusterStati
 		return nil, err
 	}
 
+	// Fast path: already typed (lasso cache seeded with scheme).
 	if typed, ok := obj.(*infrav1.AWSClusterStaticIdentity); ok {
 		return typed, nil
 	}
 
+	// Slow path: unstructured (lasso informer not seeded with CAPA scheme).
 	unstr, ok := obj.(*unstructured.Unstructured)
 	if !ok {
 		return nil, fmt.Errorf("unexpected type %T for AWSClusterStaticIdentity %q", obj, name)

@@ -3,35 +3,23 @@ package awsclusterstaticidentity
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 
 	"github.com/rancher/webhook/pkg/admission"
-	"github.com/rancher/webhook/pkg/auth"
+	"github.com/rancher/webhook/pkg/resources/infrastructure.cluster.x-k8s.io/v1beta2/capautils"
 	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/utils/trace"
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 )
 
-const rancherCredentialsNamespace = "cattle-global-data"
-
-var (
-	awsStaticIdentityGVR = schema.GroupVersionResource{
-		Group:    "infrastructure.cluster.x-k8s.io",
-		Version:  "v1beta2",
-		Resource: "awsclusterstaticidentities",
-	}
-
-	secretGVR = schema.GroupVersionResource{
-		Group:    "",
-		Version:  "v1",
-		Resource: "secrets",
-	}
-)
+var awsStaticIdentityGVR = schema.GroupVersionResource{
+	Group:    "infrastructure.cluster.x-k8s.io",
+	Version:  "v1beta2",
+	Resource: "awsclusterstaticidentities",
+}
 
 // Validator implements admission.ValidatingAdmissionHandler for AWSClusterStaticIdentity.
 type Validator struct {
@@ -70,17 +58,29 @@ func (v *Validator) Admitters() []admission.Admitter {
 
 // Admit handles the admission request for AWSClusterStaticIdentity.
 //
-// It verifies that the requesting user has GET permission on the Rancher Cloud
-// Credential Secret (in cattle-global-data) referenced by spec.secretRef.
-// If secretRef is empty, or is unchanged on UPDATE, the request is allowed
-// without performing a SubjectAccessReview.
+// The credential access check is only enforced when the identity carries the
+// annotation "cluster-api.cattle.io/source-id", indicating it is managed by
+// Rancher Turtles. Without that annotation the request is allowed immediately.
+//
+// When enforced, the webhook verifies that the requesting user has GET
+// permission on the Rancher Cloud Credential Secret (in cattle-global-data)
+// referenced by spec.secretRef. If secretRef is empty, or is unchanged on
+// UPDATE, the request is allowed without performing a SubjectAccessReview.
 func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
-	listTrace := trace.New("awsClusterStaticIdentityValidator Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
+	listTrace := trace.New("awsClusterStaticIdentityValidator Admit",
+		trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
 
 	newIdentity, err := decodeIdentity(request.Object.Raw)
 	if err != nil {
 		return admission.ResponseBadRequest(fmt.Sprintf("failed to decode AWSClusterStaticIdentity: %v", err)), nil
+	}
+
+	// Only enforce for Rancher-managed identities.
+	if !capautils.HasSourceIDAnnotation(newIdentity) {
+		logrus.Debugf("awsClusterStaticIdentityValidator: no %s annotation on %s, allowing",
+			capautils.AnnotationSourceID, newIdentity.Name)
+		return admission.ResponseAllowed(), nil
 	}
 
 	secretName := newIdentity.Spec.SecretRef
@@ -101,26 +101,7 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 		}
 	}
 
-	// SAR: check user can GET the Rancher cloud credential secret.
-	allowed, err := auth.RequestUserHasVerb(request, secretGVR, v.sar, "get", secretName, rancherCredentialsNamespace)
-	if err != nil {
-		return nil, fmt.Errorf("failed to perform access review for secret %s/%s: %w", rancherCredentialsNamespace, secretName, err)
-	}
-
-	if !allowed {
-		return &admissionv1.AdmissionResponse{
-			Allowed: false,
-			Result: &metav1.Status{
-				Status: "Failure",
-				Message: fmt.Sprintf("user %q does not have permission to get secret %s/%s",
-					request.UserInfo.Username, rancherCredentialsNamespace, secretName),
-				Reason: metav1.StatusReasonForbidden,
-				Code:   http.StatusForbidden,
-			},
-		}, nil
-	}
-
-	return admission.ResponseAllowed(), nil
+	return capautils.CheckSecretAccess(request, secretName, v.sar)
 }
 
 // decodeIdentity unmarshals raw JSON into an AWSClusterStaticIdentity.
