@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/validation"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
@@ -135,13 +134,17 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 			return response, nil
 		}
 
-		if response.Result = errorListToStatus(validateAgentDeploymentCustomization(cluster.Spec.ClusterAgentDeploymentCustomization,
+		if response.Result = common.ErrorListToStatus(validateAgentDeploymentCustomization(cluster.Spec.ClusterAgentDeploymentCustomization,
 			field.NewPath("spec", "clusterAgentDeploymentCustomization"))); response.Result != nil {
 			return response, nil
 		}
 
-		if response.Result = errorListToStatus(validateAgentDeploymentCustomization(cluster.Spec.FleetAgentDeploymentCustomization,
+		if response.Result = common.ErrorListToStatus(validateAgentDeploymentCustomization(cluster.Spec.FleetAgentDeploymentCustomization,
 			field.NewPath("spec", "fleetAgentDeploymentCustomization"))); response.Result != nil {
+			return response, nil
+		}
+
+		if response.Result = validateWebhookDeploymentCustomization(cluster); response.Result != nil {
 			return response, nil
 		}
 
@@ -874,44 +877,9 @@ func validateAgentDeploymentCustomization(customization *v1.AgentDeploymentCusto
 	}
 	var errList field.ErrorList
 
-	errList = append(errList, validateAppendToleration(customization.AppendTolerations, path.Child("appendTolerations"))...)
-	errList = append(errList, validateAffinity(customization.OverrideAffinity, path.Child("overrideAffinity"))...)
+	errList = append(errList, common.ValidateAppendTolerations(customization.AppendTolerations, path.Child("appendTolerations"))...)
+	errList = append(errList, common.ValidateAffinity(customization.OverrideAffinity, path.Child("overrideAffinity"))...)
 
-	return errList
-}
-func validateAffinity(overrideAffinity *k8sv1.Affinity, path *field.Path) field.ErrorList {
-	if overrideAffinity == nil {
-		return nil
-	}
-	var errList field.ErrorList
-
-	if affinity := overrideAffinity.NodeAffinity; affinity != nil {
-		errList = append(errList,
-			validatePreferredSchedulingTerms(affinity.PreferredDuringSchedulingIgnoredDuringExecution,
-				path.Child("nodeAffinity").Child("preferredDuringSchedulingIgnoredDuringExecution"))...,
-		)
-		errList = append(errList,
-			validateNodeSelector(affinity.RequiredDuringSchedulingIgnoredDuringExecution,
-				path.Child("nodeAffinity").Child("requiredDuringSchedulingIgnoredDuringExecution"))...,
-		)
-	}
-
-	if podAffinity := overrideAffinity.PodAffinity; podAffinity != nil {
-		errList = append(errList, validatePodAffinityTerms(podAffinity.RequiredDuringSchedulingIgnoredDuringExecution,
-			path.Child("podAffinity").Child("requiredDuringSchedulingIgnoredDuringExecution"))...)
-
-		errList = append(errList, validateWeightedPodAffinityTerms(podAffinity.PreferredDuringSchedulingIgnoredDuringExecution,
-			path.Child("podAffinity").Child("preferredDuringSchedulingIgnoredDuringExecution"))...)
-	}
-
-	if podAntiAffinity := overrideAffinity.PodAntiAffinity; podAntiAffinity != nil {
-		errList = append(errList, validatePodAffinityTerms(podAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution,
-			path.Child("podAntiAffinity").Child("requiredDuringSchedulingIgnoredDuringExecution"))...)
-
-		errList = append(errList, validateWeightedPodAffinityTerms(podAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution,
-			path.Child("podAntiAffinity").Child("preferredDuringSchedulingIgnoredDuringExecution"))...)
-
-	}
 	return errList
 }
 
@@ -946,102 +914,20 @@ func getSchedulingCustomization(cluster *v1.Cluster, agentType common.AgentType)
 	return nil
 }
 
-func validatePodAffinityTerms(terms []k8sv1.PodAffinityTerm, path *field.Path) field.ErrorList {
-	var errList field.ErrorList
-
-	for k, v := range terms {
-		errList = append(errList, validatePodAffinityTerm(v, path.Index(k))...)
-	}
-	return errList
-}
-
-func validateWeightedPodAffinityTerms(weightedPodAffinityTerm []k8sv1.WeightedPodAffinityTerm, path *field.Path) field.ErrorList {
-	var errList field.ErrorList
-	for k, v := range weightedPodAffinityTerm {
-		errList = append(errList, validatePodAffinityTerm(v.PodAffinityTerm, path.Index(k).Child("podAffinityTerm"))...)
-	}
-	return errList
-}
-
-func validatePodAffinityTerm(podAffinityTerm k8sv1.PodAffinityTerm, path *field.Path) field.ErrorList {
-	var errList field.ErrorList
-	errList = append(errList, validateLabelSelector(podAffinityTerm.LabelSelector, path.Child("labelSelector"))...)
-	errList = append(errList, validateLabelSelector(podAffinityTerm.NamespaceSelector, path.Child("namespaceSelector"))...)
-	return errList
-}
-
-func validateLabelSelector(labelSelector *metav1.LabelSelector, path *field.Path) field.ErrorList {
-	return validation.ValidateLabelSelector(labelSelector, validation.LabelSelectorValidationOptions{}, path)
-
-}
-
-func validatePreferredSchedulingTerms(schedulingTerms []k8sv1.PreferredSchedulingTerm, path *field.Path) field.ErrorList {
-	var errList field.ErrorList
-
-	for k, v := range schedulingTerms {
-		errList = append(errList, validateNodeSelectorTerm(v.Preference, path.Index(k).Child("preferences"))...)
-	}
-	return errList
-}
-
-func validateNodeSelector(nodeSelector *k8sv1.NodeSelector, path *field.Path) field.ErrorList {
-	if nodeSelector == nil {
+func validateWebhookDeploymentCustomization(cluster *v1.Cluster) *metav1.Status {
+	wdc := cluster.Spec.WebhookDeploymentCustomization
+	if wdc == nil {
 		return nil
 	}
-	var errList field.ErrorList
-	nodeSelectorPath := path.Child("nodeSelectorTerms")
-	for k, v := range nodeSelector.NodeSelectorTerms {
-		errList = append(errList, validateNodeSelectorTerm(v, nodeSelectorPath.Index(k))...)
-	}
-	return errList
-}
 
-func validateNodeSelectorTerm(term k8sv1.NodeSelectorTerm, path *field.Path) field.ErrorList {
-	var errList field.ErrorList
-	errList = append(errList, validateNodeSelectorRequirements(term.MatchFields, path.Child("matchFields"))...)
-	errList = append(errList, validateNodeSelectorRequirements(term.MatchExpressions, path.Child("matchExpressions"))...)
-	return errList
-}
+	var pdb *common.PDB
+	if wdc.PodDisruptionBudget != nil {
+		pdb = &common.PDB{MinAvailable: wdc.PodDisruptionBudget.MinAvailable, MaxUnavailable: wdc.PodDisruptionBudget.MaxUnavailable}
+	}
 
-// validateNodeSelectorRequirements Validates the NodeSelectors
-// at the moment it only validates the key by calling validation.ValidateLabelName.
-func validateNodeSelectorRequirements(selector []k8sv1.NodeSelectorRequirement, path *field.Path) field.ErrorList {
-	var errList field.ErrorList
-	for k, s := range selector {
-		errList = append(errList, validation.ValidateLabelName(s.Key, path.Index(k).Child("key"))...)
-	}
-	return errList
-}
-
-// validateAppendToleration validate if tolerations follows the k8s standards
-// at the moment it only validates the key by calling validation.ValidateLabelName.
-func validateAppendToleration(toleration []k8sv1.Toleration, path *field.Path) field.ErrorList {
-	var errList field.ErrorList
-	for k, s := range toleration {
-		errList = append(errList, validation.ValidateLabelName(s.Key, path.Index(k))...)
-	}
-	return errList
-}
-
-// errorListToStatus convert an errorList to failure status, it breaks a line for each entry and adds a * in front
-func errorListToStatus(errList field.ErrorList) *metav1.Status {
-	if len(errList) == 0 {
-		return nil
-	}
-	var builder strings.Builder
-	builder.WriteString("* ")
-	for i, fieldErr := range errList {
-		builder.WriteString(fieldErr.Error())
-		if i != len(errList)-1 {
-			builder.WriteString("\n* ")
-		}
-	}
-	return &metav1.Status{
-		Status:  failureStatus,
-		Message: builder.String(),
-		Reason:  metav1.StatusReasonInvalid,
-		Code:    http.StatusUnprocessableEntity,
-	}
+	return common.ErrorListToStatus(common.ValidateWebhookDeploymentCustomization(
+		wdc.ReplicaCount, wdc.AppendTolerations, wdc.OverrideAffinity, pdb,
+		field.NewPath("spec", "webhookDeploymentCustomization")))
 }
 
 func validateACEConfig(cluster *v1.Cluster) *metav1.Status {
