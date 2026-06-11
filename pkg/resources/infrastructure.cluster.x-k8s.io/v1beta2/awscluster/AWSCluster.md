@@ -10,22 +10,21 @@ This webhook validates AWSCluster resources (`infrastructure.cluster.x-k8s.io/v1
 
 ### Credential Access Check
 
-When an `AWSCluster` references an `AWSClusterStaticIdentity` via `spec.identityRef`, the webhook fetches that identity and — if it is Rancher-managed — verifies that the requesting user has `get` permission on the Rancher Cloud Credential Secret that backs the identity.
+When an `AWSCluster` references an `AWSClusterStaticIdentity` via `spec.identityRef`, the webhook fetches the current state of that identity and checks whether its credential is a Rancher-managed Cloud Credential. If it is, the requesting user must have `get` permission on that credential.
 
 Steps:
 1. If `spec.identityRef` is absent, the request is allowed.
 2. If `spec.identityRef.kind` is not `AWSClusterStaticIdentity`, the request is allowed (other identity types are out of scope).
-3. On UPDATE: if `spec.identityRef.{kind,name}` is unchanged, the request is allowed (no credential change).
-4. The referenced `AWSClusterStaticIdentity` is fetched from the cluster.
+3. The referenced `AWSClusterStaticIdentity` is fetched from the cluster. This fetch always occurs on both CREATE and UPDATE, because the identity itself may have changed between requests (different `spec.secretRef`, credential removed).
    - If not found: request is rejected (400 Bad Request).
    - If the lookup fails for any other reason: request is rejected (400 Bad Request).
-5. If the `AWSClusterStaticIdentity` does **not** carry the annotation `cluster-api.cattle.io/source-id`, the request is allowed. Only Rancher Turtles-managed identities are subject to the credential check.
-6. If `AWSClusterStaticIdentity.spec.secretRef` is empty, the request is allowed.
-7. A SubjectAccessReview is performed: verb `get`, resource `secrets`, namespace `cattle-global-data`, name = `spec.secretRef`.
+4. If `AWSClusterStaticIdentity.spec.secretRef` is empty, the request is allowed.
+5. The webhook checks whether a Secret named `spec.secretRef` exists in `cattle-global-data`.
+   - If **no** such secret exists: the identity is considered user-managed and the request is allowed.
+   - If the cache lookup fails with an unexpected error: the request is rejected to fail closed.
+6. If the secret exists in `cattle-global-data`, it is a Rancher Cloud Credential mirrored by Turtles. A SubjectAccessReview is performed: verb `get`, resource `secrets`, namespace `cattle-global-data`, name = `spec.secretRef`.
    - If denied: request is rejected (403 Forbidden).
 
-### Rancher-managed Identities
+### Rancher Cloud Credentials
 
-The annotation `cluster-api.cattle.io/source-id` is set by Rancher Turtles on identities it manages. Its presence signals that the identity's backing Secret is a Rancher Cloud Credential mirrored into the CAPA provider namespace. Only these identities require a credential access check.
-
-The secret is always checked in `cattle-global-data` because Rancher Turtles mirrors the user's Rancher Cloud Credential (stored in `cattle-global-data`) into `capa-system` for the CAPA controller. The access check uses the original Rancher credential namespace.
+Rancher Turtles mirrors user Cloud Credentials (stored in `cattle-global-data`) into the CAPA provider namespace (`capa-system`) for the CAPA controller to consume. The presence of a matching secret in `cattle-global-data` is the signal that a credential is Rancher-managed and subject to access enforcement. User-managed secrets that exist only in `capa-system` are not affected.

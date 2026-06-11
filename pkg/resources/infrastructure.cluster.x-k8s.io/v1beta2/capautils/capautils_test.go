@@ -6,10 +6,15 @@ import (
 	"testing"
 
 	"github.com/rancher/webhook/pkg/admission"
+	"github.com/rancher/wrangler/v3/pkg/generic"
 	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // mockSAR implements authorizationv1.SubjectAccessReviewInterface for testing.
@@ -29,53 +34,83 @@ func (m *mockSAR) Create(_ context.Context, _ *authorizationv1.SubjectAccessRevi
 	}, nil
 }
 
+// mockSecretCache implements corev1controller.SecretCache for testing.
+type mockSecretCache struct {
+	secret *corev1.Secret
+	err    error
+}
+
+func (m *mockSecretCache) Get(_, _ string) (*corev1.Secret, error) {
+	return m.secret, m.err
+}
+
+func (m *mockSecretCache) List(_ string, _ labels.Selector) ([]*corev1.Secret, error) {
+	panic("not implemented")
+}
+
+func (m *mockSecretCache) AddIndexer(_ string, _ generic.Indexer[*corev1.Secret]) {
+	panic("not implemented")
+}
+
+func (m *mockSecretCache) GetByIndex(_, _ string) ([]*corev1.Secret, error) {
+	panic("not implemented")
+}
+
 func makeRequest(username string) *admission.Request {
 	return &admission.Request{
+		Context: context.Background(),
 		AdmissionRequest: admissionv1.AdmissionRequest{
 			UserInfo: authenticationv1.UserInfo{Username: username},
 		},
 	}
 }
 
-func TestHasSourceIDAnnotation(t *testing.T) {
+func TestIsMirroredCloudCredential(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
-		name        string
-		annotations map[string]string
-		want        bool
+		name       string
+		cacheErr   error
+		wantResult bool
+		wantErr    bool
 	}{
 		{
-			name:        "annotation present with value",
-			annotations: map[string]string{AnnotationSourceID: "some-id"},
-			want:        true,
+			name:       "secret found — mirrored credential",
+			cacheErr:   nil,
+			wantResult: true,
 		},
 		{
-			name:        "annotation present but empty value",
-			annotations: map[string]string{AnnotationSourceID: ""},
-			want:        false,
+			name:       "secret not found — user-managed",
+			cacheErr:   apierrors.NewNotFound(schema.GroupResource{Resource: "secrets"}, "my-secret"),
+			wantResult: false,
 		},
 		{
-			name:        "annotation absent",
-			annotations: map[string]string{"other-key": "value"},
-			want:        false,
-		},
-		{
-			name:        "no annotations",
-			annotations: nil,
-			want:        false,
+			name:     "cache error — propagated",
+			cacheErr: fmt.Errorf("etcd unavailable"),
+			wantErr:  true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			obj := &metav1.ObjectMeta{Annotations: tt.annotations}
-			if got := HasSourceIDAnnotation(obj); got != tt.want {
-				t.Errorf("HasSourceIDAnnotation() = %v, want %v", got, tt.want)
+			var secret *corev1.Secret
+			if tt.cacheErr == nil {
+				secret = &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "my-secret", Namespace: RancherCredentialsNamespace}}
+			}
+			cache := &mockSecretCache{secret: secret, err: tt.cacheErr}
+
+			got, err := IsMirroredCloudCredential("my-secret", cache)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("IsMirroredCloudCredential() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr && got != tt.wantResult {
+				t.Errorf("IsMirroredCloudCredential() = %v, want %v", got, tt.wantResult)
 			}
 		})
 	}
 }
 
 func TestCheckSecretAccess(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		secretName  string

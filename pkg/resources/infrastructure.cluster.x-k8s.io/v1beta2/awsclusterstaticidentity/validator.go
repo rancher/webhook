@@ -6,6 +6,7 @@ import (
 
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/resources/infrastructure.cluster.x-k8s.io/v1beta2/capautils"
+	corev1controller "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
 	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
@@ -23,12 +24,13 @@ var awsStaticIdentityGVR = schema.GroupVersionResource{
 
 // Validator implements admission.ValidatingAdmissionHandler for AWSClusterStaticIdentity.
 type Validator struct {
-	sar authorizationv1.SubjectAccessReviewInterface
+	secretCache corev1controller.SecretCache
+	sar         authorizationv1.SubjectAccessReviewInterface
 }
 
 // NewValidator creates a new AWSClusterStaticIdentity validator.
-func NewValidator(sar authorizationv1.SubjectAccessReviewInterface) *Validator {
-	return &Validator{sar: sar}
+func NewValidator(secretCache corev1controller.SecretCache, sar authorizationv1.SubjectAccessReviewInterface) *Validator {
+	return &Validator{secretCache: secretCache, sar: sar}
 }
 
 // GVR returns the GroupVersionResource for this webhook.
@@ -58,14 +60,15 @@ func (v *Validator) Admitters() []admission.Admitter {
 
 // Admit handles the admission request for AWSClusterStaticIdentity.
 //
-// The credential access check is only enforced when the identity carries the
-// annotation "cluster-api.cattle.io/source-id", indicating it is managed by
-// Rancher Turtles. Without that annotation the request is allowed immediately.
+// The credential access check is only enforced when a Secret with the same
+// name as spec.secretRef exists in cattle-global-data, indicating it is a
+// Rancher Cloud Credential mirrored by Turtles into the CAPA provider
+// namespace. If no such secret exists the identity is considered user-managed
+// and the request is allowed without further checks.
 //
 // When enforced, the webhook verifies that the requesting user has GET
-// permission on the Rancher Cloud Credential Secret (in cattle-global-data)
-// referenced by spec.secretRef. If secretRef is empty, or is unchanged on
-// UPDATE, the request is allowed without performing a SubjectAccessReview.
+// permission on that secret. If secretRef is empty, the request is allowed
+// without performing a SubjectAccessReview.
 func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	listTrace := trace.New("awsClusterStaticIdentityValidator Admit",
 		trace.Field{Key: "user", Value: request.UserInfo.Username})
@@ -76,32 +79,30 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 		return admission.ResponseBadRequest(fmt.Sprintf("failed to decode AWSClusterStaticIdentity: %v", err)), nil
 	}
 
-	// Only enforce for Rancher-managed identities.
-	if !capautils.HasSourceIDAnnotation(newIdentity) {
-		logrus.Debugf("awsClusterStaticIdentityValidator: no %s annotation on %s, allowing",
-			capautils.AnnotationSourceID, newIdentity.Name)
-		return admission.ResponseAllowed(), nil
-	}
-
 	secretName := newIdentity.Spec.SecretRef
 	if secretName == "" {
 		logrus.Debugf("awsClusterStaticIdentityValidator: no secretRef on %s, allowing", newIdentity.Name)
 		return admission.ResponseAllowed(), nil
 	}
 
-	// On UPDATE, skip SAR if secretRef has not changed.
-	if request.Operation == admissionv1.Update {
-		oldIdentity, err := decodeIdentity(request.OldObject.Raw)
-		if err != nil {
-			return admission.ResponseBadRequest(fmt.Sprintf("failed to decode old AWSClusterStaticIdentity: %v", err)), nil
-		}
-		if oldIdentity.Spec.SecretRef == secretName {
-			logrus.Debugf("awsClusterStaticIdentityValidator: secretRef unchanged for %s, allowing", newIdentity.Name)
-			return admission.ResponseAllowed(), nil
-		}
+	// Determine whether this is a Rancher-managed credential by checking for a
+	// matching secret in cattle-global-data.
+	mirrored, err := capautils.IsMirroredCloudCredential(secretName, v.secretCache)
+	if err != nil {
+		return nil, fmt.Errorf("awsClusterStaticIdentityValidator: %w", err)
+	}
+	if !mirrored {
+		logrus.Debugf("awsClusterStaticIdentityValidator: secret %s not found in %s, treating as user-managed, allowing",
+			secretName, capautils.RancherCredentialsNamespace)
+		return admission.ResponseAllowed(), nil
 	}
 
-	return capautils.CheckSecretAccess(request, secretName, v.sar)
+	response, err := capautils.CheckSecretAccess(request, secretName, v.sar)
+	if err == nil && !response.Allowed {
+		logrus.Debugf("awsClusterStaticIdentityValidator: access denied to secret %s/%s for user %q, denying",
+			capautils.RancherCredentialsNamespace, secretName, request.UserInfo.Username)
+	}
+	return response, err
 }
 
 // decodeIdentity unmarshals raw JSON into an AWSClusterStaticIdentity.

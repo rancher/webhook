@@ -3,15 +3,20 @@ package awsclusterstaticidentity
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/rancher/webhook/pkg/admission"
-	"github.com/rancher/webhook/pkg/resources/infrastructure.cluster.x-k8s.io/v1beta2/capautils"
+	"github.com/rancher/wrangler/v3/pkg/generic"
 	admissionv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	infrav1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta2"
 )
 
@@ -28,6 +33,28 @@ func (m *mockSAR) Create(_ context.Context, _ *authorizationv1.SubjectAccessRevi
 	}, nil
 }
 
+// mockSecretCache implements corev1controller.SecretCache for testing.
+type mockSecretCache struct {
+	secret *corev1.Secret
+	err    error
+}
+
+func (m *mockSecretCache) Get(_, _ string) (*corev1.Secret, error) {
+	return m.secret, m.err
+}
+
+func (m *mockSecretCache) List(_ string, _ labels.Selector) ([]*corev1.Secret, error) {
+	panic("not implemented")
+}
+
+func (m *mockSecretCache) AddIndexer(_ string, _ generic.Indexer[*corev1.Secret]) {
+	panic("not implemented")
+}
+
+func (m *mockSecretCache) GetByIndex(_, _ string) ([]*corev1.Secret, error) {
+	panic("not implemented")
+}
+
 func mustMarshal(t *testing.T, obj interface{}) []byte {
 	t.Helper()
 	b, err := json.Marshal(obj)
@@ -37,27 +64,40 @@ func mustMarshal(t *testing.T, obj interface{}) []byte {
 	return b
 }
 
-// makeIdentity builds an AWSClusterStaticIdentity. When annotated=true the
-// Rancher Turtles source annotation is added, making it subject to credential
-// access checks.
-func makeIdentity(secretRef string, annotated bool) *infrav1.AWSClusterStaticIdentity {
-	identity := &infrav1.AWSClusterStaticIdentity{
+// makeIdentity builds an AWSClusterStaticIdentity with the given secretRef.
+func makeIdentity(secretRef string) *infrav1.AWSClusterStaticIdentity {
+	return &infrav1.AWSClusterStaticIdentity{
 		ObjectMeta: metav1.ObjectMeta{Name: "my-identity"},
 		Spec: infrav1.AWSClusterStaticIdentitySpec{
 			SecretRef: secretRef,
 		},
 	}
-	if annotated {
-		identity.Annotations = map[string]string{
-			capautils.AnnotationSourceID: "some-id",
-		}
+}
+
+// makeMirroredSecretCache returns a cache that reports the named secret as
+// present in cattle-global-data (mirrored Rancher Cloud Credential).
+func makeMirroredSecretCache(secretName string) *mockSecretCache {
+	return &mockSecretCache{
+		secret: &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "cattle-global-data"}},
 	}
-	return identity
+}
+
+// makeAbsentSecretCache returns a cache that reports no secret in cattle-global-data.
+func makeAbsentSecretCache() *mockSecretCache {
+	return &mockSecretCache{
+		err: apierrors.NewNotFound(schema.GroupResource{Resource: "secrets"}, ""),
+	}
+}
+
+// makeErrorSecretCache returns a cache that returns a transient error.
+func makeErrorSecretCache() *mockSecretCache {
+	return &mockSecretCache{err: fmt.Errorf("etcd unavailable")}
 }
 
 func makeRequest(t *testing.T, op admissionv1.Operation, newObj, oldObj *infrav1.AWSClusterStaticIdentity) *admission.Request {
 	t.Helper()
 	req := &admission.Request{
+		Context: context.Background(),
 		AdmissionRequest: admissionv1.AdmissionRequest{
 			Operation: op,
 			Object:    runtime.RawExtension{Raw: mustMarshal(t, newObj)},
@@ -77,94 +117,126 @@ func TestAWSClusterStaticIdentityValidator_Admit(t *testing.T) {
 		operation    admissionv1.Operation
 		newObj       *infrav1.AWSClusterStaticIdentity
 		oldObj       *infrav1.AWSClusterStaticIdentity
+		secretCache  *mockSecretCache
 		sarAllowed   bool
 		wantAllowed  bool
+		wantErr      bool
 		wantSARCalls int
 	}{
-		// --- Annotation absent: always allowed, SAR never called ---
+		// --- Empty secretRef: always allowed regardless of cache ---
 		{
-			name:         "CREATE no annotation, allowed without SAR",
+			name:         "CREATE empty secretRef, allowed without cache lookup or SAR",
 			operation:    admissionv1.Create,
-			newObj:       makeIdentity("my-secret", false),
+			newObj:       makeIdentity(""),
+			secretCache:  makeAbsentSecretCache(),
+			wantAllowed:  true,
+			wantSARCalls: 0,
+		},
+
+		// --- Secret NOT in cattle-global-data: user-managed, always allowed ---
+		{
+			name:         "CREATE secretRef set, no mirrored secret, user-managed, allowed without SAR",
+			operation:    admissionv1.Create,
+			newObj:       makeIdentity("my-secret"),
+			secretCache:  makeAbsentSecretCache(),
 			wantAllowed:  true,
 			wantSARCalls: 0,
 		},
 		{
-			name:         "UPDATE no annotation, allowed without SAR",
+			name:         "UPDATE secretRef changed, no mirrored secret, allowed without SAR",
 			operation:    admissionv1.Update,
-			newObj:       makeIdentity("new-secret", false),
-			oldObj:       makeIdentity("old-secret", false),
+			newObj:       makeIdentity("new-secret"),
+			oldObj:       makeIdentity("old-secret"),
+			secretCache:  makeAbsentSecretCache(),
 			wantAllowed:  true,
 			wantSARCalls: 0,
 		},
 
-		// --- Annotation present, empty secretRef ---
+		// --- Mirrored secret found: SAR enforced ---
 		{
-			name:         "CREATE annotated, empty secretRef, allowed without SAR",
+			name:         "CREATE mirrored secret, user has access",
 			operation:    admissionv1.Create,
-			newObj:       makeIdentity("", true),
-			wantAllowed:  true,
-			wantSARCalls: 0,
-		},
-
-		// --- Annotation present, non-empty secretRef ---
-		{
-			name:         "CREATE annotated, user has access",
-			operation:    admissionv1.Create,
-			newObj:       makeIdentity("my-secret", true),
+			newObj:       makeIdentity("my-secret"),
+			secretCache:  makeMirroredSecretCache("my-secret"),
 			sarAllowed:   true,
 			wantAllowed:  true,
 			wantSARCalls: 1,
 		},
 		{
-			name:         "CREATE annotated, user lacks access",
+			name:         "CREATE mirrored secret, user lacks access",
 			operation:    admissionv1.Create,
-			newObj:       makeIdentity("my-secret", true),
+			newObj:       makeIdentity("my-secret"),
+			secretCache:  makeMirroredSecretCache("my-secret"),
 			sarAllowed:   false,
 			wantAllowed:  false,
 			wantSARCalls: 1,
 		},
 
-		// --- UPDATE: secretRef unchanged → no SAR ---
+		// --- UPDATE secretRef unchanged: SAR still enforced ---
 		{
-			name:         "UPDATE annotated, secretRef unchanged, allowed without SAR",
+			name:         "UPDATE secretRef unchanged, mirrored secret, SAR still enforced, user has access",
 			operation:    admissionv1.Update,
-			newObj:       makeIdentity("same-secret", true),
-			oldObj:       makeIdentity("same-secret", true),
-			sarAllowed:   false,
-			wantAllowed:  true,
-			wantSARCalls: 0,
-		},
-
-		// --- UPDATE: secretRef changed → SAR runs ---
-		{
-			name:         "UPDATE annotated, secretRef changed, user has access",
-			operation:    admissionv1.Update,
-			newObj:       makeIdentity("new-secret", true),
-			oldObj:       makeIdentity("old-secret", true),
+			newObj:       makeIdentity("same-secret"),
+			oldObj:       makeIdentity("same-secret"),
+			secretCache:  makeMirroredSecretCache("same-secret"),
 			sarAllowed:   true,
 			wantAllowed:  true,
 			wantSARCalls: 1,
 		},
 		{
-			name:         "UPDATE annotated, secretRef changed, user lacks access",
+			name:         "UPDATE secretRef unchanged, no mirrored secret, user-managed, allowed",
 			operation:    admissionv1.Update,
-			newObj:       makeIdentity("new-secret", true),
-			oldObj:       makeIdentity("old-secret", true),
+			newObj:       makeIdentity("same-secret"),
+			oldObj:       makeIdentity("same-secret"),
+			secretCache:  makeAbsentSecretCache(),
+			wantAllowed:  true,
+			wantSARCalls: 0,
+		},
+
+		// --- UPDATE secretRef changed, mirrored secret ---
+		{
+			name:         "UPDATE secretRef changed, mirrored secret, user has access",
+			operation:    admissionv1.Update,
+			newObj:       makeIdentity("new-secret"),
+			oldObj:       makeIdentity("old-secret"),
+			secretCache:  makeMirroredSecretCache("new-secret"),
+			sarAllowed:   true,
+			wantAllowed:  true,
+			wantSARCalls: 1,
+		},
+		{
+			name:         "UPDATE secretRef changed, mirrored secret, user lacks access",
+			operation:    admissionv1.Update,
+			newObj:       makeIdentity("new-secret"),
+			oldObj:       makeIdentity("old-secret"),
+			secretCache:  makeMirroredSecretCache("new-secret"),
 			sarAllowed:   false,
 			wantAllowed:  false,
 			wantSARCalls: 1,
+		},
+
+		// --- Cache error: fail closed ---
+		{
+			name:         "CREATE cache error, fail closed",
+			operation:    admissionv1.Create,
+			newObj:       makeIdentity("my-secret"),
+			secretCache:  makeErrorSecretCache(),
+			wantErr:      true,
+			wantSARCalls: 0,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sar := &mockSAR{allowed: tt.sarAllowed}
-			v := NewValidator(sar)
+			v := NewValidator(tt.secretCache, sar)
 
 			resp, err := v.Admit(makeRequest(t, tt.operation, tt.newObj, tt.oldObj))
-			if err != nil {
-				t.Fatalf("Admit returned error: %v", err)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Admit() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
 			}
 			if resp.Allowed != tt.wantAllowed {
 				t.Errorf("Allowed=%v, want %v (result: %+v)", resp.Allowed, tt.wantAllowed, resp.Result)

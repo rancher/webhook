@@ -8,18 +8,15 @@ import (
 
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
+	corev1controller "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
 	admissionv1 "k8s.io/api/admission/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 )
 
 const (
-	// AnnotationSourceID is the annotation key placed on CAPA objects by Rancher
-	// Turtles to mark them as Rancher-managed. Credential access checks are only
-	// enforced when this annotation is present on the AWSClusterStaticIdentity.
-	AnnotationSourceID = "cluster-api.cattle.io/source-id"
-
 	// RancherCredentialsNamespace is the namespace where Rancher Cloud Credential
 	// secrets are stored and where SubjectAccessReview checks are performed.
 	RancherCredentialsNamespace = "cattle-global-data"
@@ -32,10 +29,23 @@ var SecretGVR = schema.GroupVersionResource{
 	Resource: "secrets",
 }
 
-// HasSourceIDAnnotation reports whether obj carries the Rancher Turtles
-// source annotation, indicating it is a Rancher-managed CAPA resource.
-func HasSourceIDAnnotation(obj metav1.Object) bool {
-	return obj.GetAnnotations()[AnnotationSourceID] != ""
+// IsMirroredCloudCredential reports whether a Secret named secretName exists
+// in RancherCredentialsNamespace (cattle-global-data), indicating it is a
+// Rancher Cloud Credential that Turtles has mirrored into the CAPA provider
+// namespace.
+//
+// Returns (true, nil) when the secret is found — SAR should be enforced.
+// Returns (false, nil) when the secret is not found — user-managed, allow.
+// Returns (false, err) on any other cache error — callers should fail closed.
+func IsMirroredCloudCredential(secretName string, secretCache corev1controller.SecretCache) (bool, error) {
+	_, err := secretCache.Get(RancherCredentialsNamespace, secretName)
+	if err == nil {
+		return true, nil
+	}
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+	return false, fmt.Errorf("failed to check secret %s/%s: %w", RancherCredentialsNamespace, secretName, err)
 }
 
 // CheckSecretAccess performs a SubjectAccessReview to verify that the user in
@@ -54,11 +64,10 @@ func CheckSecretAccess(request *admission.Request, secretName string, sar author
 		return &admissionv1.AdmissionResponse{
 			Allowed: false,
 			Result: &metav1.Status{
-				Status: "Failure",
-				Message: fmt.Sprintf("user %q does not have permission to get secret %s/%s",
-					request.UserInfo.Username, RancherCredentialsNamespace, secretName),
-				Reason: metav1.StatusReasonForbidden,
-				Code:   http.StatusForbidden,
+				Status:  "Failure",
+				Message: "requesting user does not have access to the referenced secret",
+				Reason:  metav1.StatusReasonForbidden,
+				Code:    http.StatusForbidden,
 			},
 		}, nil
 	}

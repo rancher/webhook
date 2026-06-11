@@ -6,6 +6,7 @@ import (
 
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/resources/infrastructure.cluster.x-k8s.io/v1beta2/capautils"
+	corev1controller "github.com/rancher/wrangler/v3/pkg/generated/controllers/core/v1"
 	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
@@ -39,13 +40,14 @@ type dynamicGetter interface {
 
 // Validator implements admission.ValidatingAdmissionHandler for AWSCluster.
 type Validator struct {
-	dynamic dynamicGetter
-	sar     authorizationv1.SubjectAccessReviewInterface
+	dynamic     dynamicGetter
+	secretCache corev1controller.SecretCache
+	sar         authorizationv1.SubjectAccessReviewInterface
 }
 
 // NewValidator creates a new AWSCluster validator.
-func NewValidator(dynamic dynamicGetter, sar authorizationv1.SubjectAccessReviewInterface) *Validator {
-	return &Validator{dynamic: dynamic, sar: sar}
+func NewValidator(dynamic dynamicGetter, secretCache corev1controller.SecretCache, sar authorizationv1.SubjectAccessReviewInterface) *Validator {
+	return &Validator{dynamic: dynamic, secretCache: secretCache, sar: sar}
 }
 
 // GVR returns the GroupVersionResource for this webhook.
@@ -76,13 +78,15 @@ func (v *Validator) Admitters() []admission.Admitter {
 // Admit handles the admission request for AWSCluster.
 //
 // When spec.identityRef references an AWSClusterStaticIdentity, the webhook
-// fetches that identity and checks whether it carries the annotation
-// "cluster-api.cattle.io/source-id". Only Rancher-managed identities (those
-// with the annotation) trigger a credential access check.
+// fetches the current state of that identity (on both CREATE and UPDATE) and
+// checks whether a Secret with the same name as spec.secretRef exists in
+// cattle-global-data. If such a secret exists it is considered a Rancher Cloud
+// Credential mirrored by Turtles, and the requesting user must have GET
+// permission on it. If no such secret exists the identity is user-managed and
+// the request is allowed.
 //
-// When enforced, the webhook verifies that the requesting user has GET
-// permission on the Rancher Cloud Credential Secret (in cattle-global-data)
-// named by spec.secretRef on the identity.
+// The identity is always fetched on UPDATE because the AWSClusterStaticIdentity
+// itself may have changed between requests (different secretRef, mirror removed).
 //
 // Other identity kinds (AWSClusterRoleIdentity, AWSClusterControllerIdentity)
 // are out of scope and are allowed through without a check.
@@ -111,21 +115,9 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 
 	identityName := newCluster.Spec.IdentityRef.Name
 
-	// On UPDATE, skip if identityRef has not changed.
-	if request.Operation == admissionv1.Update {
-		oldCluster, err := decodeCluster(request.OldObject.Raw)
-		if err != nil {
-			return admission.ResponseBadRequest(fmt.Sprintf("failed to decode old AWSCluster: %v", err)), nil
-		}
-		if oldCluster.Spec.IdentityRef != nil &&
-			oldCluster.Spec.IdentityRef.Kind == newCluster.Spec.IdentityRef.Kind &&
-			oldCluster.Spec.IdentityRef.Name == identityName {
-			logrus.Debugf("awsClusterValidator: identityRef unchanged for %s/%s, allowing", newCluster.Namespace, newCluster.Name)
-			return admission.ResponseAllowed(), nil
-		}
-	}
-
-	// Fetch the referenced AWSClusterStaticIdentity (cluster-scoped, no namespace).
+	// Fetch the current state of the AWSClusterStaticIdentity (cluster-scoped).
+	// This is done on every admission — including UPDATE — because the identity
+	// object itself may have changed between requests.
 	identity, err := fetchStaticIdentity(v.dynamic, identityName)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -136,20 +128,30 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 			fmt.Sprintf("failed to look up referenced AWSClusterStaticIdentity %q: %v", identityName, err)), nil
 	}
 
-	// Only enforce for Rancher-managed identities.
-	if !capautils.HasSourceIDAnnotation(identity) {
-		logrus.Debugf("awsClusterValidator: AWSClusterStaticIdentity %s has no %s annotation, allowing",
-			identityName, capautils.AnnotationSourceID)
-		return admission.ResponseAllowed(), nil
-	}
-
 	secretName := identity.Spec.SecretRef
 	if secretName == "" {
 		logrus.Debugf("awsClusterValidator: AWSClusterStaticIdentity %s has no secretRef, allowing", identityName)
 		return admission.ResponseAllowed(), nil
 	}
 
-	return capautils.CheckSecretAccess(request, secretName, v.sar)
+	// Determine whether this is a Rancher-managed credential by checking for a
+	// matching secret in cattle-global-data.
+	mirrored, err := capautils.IsMirroredCloudCredential(secretName, v.secretCache)
+	if err != nil {
+		return nil, fmt.Errorf("awsClusterValidator: %w", err)
+	}
+	if !mirrored {
+		logrus.Debugf("awsClusterValidator: secret %s not found in %s, treating as user-managed, allowing",
+			secretName, capautils.RancherCredentialsNamespace)
+		return admission.ResponseAllowed(), nil
+	}
+
+	response, err := capautils.CheckSecretAccess(request, secretName, v.sar)
+	if err == nil && !response.Allowed {
+		logrus.Debugf("awsClusterValidator: access denied to secret %s/%s for user %q, denying",
+			capautils.RancherCredentialsNamespace, secretName, request.UserInfo.Username)
+	}
+	return response, err
 }
 
 // fetchStaticIdentity retrieves an AWSClusterStaticIdentity via the dynamic controller.
