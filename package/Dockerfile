@@ -1,7 +1,7 @@
 # ===============
 # Build Stage
 # ===============
-FROM --platform=$BUILDPLATFORM rancher/hardened-build-base:v1.26.4b1@sha256:82b0ded3f892de5eacc070500456c8002f544083a91648b55233822fbd64ff6a AS build
+FROM --platform=$BUILDPLATFORM rancher/hardened-build-base:v1.26.4b1@sha256:2f876d459d6093da98f438370a7b1828c3be7fe0eba1f62a3fcf2529eb7f10b1 AS build
 
 # Set up build cache
 ENV GOMODCACHE=/root/.cache/go/modcache
@@ -90,7 +90,7 @@ COPY --from=integration-test-build /dist/rancher-webhook-integration.test /ranch
 # ===============
 # Final Stage
 # ===============
-FROM registry.suse.com/bci/bci-micro:15.7@sha256:a0ab4f6803e057fcd3c5b25e57e028ef6b69f2eddbd7273d0f7829fc0ab23630
+FROM registry.suse.com/bci/bci-micro:15.7@sha256:4ed4f6d6625e0505b1745050af2d61e507997053f3c0d32f487128b9702d17ac
 
 ARG user=webhook
 
