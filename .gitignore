@@ -8,3 +8,5 @@
 .vscode
 /webhook
 *~
+.opencode
+kubeconfig.yaml
