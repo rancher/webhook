@@ -6,6 +6,7 @@ rules:
 # --- Read-only: informer caches for validators/mutators ---
 - apiGroups: ["management.cattle.io"]
   resources:
+    - authconfigs
     - clusters
     - clusterproxyconfigs
     - clusterroletemplatebindings
