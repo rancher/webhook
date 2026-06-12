@@ -40,14 +40,14 @@ type dynamicGetter interface {
 
 // Validator implements admission.ValidatingAdmissionHandler for AWSCluster.
 type Validator struct {
-	dynamic     dynamicGetter
-	secretCache corev1controller.SecretCache
-	sar         authorizationv1.SubjectAccessReviewInterface
+	dynamic dynamicGetter
+	secrets corev1controller.SecretController
+	sar     authorizationv1.SubjectAccessReviewInterface
 }
 
 // NewValidator creates a new AWSCluster validator.
-func NewValidator(dynamic dynamicGetter, secretCache corev1controller.SecretCache, sar authorizationv1.SubjectAccessReviewInterface) *Validator {
-	return &Validator{dynamic: dynamic, secretCache: secretCache, sar: sar}
+func NewValidator(dynamic dynamicGetter, secrets corev1controller.SecretController, sar authorizationv1.SubjectAccessReviewInterface) *Validator {
+	return &Validator{dynamic: dynamic, secrets: secrets, sar: sar}
 }
 
 // GVR returns the GroupVersionResource for this webhook.
@@ -119,11 +119,11 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 	// This is done on every admission — including UPDATE — because the identity
 	// object itself may have changed between requests.
 	identity, err := fetchStaticIdentity(v.dynamic, identityName)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return admission.ResponseBadRequest(
-				fmt.Sprintf("referenced AWSClusterStaticIdentity %q not found", identityName)), nil
-		}
+
+	if apierrors.IsNotFound(err) {
+		return admission.ResponseBadRequest(
+			fmt.Sprintf("referenced AWSClusterStaticIdentity %q not found", identityName)), nil
+	} else if err != nil {
 		return admission.ResponseBadRequest(
 			fmt.Sprintf("failed to look up referenced AWSClusterStaticIdentity %q: %v", identityName, err)), nil
 	}
@@ -136,7 +136,7 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 
 	// Determine whether this is a Rancher-managed credential by checking for a
 	// matching secret in cattle-global-data.
-	mirrored, err := capautils.IsMirroredCloudCredential(secretName, v.secretCache)
+	mirrored, err := capautils.IsMirroredCloudCredential(secretName, v.secrets)
 	if err != nil {
 		return nil, fmt.Errorf("awsClusterValidator: %w", err)
 	}

@@ -24,13 +24,13 @@ var awsStaticIdentityGVR = schema.GroupVersionResource{
 
 // Validator implements admission.ValidatingAdmissionHandler for AWSClusterStaticIdentity.
 type Validator struct {
-	secretCache corev1controller.SecretCache
-	sar         authorizationv1.SubjectAccessReviewInterface
+	secrets corev1controller.SecretController
+	sar     authorizationv1.SubjectAccessReviewInterface
 }
 
 // NewValidator creates a new AWSClusterStaticIdentity validator.
-func NewValidator(secretCache corev1controller.SecretCache, sar authorizationv1.SubjectAccessReviewInterface) *Validator {
-	return &Validator{secretCache: secretCache, sar: sar}
+func NewValidator(secrets corev1controller.SecretController, sar authorizationv1.SubjectAccessReviewInterface) *Validator {
+	return &Validator{secrets: secrets, sar: sar}
 }
 
 // GVR returns the GroupVersionResource for this webhook.
@@ -87,7 +87,7 @@ func (v *Validator) Admit(request *admission.Request) (*admissionv1.AdmissionRes
 
 	// Determine whether this is a Rancher-managed credential by checking for a
 	// matching secret in cattle-global-data.
-	mirrored, err := capautils.IsMirroredCloudCredential(secretName, v.secretCache)
+	mirrored, err := capautils.IsMirroredCloudCredential(secretName, v.secrets)
 	if err != nil {
 		return nil, fmt.Errorf("awsClusterStaticIdentityValidator: %w", err)
 	}

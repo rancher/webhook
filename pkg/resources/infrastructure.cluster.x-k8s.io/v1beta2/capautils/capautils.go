@@ -34,17 +34,34 @@ var SecretGVR = schema.GroupVersionResource{
 // Rancher Cloud Credential that Turtles has mirrored into the CAPA provider
 // namespace.
 //
+// It first checks the controller's informer cache. A cache hit (err == nil)
+// is definitive — the secret exists. Any other cache result (NotFound or any
+// other error) falls back to a live API call, because the informer may not
+// have synced the secret yet and a cache miss could be a false negative.
+// Only a NotFound from the live API is definitive absence.
+//
 // Returns (true, nil) when the secret is found — SAR should be enforced.
 // Returns (false, nil) when the secret is not found — user-managed, allow.
-// Returns (false, err) on any other cache error — callers should fail closed.
-func IsMirroredCloudCredential(secretName string, secretCache corev1controller.SecretCache) (bool, error) {
-	_, err := secretCache.Get(RancherCredentialsNamespace, secretName)
+// Returns (false, err) when the API call fails — callers should fail closed.
+func IsMirroredCloudCredential(secretName string, secrets corev1controller.SecretController) (bool, error) {
+	_, err := secrets.Cache().Get(RancherCredentialsNamespace, secretName)
+	if err == nil {
+		// Cache hit — secret is present.
+		return true, nil
+	}
+
+	// Cache miss (NotFound) or cache error — fall back to the live API.
+	// A NotFound from the cache is not definitive: the informer may not have
+	// synced the secret yet.
+	_, err = secrets.Get(RancherCredentialsNamespace, secretName, metav1.GetOptions{})
 	if err == nil {
 		return true, nil
 	}
 	if apierrors.IsNotFound(err) {
 		return false, nil
 	}
+
+	// API call failed — fail closed.
 	return false, fmt.Errorf("failed to check secret %s/%s: %w", RancherCredentialsNamespace, secretName, err)
 }
 

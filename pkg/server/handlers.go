@@ -101,8 +101,8 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			),
 			machinedeployment.NewValidator(clients.Provisioning.Cluster().Cache(), clients.Provisioning.Cluster(), clients.Dynamic),
 			proxyendpoint.NewValidator(),
-			awscluster.NewValidator(clients.Dynamic, clients.Core.Secret().Cache(), clients.K8s.AuthorizationV1().SubjectAccessReviews()),
-			awsclusterstaticidentity.NewValidator(clients.Core.Secret().Cache(), clients.K8s.AuthorizationV1().SubjectAccessReviews()),
+			awscluster.NewValidator(clients.Dynamic, clients.Core.Secret(), clients.K8s.AuthorizationV1().SubjectAccessReviews()),
+			awsclusterstaticidentity.NewValidator(clients.Core.Secret(), clients.K8s.AuthorizationV1().SubjectAccessReviews()),
 		)
 	} else {
 		handlers = append(handlers, clusterauthtoken.NewValidator())
