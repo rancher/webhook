@@ -1,8 +1,6 @@
 module github.com/rancher/webhook
 
-go 1.24.0
-
-toolchain go1.24.13
+go 1.25.11
 
 replace (
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.34.5
@@ -39,7 +37,7 @@ require (
 	github.com/rancher/dynamiclistener v0.7.6
 	github.com/rancher/jsonpath v0.0.0-20250620213443-ad24535cf0c1
 	github.com/rancher/lasso v0.2.5
-	github.com/rancher/rancher/pkg/apis v0.0.0-20260610144422-c2f733f09b0a
+	github.com/rancher/rancher/pkg/apis v0.0.0-20260612083617-543cf435a03f
 	github.com/rancher/rke v1.8.6
 	github.com/rancher/wrangler/v3 v3.3.5
 	github.com/robfig/cron v1.2.0
@@ -100,8 +98,8 @@ require (
 	github.com/rancher/norman v0.7.4 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	go.opentelemetry.io/otel v1.41.0 // indirect
-	go.opentelemetry.io/otel/trace v1.41.0 // indirect
+	go.opentelemetry.io/otel v1.43.0 // indirect
+	go.opentelemetry.io/otel/trace v1.43.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.47.0 // indirect
