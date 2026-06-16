@@ -16,7 +16,6 @@ import (
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/clusterproxyconfig"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/clusterroletemplatebinding"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/feature"
-	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/fleetworkspace"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/globalrole"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/globalrolebinding"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/nodedriver"
@@ -105,7 +104,6 @@ func Mutation(clients *clients.Clients) ([]admission.MutatingAdmissionHandler, e
 	mutators := []admission.MutatingAdmissionHandler{
 		provisioningCluster.NewProvisioningClusterMutator(clients.Core.Secret(), clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache()),
 		managementCluster.NewManagementClusterMutator(clients.Management.PodSecurityAdmissionConfigurationTemplate().Cache()),
-		fleetworkspace.NewMutator(clients),
 		&machineconfig.Mutator{},
 	}
 
