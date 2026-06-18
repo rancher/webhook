@@ -110,11 +110,22 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return &admissionv1.AdmissionResponse{Allowed: true}, nil
 	}
 
+	// Check manage-users verb before Update/Delete operation checks so that the bypass
+	// applies to checkLocalUser, allowing admins to update or delete local users for
+	// migration cleanup. Create is intentionally excluded — the feature always blocks
+	// creation of local users regardless of the privilege.
+	hasManageUsers, err := auth.RequestUserHasVerb(request, gvr, a.sar, manageUsersVerb, "", "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if requester has manage-users verb: %w", err)
+	}
+
 	fieldPath := field.NewPath("user")
 	if request.Operation == admissionv1.Update {
-		response, err := a.checkLocalUser("update", newUser)
-		if response != nil || err != nil {
-			return response, err
+		if !hasManageUsers {
+			response, err := a.checkLocalUser("update", newUser)
+			if response != nil || err != nil {
+				return response, err
+			}
 		}
 
 		if err := validateUpdateFields(oldUser, newUser, fieldPath); err != nil {
@@ -134,20 +145,16 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		}
 	}
 	if request.Operation == admissionv1.Delete {
-		response, err := a.checkLocalUser("delete", oldUser)
-		if response != nil || err != nil {
-			return response, err
+		if !hasManageUsers {
+			response, err := a.checkLocalUser("delete", oldUser)
+			if response != nil || err != nil {
+				return response, err
+			}
 		}
 
 		if oldUser.Name == request.UserInfo.Username {
 			return admission.ResponseBadRequest("can't delete yourself"), nil
 		}
-	}
-
-	// Check if requester has manage-user verb
-	hasManageUsers, err := auth.RequestUserHasVerb(request, gvr, a.sar, manageUsersVerb, "", "")
-	if err != nil {
-		return nil, fmt.Errorf("failed to check if requester has manage-users verb: %w", err)
 	}
 
 	if hasManageUsers {
@@ -204,10 +211,10 @@ func (a *admitter) checkUsernameUniqueness(username string) (*admissionv1.Admiss
 	return nil, nil
 }
 
-// checkLocalUser rejects the user in the request if it is linked to the local
-// auth provider and the local auth provider is hidden.
+// checkLocalUser rejects the admission request when the target user is a
+// local-only user and the local auth provider is currently hidden.
 func (a *admitter) checkLocalUser(operation string, user *v3.User) (*admissionv1.AdmissionResponse, error) {
-	hidden, err := a.hiddenLocalAuthProvider()
+	hidden, err := a.isLocalAuthProviderHidden()
 	if err != nil {
 		return nil, err
 	}
@@ -221,26 +228,23 @@ func (a *admitter) checkLocalUser(operation string, user *v3.User) (*admissionv1
 	logrus.Debugf("[user-validation] %s: checking user %q", operation, user.Name)
 
 	if len(user.PrincipalIDs) == 0 {
-		// reject local user (dashboard)
 		logrus.Debugf("[user-validation] %s: rejected local user %q (no principals)", operation, user.Name)
 		return admission.ResponseBadRequest("can't " + operation + " user '" + user.Name + "' for disabled local provider"), nil
 	}
 	if len(user.PrincipalIDs) == 1 && strings.HasPrefix(user.PrincipalIDs[0], "local:") {
-		// reject other local user in creation
 		logrus.Debugf("[user-validation] %s: rejected local user %q (local principal)", operation, user.Name)
 		return admission.ResponseBadRequest("can't " + operation + " user '" + user.Name + "' for disabled local provider"), nil
 	}
-	// user is not local (default admin or system). pass to regular checks.
+	// User has external principals (e.g. default admin, system user) — not local-only.
 	logrus.Debugf("[user-validation] %s: continue for non-local user %q", operation, user.Name)
 	return nil, nil
 }
 
-// hiddenLocalAuthProvider determines if the local auth provider is hidden or
-// not. It is hidden when both the auto-hide policy and an external auth
-// provider are active.
-func (a *admitter) hiddenLocalAuthProvider() (bool, error) {
-	// Check policy first, fast
-	hide, err := a.hideLocalAuthProvider()
+// isLocalAuthProviderHidden reports whether the local auth provider is currently
+// hidden — true when the hide policy feature is enabled and at least one
+// external auth provider is active.
+func (a *admitter) isLocalAuthProviderHidden() (bool, error) {
+	hide, err := a.isHideLocalAuthProviderPolicyEnabled()
 	if err != nil {
 		return false, err
 	}
@@ -248,12 +252,16 @@ func (a *admitter) hiddenLocalAuthProvider() (bool, error) {
 		return false, nil
 	}
 
-	// Check for active external auth provider, query etcd
 	acList, err := a.authConfigCache.List(labels.Everything())
 	if err != nil {
 		return false, err
 	}
 
+	// Note: this checks the Enabled flag from etcd, not live provider health. If an
+	// enabled external provider is unreachable (e.g. OIDC cert expired, LDAP down),
+	// the webhook still treats it as active and blocks local user operations. Operators
+	// must disable the external provider via Rancher UI to restore local auth access
+	// during provider outages.
 	externalActive := false
 	for _, ac := range acList {
 		if ac.Enabled && ac.Name != "local" {
@@ -265,13 +273,12 @@ func (a *admitter) hiddenLocalAuthProvider() (bool, error) {
 	return externalActive, nil
 }
 
-// hideLocalAuthProvider retrieves the current value of the hide policy
-// feature. A missing feature is treated as off. This can happen if the new
-// webhook is run against an older rancher backend.
-func (a *admitter) hideLocalAuthProvider() (bool, error) {
+// isHideLocalAuthProviderPolicyEnabled reports whether the hide-local-auth-provider feature
+// is enabled. A missing feature resource is treated as disabled — this can
+// occur when a newer webhook runs against an older Rancher backend.
+func (a *admitter) isHideLocalAuthProviderPolicyEnabled() (bool, error) {
 	feature, err := a.featureCache.Get(common.HideLocalAuthProvider)
 	if err != nil {
-		// treat `feature not found` as `feature exists with (default) value OFF`
 		if apierrors.IsNotFound(err) {
 			return false, nil
 		}

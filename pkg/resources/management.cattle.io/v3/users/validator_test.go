@@ -346,7 +346,7 @@ func Test_HiddenLocalAuthProvider(t *testing.T) {
 				featureCache:    spec.featureCache(),
 				authConfigCache: spec.authConfigCache(),
 			}
-			hide, err := a.hiddenLocalAuthProvider()
+			hide, err := a.isLocalAuthProviderHidden()
 			if spec.expectErr {
 				assert.Error(t, err)
 			} else {
@@ -433,7 +433,7 @@ func Test_HideLocalAuthProvider(t *testing.T) {
 			a := &admitter{
 				featureCache: spec.featureCache(),
 			}
-			hide, err := a.hideLocalAuthProvider()
+			hide, err := a.isHideLocalAuthProviderPolicyEnabled()
 			if spec.expectErr {
 				assert.Error(t, err)
 			} else {
@@ -472,26 +472,33 @@ func Test_Admit(t *testing.T) {
 		mockUserCache    func() controllerv3.UserCache
 		wantErr          bool
 		lapHidden        bool
+		// skipLocalUserCheck indicates that checkLocalUser will not be called for
+		// this test case (e.g. manage-users bypass, or SAR error before the check).
+		// When true, no featureCache mock expectations are set up.
+		skipLocalUserCheck bool
 	}{
 		{
-			name:            "User has manage-users verb. delete operation",
-			oldUser:         defaultUser.DeepCopy(),
-			requestUserName: managerUserName,
-			allowed:         true,
+			name:               "User has manage-users verb. delete operation",
+			oldUser:            defaultUser.DeepCopy(),
+			requestUserName:    managerUserName,
+			allowed:            true,
+			skipLocalUserCheck: true,
 		},
 		{
-			name:            "User has manage-users verb. update operation",
-			requestUserName: managerUserName,
-			oldUser:         defaultUser.DeepCopy(),
-			newUser:         defaultUser.DeepCopy(),
-			allowed:         true,
+			name:               "User has manage-users verb. update operation",
+			requestUserName:    managerUserName,
+			oldUser:            defaultUser.DeepCopy(),
+			newUser:            defaultUser.DeepCopy(),
+			allowed:            true,
+			skipLocalUserCheck: true,
 		},
 		{
-			name:            "error checking manage-users verb",
-			requestUserName: sarErrorUser,
-			oldUser:         defaultUser.DeepCopy(),
-			allowed:         false,
-			wantErr:         true,
+			name:               "error checking manage-users verb",
+			requestUserName:    sarErrorUser,
+			oldUser:            defaultUser.DeepCopy(),
+			allowed:            false,
+			wantErr:            true,
+			skipLocalUserCheck: true,
 		},
 		{
 			name:            "error getting rules for User",
@@ -709,7 +716,8 @@ func Test_Admit(t *testing.T) {
 				}, nil)
 				return mock
 			},
-			allowed: false,
+			allowed:            false,
+			skipLocalUserCheck: true,
 		},
 		{
 			name: "setting a unique username on update is allowed",
@@ -732,7 +740,8 @@ func Test_Admit(t *testing.T) {
 				}, nil)
 				return mock
 			},
-			allowed: true,
+			allowed:            true,
+			skipLocalUserCheck: true,
 		},
 		// verify that `checkLocalUser` is in the code paths for create,
 		// update and delete requests.  the full set of checks done by
@@ -773,32 +782,57 @@ func Test_Admit(t *testing.T) {
 			lapHidden: true,
 			allowed:   false,
 		},
+		// verify manage-users bypass: update and delete are allowed, create is still blocked.
+		{
+			name:               "manage-users allows delete of local user when feature is on",
+			oldUser:            &v3.User{ObjectMeta: metav1.ObjectMeta{Name: "a-local-user"}},
+			requestUserName:    managerUserName,
+			allowed:            true,
+			skipLocalUserCheck: true,
+		},
+		{
+			name:               "manage-users allows update of local user when feature is on",
+			oldUser:            &v3.User{ObjectMeta: metav1.ObjectMeta{Name: "a-local-user"}},
+			newUser:            &v3.User{ObjectMeta: metav1.ObjectMeta{Name: "a-local-user"}},
+			requestUserName:    managerUserName,
+			allowed:            true,
+			skipLocalUserCheck: true,
+		},
+		{
+			name:            "create is still blocked with manage-users when feature is on",
+			newUser:         &v3.User{ObjectMeta: metav1.ObjectMeta{Name: "a-local-user"}},
+			requestUserName: managerUserName,
+			lapHidden:       true,
+			allowed:         false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &admitter{
 				sar: fakeSAR,
 			}
-			if tt.lapHidden {
-				// policy on, eap active, hiding local auth provider
-				mockFeature := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
-				mockFeature.EXPECT().Get(common.HideLocalAuthProvider).Return(&v3.Feature{
-					Status: v3.FeatureStatus{Default: true},
-				}, nil)
-				mockAuthConfig := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
-				mockAuthConfig.EXPECT().List(labels.Everything()).Return([]*v3.AuthConfig{
-					{ObjectMeta: metav1.ObjectMeta{Name: "oidc"}, Enabled: true},
-				}, nil)
-				a.featureCache = mockFeature
-				a.authConfigCache = mockAuthConfig
-			} else {
-				// policy off, authconfigs not queried, visible local auth provider
-				mockFeature := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
-				mockFeature.EXPECT().Get(common.HideLocalAuthProvider).Return(&v3.Feature{
-					Status: v3.FeatureStatus{Default: false},
-				}, nil)
-				a.featureCache = mockFeature
-				a.authConfigCache = nil
+			if !tt.skipLocalUserCheck {
+				if tt.lapHidden {
+					// policy on, eap active, hiding local auth provider
+					mockFeature := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+					mockFeature.EXPECT().Get(common.HideLocalAuthProvider).Return(&v3.Feature{
+						Status: v3.FeatureStatus{Default: true},
+					}, nil)
+					mockAuthConfig := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
+					mockAuthConfig.EXPECT().List(labels.Everything()).Return([]*v3.AuthConfig{
+						{ObjectMeta: metav1.ObjectMeta{Name: "oidc"}, Enabled: true},
+					}, nil)
+					a.featureCache = mockFeature
+					a.authConfigCache = mockAuthConfig
+				} else {
+					// policy off, authconfigs not queried, visible local auth provider
+					mockFeature := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+					mockFeature.EXPECT().Get(common.HideLocalAuthProvider).Return(&v3.Feature{
+						Status: v3.FeatureStatus{Default: false},
+					}, nil)
+					a.featureCache = mockFeature
+					a.authConfigCache = nil
+				}
 			}
 
 			// Handle fake resolver
