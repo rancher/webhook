@@ -253,12 +253,9 @@ A `FleetWorkspace` cannot be created if a namespace with the same name already e
 
 ### Mutation Checks
 
-#### On create
-
-When a `FleetWorkspace` is created, it will create the following resources:
-1. `Namespace`. It will have the same name as the `FleetWorkspace`.
-2. `ClusterRole`. It will create the cluster role that has * permission only to the current workspace.
-3. Two `RoleBindings` to bind the current user to fleet-admin roles and `FleetWorkspace` roles.
+The `FleetWorkspace` mutating webhook no longer creates resources on create.
+Namespace and RBAC objects are reconciled by the Rancher controller after
+workspace creation.
 
 ## GlobalRole
 
