@@ -150,7 +150,7 @@ func Test_CheckLocalUser(t *testing.T) {
 
 	eapActive := func() controllerv3.AuthConfigCache {
 		ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
-		ac.EXPECT().List(gomock.Any()).Return([]*v3.AuthConfig{
+		ac.EXPECT().List(labels.Everything()).Return([]*v3.AuthConfig{
 			{ObjectMeta: metav1.ObjectMeta{Name: "oidc"}, Enabled: true},
 		}, nil)
 		return ac
@@ -285,7 +285,7 @@ func Test_HiddenLocalAuthProvider(t *testing.T) {
 			featureCache: policyOn,
 			authConfigCache: func() controllerv3.AuthConfigCache {
 				ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
-				ac.EXPECT().List(gomock.Any()).Return(nil, fmt.Errorf("some error"))
+				ac.EXPECT().List(labels.Everything()).Return(nil, fmt.Errorf("some error"))
 				return ac
 			},
 			hide:      false,
@@ -295,7 +295,7 @@ func Test_HiddenLocalAuthProvider(t *testing.T) {
 			featureCache: policyOn,
 			authConfigCache: func() controllerv3.AuthConfigCache {
 				ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
-				ac.EXPECT().List(gomock.Any()).Return([]*v3.AuthConfig{}, nil)
+				ac.EXPECT().List(labels.Everything()).Return([]*v3.AuthConfig{}, nil)
 				return ac
 			},
 			hide:      false,
@@ -305,7 +305,7 @@ func Test_HiddenLocalAuthProvider(t *testing.T) {
 			featureCache: policyOn,
 			authConfigCache: func() controllerv3.AuthConfigCache {
 				ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
-				ac.EXPECT().List(gomock.Any()).Return([]*v3.AuthConfig{
+				ac.EXPECT().List(labels.Everything()).Return([]*v3.AuthConfig{
 					{ObjectMeta: metav1.ObjectMeta{Name: "local"}, Enabled: true},
 				}, nil)
 				return ac
@@ -317,7 +317,7 @@ func Test_HiddenLocalAuthProvider(t *testing.T) {
 			featureCache: policyOn,
 			authConfigCache: func() controllerv3.AuthConfigCache {
 				ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
-				ac.EXPECT().List(gomock.Any()).Return([]*v3.AuthConfig{
+				ac.EXPECT().List(labels.Everything()).Return([]*v3.AuthConfig{
 					{ObjectMeta: metav1.ObjectMeta{Name: "oidc"}, Enabled: false},
 				}, nil)
 				return ac
@@ -329,7 +329,7 @@ func Test_HiddenLocalAuthProvider(t *testing.T) {
 			featureCache: policyOn,
 			authConfigCache: func() controllerv3.AuthConfigCache {
 				ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
-				ac.EXPECT().List(gomock.Any()).Return([]*v3.AuthConfig{
+				ac.EXPECT().List(labels.Everything()).Return([]*v3.AuthConfig{
 					{ObjectMeta: metav1.ObjectMeta{Name: "local"}, Enabled: true},
 					{ObjectMeta: metav1.ObjectMeta{Name: "oidc"}, Enabled: true},
 				}, nil)
@@ -786,7 +786,7 @@ func Test_Admit(t *testing.T) {
 					Status: v3.FeatureStatus{Default: true},
 				}, nil)
 				mockAuthConfig := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
-				mockAuthConfig.EXPECT().List(gomock.Any()).Return([]*v3.AuthConfig{
+				mockAuthConfig.EXPECT().List(labels.Everything()).Return([]*v3.AuthConfig{
 					{ObjectMeta: metav1.ObjectMeta{Name: "oidc"}, Enabled: true},
 				}, nil)
 				a.featureCache = mockFeature
