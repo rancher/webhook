@@ -249,7 +249,7 @@ func (a *admitter) hiddenLocalAuthProvider() (bool, error) {
 	}
 
 	// Check for active external auth provider, query etcd
-	acList, err := a.authConfigCache.List(nil)
+	acList, err := a.authConfigCache.List(labels.Everything())
 	if err != nil {
 		return false, err
 	}
