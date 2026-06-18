@@ -37,7 +37,7 @@ require (
 	github.com/rancher/dynamiclistener v0.7.6
 	github.com/rancher/jsonpath v0.0.0-20250620213443-ad24535cf0c1
 	github.com/rancher/lasso v0.2.5
-	github.com/rancher/rancher/pkg/apis v0.0.0-20260612083617-543cf435a03f
+	github.com/rancher/rancher/pkg/apis v0.0.0-20260618095306-f9d8b1c32b47
 	github.com/rancher/rke v1.8.6
 	github.com/rancher/wrangler/v3 v3.3.5
 	github.com/robfig/cron v1.2.0
@@ -47,10 +47,10 @@ require (
 	golang.org/x/text v0.33.0
 	golang.org/x/tools v0.41.0
 	k8s.io/api v0.34.8
-	k8s.io/apimachinery v0.34.8
-	k8s.io/apiserver v0.34.6
+	k8s.io/apimachinery v0.34.9
+	k8s.io/apiserver v0.34.8
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/kubernetes v1.34.6
+	k8s.io/kubernetes v1.34.8
 	k8s.io/pod-security-admission v0.34.5
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	sigs.k8s.io/controller-runtime v0.22.5
@@ -116,9 +116,9 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/apiextensions-apiserver v0.34.6 // indirect
+	k8s.io/apiextensions-apiserver v0.34.8 // indirect
 	k8s.io/code-generator v0.34.5 // indirect
-	k8s.io/component-base v0.34.6 // indirect
+	k8s.io/component-base v0.34.8 // indirect
 	k8s.io/component-helpers v0.34.1 // indirect
 	k8s.io/controller-manager v0.34.1 // indirect
 	k8s.io/gengo v0.0.0-20250130153323-76c5745d3511 // indirect
