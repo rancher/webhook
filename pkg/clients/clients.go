@@ -54,6 +54,11 @@ func New(ctx context.Context, rest *rest.Config, mcmEnabled bool) (*Clients, err
 		return nil, err
 	}
 
+	// Pre-register informers used by validators before Start so they are included
+	// in the initial cache sync barrier. Without this, lazily-registered informers
+	// may not be synced when the HTTP server begins serving admission requests.
+	_ = mgmt.Management().V3().AuthConfig().Cache()
+
 	if err = mgmt.Start(ctx, 5); err != nil {
 		return nil, err
 	}
