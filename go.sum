@@ -299,8 +299,8 @@ k8s.io/pod-security-admission v0.36.2 h1:mJ/3k6w8A01k/m9MRN6DPT8ldaDmkzMfzfrOquN
 k8s.io/pod-security-admission v0.36.2/go.mod h1:PTkT8i1jQ9YszlxWPa8TthuitZW68gCFRmjnmhRIrFM=
 k8s.io/utils v0.0.0-20260319190234-28399d86e0b5 h1:kBawHLSnx/mYHmRnNUf9d4CpjREbeZuxoSGOX/J+aYM=
 k8s.io/utils v0.0.0-20260319190234-28399d86e0b5/go.mod h1:xDxuJ0whA3d0I4mf/C4ppKHxXynQ+fxnkmQH0vTHnuk=
-sigs.k8s.io/cluster-api v1.13.2 h1:NVdbVLmh6IyfdtENQAi80AijJf/FjfQLODz/6caDjlc=
-sigs.k8s.io/cluster-api v1.13.2/go.mod h1:h7cyiUh+N7sIBkSerqU8cDkYMtRlXVO1c5RoJE1p5+g=
+sigs.k8s.io/cluster-api v1.13.3 h1:BlNVnjg644NnlWnxIWHbkltleFLVQwm8FmjWCSB9wGY=
+sigs.k8s.io/cluster-api v1.13.3/go.mod h1:7xB2mYn7oOxSlUw7wk6TukNCjR2phn+MI0gRju3TKSk=
 sigs.k8s.io/cluster-api-provider-aws/v2 v2.11.1 h1:Z/H2UtjE9frE2syrDksLZy4ouvz8CaUZk4HoVDUgSbE=
 sigs.k8s.io/cluster-api-provider-aws/v2 v2.11.1/go.mod h1:8zr5dWU+ZTJdEqwbkOEGErLfg8/LJzSSVbjgR7MDyu0=
 sigs.k8s.io/controller-runtime v0.24.1 h1:miPEwrmirImAvgME1L9qebGHrOnGJoVmVdtOU9fRfo4=
