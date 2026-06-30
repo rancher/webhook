@@ -154,7 +154,7 @@ func generateObjectsFromRequest(outputDir string, groups map[string]args.Group) 
 			ti := typeInfo{
 				Type: rt.String(),
 			}
-			if rt.Kind() == reflect.Ptr {
+			if rt.Kind() == reflect.Pointer {
 				// PkgPath returns an empty string for pointers
 				// Elem returns a Type associated with the dereferenced type.
 				rt = rt.Elem()
