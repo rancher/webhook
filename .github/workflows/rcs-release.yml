@@ -1,0 +1,148 @@
+name: RCS Release
+on:
+  push:
+    tags:
+      - "v*-rcs*"
+
+env:
+  GIT_TAG: ${{ github.ref_name }}
+  IMAGE: rancher/rancher-webhook
+  REGISTRY: ${{ vars.STAGING_REGISTRY_HOSTNAME }}
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Run unit tests
+        run: make test
+  build-webhook:
+    needs: unit-tests
+    runs-on: runs-on,runner=4cpu-${{ matrix.os }}-${{ matrix.arch }},image=ubuntu22-full-${{ matrix.arch }},run-id=${{ github.run_id }}
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        os: [linux]
+        arch: [x64, arm64]
+    env:
+      ARCH: ${{ matrix.arch }}
+      OS: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Set Version/Commit
+        run: |
+          source ./scripts/version
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "COMMIT=${COMMIT}" >> $GITHUB_ENV
+      - name: Convert arch
+        shell: bash
+        run: |
+          if [[ "$ARCH" == "x64" ]]; then
+            echo "ARCH=amd64" >> $GITHUB_ENV
+          fi
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+      - name: Build image
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: .
+          file: ./package/Dockerfile
+          platforms: "linux/${{ env.ARCH }}"
+          push: false
+          build-args: |
+            VERSION=${{ env.VERSION }}
+            COMMIT=${{ env.COMMIT }}
+          tags: ${{ env.IMAGE }}:${{ github.ref_name }}-${{ env.ARCH }}
+          outputs: type=docker,dest=/tmp/rancher-webhook-${{ matrix.os }}-${{ env.ARCH }}.tar
+      - name: Upload image
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: "rancher-webhook-${{ matrix.os }}-${{ env.ARCH }}"
+          path: /tmp/rancher-webhook-${{ matrix.os }}-${{ env.ARCH }}.tar
+          if-no-files-found: error
+          retention-days: 4
+          overwrite: false
+  push-images:
+    needs: [unit-tests, build-webhook]
+    strategy:
+      matrix:
+        os: [linux]
+        arch: [x64, arm64]
+    runs-on: runs-on,runner=2cpu-${{ matrix.os }}-${{ matrix.arch }},image=ubuntu22-full-${{ matrix.arch }},run-id=${{ github.run_id }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ARCH: ${{ matrix.arch }}
+      OS: ${{ matrix.os }}
+    steps:
+      - name: Convert arch
+        shell: bash
+        run: |
+          if [[ "$ARCH" == "x64" ]]; then
+            echo "ARCH=amd64" >> $GITHUB_ENV
+          fi
+      - name: Load Secrets from Vault
+        uses: rancher-eio/read-vault-secrets@7282bf97898cd1c16c89f837e0bb442e6d384c89 # v3
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials username | DOCKER_USERNAME ;
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials password | DOCKER_PASSWORD
+      - name: Download rancher-webhook image
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: "rancher-webhook-${{ matrix.os }}-${{ env.ARCH }}"
+          path: /tmp
+      - name: Docker Registry Login
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
+          registry: ${{ env.REGISTRY }}
+      - name: Push webhook image
+        run: |
+          docker load --input /tmp/rancher-webhook-${{ env.OS }}-${{ env.ARCH }}.tar
+          local_image="${{ env.IMAGE }}:${{ github.ref_name }}-${{ env.ARCH }}"
+          remote_image="${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ github.ref_name }}-${{ env.ARCH }}"
+          docker tag "$local_image" "$remote_image"
+          docker push "$remote_image"
+  merge-webhook-manifest:
+    needs: [push-images]
+    runs-on: runs-on,runner=2cpu-linux-x64,image=ubuntu22-full-x64,run-id=${{ github.run_id }}
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: 'merge-manifest-${{ github.ref }}'
+      cancel-in-progress: false
+    steps:
+      - name: Load Secrets from Vault
+        uses: rancher-eio/read-vault-secrets@7282bf97898cd1c16c89f837e0bb442e6d384c89 # v3
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials username | DOCKER_USERNAME ;
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials password | DOCKER_PASSWORD
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+      - name: Login to Docker Registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
+          registry: ${{ env.REGISTRY }}
+      - name: Create manifest list and push
+        run: |
+          docker buildx imagetools create -t ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ github.ref_name }} ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ github.ref_name }}-amd64 ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ github.ref_name }}-arm64
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ github.ref_name }}
