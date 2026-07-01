@@ -34,8 +34,6 @@ require (
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/evanphx/json-patch v5.9.11+incompatible
 	github.com/go-ldap/ldap/v3 v3.4.13
-	github.com/google/uuid v1.6.0
-	github.com/rancher/dynamiclistener v0.9.0-rc.1
 	github.com/rancher/jsonpath v0.0.0-20260423141252-c4e0c565a09f
 	github.com/rancher/lasso v0.2.9
 	github.com/rancher/rancher/pkg/apis v0.0.0-20260622051947-2c7a817a4e8c
@@ -75,6 +73,7 @@ require (
 	github.com/go-openapi/swag/typeutils v0.25.4 // indirect
 	github.com/go-openapi/swag/yamlutils v0.25.4 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/onsi/gomega v1.41.0 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 )
