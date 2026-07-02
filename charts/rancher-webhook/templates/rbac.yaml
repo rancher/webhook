@@ -79,8 +79,16 @@ rules:
   resources: [roles]
   verbs: [update]
 - apiGroups: ["rbac.authorization.k8s.io"]
-  resources: [rolebindings, clusterroles, clusterrolebindings]
+  resources: [rolebindings, clusterrolebindings]
   verbs: [create]
+# The fleetworkspace mutator creates a per-workspace ClusterRole and binds it (plus the
+# fleet-admin ClusterRole) to the workspace creator. Those grants include permissions the
+# webhook ServiceAccount does not itself hold (fleet.cattle.io/*), so Kubernetes RBAC
+# escalation prevention requires escalate (to create the ClusterRole) and bind (to reference
+# it from a [Cluster]RoleBinding).
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: [clusterroles]
+  verbs: [create, escalate, bind]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
