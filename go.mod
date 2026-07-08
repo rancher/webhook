@@ -35,7 +35,7 @@ require (
 	github.com/evanphx/json-patch v5.9.11+incompatible
 	github.com/go-ldap/ldap/v3 v3.4.13
 	github.com/google/uuid v1.6.0
-	github.com/rancher/dynamiclistener v0.9.0-rc.1
+	github.com/rancher/dynamiclistener v0.9.0-rc.3
 	github.com/rancher/jsonpath v0.0.0-20260423141252-c4e0c565a09f
 	github.com/rancher/lasso v0.2.9
 	github.com/rancher/rancher/pkg/apis v0.0.0-20260706231855-186a8c0fcf89
@@ -111,7 +111,7 @@ require (
 	github.com/rancher/eks-operator v1.15.0-rc.2 // indirect
 	github.com/rancher/fleet/pkg/apis v0.16.0-rc.2 // indirect
 	github.com/rancher/gke-operator v1.15.0-rc.2 // indirect
-	github.com/rancher/norman v0.9.7
+	github.com/rancher/norman v0.9.8
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
