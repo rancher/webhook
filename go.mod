@@ -45,7 +45,7 @@ require (
 	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/mock v0.6.0
-	golang.org/x/text v0.38.0
+	golang.org/x/text v0.39.0
 	golang.org/x/tools v0.47.0
 	k8s.io/api v0.36.2
 	k8s.io/apimachinery v0.36.2
