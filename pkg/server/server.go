@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/clients"
@@ -102,8 +104,13 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, validators []
 	certPath := filepath.Join(certDir, "tls.crt")
 	keyPath := filepath.Join(certDir, "tls.key")
 
+	reloader, err := newCertReloader(certPath, keyPath)
+	if err != nil {
+		return fmt.Errorf("failed to load serving cert from %s: %w", certDir, err)
+	}
+
 	tlsConfig := &tls.Config{
-		GetCertificate: certReloader(certPath, keyPath),
+		GetCertificate: reloader.getCertificate,
 	}
 	tlsOpt(tlsConfig)
 
@@ -123,9 +130,6 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, validators []
 	}()
 
 	logrus.Infof("listening on :%d serving certs from %s", webhookHTTPSPort, certDir)
-	if _, err := tls.LoadX509KeyPair(certPath, keyPath); err != nil {
-		return fmt.Errorf("failed to load serving cert from %s: %w", certDir, err)
-	}
 	errChecker.Store(nil)
 
 	go func() {
@@ -142,18 +146,81 @@ func listenAndServe(ctx context.Context, clients *clients.Clients, validators []
 	return nil
 }
 
-// certReloader returns a GetCertificate that re-reads the cert files on every TLS
-// handshake. This is intentionally re-read each time so that needacert can rotate
-// the underlying secret (kubelet refreshes the projected files on its own cycle)
-// without needing a webhook pod restart.
-func certReloader(certPath, keyPath string) func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
-	return func(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
-		cert, err := tls.LoadX509KeyPair(certPath, keyPath)
-		if err != nil {
-			return nil, err
-		}
-		return &cert, nil
+// certReloader caches the parsed serving certificate and only re-parses it when
+// the underlying files change, so that needacert can rotate the secret (kubelet
+// refreshes the projected files on its own cycle) without a webhook pod restart
+// or a full LoadX509KeyPair on every handshake. If a reload fails - e.g. it races
+// a secret update and reads a mismatched cert/key pair - the last-known-good
+// certificate keeps serving instead of failing the handshake.
+type certReloader struct {
+	certPath, keyPath string
+
+	mu          sync.RWMutex
+	cert        *tls.Certificate
+	certModTime time.Time
+	keyModTime  time.Time
+}
+
+func newCertReloader(certPath, keyPath string) (*certReloader, error) {
+	r := &certReloader{certPath: certPath, keyPath: keyPath}
+	if err := r.reload(); err != nil {
+		return nil, err
 	}
+	return r, nil
+}
+
+// reload re-parses the cert/key files and, on success, updates the cache.
+func (r *certReloader) reload() error {
+	certInfo, err := os.Stat(r.certPath)
+	if err != nil {
+		return err
+	}
+	keyInfo, err := os.Stat(r.keyPath)
+	if err != nil {
+		return err
+	}
+	cert, err := tls.LoadX509KeyPair(r.certPath, r.keyPath)
+	if err != nil {
+		return err
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.cert = &cert
+	r.certModTime = certInfo.ModTime()
+	r.keyModTime = keyInfo.ModTime()
+	return nil
+}
+
+// getCertificate is used as tls.Config.GetCertificate. It only re-parses the
+// cert/key when their mtimes have changed, and falls back to the cached
+// certificate if a reload fails.
+func (r *certReloader) getCertificate(_ *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	certInfo, certErr := os.Stat(r.certPath)
+	keyInfo, keyErr := os.Stat(r.keyPath)
+
+	r.mu.RLock()
+	cachedCert := r.cert
+	changed := certErr != nil || keyErr != nil ||
+		!certInfo.ModTime().Equal(r.certModTime) ||
+		!keyInfo.ModTime().Equal(r.keyModTime)
+	r.mu.RUnlock()
+
+	if !changed {
+		return cachedCert, nil
+	}
+
+	if err := r.reload(); err != nil {
+		if cachedCert != nil {
+			logrus.Warnf("failed to reload serving cert from %s, falling back to cached cert: %v", r.certPath, err)
+			return cachedCert, nil
+		}
+		return nil, err
+	}
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.cert, nil
 }
 
 // certAuth returns a middleware for cert-based authentication.
