@@ -42,9 +42,9 @@ require (
 	github.com/evanphx/json-patch v5.9.11+incompatible
 	github.com/go-ldap/ldap/v3 v3.4.10
 	github.com/gorilla/mux v1.8.1
-	github.com/rancher/dynamiclistener v0.6.4
+	github.com/rancher/dynamiclistener v0.6.5-rc.1
 	github.com/rancher/lasso v0.2.4
-	github.com/rancher/rancher/pkg/apis v0.0.0-20260709171605-f14179eff2bb
+	github.com/rancher/rancher/pkg/apis v0.0.0-20260716035604-1bb445bdfea3
 	github.com/rancher/rke v1.8.12
 	github.com/rancher/wrangler/v3 v3.2.4
 	github.com/robfig/cron v1.2.0
@@ -114,10 +114,10 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/rancher/aks-operator v1.11.11 // indirect
-	github.com/rancher/eks-operator v1.11.11 // indirect
+	github.com/rancher/aks-operator v1.11.12-rc.2 // indirect
+	github.com/rancher/eks-operator v1.11.12-rc.1 // indirect
 	github.com/rancher/fleet/pkg/apis v0.12.17 // indirect
-	github.com/rancher/gke-operator v1.11.11 // indirect
+	github.com/rancher/gke-operator v1.11.12-rc.1 // indirect
 	github.com/rancher/norman v0.5.2 // indirect
 	github.com/spf13/cobra v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
@@ -128,7 +128,7 @@ require (
 	go.etcd.io/etcd/client/v3 v3.5.17 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0 // indirect
-	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.58.0 // indirect
+	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect
 	go.opentelemetry.io/otel v1.44.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.33.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.33.0 // indirect
@@ -147,7 +147,7 @@ require (
 	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/term v0.44.0 // indirect
-	golang.org/x/time v0.10.0 // indirect
+	golang.org/x/time v0.13.0 // indirect
 	golang.org/x/tools/go/expect v0.1.1-deprecated // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260120221211-b8f7ae30c516 // indirect
