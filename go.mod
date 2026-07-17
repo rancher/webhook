@@ -35,10 +35,10 @@ require (
 	github.com/evanphx/json-patch v5.9.11+incompatible
 	github.com/go-ldap/ldap/v3 v3.4.13
 	github.com/google/uuid v1.6.0
-	github.com/rancher/dynamiclistener v0.9.0-rc.3
+	github.com/rancher/dynamiclistener v0.9.0
 	github.com/rancher/jsonpath v0.0.0-20260423141252-c4e0c565a09f
 	github.com/rancher/lasso v0.2.9
-	github.com/rancher/rancher/pkg/apis v0.0.0-20260709222729-e564a92c78ef
+	github.com/rancher/rancher/pkg/apis v0.0.0-20260716172734-12699fd637b6
 	github.com/rancher/rancher/pkg/plan v0.0.0-20260428222332-2696373f4152
 	github.com/rancher/wrangler/v3 v3.7.0
 	github.com/robfig/cron v1.2.0
@@ -60,9 +60,9 @@ require (
 )
 
 require (
-	github.com/aws/aws-sdk-go-v2 v1.41.11 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.304.1 // indirect
-	github.com/aws/smithy-go v1.27.0 // indirect
+	github.com/aws/aws-sdk-go-v2 v1.42.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.311.0 // indirect
+	github.com/aws/smithy-go v1.27.3 // indirect
 	github.com/go-openapi/swag/cmdutils v0.25.4 // indirect
 	github.com/go-openapi/swag/conv v0.25.4 // indirect
 	github.com/go-openapi/swag/fileutils v0.25.4 // indirect
@@ -75,7 +75,7 @@ require (
 	github.com/go-openapi/swag/typeutils v0.25.4 // indirect
 	github.com/go-openapi/swag/yamlutils v0.25.4 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/onsi/gomega v1.41.0 // indirect
+	github.com/onsi/gomega v1.42.1 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 )
 
@@ -106,11 +106,11 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.67.5 // indirect
 	github.com/prometheus/procfs v0.19.2 // indirect
-	github.com/rancher/aks-operator v1.15.0-rc.2 // indirect
-	github.com/rancher/ali-operator v1.15.0-rc.2 // indirect
-	github.com/rancher/eks-operator v1.15.0-rc.2 // indirect
+	github.com/rancher/aks-operator v1.15.0-rc.4 // indirect
+	github.com/rancher/ali-operator v1.15.0-rc.3 // indirect
+	github.com/rancher/eks-operator v1.15.0-rc.3 // indirect
 	github.com/rancher/fleet/pkg/apis v0.16.0-rc.2 // indirect
-	github.com/rancher/gke-operator v1.15.0-rc.2 // indirect
+	github.com/rancher/gke-operator v1.15.0-rc.3 // indirect
 	github.com/rancher/norman v0.9.8
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
