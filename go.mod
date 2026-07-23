@@ -45,7 +45,7 @@ require (
 	github.com/rancher/dynamiclistener v0.7.7
 	github.com/rancher/jsonpath v0.0.0-20250620213443-ad24535cf0c1
 	github.com/rancher/lasso v0.2.5
-	github.com/rancher/rancher/pkg/apis v0.0.0-20260717210028-017aaa2c9577
+	github.com/rancher/rancher/pkg/apis v0.0.0-20260722193507-5946555ccdd5
 	github.com/rancher/rke v1.8.0
 	github.com/rancher/wrangler/v3 v3.3.5
 	github.com/robfig/cron v1.2.0
@@ -99,7 +99,7 @@ require (
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/rancher/aks-operator v1.12.11-rc.1 // indirect
 	github.com/rancher/eks-operator v1.12.11-rc.1 // indirect
-	github.com/rancher/fleet/pkg/apis v0.13.13 // indirect
+	github.com/rancher/fleet/pkg/apis v0.13.14 // indirect
 	github.com/rancher/gke-operator v1.12.11-rc.1 // indirect
 	github.com/rancher/norman v0.6.1 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
