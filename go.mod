@@ -111,7 +111,7 @@ require (
 	github.com/rancher/eks-operator v1.15.0-rc.3 // indirect
 	github.com/rancher/fleet/pkg/apis v0.16.0-rc.2 // indirect
 	github.com/rancher/gke-operator v1.15.0-rc.3 // indirect
-	github.com/rancher/norman v0.9.8
+	github.com/rancher/norman v0.10.0
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
@@ -123,7 +123,7 @@ require (
 	golang.org/x/mod v0.37.0 // indirect
 	golang.org/x/net v0.56.0
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sync v0.21.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/term v0.44.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
