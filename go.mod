@@ -4,7 +4,7 @@ go 1.25.11
 
 replace (
 	github.com/google/gnostic-models => github.com/google/gnostic-models v0.6.9
-	github.com/rancher/rke => github.com/rancher/rke v1.7.2
+	github.com/rancher/rke => github.com/rancher/rke v1.8.14
 	k8s.io/api => k8s.io/api v0.33.1
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.33.1
 	k8s.io/apimachinery => k8s.io/apimachinery v0.33.1
@@ -46,7 +46,7 @@ require (
 	github.com/rancher/jsonpath v0.0.0-20250620213443-ad24535cf0c1
 	github.com/rancher/lasso v0.2.5
 	github.com/rancher/rancher/pkg/apis v0.0.0-20260717210028-017aaa2c9577
-	github.com/rancher/rke v1.8.0
+	github.com/rancher/rke v1.8.14
 	github.com/rancher/wrangler/v3 v3.3.5
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.4
