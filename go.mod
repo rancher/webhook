@@ -3,7 +3,7 @@ module github.com/rancher/webhook
 go 1.25.11
 
 replace (
-	github.com/google/gnostic-models => github.com/google/gnostic-models v0.6.9
+	github.com/google/gnostic-models => github.com/google/gnostic-models v0.7.1
 	github.com/rancher/rke => github.com/rancher/rke v1.7.2
 	k8s.io/api => k8s.io/api v0.33.1
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.33.1
@@ -108,6 +108,7 @@ require (
 	go.opentelemetry.io/otel v1.44.0 // indirect
 	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
+	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/mod v0.37.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
