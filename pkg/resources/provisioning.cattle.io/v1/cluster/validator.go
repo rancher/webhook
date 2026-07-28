@@ -506,12 +506,26 @@ func (p *provisioningAdmitter) validatePSACT(request *admission.Request, respons
 		return nil
 	}
 
+	// The mutating webhook skips its PSACT side effects on dry-run: the
+	// admission-config secret is not written or deleted, and the cluster
+	// fields derived from it are not set or dropped. Checks against that
+	// mutator-produced state therefore skip on dry-run too (see the dryRun
+	// gates below), while the pure input checks (kubernetes version floor,
+	// template existence) still run, so invalid input is denied in the
+	// preview exactly as it would be on a real request.
+	dryRun := request.DryRun != nil && *request.DryRun
+
 	name := fmt.Sprintf(secretName, cluster.Name)
 	mountPath := fmt.Sprintf(mountPath, getRuntime(cluster.Spec.KubernetesVersion))
 	templateName := cluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName
 
 	switch request.Operation {
 	case admissionv1.Delete:
+		if dryRun {
+			// The only check below is that the mutator deleted the
+			// admission-config secret, which it does not do on dry-run.
+			return nil
+		}
 		_, err := p.secretCache.Get(cluster.Namespace, name)
 		if err == nil {
 			return fmt.Errorf("[provisioning cluster validator] the secret %s still exists in the cluster", name)
@@ -525,6 +539,12 @@ func (p *provisioningAdmitter) validatePSACT(request *admission.Request, respons
 			return nil
 		}
 		if templateName == "" {
+			if dryRun {
+				// Every check below verifies the mutator's cleanup for a
+				// cluster without a template — secret deleted, PSA fields
+				// dropped — none of which happens on dry-run.
+				return nil
+			}
 			// validate that the secret does not exist
 			_, err := p.secretCache.Get(cluster.Namespace, name)
 			if err == nil {
@@ -572,6 +592,11 @@ func (p *provisioningAdmitter) validatePSACT(request *admission.Request, respons
 					return nil
 				}
 				return fmt.Errorf("[provisioning cluster validator] failed to get PodSecurityAdmissionConfigurationTemplate: %w", err)
+			}
+			if dryRun {
+				// The secret and the cluster fields checked below are the
+				// mutator's work, skipped on dry-run.
+				return nil
 			}
 			// validate that the secret for PSA exists
 			secret, err := p.secretCache.Get(cluster.Namespace, name)
