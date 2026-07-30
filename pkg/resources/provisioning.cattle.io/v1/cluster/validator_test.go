@@ -23,6 +23,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
@@ -3006,6 +3007,88 @@ func TestValidateETCDSnapshotRestore(t *testing.T) {
 			asserts.Equal(testCase.expectAllowed, response.Allowed)
 			if !testCase.expectAllowed && testCase.expectedDenyMsg != "" {
 				asserts.Contains(response.Result.Message, testCase.expectedDenyMsg)
+			}
+		})
+	}
+}
+
+func TestValidatePSACTDryRun(t *testing.T) {
+	t.Parallel()
+
+	// On dry-run, the pure input checks (kubernetes version floor,
+	// template existence) must still run — invalid input is denied in the
+	// preview exactly as on a real request — while the checks against the
+	// mutator's side effects (the admission-config secret and the cluster
+	// fields derived from it) must skip, since the mutator does not
+	// perform them on dry-run. The nil secret cache proves the skip: any
+	// secret lookup would panic.
+	tests := []struct {
+		name         string
+		template     string
+		k8sVersion   string
+		templateMiss bool
+		wantDenied   bool
+	}{
+		{
+			name:       "valid template and version: allowed, secret checks skipped",
+			template:   "restricted",
+			k8sVersion: "v1.30.5+rke2r1",
+		},
+		{
+			name:         "nonexistent template: denied on dry-run too",
+			template:     "no-such-template",
+			k8sVersion:   "v1.30.5+rke2r1",
+			templateMiss: true,
+			wantDenied:   true,
+		},
+		{
+			name:       "version below 1.23: denied on dry-run too",
+			template:   "restricted",
+			k8sVersion: "v1.22.9+rke2r1",
+			wantDenied: true,
+		},
+		{
+			name:       "template cleared: allowed, secret-absence check skipped",
+			template:   "",
+			k8sVersion: "v1.30.5+rke2r1",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			ctrl := gomock.NewController(t)
+			psactCache := fake.NewMockNonNamespacedCacheInterface[*v3.PodSecurityAdmissionConfigurationTemplate](ctrl)
+			if tt.templateMiss {
+				psactCache.EXPECT().Get(tt.template).Return(nil,
+					apierrors.NewNotFound(schema.GroupResource{Group: "management.cattle.io", Resource: "podsecurityadmissionconfigurationtemplates"}, tt.template)).AnyTimes()
+			} else if tt.template != "" {
+				psactCache.EXPECT().Get(tt.template).Return(&v3.PodSecurityAdmissionConfigurationTemplate{}, nil).AnyTimes()
+			}
+			a := provisioningAdmitter{psactCache: psactCache}
+			resp := admissionv1.AdmissionResponse{}
+			cluster := &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "fleet-default"},
+				Spec: v1.ClusterSpec{
+					RKEConfig:         &v1.RKEConfig{},
+					KubernetesVersion: tt.k8sVersion,
+					DefaultPodSecurityAdmissionConfigurationTemplateName: tt.template,
+				},
+			}
+			req := &admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Operation: admissionv1.Create,
+					DryRun:    admission.Ptr(true),
+				},
+			}
+
+			err := a.validatePSACT(req, &resp, cluster)
+			assert.NoError(t, err)
+			if tt.wantDenied {
+				assert.NotNil(t, resp.Result, "invalid input must be denied on dry-run")
+			} else {
+				assert.Nil(t, resp.Result)
 			}
 		})
 	}

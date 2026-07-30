@@ -670,6 +670,15 @@ If the action is an update, and the old cluster had a `nil` `.spec.rkeConfig`, a
 
 Prevent the creation of objects if the secret specified in `.spec.rkeConfig.etcd.s3.cloudCredentialName` does not exist.
 
+##### Pod Security Admission Configuration Template
+
+When `spec.defaultPodSecurityAdmissionConfigurationTemplateName` is set, the referenced
+`PodSecurityAdmissionConfigurationTemplate` must exist and the cluster's Kubernetes version must be 1.23 or above.
+The admission-configuration secret managed by the mutator, and the cluster fields derived from it, are also
+validated — except on server-side dry-run requests, where the mutator does not perform that secret management (see
+Mutation Checks); the template-existence and version checks still run on dry-run. The same applies on update, and
+the check that the secret was removed is skipped on dry-run deletes.
+
 #### On Update
 
 ##### Creator ID Annotation
@@ -758,6 +767,17 @@ When a cluster is created `field.cattle.io/creatorId` is set to the Username fro
 
 If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` does not get set.
 
+This also applies to server-side dry-run creates: the annotation is set in the returned patch, so the Creator ID
+validation passes on a dry-run exactly as it does on a real create.
+
+##### Pod Security Admission Configuration Template
+
+When a cluster is created or updated with `spec.defaultPodSecurityAdmissionConfigurationTemplateName` set, the
+mutator manages an admission-configuration secret for the cluster and sets the machine selector file and
+kube-apiserver argument that mount it; when the field is cleared, the secret is deleted and those fields are
+dropped. On server-side dry-run requests the secret is neither written nor deleted, and the derived fields are not
+set or dropped — the corresponding validation of that state is skipped on dry-run as well (see Validation Checks).
+
 #### On Update
 
 ##### Dynamic Schema Drop
@@ -766,6 +786,9 @@ Check for the presence of the `provisioning.cattle.io/allow-dynamic-schema-drop`
 perform no mutations. If the value is not present or not `"true"`, compare the value of the `dynamicSchemaSpec` field
 for each `machinePool`, to its' previous value. If the values are not identical, revert the value for the
 `dynamicSchemaSpec` for the specific `machinePool`, but do not reject the request.
+
+The revert also applies to server-side dry-run updates, so a dry-run preview matches what a real update would
+persist.
 
 # rbac.authorization.k8s.io/v1
 
