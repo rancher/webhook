@@ -102,11 +102,17 @@ func (m *ProvisioningClusterMutator) MutatingWebhook(clientConfig admissionregis
 
 // Admit is the entrypoint for the mutator. Admit will return an error if it unable to process the request.
 func (m *ProvisioningClusterMutator) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
-	if request.DryRun != nil && *request.DryRun {
-		return &admissionv1.AdmissionResponse{
-			Allowed: true,
-		}, nil
-	}
+	// Dry-run requests must not skip this handler entirely: the validating
+	// webhook requires the creatorId annotation on dry-run creates too, and
+	// a dry-run's patch should preview what a real request would produce.
+	// Everything that only changes the in-flight request object — the
+	// creatorId annotation, the dynamic-schema revert, the JSON patch — runs
+	// on dry-run; nothing is persisted. Only the PSACT handling is guarded
+	// by dryRun below: it creates or deletes the admission-config secret,
+	// the real side effect the webhook's SideEffects: NoneOnDryRun
+	// registration promises to skip (its validating counterpart skips the
+	// secret-derived checks on dry-run for the same reason).
+	dryRun := request.DryRun != nil && *request.DryRun
 
 	listTrace := trace.New("provisioningCluster Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
@@ -128,12 +134,15 @@ func (m *ProvisioningClusterMutator) Admit(request *admission.Request) (*admissi
 		common.SetCreatorIDAnnotation(request, cluster)
 	}
 
-	response, err := m.handlePSACT(request, cluster)
-	if err != nil {
-		return nil, err
-	}
-	if response.Result != nil {
-		return response, nil
+	response := &admissionv1.AdmissionResponse{}
+	if !dryRun {
+		response, err = m.handlePSACT(request, cluster)
+		if err != nil {
+			return nil, err
+		}
+		if response.Result != nil {
+			return response, nil
+		}
 	}
 
 	if request.Operation == admissionv1.Update {
