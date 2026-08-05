@@ -12,6 +12,7 @@ import (
 	data2 "github.com/rancher/wrangler/v3/pkg/data"
 	"github.com/stretchr/testify/assert"
 	admissionv1 "k8s.io/api/admission/v1"
+	authenticationv1 "k8s.io/api/authentication/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -681,6 +682,86 @@ func TestAdmitPreserveUnknownFields(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Nil(t, response.Patch)
 
+}
+
+func TestAdmitDryRun(t *testing.T) {
+	cluster := &v1.Cluster{}
+	raw, err := json.Marshal(cluster)
+	assert.Nil(t, err)
+
+	m := ProvisioningClusterMutator{}
+
+	// A dry-run Create must return a patch that sets the creatorId
+	// annotation from the request's user. No OldObject — the apiserver
+	// sends none on Create.
+	createReq := &admission.Request{
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Create,
+			DryRun:    admission.Ptr(true),
+			UserInfo:  authenticationv1.UserInfo{Username: "u-test"},
+			Object:    runtime.RawExtension{Raw: raw},
+		},
+	}
+	response, err := m.Admit(createReq)
+	assert.Nil(t, err)
+	assert.True(t, response.Allowed)
+	assert.Equal(t, []byte(`[{"op":"add","path":"/metadata/annotations","value":{"field.cattle.io/creatorId":"u-test"}}]`), response.Patch)
+
+	// A dry-run Update of an unchanged cluster must return allowed with no
+	// patch: the annotation is only set on Create, and there is nothing for
+	// the dynamic-schema handling to revert.
+	updateReq := &admission.Request{
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Update,
+			DryRun:    admission.Ptr(true),
+			UserInfo:  authenticationv1.UserInfo{Username: "u-test"},
+			Object:    runtime.RawExtension{Raw: raw},
+			OldObject: runtime.RawExtension{Raw: raw},
+		},
+	}
+	response, err = m.Admit(updateReq)
+	assert.Nil(t, err)
+	assert.True(t, response.Allowed)
+	assert.Nil(t, response.Patch)
+
+	// A dry-run Update that drops a machine pool's dynamicSchemaSpec must
+	// preview the same revert a real update performs — the revert changes
+	// only the in-flight object, so skipping it on dry-run would make the
+	// preview disagree with the eventual apply.
+	oldWithSchema := &v1.Cluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+		Spec: v1.ClusterSpec{
+			RKEConfig: &v1.RKEConfig{
+				MachinePools: []v1.RKEMachinePool{{Name: "pool-a", DynamicSchemaSpec: "the-spec"}},
+			},
+		},
+	}
+	newWithoutSchema := &v1.Cluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+		Spec: v1.ClusterSpec{
+			RKEConfig: &v1.RKEConfig{
+				MachinePools: []v1.RKEMachinePool{{Name: "pool-a"}},
+			},
+		},
+	}
+	oldRaw, err := json.Marshal(oldWithSchema)
+	assert.Nil(t, err)
+	newRaw, err := json.Marshal(newWithoutSchema)
+	assert.Nil(t, err)
+	dropReq := &admission.Request{
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Update,
+			DryRun:    admission.Ptr(true),
+			UserInfo:  authenticationv1.UserInfo{Username: "u-test"},
+			Object:    runtime.RawExtension{Raw: newRaw},
+			OldObject: runtime.RawExtension{Raw: oldRaw},
+		},
+	}
+	response, err = m.Admit(dropReq)
+	assert.Nil(t, err)
+	assert.True(t, response.Allowed)
+	assert.Contains(t, string(response.Patch), "the-spec",
+		"the dry-run patch must carry the dynamic-schema revert")
 }
 
 func TestDynamicSchemaDrop(t *testing.T) {
