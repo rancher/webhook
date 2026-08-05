@@ -467,6 +467,166 @@ func (s *SettingSuite) validateAuthUserInfoResyncCron(op v1.Operation) {
 	}
 }
 
+func (s *SettingSuite) TestValidateCRTDefaultTTLOnUpdate() {
+	s.validateCRTDefaultTTL(v1.Update)
+}
+
+func (s *SettingSuite) TestValidateCRTDefaultTTLOnCreate() {
+	s.validateCRTDefaultTTL(v1.Create)
+}
+
+func (s *SettingSuite) validateCRTDefaultTTL(op v1.Operation) {
+	tests := []struct {
+		desc           string
+		value          string
+		gracePeriod    string
+		gracePeriodErr error
+		allowed        bool
+	}{
+		{
+			desc:        "valid ttl",
+			value:       "43200",
+			gracePeriod: "180",
+			allowed:     true,
+		},
+		{
+			desc:  "not an integer",
+			value: "foo",
+		},
+		{
+			desc:  "less than minimum",
+			value: "29",
+		},
+		{
+			desc:        "not greater than grace period",
+			value:       "180",
+			gracePeriod: "180",
+		},
+		{
+			desc:        "less than grace period",
+			value:       "100",
+			gracePeriod: "180",
+		},
+		{
+			desc:           "error getting grace period",
+			value:          "43200",
+			gracePeriodErr: errors.New("some error"),
+			allowed:        true,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		s.T().Run(test.desc, func(t *testing.T) {
+			t.Parallel()
+
+			ctrl := gomock.NewController(t)
+			settingCache := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
+			settingCache.EXPECT().Get(setting.CRTDefaultGracePeriod).DoAndReturn(func(string) (*v3.Setting, error) {
+				if test.gracePeriodErr != nil {
+					return nil, test.gracePeriodErr
+				}
+				return &v3.Setting{
+					ObjectMeta: metav1.ObjectMeta{Name: setting.CRTDefaultGracePeriod},
+					Value:      test.gracePeriod,
+				}, nil
+			}).AnyTimes()
+
+			validator := setting.NewValidator(nil, settingCache)
+			s.testAdmit(t, validator, &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: setting.CRTDefaultTTL,
+				},
+			}, &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: setting.CRTDefaultTTL,
+				},
+				Value: test.value,
+			}, op, test.allowed)
+		})
+	}
+}
+
+func (s *SettingSuite) TestValidateCRTDefaultGracePeriodOnUpdate() {
+	s.validateCRTDefaultGracePeriod(v1.Update)
+}
+
+func (s *SettingSuite) TestValidateCRTDefaultGracePeriodOnCreate() {
+	s.validateCRTDefaultGracePeriod(v1.Create)
+}
+
+func (s *SettingSuite) validateCRTDefaultGracePeriod(op v1.Operation) {
+	tests := []struct {
+		desc    string
+		value   string
+		ttl     string
+		ttlErr  error
+		allowed bool
+	}{
+		{
+			desc:    "valid grace period",
+			value:   "180",
+			ttl:     "43200",
+			allowed: true,
+		},
+		{
+			desc:  "not an integer",
+			value: "foo",
+		},
+		{
+			desc:  "less than minimum",
+			value: "9",
+		},
+		{
+			desc:  "not less than ttl",
+			value: "43200",
+			ttl:   "43200",
+		},
+		{
+			desc:  "greater than ttl",
+			value: "43200",
+			ttl:   "180",
+		},
+		{
+			desc:    "error getting ttl",
+			value:   "180",
+			ttlErr:  errors.New("some error"),
+			allowed: true,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		s.T().Run(test.desc, func(t *testing.T) {
+			t.Parallel()
+
+			ctrl := gomock.NewController(t)
+			settingCache := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
+			settingCache.EXPECT().Get(setting.CRTDefaultTTL).DoAndReturn(func(string) (*v3.Setting, error) {
+				if test.ttlErr != nil {
+					return nil, test.ttlErr
+				}
+				return &v3.Setting{
+					ObjectMeta: metav1.ObjectMeta{Name: setting.CRTDefaultTTL},
+					Value:      test.ttl,
+				}, nil
+			}).AnyTimes()
+
+			validator := setting.NewValidator(nil, settingCache)
+			s.testAdmit(t, validator, &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: setting.CRTDefaultGracePeriod,
+				},
+			}, &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: setting.CRTDefaultGracePeriod,
+				},
+				Value: test.value,
+			}, op, test.allowed)
+		})
+	}
+}
+
 func (s *SettingSuite) validateUserLastLoginDefault(op v1.Operation) {
 	tests := []struct {
 		desc    string
