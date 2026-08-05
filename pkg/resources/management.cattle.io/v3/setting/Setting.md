@@ -12,6 +12,8 @@ When settings are created or updated, the following common checks take place:
 - The `auth-user-session-idle-ttl-minutes` must be a positive integer and can't be greater than `auth-user-session-ttl-minutes`.
 - The `auth-user-info-max-age-seconds` must be a valid duration value.
 - The `auth-user-info-resync-cron` must be a valid cron expression.
+- If set, `crt-default-ttl-minutes` must be a valid integer no less than `30` and greater than `crt-default-grace-period-minutes` if that value is set.
+- If set, `crt-default-grace-period-minutes` must be a valid integer no less than `10` and less than `crt-default-ttl-minutes` if that value is set.
 
 ### Update
 

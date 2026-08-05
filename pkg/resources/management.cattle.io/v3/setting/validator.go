@@ -33,6 +33,8 @@ const (
 	AuthUserSessionTTLMinutes             = "auth-user-session-ttl-minutes"
 	CattleClusterAgentPodDisruptionBudget = "cluster-agent-default-pod-disruption-budget"
 	CattleClusterAgentPriorityClass       = "cluster-agent-default-priority-class"
+	CRTDefaultTTL                         = "crt-default-ttl-minutes"
+	CRTDefaultGracePeriod                 = "crt-default-grace-period-minutes"
 	DeleteInactiveUserAfter               = "delete-inactive-user-after"
 	DisableInactiveUserAfter              = "disable-inactive-user-after"
 	FleetAgentPodDisruptionBudget         = "fleet-agent-default-pod-disruption-budget"
@@ -45,6 +47,11 @@ const (
 // This is introduced to minimize the risk of deleting users accidentally by setting a relatively low value.
 // The admin can still set a lower value if needed by bypassing the webhook.
 const MinDeleteInactiveUserAfter = 24 * 14 * time.Hour // 14 days.
+
+const (
+	minCRTTTLMinutes         = 30 // 30 minutes
+	minCRTGracePeriodMinutes = 10 // 10 minutes
+)
 
 var gvr = schema.GroupVersionResource{
 	Group:    "management.cattle.io",
@@ -172,6 +179,10 @@ func (a *admitter) admitCommonCreateUpdate(_, newSetting *v3.Setting) (*admissio
 		err = a.validateAuthUserInfoMaxAgeSeconds(newSetting)
 	case AuthUserInfoResyncCron:
 		err = a.validateAuthUserInfoResyncCron(newSetting)
+	case CRTDefaultTTL:
+		err = a.validateCRTDefaultTTL(newSetting)
+	case CRTDefaultGracePeriod:
+		err = a.validateCRTDefaultGracePeriod(newSetting)
 	default:
 	}
 
@@ -398,6 +409,79 @@ func (a *admitter) validateUserLastLoginDefault(s *v3.Setting) error {
 	}
 
 	return nil
+}
+
+// validateCRTDefaultTTL validates the crt-default-ttl-minutes setting
+// to make sure it's a valid integer no less than minCRTTTLMinutes and
+// greater than the value of crt-default-grace-period-minutes setting.
+func (a *admitter) validateCRTDefaultTTL(s *v3.Setting) error {
+	if s.Value == "" {
+		return nil
+	}
+
+	ttl, err := strconv.Atoi(s.Value)
+	if err != nil {
+		return field.TypeInvalid(valuePath, s.Value, err.Error())
+	}
+	if ttl < minCRTTTLMinutes {
+		return field.Forbidden(valuePath, fmt.Sprintf("must be >= %d", minCRTTTLMinutes))
+	}
+
+	gp, err := a.getCRTIntSetting(CRTDefaultGracePeriod)
+	if err != nil {
+		logrus.Warnf("[settingValidator] Failed to get %s: %v", CRTDefaultGracePeriod, err)
+		return nil // Deliberately allow to proceed.
+	}
+
+	if ttl <= gp {
+		return field.Forbidden(valuePath, fmt.Sprintf("%s (%d) must be greater than %s (%d)", CRTDefaultTTL, ttl, CRTDefaultGracePeriod, gp))
+	}
+
+	return nil
+}
+
+// validateCRTDefaultGracePeriod validates the crt-default-grace-period-minutes setting
+// to make sure it's a valid integer no less than minCRTGracePeriodMinutes and
+// less than the value of crt-default-ttl-minutes setting.
+func (a *admitter) validateCRTDefaultGracePeriod(s *v3.Setting) error {
+	if s.Value == "" {
+		return nil
+	}
+
+	gp, err := strconv.Atoi(s.Value)
+	if err != nil {
+		return field.TypeInvalid(valuePath, s.Value, err.Error())
+	}
+	if gp < minCRTGracePeriodMinutes {
+		return field.Forbidden(valuePath, fmt.Sprintf("must be >= %d", minCRTGracePeriodMinutes))
+	}
+
+	ttl, err := a.getCRTIntSetting(CRTDefaultTTL)
+	if err != nil {
+		logrus.Warnf("[settingValidator] Failed to get %s: %v", CRTDefaultTTL, err)
+		return nil // Deliberately allow to proceed.
+	}
+
+	if ttl <= gp {
+		return field.Forbidden(valuePath, fmt.Sprintf("%s (%d) must be less than %s (%d)", CRTDefaultGracePeriod, gp, CRTDefaultTTL, ttl))
+	}
+
+	return nil
+}
+
+// getCRTIntSetting fetches the effective value of the given setting from the cache and parses it as an integer.
+func (a *admitter) getCRTIntSetting(name string) (int, error) {
+	setting, err := a.settingCache.Get(name)
+	if err != nil {
+		return 0, err
+	}
+
+	value := effectiveValue(setting)
+	if value == "" {
+		return 0, nil
+	}
+
+	return strconv.Atoi(value)
 }
 
 // validateDuration parses the value as durations and makes sure it's not negative.
