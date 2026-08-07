@@ -47,7 +47,7 @@ try --waitmsg "Waiting for CRDs" crds_exist
 echo "Shutting down core rancher"
 kubectl scale deploy rancher -n cattle-system --replicas=0
 kubectl wait pods -l app=rancher --for=delete -n cattle-system
-# Make sure the webhook recreates configurations on startup
+# Delete the existing webhook configurations so the helm upgrade recreates them from the chart templates.
 kubectl delete validatingwebhookconfiguration rancher.cattle.io
 kubectl delete mutatingwebhookconfiguration rancher.cattle.io
 
@@ -83,6 +83,25 @@ upgrade_rancher_webhook() {
    kubectl rollout status deployment/rancher-webhook -n cattle-system
 
    try --max 90 --waitmsg "Waiting for webhooks to be registered" --failmsg "Webhooks not registered" check_webhooks
+
+   # The chart now owns the WebhookConfigurations with caBundle: "" (filled by needacert at runtime).
+   # needacert runs inside the rancher pod, which is scaled to 0 in this test. Patch caBundle
+   # directly from the TLS secret so the kube-apiserver can verify the webhook's serving cert.
+   populate_ca_bundle() {
+     local ca_bundle
+     ca_bundle=$(kubectl get secret cattle-webhook-tls -n cattle-system \
+       -o jsonpath='{.data.tls\.crt}' 2>/dev/null)
+     [[ -z "$ca_bundle" ]] && return 1
+     for resource in validatingwebhookconfiguration mutatingwebhookconfiguration; do
+       local patch
+       patch=$(kubectl get "$resource" rancher.cattle.io -o json \
+         | jq --arg ca "$ca_bundle" \
+           '[range(.webhooks | length) | {"op":"replace","path":"/webhooks/\(.)/clientConfig/caBundle","value":$ca}]')
+       kubectl patch "$resource" rancher.cattle.io --type=json -p="$patch"
+     done
+   }
+   try --max 10 --delay 3 --waitmsg "Populating caBundle from TLS secret" \
+     --failmsg "Failed to populate caBundle" populate_ca_bundle
 }
 
 try --max 3 --delay 2 --waitmsg "Upgrading Webhook" --failmsg "Failed to upgrade webhook" upgrade_rancher_webhook
