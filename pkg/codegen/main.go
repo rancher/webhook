@@ -106,8 +106,10 @@ func main() {
 		"core": {
 			Types: []interface{}{
 				&unstructured.Unstructured{},
-				&corev1.Secret{},
+				&corev1.LimitRange{},
 				&corev1.Namespace{},
+				&corev1.ResourceQuota{},
+				&corev1.Secret{},
 			},
 		},
 		"autoscaling": {
