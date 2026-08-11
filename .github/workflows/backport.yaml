@@ -1,0 +1,42 @@
+name: Backport PR
+on:
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: "Pull request number (eg: 123) or link to PR (eg: https://github.com/rancher/webhook/pull/123) "
+        required: true
+      cherry_pick:
+        description: "If true, the squashed commit from the PR will be cherry-picked"
+        type: boolean
+        required: true
+        default: "true"
+
+permissions:
+  contents: read
+
+env:
+  PULL_REQUEST: ${{ github.event.inputs.pull_request }}
+  CHERRY_PICK: ${{ github.event.inputs.cherry_pick }}
+  REPO: ${{ github.repository }}
+
+jobs:
+  backport-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: webhook
+          # depth: 0
+
+      - name: Run backport script
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ref=$(echo "$GITHUB_REF" | sed "s|refs/heads/||")
+          cd webhook
+          git config --global user.email "webhook@example.com"
+          git config --global user.name "tomleb webhook Bot"
+          ./.github/workflows/scripts/backport.sh "$PULL_REQUEST" "$ref" "$CHERRY_PICK" "$REPO"
