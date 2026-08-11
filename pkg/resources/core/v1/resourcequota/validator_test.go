@@ -1,0 +1,165 @@
+package resourcequota
+
+import (
+	"context"
+	"encoding/json"
+	"testing"
+
+	"github.com/rancher/webhook/pkg/admission"
+	"github.com/stretchr/testify/assert"
+	admissionv1 "k8s.io/api/admission/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+)
+
+const (
+	testNamespace = "test-ns"
+)
+
+func TestResourceQuotaValidator(t *testing.T) {
+	t.Parallel()
+
+	rqOld := makeObject("rq", testNamespace, nil, corev1.ResourceList{
+		corev1.ResourceLimitsCPU: resource.MustParse("1"),
+	})
+	rq := makeObject("rq", testNamespace, nil, corev1.ResourceList{
+		corev1.ResourceLimitsCPU:    resource.MustParse("100"),
+		corev1.ResourceLimitsMemory: resource.MustParse("100Gi"),
+	})
+	rqManaged := makeObject("rqmanaged", testNamespace, markerLabels(), corev1.ResourceList{
+		corev1.ResourceLimitsCPU:    resource.MustParse("1"),
+		corev1.ResourceLimitsMemory: resource.MustParse("1Gi"),
+	})
+
+	tests := []struct {
+		name        string
+		operation   admissionv1.Operation
+		oldRQ       *corev1.ResourceQuota
+		newRQ       *corev1.ResourceQuota
+		wantAllowed bool
+		wantErr     bool
+	}{
+		// --- CREATE ---
+		{
+			name:        "create unmanaged is allowed",
+			operation:   admissionv1.Create,
+			newRQ:       rq,
+			wantAllowed: true,
+		},
+		{
+			name:        "create managed is denied",
+			operation:   admissionv1.Create,
+			newRQ:       rqManaged,
+			wantAllowed: false,
+		},
+		// --- UPDATE ---
+		{
+			name:        "update unmanaged is allowed",
+			operation:   admissionv1.Update,
+			oldRQ:       rqOld,
+			newRQ:       rq,
+			wantAllowed: true,
+		},
+		{
+			name:        "update promotion to managed is denied",
+			operation:   admissionv1.Update,
+			oldRQ:       rq,
+			newRQ:       rqManaged,
+			wantAllowed: false,
+		},
+		{
+			name:        "update demotion to unmnaged is denied",
+			operation:   admissionv1.Update,
+			oldRQ:       rqManaged,
+			newRQ:       rq,
+			wantAllowed: false,
+		},
+		// --- DELETE ---
+		{
+			name:        "delete unmanaged is allowed",
+			operation:   admissionv1.Delete,
+			oldRQ:       rq,
+			wantAllowed: true,
+		},
+		{
+			name:        "delete managed is denied",
+			operation:   admissionv1.Delete,
+			oldRQ:       rqManaged,
+			wantAllowed: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			v := NewValidator()
+			assert.Len(t, v.Admitters(), 1)
+
+			req, err := createRequest(tt.oldRQ, tt.newRQ, tt.operation)
+			assert.NoError(t, err)
+
+			resp, err := v.Admitters()[0].Admit(req)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.wantAllowed, resp.Allowed)
+		})
+	}
+}
+
+// createRequest builds an admission.Request for a ResourceQuota operation.
+func createRequest(oldObject, newObject *corev1.ResourceQuota, operation admissionv1.Operation) (*admission.Request, error) {
+	gvk := metav1.GroupVersionKind{Group: "", Version: "v1", Kind: "ResourceQuota"}
+	gvr := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "resourcequotas"}
+	req := &admission.Request{
+		Context: context.Background(),
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Kind:            gvk,
+			Resource:        gvr,
+			RequestKind:     &gvk,
+			RequestResource: &gvr,
+			Operation:       operation,
+			Object:          runtime.RawExtension{},
+			OldObject:       runtime.RawExtension{},
+		},
+	}
+	if newObject != nil {
+		raw, err := json.Marshal(newObject)
+		if err != nil {
+			return nil, err
+		}
+		req.Object.Raw = raw
+	}
+	if oldObject != nil {
+		raw, err := json.Marshal(oldObject)
+		if err != nil {
+			return nil, err
+		}
+		req.OldObject.Raw = raw
+	}
+	return req, nil
+}
+
+// makeObject builds a ResourceQuota for testing purposes.
+func makeObject(name, namespace string, labels map[string]string, hard corev1.ResourceList) *corev1.ResourceQuota {
+	return &corev1.ResourceQuota{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.ResourceQuotaSpec{
+			Hard: hard,
+		},
+	}
+}
+
+// markerLabels returns the label map that identifies a Rancher-managed ResourceQuota.
+func markerLabels() map[string]string {
+	return map[string]string{defaultResourceQuotaLabel: "true"}
+}
