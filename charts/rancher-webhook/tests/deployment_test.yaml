@@ -3,6 +3,15 @@ templates:
   - deployment.yaml
 
 tests:
+  - it: should render imagePullSecrets when set
+    set:
+      imagePullSecrets:
+        - name: my-secret
+    asserts:
+      - contains:
+          path: spec.template.spec.imagePullSecrets
+          content:
+            name: my-secret
   - it: should set webhook default port values
     asserts:
       - equal:
