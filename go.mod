@@ -35,12 +35,12 @@ require (
 	github.com/evanphx/json-patch v5.9.11+incompatible
 	github.com/go-ldap/ldap/v3 v3.4.13
 	github.com/google/uuid v1.6.0
-	github.com/rancher/dynamiclistener v0.9.0
+	github.com/rancher/dynamiclistener v0.9.1
 	github.com/rancher/jsonpath v0.0.0-20260423141252-c4e0c565a09f
 	github.com/rancher/lasso v0.2.9
 	github.com/rancher/rancher/pkg/apis v0.0.0-20260813081821-22606a1ec939
 	github.com/rancher/rancher/pkg/plan v0.0.0-20260428222332-2696373f4152
-	github.com/rancher/wrangler/v3 v3.7.1-rc.2
+	github.com/rancher/wrangler/v3 v3.7.1
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.4
 	github.com/stretchr/testify v1.11.1
@@ -75,6 +75,7 @@ require (
 	github.com/go-openapi/swag/typeutils v0.25.4 // indirect
 	github.com/go-openapi/swag/yamlutils v0.25.4 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
+	github.com/google/renameio/v2 v2.0.2 // indirect
 	github.com/onsi/gomega v1.42.1 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 )
@@ -111,7 +112,7 @@ require (
 	github.com/rancher/eks-operator v1.15.0 // indirect
 	github.com/rancher/fleet/pkg/apis v0.16.1-beta.1 // indirect
 	github.com/rancher/gke-operator v1.15.0 // indirect
-	github.com/rancher/norman v0.9.8
+	github.com/rancher/norman v0.9.10
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
