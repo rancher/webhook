@@ -345,6 +345,74 @@ func Test_Admit(t *testing.T) {
 			},
 			allowed: true,
 		},
+		{
+			name: "changing principalIds not allowed for non-system user",
+			oldUser: &v3.User{
+				ObjectMeta:   metav1.ObjectMeta{Name: defaultUserName},
+				Username:     defaultUserName,
+				PrincipalIDs: []string{"local://u-abc"},
+			},
+			newUser: &v3.User{
+				ObjectMeta:   metav1.ObjectMeta{Name: defaultUserName},
+				Username:     defaultUserName,
+				PrincipalIDs: []string{"local://u-abc", "openldap_user://CN=Admin,DC=corp"},
+			},
+			requestUserName: requesterUserName,
+			allowed:         false,
+		},
+		{
+			name: "changing principalIds not allowed even for manage-users holder",
+			oldUser: &v3.User{
+				ObjectMeta:   metav1.ObjectMeta{Name: defaultUserName},
+				Username:     defaultUserName,
+				PrincipalIDs: []string{"local://u-abc"},
+			},
+			newUser: &v3.User{
+				ObjectMeta:   metav1.ObjectMeta{Name: defaultUserName},
+				Username:     defaultUserName,
+				PrincipalIDs: []string{"local://u-abc", "oidc_user://alice@example.com"},
+			},
+			requestUserName: managerUserName,
+			allowed:         false,
+		},
+		{
+			name: "removing principalIds not allowed",
+			oldUser: &v3.User{
+				ObjectMeta:   metav1.ObjectMeta{Name: defaultUserName},
+				Username:     defaultUserName,
+				PrincipalIDs: []string{"local://u-abc", "github_user://12345"},
+			},
+			newUser: &v3.User{
+				ObjectMeta:   metav1.ObjectMeta{Name: defaultUserName},
+				Username:     defaultUserName,
+				PrincipalIDs: []string{"local://u-abc"},
+			},
+			requestUserName: requesterUserName,
+			allowed:         false,
+		},
+		{
+			name: "unchanged principalIds allowed for any user",
+			oldUser: &v3.User{
+				ObjectMeta:   metav1.ObjectMeta{Name: defaultUserName},
+				Username:     defaultUserName,
+				PrincipalIDs: []string{"local://u-abc"},
+			},
+			newUser: &v3.User{
+				ObjectMeta:   metav1.ObjectMeta{Name: defaultUserName},
+				Username:     defaultUserName,
+				PrincipalIDs: []string{"local://u-abc"},
+			},
+			requestUserName: requesterUserName,
+			resolverRulesFor: func(s string) ([]rbacv1.PolicyRule, error) {
+				switch s {
+				case requesterUserName, defaultUserName:
+					return getPods, nil
+				default:
+					return nil, fmt.Errorf("unexpected error")
+				}
+			},
+			allowed: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

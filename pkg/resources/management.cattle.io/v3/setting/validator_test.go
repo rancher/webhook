@@ -1398,19 +1398,16 @@ func (s *SettingSuite) TestValidateAuthUserSessionTTLIdleMinutesOnCreate() {
 }
 
 func (s *SettingSuite) validateAuthUserSessionTTLIdleMinutes(op v1.Operation, t *testing.T) {
-	ctrl := gomock.NewController(t)
-	settingCache := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
-
 	tests := []struct {
 		name      string
 		value     string
-		mockSetup func()
+		mockSetup func(settingCache *fake.MockNonNamespacedCacheInterface[*v3.Setting])
 		allowed   bool
 	}{
 		{
 			name:  "valid value",
 			value: "10",
-			mockSetup: func() {
+			mockSetup: func(settingCache *fake.MockNonNamespacedCacheInterface[*v3.Setting]) {
 				settingCache.EXPECT().Get(gomock.Any()).DoAndReturn(func(_ string) (*v3.Setting, error) {
 					return &v3.Setting{
 						Value:   "",
@@ -1423,7 +1420,7 @@ func (s *SettingSuite) validateAuthUserSessionTTLIdleMinutes(op v1.Operation, t 
 		{
 			name:  "value is too high",
 			value: "10000",
-			mockSetup: func() {
+			mockSetup: func(settingCache *fake.MockNonNamespacedCacheInterface[*v3.Setting]) {
 				settingCache.EXPECT().Get(gomock.Any()).DoAndReturn(func(_ string) (*v3.Setting, error) {
 					return &v3.Setting{
 						Value:   "",
@@ -1436,31 +1433,31 @@ func (s *SettingSuite) validateAuthUserSessionTTLIdleMinutes(op v1.Operation, t 
 		{
 			name:      "value is too low",
 			value:     "-10",
-			mockSetup: func() {},
+			mockSetup: func(*fake.MockNonNamespacedCacheInterface[*v3.Setting]) {},
 			allowed:   false,
 		},
 		{
 			name:      "value cannot be 0",
 			value:     "0",
-			mockSetup: func() {},
+			mockSetup: func(*fake.MockNonNamespacedCacheInterface[*v3.Setting]) {},
 			allowed:   false,
 		},
 		{
 			name:      "value cannot be 0.5",
 			value:     "0.5",
-			mockSetup: func() {},
+			mockSetup: func(*fake.MockNonNamespacedCacheInterface[*v3.Setting]) {},
 			allowed:   false,
 		},
 		{
 			name:      "value cannot be a char",
 			value:     "A",
-			mockSetup: func() {},
+			mockSetup: func(*fake.MockNonNamespacedCacheInterface[*v3.Setting]) {},
 			allowed:   false,
 		},
 		{
 			name:  "invalid value due to auth-session-user-ttl-minutes",
 			value: "12",
-			mockSetup: func() {
+			mockSetup: func(settingCache *fake.MockNonNamespacedCacheInterface[*v3.Setting]) {
 				settingCache.EXPECT().Get(gomock.Any()).DoAndReturn(func(_ string) (*v3.Setting, error) {
 					return &v3.Setting{
 						Value:   "10",
@@ -1473,7 +1470,7 @@ func (s *SettingSuite) validateAuthUserSessionTTLIdleMinutes(op v1.Operation, t 
 		{
 			name:  "valid because auth-user-session-ttl-minutes equal 0 means token lives forever",
 			value: "1",
-			mockSetup: func() {
+			mockSetup: func(settingCache *fake.MockNonNamespacedCacheInterface[*v3.Setting]) {
 				settingCache.EXPECT().Get(gomock.Any()).DoAndReturn(func(_ string) (*v3.Setting, error) {
 					return &v3.Setting{
 						Value:   "0",
@@ -1488,7 +1485,9 @@ func (s *SettingSuite) validateAuthUserSessionTTLIdleMinutes(op v1.Operation, t 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			tt.mockSetup()
+			ctrl := gomock.NewController(t)
+			settingCache := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
+			tt.mockSetup(settingCache)
 
 			validator := setting.NewValidator(nil, settingCache)
 			s.testAdmit(t, validator, &v3.Setting{

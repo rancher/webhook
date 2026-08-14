@@ -580,7 +580,11 @@ If the user making the request has the verb `manage-users` for the resource `use
 
 Users can update the following fields if they had not been set. But after getting initial values, the fields cannot be changed:
 
-- UserName
+- `userName`
+
+The following fields are immutable:
+
+- `principalIDs` (managed internally by Rancher).
 
 A user can't deactivate or delete himself.
 
