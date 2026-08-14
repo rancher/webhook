@@ -175,6 +175,9 @@ jobs:
           - label: "later main (#56253 + #56261 + more, Aug 13)"
             rancher_commit: f74f4fdb55c51022b1f515e40a6e20f53e1a487e
             image_tag: v2.16-f74f4fdb55c51022b1f515e40a6e20f53e1a487e-head
+          - label: "near-current main (Aug 14, closest to real CI HEAD)"
+            rancher_commit: 5d1a1a2f12666734a86a448b8dcbc6c4d7fb1046
+            image_tag: v2.16-5d1a1a2f12666734a86a448b8dcbc6c4d7fb1046-head
     runs-on: runs-on,runner=1cpu-linux-x64,run-id=${{ github.run_id }}
     steps:
       - name: Checkout repository
