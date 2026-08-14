@@ -3,6 +3,7 @@ package users
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -314,6 +315,9 @@ func validateUpdateFields(oldUser, newUser *v3.User, fieldPath *field.Path) erro
 	const reason = "field is immutable"
 	if oldUser.Username != "" && oldUser.Username != newUser.Username {
 		return field.Invalid(fieldPath.Child("username"), newUser.Username, reason)
+	}
+	if !slices.Equal(oldUser.PrincipalIDs, newUser.PrincipalIDs) {
+		return field.Invalid(fieldPath.Child("principalIds"), newUser.PrincipalIDs, reason)
 	}
 	return nil
 }
