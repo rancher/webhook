@@ -85,7 +85,55 @@ jobs:
       - name: Dump logs
         if: failure()
         run: |
+          echo "::group::Cluster-wide pod status"
+          kubectl get pods -A -o wide || true
+          echo "::endgroup::"
+
+          echo "::group::cattle-system events"
+          kubectl get events -n cattle-system --sort-by='.lastTimestamp' || true
+          echo "::endgroup::"
+
+          echo "::group::helm releases in cattle-system"
+          helm list -n cattle-system || true
+          echo "::endgroup::"
+
+          echo "::group::apps.catalog.cattle.io status"
+          kubectl get apps.catalog.cattle.io -n cattle-system -o yaml || true
+          echo "::endgroup::"
+
+          echo "::group::rancher pod describe"
+          kubectl describe pods -n cattle-system -l app=rancher || true
+          echo "::endgroup::"
+
+          echo "::group::rancher logs (current)"
+          kubectl logs -n cattle-system -l app=rancher --all-containers=true --tail=-1 --timestamps=true || true
+          echo "::endgroup::"
+
+          echo "::group::rancher logs (previous, in case of restart/crash)"
+          kubectl logs -n cattle-system -l app=rancher --all-containers=true --tail=-1 --timestamps=true --previous || true
+          echo "::endgroup::"
+
+          echo "::group::helm-operation (system chart install) pods"
+          kubectl get pods -n cattle-system -l app=helm-operation -o wide || true
+          for pod in $(kubectl get pods -n cattle-system -l app=helm-operation -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+            echo "--- logs for $pod ---"
+            kubectl logs -n cattle-system "$pod" --all-containers=true --tail=-1 --timestamps=true || true
+          done
+          echo "::endgroup::"
+
+          echo "::group::rancher-webhook pod describe"
+          kubectl describe pods -n cattle-system -l app=rancher-webhook || true
+          echo "::endgroup::"
+
+          echo "::group::rancher-webhook logs (current)"
           kubectl logs -n cattle-system -l app=rancher-webhook --all-containers=true --tail=-1 --timestamps=true || true
-          echo "Dumping webhook configurations:"
+          echo "::endgroup::"
+
+          echo "::group::rancher-webhook logs (previous, in case of restart/crash)"
+          kubectl logs -n cattle-system -l app=rancher-webhook --all-containers=true --tail=-1 --timestamps=true --previous || true
+          echo "::endgroup::"
+
+          echo "::group::webhook configurations"
           kubectl get mutatingwebhookconfiguration rancher.cattle.io -o yaml || true
           kubectl get validatingwebhookconfiguration rancher.cattle.io -o yaml || true
+          echo "::endgroup::"
