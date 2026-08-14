@@ -42,6 +42,7 @@ func (s *SettingSuite) TestAdmitUpdateGuards() {
 		name       string
 		oldSetting *v3.Setting
 		newSetting *v3.Setting
+		username   string
 		allowed    bool
 	}{
 		{
@@ -79,6 +80,18 @@ func (s *SettingSuite) TestAdmitUpdateGuards() {
 			},
 		},
 		{
+			name: "allow read-only setting frombypass service account",
+			oldSetting: &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{Name: "cacerts"},
+			},
+			newSetting: &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{Name: "cacerts"},
+				Value:      "new-certs",
+			},
+			username: "system:serviceaccount:cattle-system:rancher",
+			allowed:  true,
+		},
+		{
 			name: "allow normal valid update",
 			oldSetting: &v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{Name: setting.UserRetentionCron},
@@ -97,7 +110,7 @@ func (s *SettingSuite) TestAdmitUpdateGuards() {
 			t.Parallel()
 
 			validator := setting.NewValidator(nil, nil)
-			s.testAdmit(t, validator, test.oldSetting, test.newSetting, v1.Update, test.allowed)
+			s.testAdmit(t, validator, test.oldSetting, test.newSetting, v1.Update, test.username, test.allowed)
 		})
 	}
 }
@@ -197,7 +210,7 @@ func (s *SettingSuite) validateDisableInactiveUserAfter(op v1.Operation) {
 					Name: setting.DisableInactiveUserAfter,
 				},
 				Value: test.value,
-			}, op, test.allowed)
+			}, op, "foo", test.allowed)
 		})
 	}
 }
@@ -301,7 +314,7 @@ func (s *SettingSuite) validateDeleteInactiveUserAfter(op v1.Operation) {
 					Name: setting.DeleteInactiveUserAfter,
 				},
 				Value: test.value,
-			}, op, test.allowed)
+			}, op, "foo", test.allowed)
 		})
 	}
 }
@@ -355,7 +368,7 @@ func (s *SettingSuite) validateUserRetentionCron(op v1.Operation) {
 					Name: setting.UserRetentionCron,
 				},
 				Value: test.value,
-			}, op, test.allowed)
+			}, op, "foo", test.allowed)
 		})
 	}
 }
@@ -413,7 +426,7 @@ func (s *SettingSuite) validateAuthUserInfoMaxAgeSeconds(op v1.Operation) {
 					Name: setting.AuthUserInfoMaxAgeSeconds,
 				},
 				Value: test.value,
-			}, op, test.allowed)
+			}, op, "foo", test.allowed)
 		})
 	}
 }
@@ -462,7 +475,7 @@ func (s *SettingSuite) validateAuthUserInfoResyncCron(op v1.Operation) {
 					Name: setting.AuthUserInfoResyncCron,
 				},
 				Value: test.value,
-			}, op, test.allowed)
+			}, op, "foo", test.allowed)
 		})
 	}
 }
@@ -542,7 +555,7 @@ func (s *SettingSuite) validateCRTDefaultTTL(op v1.Operation) {
 					Name: setting.CRTDefaultTTL,
 				},
 				Value: test.value,
-			}, op, test.allowed)
+			}, op, "foo", test.allowed)
 		})
 	}
 }
@@ -622,7 +635,7 @@ func (s *SettingSuite) validateCRTDefaultGracePeriod(op v1.Operation) {
 					Name: setting.CRTDefaultGracePeriod,
 				},
 				Value: test.value,
-			}, op, test.allowed)
+			}, op, "foo", test.allowed)
 		})
 	}
 }
@@ -668,7 +681,7 @@ func (s *SettingSuite) validateUserLastLoginDefault(op v1.Operation) {
 					Name: setting.UserLastLoginDefault,
 				},
 				Value: test.value,
-			}, op, test.allowed)
+			}, op, "foo", test.allowed)
 		})
 	}
 }
@@ -766,7 +779,7 @@ func (s *SettingSuite) TestValidateClusterAgentSchedulingPriorityClass() {
 						Name: settingName,
 					},
 					Value: test.newValue,
-				}, v1.Update, test.allowed)
+				}, v1.Update, "foo", test.allowed)
 			})
 		}
 	}
@@ -885,7 +898,7 @@ func (s *SettingSuite) TestValidateAgentSchedulingPodDisruptionBudget() {
 						Name: settingName,
 					},
 					Value: test.newValue,
-				}, v1.Update, test.allowed)
+				}, v1.Update, "foo", test.allowed)
 			})
 		}
 	}
@@ -1061,19 +1074,19 @@ func (s *SettingSuite) validateAuthUserSessionTTLMinutes(op v1.Operation) {
 					Name: setting.AuthUserSessionTTLMinutes,
 				},
 				Value: test.value,
-			}, op, test.allowed)
+			}, op, "foo", test.allowed)
 		})
 	}
 }
 
-func (s *SettingSuite) testAdmit(t *testing.T, validator *setting.Validator, oldSetting, newSetting *v3.Setting, op v1.Operation, allowed bool) {
+func (s *SettingSuite) testAdmit(t *testing.T, validator *setting.Validator, oldSetting, newSetting *v3.Setting, op v1.Operation, username string, allowed bool) {
 	oldObjRaw, err := json.Marshal(oldSetting)
 	require.NoError(t, err, "failed to marshal old Setting")
 
 	objRaw, err := json.Marshal(newSetting)
 	require.NoError(t, err, "failed to marshal Setting")
 
-	resp, err := validator.Admitters()[0].Admit(newRequest(op, objRaw, oldObjRaw))
+	resp, err := validator.Admitters()[0].Admit(newRequest(op, objRaw, oldObjRaw, username))
 	require.NoError(t, err)
 	assert.Equal(t, allowed, resp.Allowed)
 }
@@ -1088,7 +1101,7 @@ func (s *SettingSuite) TestValidatingWebhookFailurePolicy() {
 	require.Equal(t, &ignorePolicy, webhook[0].FailurePolicy)
 }
 
-func newRequest(op v1.Operation, obj, oldObj []byte) *admission.Request {
+func newRequest(op v1.Operation, obj, oldObj []byte, username string) *admission.Request {
 	return &admission.Request{
 		AdmissionRequest: v1.AdmissionRequest{
 			UID:             "1",
@@ -1097,7 +1110,7 @@ func newRequest(op v1.Operation, obj, oldObj []byte) *admission.Request {
 			RequestKind:     &gvk,
 			RequestResource: &gvr,
 			Operation:       op,
-			UserInfo:        authenticationv1.UserInfo{Username: "foo", UID: ""},
+			UserInfo:        authenticationv1.UserInfo{Username: username, UID: ""},
 			Object:          runtime.RawExtension{Raw: obj},
 			OldObject:       runtime.RawExtension{Raw: oldObj},
 		},
@@ -1666,7 +1679,7 @@ func (s *SettingSuite) validateAuthUserSessionTTLIdleMinutes(op v1.Operation, t 
 					Name: setting.AuthUserSessionIdleTTLMinutes,
 				},
 				Value: tt.value,
-			}, op, tt.allowed)
+			}, op, "foo", tt.allowed)
 		})
 	}
 }
