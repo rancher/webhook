@@ -85,7 +85,183 @@ jobs:
       - name: Dump logs
         if: failure()
         run: |
+          echo "::group::Cluster-wide pod status"
+          kubectl get pods -A -o wide || true
+          echo "::endgroup::"
+
+          echo "::group::cattle-system events"
+          kubectl get events -n cattle-system --sort-by='.lastTimestamp' || true
+          echo "::endgroup::"
+
+          echo "::group::helm releases in cattle-system"
+          helm list -n cattle-system || true
+          echo "::endgroup::"
+
+          echo "::group::apps.catalog.cattle.io status"
+          kubectl get apps.catalog.cattle.io -n cattle-system -o yaml || true
+          echo "::endgroup::"
+
+          echo "::group::rancher pod describe"
+          kubectl describe pods -n cattle-system -l app=rancher || true
+          echo "::endgroup::"
+
+          echo "::group::rancher logs (current)"
+          kubectl logs -n cattle-system -l app=rancher --all-containers=true --tail=-1 --timestamps=true || true
+          echo "::endgroup::"
+
+          echo "::group::rancher logs (previous, in case of restart/crash)"
+          kubectl logs -n cattle-system -l app=rancher --all-containers=true --tail=-1 --timestamps=true --previous || true
+          echo "::endgroup::"
+
+          echo "::group::helm-operation (system chart install) pods"
+          kubectl get pods -n cattle-system -l app=helm-operation -o wide || true
+          for pod in $(kubectl get pods -n cattle-system -l app=helm-operation -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+            echo "--- logs for $pod ---"
+            kubectl logs -n cattle-system "$pod" --all-containers=true --tail=-1 --timestamps=true || true
+          done
+          echo "::endgroup::"
+
+          echo "::group::rancher-webhook pod describe"
+          kubectl describe pods -n cattle-system -l app=rancher-webhook || true
+          echo "::endgroup::"
+
+          echo "::group::rancher-webhook logs (current)"
           kubectl logs -n cattle-system -l app=rancher-webhook --all-containers=true --tail=-1 --timestamps=true || true
-          echo "Dumping webhook configurations:"
+          echo "::endgroup::"
+
+          echo "::group::rancher-webhook logs (previous, in case of restart/crash)"
+          kubectl logs -n cattle-system -l app=rancher-webhook --all-containers=true --tail=-1 --timestamps=true --previous || true
+          echo "::endgroup::"
+
+          echo "::group::webhook configurations"
           kubectl get mutatingwebhookconfiguration rancher.cattle.io -o yaml || true
           kubectl get validatingwebhookconfiguration rancher.cattle.io -o yaml || true
+          echo "::endgroup::"
+
+  # Diagnostic job (not part of the regular pass/fail gate): stands up rancher
+  # alone, with no webhook image imported at all, from specific rancher/rancher
+  # commits picked to bisect a suspected regression in
+  # https://github.com/rancher/rancher (PR #56253, "Implement Rancher assets
+  # image", which added the rancher-charts-copy init container + emptyDir
+  # chart volume) interacting with PR #56261 ("fix: checking out bundled
+  # charts", which made the bundled-catalog path run `git reset --hard` on
+  # every boot). Round 1 (commits 1-2) showed #56253 alone is NOT sufficient
+  # to fail the startupProbe in isolation (2m52s vs 6m36s, both well under the
+  # 8m timeout) -- but the real webhook CI job (which also builds/tests/
+  # packages webhook and imports its image on the same 1cpu runner) still
+  # fails with the same probe-kill + git index.lock signature on current
+  # main. Round 2 (commits 3-4) adds #56261 itself, and a later main commit
+  # that includes both #56253 and #56261, to see whether #56261 changes the
+  # picture even in isolation (e.g. makes the restart-triggered git lock
+  # corruption possible where #56253 alone didn't manage it in 6m36s).
+  #
+  # This job is purely diagnostic: it does not gate the PR (no other job
+  # depends on it) and can be deleted once the bisection is complete.
+  probe-assets-image-regression:
+    name: "Probe: rancher startup (${{ matrix.probe.label }})"
+    strategy:
+      fail-fast: false
+      matrix:
+        probe:
+          - label: "without #56253 (parent commit)"
+            rancher_commit: 3d7396a2b7d3d270e1cb4c14864be7f5c25e1fca
+            image_tag: v2.16-3d7396a2b7d3d270e1cb4c14864be7f5c25e1fca-head
+          - label: "with #56253 (assets image)"
+            rancher_commit: 5f868f27e427c7693ced107ab07dcc9eedcc5e17
+            image_tag: v2.16-5f868f27e427c7693ced107ab07dcc9eedcc5e17-head
+          - label: "with #56261 (checking out bundled charts fix)"
+            rancher_commit: 1b96837a0a57cd9bdeba3b23c1a3dff247eccd56
+            image_tag: v2.16-1b96837a0a57cd9bdeba3b23c1a3dff247eccd56-head
+          - label: "later main (#56253 + #56261 + more, Aug 13)"
+            rancher_commit: f74f4fdb55c51022b1f515e40a6e20f53e1a487e
+            image_tag: v2.16-f74f4fdb55c51022b1f515e40a6e20f53e1a487e-head
+          - label: "near-current main (Aug 14, closest to real CI HEAD)"
+            rancher_commit: 5d1a1a2f12666734a86a448b8dcbc6c4d7fb1046
+            image_tag: v2.16-5d1a1a2f12666734a86a448b8dcbc6c4d7fb1046-head
+    runs-on: runs-on,runner=1cpu-linux-x64,run-id=${{ github.run_id }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Checkout rancher/rancher at pinned commit and build the chart
+        run: |
+          mkdir -p "${{ runner.temp }}"
+          pushd "${{ runner.temp }}"
+          git clone https://github.com/rancher/rancher.git rancherDir
+          cd rancherDir
+          git checkout "${{ matrix.probe.rancher_commit }}"
+          ./scripts/chart/build chart
+          tar cfz "${{ runner.temp }}/rancher.tgz" -C build/chart/rancher .
+          popd
+
+      - name: install K3d
+        run: |
+          ./.github/workflows/scripts/install-k3d.sh
+          sudo mv ./bin/k3d /usr/local/bin/k3d
+
+      - name: setup cluster
+        run: ./.github/workflows/scripts/setup-cluster.sh
+        env:
+          CLUSTER_NAME: webhook-probe
+          K3S_VERSION: v1.28.9-k3s1
+          ARCH: amd64
+
+      - name: install cert-manager and rancher (no webhook image imported - just rancher itself)
+        id: install
+        continue-on-error: true
+        run: |
+          set -exu
+          helm repo add cert-manager https://charts.jetstack.io
+          helm repo update
+          helm upgrade --install cert-manager --namespace cert-manager cert-manager/cert-manager \
+            --set installCRDs=true --create-namespace --wait --timeout=10m
+          kubectl rollout status --namespace cert-manager deploy/cert-manager --timeout 1m
+
+          helm upgrade \
+            --install rancher "${{ runner.temp }}/rancher.tgz" \
+            --namespace cattle-system \
+            --wait --timeout=8m \
+            --create-namespace \
+            --version main \
+            --set replicas=1 \
+            --set hostname=localhost \
+            --set rancherImage=rancher/rancher \
+            --set rancherImageTag="${{ matrix.probe.image_tag }}" \
+            --set 'extraEnv[0].name=CATTLE_RANCHER_WEBHOOK_VERSION' \
+            --set "extraEnv[0].value=" \
+            --set features=imperative-api-extension=false
+
+      - name: report result
+        run: |
+          if [ "${{ steps.install.outcome }}" = "success" ]; then
+            echo "::notice::rancher (${{ matrix.probe.label }}, commit ${{ matrix.probe.rancher_commit }}) rolled out successfully within the timeout."
+          else
+            echo "::error::rancher (${{ matrix.probe.label }}, commit ${{ matrix.probe.rancher_commit }}) FAILED to roll out within the timeout."
+          fi
+
+      - name: Dump logs (always, for comparison between the two probe legs)
+        if: always()
+        run: |
+          echo "::group::pod status"
+          kubectl get pods -A -o wide || true
+          echo "::endgroup::"
+
+          echo "::group::cattle-system events"
+          kubectl get events -n cattle-system --sort-by='.lastTimestamp' || true
+          echo "::endgroup::"
+
+          echo "::group::rancher pod describe"
+          kubectl describe pods -n cattle-system -l app=rancher || true
+          echo "::endgroup::"
+
+          echo "::group::rancher logs (current)"
+          kubectl logs -n cattle-system -l app=rancher --all-containers=true --tail=-1 --timestamps=true || true
+          echo "::endgroup::"
+
+          echo "::group::rancher logs (previous, in case of restart/crash)"
+          kubectl logs -n cattle-system -l app=rancher --all-containers=true --tail=-1 --timestamps=true --previous || true
+          echo "::endgroup::"
+
+      - name: fail job if install failed
+        if: steps.install.outcome != 'success'
+        run: exit 1
