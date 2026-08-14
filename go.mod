@@ -38,7 +38,7 @@ require (
 	github.com/rancher/dynamiclistener v0.9.1
 	github.com/rancher/jsonpath v0.0.0-20260423141252-c4e0c565a09f
 	github.com/rancher/lasso v0.2.9
-	github.com/rancher/rancher/pkg/apis v0.0.0-20260813081821-22606a1ec939
+	github.com/rancher/rancher/pkg/apis v0.0.0-20260813165537-c7913dce4e58
 	github.com/rancher/rancher/pkg/plan v0.0.0-20260428222332-2696373f4152
 	github.com/rancher/wrangler/v3 v3.7.1
 	github.com/robfig/cron v1.2.0
@@ -60,8 +60,8 @@ require (
 )
 
 require (
-	github.com/aws/aws-sdk-go-v2 v1.42.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.311.0 // indirect
+	github.com/aws/aws-sdk-go-v2 v1.43.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.317.0 // indirect
 	github.com/aws/smithy-go v1.27.3 // indirect
 	github.com/go-openapi/swag/cmdutils v0.25.4 // indirect
 	github.com/go-openapi/swag/conv v0.25.4 // indirect
@@ -107,17 +107,17 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.67.5 // indirect
 	github.com/prometheus/procfs v0.19.2 // indirect
-	github.com/rancher/aks-operator v1.15.0 // indirect
-	github.com/rancher/ali-operator v1.15.0-rc.3 // indirect
-	github.com/rancher/eks-operator v1.15.0 // indirect
+	github.com/rancher/aks-operator v1.15.1-rc.1 // indirect
+	github.com/rancher/ali-operator v1.15.0-rc.4 // indirect
+	github.com/rancher/eks-operator v1.15.1-rc.1 // indirect
 	github.com/rancher/fleet/pkg/apis v0.16.1-beta.1 // indirect
-	github.com/rancher/gke-operator v1.15.0 // indirect
+	github.com/rancher/gke-operator v1.15.1-rc.1 // indirect
 	github.com/rancher/norman v0.9.10
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	go.opentelemetry.io/otel v1.43.0 // indirect
-	go.opentelemetry.io/otel/trace v1.43.0 // indirect
+	go.opentelemetry.io/otel v1.44.0 // indirect
+	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.54.0 // indirect
