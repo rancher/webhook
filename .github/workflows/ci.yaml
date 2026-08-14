@@ -201,7 +201,7 @@ jobs:
         continue-on-error: true
         run: |
           set -exu
-          helm repo add jetstack https://charts.jetstack.io
+          helm repo add cert-manager https://charts.jetstack.io
           helm repo update
           helm upgrade --install cert-manager --namespace cert-manager cert-manager/cert-manager \
             --set installCRDs=true --create-namespace --wait --timeout=10m
