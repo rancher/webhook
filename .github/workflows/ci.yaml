@@ -139,20 +139,21 @@ jobs:
           echo "::endgroup::"
 
   # Diagnostic job (not part of the regular pass/fail gate): stands up rancher
-  # alone, with no webhook image imported at all, from two specific
-  # rancher/rancher commits picked to bisect a suspected regression in
+  # alone, with no webhook image imported at all, from specific rancher/rancher
+  # commits picked to bisect a suspected regression in
   # https://github.com/rancher/rancher (PR #56253, "Implement Rancher assets
   # image", which added the rancher-charts-copy init container + emptyDir
   # chart volume) interacting with PR #56261 ("fix: checking out bundled
   # charts", which made the bundled-catalog path run `git reset --hard` on
-  # every boot). The hypothesis is that #56253 alone is enough to slow rancher
-  # startup past the (unchanged) startupProbe deadline, causing kubelet to
-  # kill+restart the container and potentially wedge chart sync via a stale
-  # git index.lock in the surviving emptyDir. Comparing the immediate parent
-  # commit (without #56253) against #56253's own commit (with it, in
-  # isolation) tells us whether #56253 by itself is sufficient to reproduce
-  # the failure, or whether #56261 (or something else on main since) is also
-  # required.
+  # every boot). Round 1 (commits 1-2) showed #56253 alone is NOT sufficient
+  # to fail the startupProbe in isolation (2m52s vs 6m36s, both well under the
+  # 8m timeout) -- but the real webhook CI job (which also builds/tests/
+  # packages webhook and imports its image on the same 1cpu runner) still
+  # fails with the same probe-kill + git index.lock signature on current
+  # main. Round 2 (commits 3-4) adds #56261 itself, and a later main commit
+  # that includes both #56253 and #56261, to see whether #56261 changes the
+  # picture even in isolation (e.g. makes the restart-triggered git lock
+  # corruption possible where #56253 alone didn't manage it in 6m36s).
   #
   # This job is purely diagnostic: it does not gate the PR (no other job
   # depends on it) and can be deleted once the bisection is complete.
@@ -168,6 +169,12 @@ jobs:
           - label: "with #56253 (assets image)"
             rancher_commit: 5f868f27e427c7693ced107ab07dcc9eedcc5e17
             image_tag: v2.16-5f868f27e427c7693ced107ab07dcc9eedcc5e17-head
+          - label: "with #56261 (checking out bundled charts fix)"
+            rancher_commit: 1b96837a0a57cd9bdeba3b23c1a3dff247eccd56
+            image_tag: v2.16-1b96837a0a57cd9bdeba3b23c1a3dff247eccd56-head
+          - label: "later main (#56253 + #56261 + more, Aug 13)"
+            rancher_commit: f74f4fdb55c51022b1f515e40a6e20f53e1a487e
+            image_tag: v2.16-f74f4fdb55c51022b1f515e40a6e20f53e1a487e-head
     runs-on: runs-on,runner=1cpu-linux-x64,run-id=${{ github.run_id }}
     steps:
       - name: Checkout repository
