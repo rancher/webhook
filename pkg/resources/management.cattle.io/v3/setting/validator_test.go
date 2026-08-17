@@ -378,9 +378,10 @@ func (s *SettingSuite) TestValidateAuthUserInfoMaxAgeSecondsOnCreate() {
 
 func (s *SettingSuite) validateAuthUserInfoMaxAgeSeconds(op v1.Operation) {
 	tests := []struct {
-		desc    string
-		value   string
-		allowed bool
+		desc         string
+		value        string
+		defaultValue string
+		allowed      bool
 	}{
 		{
 			desc:    "valid max age",
@@ -395,6 +396,15 @@ func (s *SettingSuite) validateAuthUserInfoMaxAgeSeconds(op v1.Operation) {
 		{
 			desc:  "invalid max age",
 			value: "foo",
+		},
+		{
+			desc:         "empty value with default",
+			defaultValue: "3600",
+			allowed:      true,
+		},
+		{
+			desc:    "empty value and default",
+			allowed: false,
 		},
 	}
 
@@ -412,7 +422,8 @@ func (s *SettingSuite) validateAuthUserInfoMaxAgeSeconds(op v1.Operation) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: setting.AuthUserInfoMaxAgeSeconds,
 				},
-				Value: test.value,
+				Value:   test.value,
+				Default: test.defaultValue,
 			}, op, test.allowed)
 		})
 	}
