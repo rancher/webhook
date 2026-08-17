@@ -757,6 +757,44 @@ func TestAdmitDryRun(t *testing.T) {
 	assert.True(t, response.Allowed)
 	assert.Contains(t, string(response.Patch), "the-spec",
 		"the dry-run patch must carry the dynamic-schema revert")
+
+	// A dry-run Create must normalize trailing carriage returns and newlines
+	// in agent environment variable values.
+	clusterWithEnvVars := &v1.Cluster{
+		Spec: v1.ClusterSpec{
+			AgentEnvVars: []rkev1.EnvVar{
+				{
+					Name:  "HTTPS_PROXY",
+					Value: "https://${domain}.com:8080\r\n",
+				},
+				{
+					Name:  "NO_PROXY",
+					Value: "10.0.0.0/8,172.16.0.0/16\n",
+				},
+			},
+		},
+	}
+
+	envVarsRaw, err := json.Marshal(clusterWithEnvVars)
+	assert.Nil(t, err)
+
+	normalizeReq := &admission.Request{
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Create,
+			DryRun:    admission.Ptr(true),
+			UserInfo:  authenticationv1.UserInfo{Username: "u-test"},
+			Object:    runtime.RawExtension{Raw: envVarsRaw},
+		},
+	}
+
+	response, err = m.Admit(normalizeReq)
+	assert.Nil(t, err)
+	assert.True(t, response.Allowed)
+
+	assert.Contains(t, string(response.Patch), "https://${domain}.com:8080")
+	assert.Contains(t, string(response.Patch), "10.0.0.0/8,172.16.0.0/16")
+	assert.NotContains(t, string(response.Patch), "\\r")
+	assert.NotContains(t, string(response.Patch), "\\n")
 }
 
 func TestDynamicSchemaDrop(t *testing.T) {
@@ -1028,4 +1066,37 @@ func TestDynamicSchemaDrop(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_normalizeAgentEnvVars(t *testing.T) {
+	cluster := &v1.Cluster{
+		Spec: v1.ClusterSpec{
+			AgentEnvVars: []rkev1.EnvVar{
+				{Name: "CRLF", Value: "https://${domain}.com:8080\r\n"},
+				{Name: "CR_ONLY", Value: "https://${domain}.com:8080\r"},
+				{Name: "LF_ONLY", Value: "https://${domain}.com:8080\n"},
+				{Name: "MULTIPLE_TRAILING", Value: "https://${domain}.com:8080\r\n\r\n\n\r"},
+				{Name: "MIDDLE_BREAKS_PRESERVED", Value: "foo\nbar\r\nbaz\n"},
+				{Name: "NO_TRAILING_BREAK", Value: "https://${domain}.com:8080"},
+				{Name: "EMPTY", Value: ""},
+			},
+		},
+	}
+
+	expected := &v1.Cluster{
+		Spec: v1.ClusterSpec{
+			AgentEnvVars: []rkev1.EnvVar{
+				{Name: "CRLF", Value: "https://${domain}.com:8080"},
+				{Name: "CR_ONLY", Value: "https://${domain}.com:8080"},
+				{Name: "LF_ONLY", Value: "https://${domain}.com:8080"},
+				{Name: "MULTIPLE_TRAILING", Value: "https://${domain}.com:8080"},
+				{Name: "MIDDLE_BREAKS_PRESERVED", Value: "foo\nbar\r\nbaz"},
+				{Name: "NO_TRAILING_BREAK", Value: "https://${domain}.com:8080"},
+				{Name: "EMPTY", Value: ""},
+			},
+		},
+	}
+
+	normalizeAgentEnvVars(cluster)
+	assert.Equal(t, expected, cluster)
 }
