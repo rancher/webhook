@@ -24,7 +24,9 @@ echo "Rancher deployed"
 webhook_deployment_created() {
     kubectl get deployments -n cattle-system | grep rancher-webhook
 }
+SECONDS=0
 try --max 48 --delay 5 --waitmsg "Waiting for a rancher-webhook deployment to be created" --failmsg "Deployment creation failed" webhook_deployment_created
+echo "rancher-webhook deployment created after ${SECONDS}s"
 
 try --waitmsg "Waiting for rancher/webhook to be deployed" --failmsg "No rancher/webhook here" kubectl rollout status --watch=true --timeout=10s -n cattle-system deploy/rancher-webhook
 echo "Rancher deployed"
