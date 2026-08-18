@@ -117,7 +117,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	case admissionv1.Create:
 		return a.admitCreate(newSetting)
 	case admissionv1.Update:
-		return a.admitUpdate(oldSetting, newSetting)
+		return a.admitUpdate(oldSetting, newSetting, request.UserInfo.Username)
 	default:
 		return admission.ResponseAllowed(), nil
 	}
@@ -127,16 +127,17 @@ func (a *admitter) admitCreate(newSetting *v3.Setting) (*admissionv1.AdmissionRe
 	return a.admitCommonCreateUpdate(nil, newSetting)
 }
 
+var bypassServiceAccount = "system:serviceaccount:cattle-system:rancher"
 var ReadOnlySettings = []string{
 	"cacerts",
 }
 
-func (a *admitter) admitUpdate(oldSetting, newSetting *v3.Setting) (*admissionv1.AdmissionResponse, error) {
+func (a *admitter) admitUpdate(oldSetting, newSetting *v3.Setting, username string) (*admissionv1.AdmissionResponse, error) {
 	if oldSetting.Source == "env" && newSetting.Source != "env" {
 		return admission.ResponseBadRequest(fmt.Sprintf("setting with source \"%s\" cannot update setting with source \"env\"", newSetting.Source)), nil
 	}
 
-	if slices.Contains(ReadOnlySettings, oldSetting.Name) {
+	if slices.Contains(ReadOnlySettings, oldSetting.Name) && username != bypassServiceAccount {
 		return admission.ResponseBadRequest("setting is read only"), nil
 	}
 
