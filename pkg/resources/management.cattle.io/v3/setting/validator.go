@@ -377,7 +377,7 @@ func (a *admitter) validateUserRetentionCron(s *v3.Setting) error {
 func (a *admitter) validateAuthUserInfoMaxAgeSeconds(s *v3.Setting) error {
 	// We cannot use the validateDuration func since it does not allow for negative durations
 	// which are valid for the auth-user-info-max-age-seconds setting.
-	if _, err := time.ParseDuration(s.Value + "s"); err != nil {
+	if _, err := time.ParseDuration(effectiveValue(s) + "s"); err != nil {
 		return field.TypeInvalid(valuePath, s.Value, err.Error())
 	}
 
