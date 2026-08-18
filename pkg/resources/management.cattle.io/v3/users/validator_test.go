@@ -743,9 +743,75 @@ func Test_Admit(t *testing.T) {
 			allowed:            true,
 			skipLocalUserCheck: true,
 		},
-		// verify that `checkLocalUser` is in the code paths for create,
-		// update and delete requests.  the full set of checks done by
-		// `checkLocalUser` is tested separately, see `Test_CheckLocalUser`.
+		{
+			name: "changing principalIds not allowed for non-system user",
+			oldUser: &v3.User{
+				ObjectMeta:   metav1.ObjectMeta{Name: defaultUserName},
+				Username:     defaultUserName,
+				PrincipalIDs: []string{"local://u-abc"},
+			},
+			newUser: &v3.User{
+				ObjectMeta:   metav1.ObjectMeta{Name: defaultUserName},
+				Username:     defaultUserName,
+				PrincipalIDs: []string{"local://u-abc", "openldap_user://CN=Admin,DC=corp"},
+			},
+			requestUserName: requesterUserName,
+			allowed:         false,
+		},
+		{
+			name: "changing principalIds not allowed even for manage-users holder",
+			oldUser: &v3.User{
+				ObjectMeta:   metav1.ObjectMeta{Name: defaultUserName},
+				Username:     defaultUserName,
+				PrincipalIDs: []string{"local://u-abc"},
+			},
+			newUser: &v3.User{
+				ObjectMeta:   metav1.ObjectMeta{Name: defaultUserName},
+				Username:     defaultUserName,
+				PrincipalIDs: []string{"local://u-abc", "oidc_user://alice@example.com"},
+			},
+			requestUserName:    managerUserName,
+			allowed:            false,
+			skipLocalUserCheck: true,
+		},
+		{
+			name: "removing principalIds not allowed",
+			oldUser: &v3.User{
+				ObjectMeta:   metav1.ObjectMeta{Name: defaultUserName},
+				Username:     defaultUserName,
+				PrincipalIDs: []string{"local://u-abc", "github_user://12345"},
+			},
+			newUser: &v3.User{
+				ObjectMeta:   metav1.ObjectMeta{Name: defaultUserName},
+				Username:     defaultUserName,
+				PrincipalIDs: []string{"local://u-abc"},
+			},
+			requestUserName: requesterUserName,
+			allowed:         false,
+		},
+		{
+			name: "unchanged principalIds allowed for any user",
+			oldUser: &v3.User{
+				ObjectMeta:   metav1.ObjectMeta{Name: defaultUserName},
+				Username:     defaultUserName,
+				PrincipalIDs: []string{"local://u-abc"},
+			},
+			newUser: &v3.User{
+				ObjectMeta:   metav1.ObjectMeta{Name: defaultUserName},
+				Username:     defaultUserName,
+				PrincipalIDs: []string{"local://u-abc"},
+			},
+			requestUserName: requesterUserName,
+			resolverRulesFor: func(s string) ([]rbacv1.PolicyRule, error) {
+				switch s {
+				case requesterUserName, defaultUserName:
+					return getPods, nil
+				default:
+					return nil, fmt.Errorf("unexpected error")
+				}
+			},
+			allowed: true,
+		},
 		{
 			name: "create rejects new local user (no principal ids) for hidden local auth provider",
 			newUser: &v3.User{
