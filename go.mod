@@ -43,7 +43,7 @@ require (
 	github.com/rancher/wrangler/v3 v3.7.1-rc.2
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.9.4
-	github.com/stretchr/testify v1.11.1
+	github.com/stretchr/testify v1.12.0
 	go.uber.org/mock v0.6.0
 	golang.org/x/text v0.40.0
 	golang.org/x/tools v0.48.0
