@@ -154,6 +154,10 @@ kube-apiserver argument that mount it; when the field is cleared, the secret is 
 dropped. On server-side dry-run requests the secret is neither written nor deleted, and the derived fields are not
 set or dropped — the corresponding validation of that state is skipped on dry-run as well (see Validation Checks).
 
+#### Agent Environment Variable Normalization
+
+Trailing carriage return (`\r`) and newline (`\n`) characters are stripped from the `Value` of each entry in `spec.agentEnvVars`.
+
 ### On Update
 
 #### Dynamic Schema Drop
@@ -165,3 +169,8 @@ for each `machinePool`, to its' previous value. If the values are not identical,
 
 The revert also applies to server-side dry-run updates, so a dry-run preview matches what a real update would
 persist.
+
+
+#### Agent Environment Variable Normalization
+
+Trailing carriage return (`\r`) and newline (`\n`) characters are stripped from the `Value` of each entry in `spec.agentEnvVars`.
