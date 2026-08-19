@@ -152,6 +152,11 @@ func (m *ProvisioningClusterMutator) Admit(request *admission.Request) (*admissi
 		}
 	}
 
+	if request.Operation == admissionv1.Create ||
+		request.Operation == admissionv1.Update {
+		normalizeAgentEnvVars(cluster)
+	}
+
 	response.Allowed = true
 	if err = patch.CreatePatch(clusterJSON, cluster, response); err != nil {
 		return nil, fmt.Errorf("failed to create patch: %w", err)
@@ -441,5 +446,13 @@ func cleanupHash(file *rkev1.RKEProvisioningFiles) {
 		for j := range source.ConfigMap.Items {
 			file.FileSources[i].ConfigMap.Items[j].Hash = ""
 		}
+	}
+}
+
+// normalizeAgentEnvVars normalizes agent environment variable values by removing
+// trailing carriage return and newline characters from the provisioning cluster.
+func normalizeAgentEnvVars(cluster *v1.Cluster) {
+	for idx := range cluster.Spec.AgentEnvVars {
+		cluster.Spec.AgentEnvVars[idx].Value = strings.TrimRight(cluster.Spec.AgentEnvVars[idx].Value, "\r\n")
 	}
 }
