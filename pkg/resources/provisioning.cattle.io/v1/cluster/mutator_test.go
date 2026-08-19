@@ -795,6 +795,57 @@ func TestAdmitDryRun(t *testing.T) {
 	assert.Contains(t, string(response.Patch), "10.0.0.0/8,172.16.0.0/16")
 	assert.NotContains(t, string(response.Patch), "\\r")
 	assert.NotContains(t, string(response.Patch), "\\n")
+
+	// A dry-run Update must normalize trailing carriage returns and newlines
+	// in agent environment variable values.
+	oldClusterWithEnvVars := &v1.Cluster{
+		Spec: v1.ClusterSpec{
+			AgentEnvVars: []rkev1.EnvVar{
+				{
+					Name:  "HTTPS_PROXY",
+					Value: "https://old-proxy.example.com:8080",
+				},
+			},
+		},
+	}
+	oldEnvVarsRaw, err := json.Marshal(oldClusterWithEnvVars)
+	assert.Nil(t, err)
+
+	newClusterWithEnvVars := &v1.Cluster{
+		Spec: v1.ClusterSpec{
+			AgentEnvVars: []rkev1.EnvVar{
+				{
+					Name:  "HTTPS_PROXY",
+					Value: "https://${domain}.com:8080\r\n",
+				},
+				{
+					Name:  "NO_PROXY",
+					Value: "10.0.0.0/8,172.16.0.0/16\n",
+				},
+			},
+		},
+	}
+	newEnvVarsRaw, err := json.Marshal(newClusterWithEnvVars)
+	assert.Nil(t, err)
+
+	normalizeUpdateReq := &admission.Request{
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Update,
+			DryRun:    admission.Ptr(true),
+			UserInfo:  authenticationv1.UserInfo{Username: "u-test"},
+			Object:    runtime.RawExtension{Raw: newEnvVarsRaw},
+			OldObject: runtime.RawExtension{Raw: oldEnvVarsRaw},
+		},
+	}
+
+	response, err = m.Admit(normalizeUpdateReq)
+	assert.Nil(t, err)
+	assert.True(t, response.Allowed)
+
+	assert.Contains(t, string(response.Patch), "https://${domain}.com:8080")
+	assert.Contains(t, string(response.Patch), "10.0.0.0/8,172.16.0.0/16")
+	assert.NotContains(t, string(response.Patch), "\\r")
+	assert.NotContains(t, string(response.Patch), "\\n")
 }
 
 func TestDynamicSchemaDrop(t *testing.T) {
