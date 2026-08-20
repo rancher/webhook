@@ -64,6 +64,8 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		nshandler.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews()),
 		clusterrepo.NewValidator(),
 		auditpolicy.NewValidator(),
+		resourcequota.NewValidator(),
+		limitrange.NewValidator(),
 	}
 
 	if clients.MultiClusterManagement {
@@ -84,8 +86,6 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			secret.NewValidator(clients.RBAC.Role().Cache(), clients.RBAC.RoleBinding().Cache()),
 			nodedriver.NewValidator(clients.Dynamic),
 			project.NewValidator(clients.Management.Cluster().Cache(), clients.Management.User().Cache()),
-			resourcequota.NewValidator(),
-			limitrange.NewValidator(),
 			role.NewValidator(),
 			rolebinding.NewValidator(),
 			setting.NewValidator(clients.Management.Cluster().Cache(), clients.Management.Setting().Cache()),
