@@ -100,7 +100,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		if hasMarkerLabel(newRq) {
 			// Reject the user's attempt to promote an unmanaged resource to Rancher managed
 			return admission.ResponseBadRequest(
-				"users are forbidden from creating resources managed by Rancher. Remove the marker label",
+				"users are forbidden from promoting resources to Rancher management. Remove the marker label",
 			), nil
 		}
 	case admissionv1.Delete:
