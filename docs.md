@@ -106,7 +106,7 @@ When a scale operation is performed on a MachineDeployment, the webhook synchron
 
 # core/v1
 
-## Limitrange
+## LimitRange
 
 ### Validation Checks
 
