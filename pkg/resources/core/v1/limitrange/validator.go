@@ -15,14 +15,14 @@ import (
 	"k8s.io/utils/trace"
 )
 
-// defaultLimitrangeLabel is the label that Rancher sets on the namespace
-// Limitrange it manages. LimitRanges carrying this label cannot be created,
+// defaultLimitRangeLabel is the label that Rancher sets on the namespace
+// LimitRange it manages. LimitRanges carrying this label cannot be created,
 // modified, or deleted by regular users. This includes indirect creation by
 // adding the marker label to an unmanaged user resource. Note, yes, the
 // limitrange resource use the same label as resource quota resources.
 const defaultLimitRangeLabel = "resourcequota.management.cattle.io/default-resource-quota"
 
-// limitrangeGVR is the GroupVersionResource for core Limitrange objects.
+// limitrangeGVR is the GroupVersionResource for core LimitRange objects.
 var limitrangeGVR = schema.GroupVersionResource{
 	Group:    "",
 	Version:  "v1",
@@ -34,7 +34,7 @@ type Validator struct {
 	admitter admitter
 }
 
-// NewValidator returns a Limitrange validator.
+// NewValidator returns a LimitRange validator.
 func NewValidator() *Validator {
 	return &Validator{
 		admitter: admitter{},
@@ -78,7 +78,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 
 	oldRq, newRq, err := objectsv1.LimitRangeOldAndNewFromRequest(&request.AdmissionRequest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode Limitrange from request: %w", err)
+		return nil, fmt.Errorf("failed to decode LimitRange from request: %w", err)
 	}
 	switch request.Operation {
 	case admissionv1.Create:
@@ -100,7 +100,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		if hasMarkerLabel(newRq) {
 			// Reject the user's attempt to promote an unmanaged resource to Rancher managed
 			return admission.ResponseBadRequest(
-				"users are forbidden from creating resources managed by Rancher. Remove the marker label",
+				"users are forbidden from promoting resources to Rancher management. Remove the marker label",
 			), nil
 		}
 	case admissionv1.Delete:
@@ -118,7 +118,7 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	return admission.ResponseAllowed(), nil
 }
 
-// hasMarkerLabel reports whether rq is a Rancher-managed namespace Limitrange resource.
+// hasMarkerLabel reports whether rq is a Rancher-managed namespace LimitRange resource.
 func hasMarkerLabel(rq *corev1.LimitRange) bool {
 	return rq.Labels[defaultLimitRangeLabel] == "true"
 }

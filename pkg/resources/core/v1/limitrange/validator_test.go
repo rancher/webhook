@@ -61,7 +61,7 @@ func TestLimitRangeValidator(t *testing.T) {
 			wantAllowed: false,
 		},
 		{
-			name:        "update demotion to unmnaged is denied",
+			name:        "update demotion to unmanaged is denied",
 			operation:   admissionv1.Update,
 			oldRQ:       rqManaged,
 			newRQ:       rq,
