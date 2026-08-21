@@ -151,7 +151,7 @@ The following labels are considered relevant for PSA enforcement:
 
 Validation ensures that the limits for cpu/memory must not be less than the requests for cpu/memory.
 
-## Resourcequota
+## ResourceQuota
 
 ### Validation Checks
 
