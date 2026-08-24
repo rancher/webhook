@@ -15,6 +15,11 @@ import (
 	"k8s.io/utils/trace"
 )
 
+// kubernetesNamespaceController is the system user who is allowed to all
+// resource quotas, even the rancher-managed one. because it does so only as
+// part of deleting the entire namespace.
+const kubernetesNamespaceController = "system:serviceaccount:kube-system:namespace-controller"
+
 // defaultResourceQuotaLabel is the label that Rancher sets on the namespace
 // ResourceQuota it manages.  ResourceQuotas carrying this label cannot be
 // created, modified, or deleted by regular users. This includes indirect
@@ -103,6 +108,11 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 			), nil
 		}
 	case admissionv1.Delete:
+		if request.UserInfo.Username == kubernetesNamespaceController {
+			// The kubernetes controller is allowed to delete the rancher-managed resource.
+			// This happens as part of deleting the containing namespace.
+			return admission.ResponseAllowed(), nil
+		}
 		if hasMarkerLabel(oldRq) {
 			// Reject the user's attempt to delete the
 			// rancher-managed quota resource
