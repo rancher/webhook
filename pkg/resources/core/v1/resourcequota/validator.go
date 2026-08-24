@@ -62,6 +62,7 @@ func (v *Validator) Operations() []admissionregistrationv1.OperationType {
 // ValidatingWebhook returns the ValidatingWebhook configuration for this validator.
 func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.WebhookClientConfig) []admissionregistrationv1.ValidatingWebhook {
 	wh := admission.NewDefaultValidatingWebhook(v, clientConfig, admissionregistrationv1.NamespacedScope, v.Operations())
+	wh.Rules[0].Rule.Resources = []string{resourceQuotaGVR.Resource, resourceQuotaGVR.Resource + "/status"}
 	return []admissionregistrationv1.ValidatingWebhook{*wh}
 }
 
@@ -94,6 +95,23 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 			), nil
 		}
 	case admissionv1.Update:
+		if request.SubResource == "status" {
+			oldHasMarkerLabel := hasMarkerLabel(oldRq)
+			newHasMarkerLabel := hasMarkerLabel(newRq)
+			if oldHasMarkerLabel && !newHasMarkerLabel {
+				// Reject the user's attempt to demote a Rancher-managed resource.
+				return admission.ResponseBadRequest(
+					"users are forbidden from changing resources managed by Rancher",
+				), nil
+			}
+			if !oldHasMarkerLabel && newHasMarkerLabel {
+				// Reject the user's attempt to promote an unmanaged resource to Rancher managed.
+				return admission.ResponseBadRequest(
+					"users are forbidden from promoting resources to Rancher management. Remove the marker label",
+				), nil
+			}
+			return admission.ResponseAllowed(), nil
+		}
 		if hasMarkerLabel(oldRq) {
 			// Reject the user's attempt to update the
 			// rancher-managed quota resource
