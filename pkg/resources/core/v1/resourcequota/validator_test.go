@@ -40,6 +40,7 @@ func TestResourceQuotaValidator(t *testing.T) {
 		newRQ       *corev1.ResourceQuota
 		wantAllowed bool
 		wantErr     bool
+		system      bool
 	}{
 		// --- CREATE ---
 		{
@@ -89,6 +90,13 @@ func TestResourceQuotaValidator(t *testing.T) {
 			oldRQ:       rqManaged,
 			wantAllowed: false,
 		},
+		{
+			name:        "delete managed is allowed to system controller",
+			operation:   admissionv1.Delete,
+			oldRQ:       rqManaged,
+			wantAllowed: true,
+			system:      true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -100,6 +108,9 @@ func TestResourceQuotaValidator(t *testing.T) {
 
 			req, err := createRequest(tt.oldRQ, tt.newRQ, tt.operation)
 			assert.NoError(t, err)
+			if tt.system {
+				req = systemController(req)
+			}
 
 			resp, err := v.Admitters()[0].Admit(req)
 			if tt.wantErr {
@@ -110,6 +121,13 @@ func TestResourceQuotaValidator(t *testing.T) {
 			assert.Equal(t, tt.wantAllowed, resp.Allowed)
 		})
 	}
+}
+
+// systemController adds the kubernetes namespace controller user to the request
+func systemController(request *admission.Request) *admission.Request {
+	newRq := *request
+	newRq.UserInfo.Username = kubernetesNamespaceController
+	return &newRq
 }
 
 // createRequest builds an admission.Request for a ResourceQuota operation.
