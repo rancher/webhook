@@ -18,7 +18,10 @@ import (
 // kubernetesNamespaceController is the system user who is allowed to all
 // resource quotas, even the rancher-managed one. because it does so only as
 // part of deleting the entire namespace.
-const kubernetesNamespaceController = "system:serviceaccount:kube-system:namespace-controller"
+const (
+	kubernetesNamespaceController = "system:serviceaccount:kube-system:namespace-controller"
+	kubernetesQuotaController     = "system:serviceaccount:kube-system:resourcequota-controller"
+)
 
 // defaultResourceQuotaLabel is the label that Rancher sets on the namespace
 // ResourceQuota it manages.  ResourceQuotas carrying this label cannot be
@@ -110,7 +113,12 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 					"users are forbidden from promoting resources to Rancher management. Remove the marker label",
 				), nil
 			}
-			return admission.ResponseAllowed(), nil
+			// The kubernetes quota controller is allowed to update
+			// the status of quota resources, managed or not.
+			if request.UserInfo.Username == kubernetesQuotaController {
+				return admission.ResponseAllowed(), nil
+			}
+			return admission.ResponseBadRequest("status is immutable"), nil
 		}
 		if hasMarkerLabel(oldRq) {
 			// Reject the user's attempt to update the

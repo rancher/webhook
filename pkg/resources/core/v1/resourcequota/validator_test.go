@@ -42,7 +42,7 @@ func TestResourceQuotaValidator(t *testing.T) {
 		newRQ       *corev1.ResourceQuota
 		wantAllowed bool
 		wantErr     bool
-		system      bool
+		system      string
 	}{
 		// --- CREATE ---
 		{
@@ -80,12 +80,21 @@ func TestResourceQuotaValidator(t *testing.T) {
 			wantAllowed: false,
 		},
 		{
-			name:        "status update of managed is allowed",
+			name:        "status update of managed is denied",
+			operation:   admissionv1.Update,
+			subresource: "status",
+			oldRQ:       rqManaged,
+			newRQ:       rqManaged,
+			wantAllowed: false,
+		},
+		{
+			name:        "status update of managed by quota controller is allowed",
 			operation:   admissionv1.Update,
 			subresource: "status",
 			oldRQ:       rqManaged,
 			newRQ:       rqManaged,
 			wantAllowed: true,
+			system:      kubernetesQuotaController,
 		},
 		{
 			name:        "status update promotion to managed is denied",
@@ -117,11 +126,11 @@ func TestResourceQuotaValidator(t *testing.T) {
 			wantAllowed: false,
 		},
 		{
-			name:        "delete managed is allowed to system controller",
+			name:        "delete managed is allowed to namespace controller",
 			operation:   admissionv1.Delete,
 			oldRQ:       rqManaged,
 			wantAllowed: true,
-			system:      true,
+			system:      kubernetesNamespaceController,
 		},
 	}
 
@@ -134,8 +143,8 @@ func TestResourceQuotaValidator(t *testing.T) {
 
 			req, err := createRequest(tt.oldRQ, tt.newRQ, tt.operation, tt.subresource)
 			assert.NoError(t, err)
-			if tt.system {
-				req = systemController(req)
+			if tt.system != "" {
+				req = systemController(req, tt.system)
 			}
 
 			resp, err := v.Admitters()[0].Admit(req)
@@ -159,9 +168,9 @@ func TestResourceQuotaValidatingWebhookIncludesStatusSubresource(t *testing.T) {
 }
 
 // systemController adds the kubernetes namespace controller user to the request
-func systemController(request *admission.Request) *admission.Request {
+func systemController(request *admission.Request, name string) *admission.Request {
 	newRq := *request
-	newRq.UserInfo.Username = kubernetesNamespaceController
+	newRq.UserInfo.Username = name
 	return &newRq
 }
 
