@@ -8,6 +8,7 @@ import (
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/stretchr/testify/assert"
 	admissionv1 "k8s.io/api/admission/v1"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -27,6 +28,7 @@ func TestLimitRangeValidator(t *testing.T) {
 	tests := []struct {
 		name        string
 		operation   admissionv1.Operation
+		subresource string
 		oldRQ       *corev1.LimitRange
 		newRQ       *corev1.LimitRange
 		wantAllowed bool
@@ -68,6 +70,30 @@ func TestLimitRangeValidator(t *testing.T) {
 			newRQ:       rq,
 			wantAllowed: false,
 		},
+		{
+			name:        "status update of managed is allowed",
+			operation:   admissionv1.Update,
+			subresource: "status",
+			oldRQ:       rqManaged,
+			newRQ:       rqManaged,
+			wantAllowed: true,
+		},
+		{
+			name:        "status update promotion to managed is denied",
+			operation:   admissionv1.Update,
+			subresource: "status",
+			oldRQ:       rq,
+			newRQ:       rqManaged,
+			wantAllowed: false,
+		},
+		{
+			name:        "status update demotion to unmanaged is denied",
+			operation:   admissionv1.Update,
+			subresource: "status",
+			oldRQ:       rqManaged,
+			newRQ:       rq,
+			wantAllowed: false,
+		},
 		// --- DELETE ---
 		{
 			name:        "delete unmanaged is allowed",
@@ -97,7 +123,7 @@ func TestLimitRangeValidator(t *testing.T) {
 			v := NewValidator()
 			assert.Len(t, v.Admitters(), 1)
 
-			req, err := createRequest(tt.oldRQ, tt.newRQ, tt.operation)
+			req, err := createRequest(tt.oldRQ, tt.newRQ, tt.operation, tt.subresource)
 			assert.NoError(t, err)
 			if tt.system {
 				req = systemController(req)
@@ -114,6 +140,15 @@ func TestLimitRangeValidator(t *testing.T) {
 	}
 }
 
+func TestLimitRangeValidatingWebhookIncludesStatusSubresource(t *testing.T) {
+	t.Parallel()
+
+	webhooks := NewValidator().ValidatingWebhook(admissionregistrationv1.WebhookClientConfig{})
+	assert.Len(t, webhooks, 1)
+	assert.Len(t, webhooks[0].Rules, 1)
+	assert.Equal(t, []string{"limitranges", "limitranges/status"}, webhooks[0].Rules[0].Resources)
+}
+
 // systemController adds the kubernetes namespace controller user to the request
 func systemController(request *admission.Request) *admission.Request {
 	newRq := *request
@@ -122,7 +157,7 @@ func systemController(request *admission.Request) *admission.Request {
 }
 
 // createRequest builds an admission.Request for a LimitRange operation.
-func createRequest(oldObject, newObject *corev1.LimitRange, operation admissionv1.Operation) (*admission.Request, error) {
+func createRequest(oldObject, newObject *corev1.LimitRange, operation admissionv1.Operation, subresource string) (*admission.Request, error) {
 	gvk := metav1.GroupVersionKind{Group: "", Version: "v1", Kind: "LimitRange"}
 	gvr := metav1.GroupVersionResource{Group: "", Version: "v1", Resource: "limitranges"}
 	req := &admission.Request{
@@ -133,6 +168,7 @@ func createRequest(oldObject, newObject *corev1.LimitRange, operation admissionv
 			RequestKind:     &gvk,
 			RequestResource: &gvr,
 			Operation:       operation,
+			SubResource:     subresource,
 			Object:          runtime.RawExtension{},
 			OldObject:       runtime.RawExtension{},
 		},
