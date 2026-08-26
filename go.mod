@@ -38,9 +38,9 @@ require (
 	github.com/rancher/dynamiclistener v0.9.0
 	github.com/rancher/jsonpath v0.0.0-20260423141252-c4e0c565a09f
 	github.com/rancher/lasso v0.2.9
-	github.com/rancher/rancher/pkg/apis v0.0.0-20260813204112-1b9f68450983
+	github.com/rancher/rancher/pkg/apis v0.0.0-20260826091527-c6511f58083f
 	github.com/rancher/rancher/pkg/plan v0.0.0-20260428222332-2696373f4152
-	github.com/rancher/wrangler/v3 v3.7.1-rc.2
+	github.com/rancher/wrangler/v3 v3.7.1
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.10.0
 	github.com/stretchr/testify v1.12.1
@@ -109,7 +109,7 @@ require (
 	github.com/rancher/aks-operator v1.15.0 // indirect
 	github.com/rancher/ali-operator v1.15.0-rc.3 // indirect
 	github.com/rancher/eks-operator v1.15.0 // indirect
-	github.com/rancher/fleet/pkg/apis v0.16.0 // indirect
+	github.com/rancher/fleet/pkg/apis v0.17.0-alpha.1 // indirect
 	github.com/rancher/gke-operator v1.15.0 // indirect
 	github.com/rancher/norman v0.10.0
 	github.com/robfig/cron/v3 v3.0.1 // indirect
