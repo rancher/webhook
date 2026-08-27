@@ -42,7 +42,7 @@ require (
 	github.com/rancher/rancher/pkg/plan v0.0.0-20260428222332-2696373f4152
 	github.com/rancher/wrangler/v3 v3.7.1
 	github.com/robfig/cron v1.2.0
-	github.com/sirupsen/logrus v1.10.0
+	github.com/sirupsen/logrus v1.10.1
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/mock v0.6.0
 	golang.org/x/text v0.41.0
