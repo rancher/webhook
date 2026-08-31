@@ -38,7 +38,7 @@ require (
 	github.com/rancher/dynamiclistener v0.9.1
 	github.com/rancher/jsonpath v0.0.0-20260423141252-c4e0c565a09f
 	github.com/rancher/lasso v0.2.9
-	github.com/rancher/rancher/pkg/apis v0.0.0-20260828035822-7a21b0377a23
+	github.com/rancher/rancher/pkg/apis v0.0.0-20260828165945-fbf213057b25
 	github.com/rancher/rancher/pkg/plan v0.0.0-20260428222332-2696373f4152
 	github.com/rancher/wrangler/v3 v3.7.1
 	github.com/robfig/cron v1.2.0
