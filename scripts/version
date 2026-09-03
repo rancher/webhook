@@ -11,7 +11,7 @@ GIT_TAG=${GIT_TAG:-$(git tag -l --contains HEAD | head -n 1)}
 if [[ -z "$DIRTY" && -n "$GIT_TAG" ]]; then
     VERSION=$GIT_TAG
 else
-    VERSION="0.0.0-${COMMIT}${DIRTY}"
+    VERSION="0.0.0-g${COMMIT}${DIRTY}"
 fi
 
 # ARCH is now expected to be in the environment, set by the Makefile
