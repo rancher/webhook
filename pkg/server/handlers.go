@@ -9,7 +9,9 @@ import (
 	"github.com/rancher/webhook/pkg/resources/catalog.cattle.io/v1/clusterrepo"
 	"github.com/rancher/webhook/pkg/resources/cluster.cattle.io/v3/clusterauthtoken"
 	"github.com/rancher/webhook/pkg/resources/cluster.x-k8s.io/v1beta2/machinedeployment"
+	"github.com/rancher/webhook/pkg/resources/core/v1/limitrange"
 	nshandler "github.com/rancher/webhook/pkg/resources/core/v1/namespace"
+	"github.com/rancher/webhook/pkg/resources/core/v1/resourcequota"
 	"github.com/rancher/webhook/pkg/resources/core/v1/secret"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/authconfig"
 	managementCluster "github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/cluster"
@@ -60,6 +62,8 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		nshandler.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews()),
 		clusterrepo.NewValidator(),
 		auditpolicy.NewValidator(),
+		resourcequota.NewValidator(),
+		limitrange.NewValidator(),
 	}
 
 	if clients.MultiClusterManagement {

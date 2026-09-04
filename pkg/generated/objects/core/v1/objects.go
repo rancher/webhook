@@ -62,16 +62,16 @@ func UnstructuredFromRequest(request *admissionv1.AdmissionRequest) (*unstructur
 	return object, nil
 }
 
-// SecretOldAndNewFromRequest gets the old and new Secret objects, respectively, from the webhook request.
-// If the request is a Delete operation, then the new object is the zero value for Secret.
-// Similarly, if the request is a Create operation, then the old object is the zero value for Secret.
-func SecretOldAndNewFromRequest(request *admissionv1.AdmissionRequest) (*v1.Secret, *v1.Secret, error) {
+// LimitRangeOldAndNewFromRequest gets the old and new LimitRange objects, respectively, from the webhook request.
+// If the request is a Delete operation, then the new object is the zero value for LimitRange.
+// Similarly, if the request is a Create operation, then the old object is the zero value for LimitRange.
+func LimitRangeOldAndNewFromRequest(request *admissionv1.AdmissionRequest) (*v1.LimitRange, *v1.LimitRange, error) {
 	if request == nil {
 		return nil, nil, fmt.Errorf("nil request")
 	}
 
-	object := &v1.Secret{}
-	oldObject := &v1.Secret{}
+	object := &v1.LimitRange{}
+	oldObject := &v1.LimitRange{}
 
 	if request.Operation != admissionv1.Delete {
 		err := json.Unmarshal(request.Object.Raw, object)
@@ -92,15 +92,15 @@ func SecretOldAndNewFromRequest(request *admissionv1.AdmissionRequest) (*v1.Secr
 	return oldObject, object, nil
 }
 
-// SecretFromRequest returns a Secret object from the webhook request.
+// LimitRangeFromRequest returns a LimitRange object from the webhook request.
 // If the operation is a Delete operation, then the old object is returned.
 // Otherwise, the new object is returned.
-func SecretFromRequest(request *admissionv1.AdmissionRequest) (*v1.Secret, error) {
+func LimitRangeFromRequest(request *admissionv1.AdmissionRequest) (*v1.LimitRange, error) {
 	if request == nil {
 		return nil, fmt.Errorf("nil request")
 	}
 
-	object := &v1.Secret{}
+	object := &v1.LimitRange{}
 	raw := request.Object.Raw
 
 	if request.Operation == admissionv1.Delete {
@@ -154,6 +154,112 @@ func NamespaceFromRequest(request *admissionv1.AdmissionRequest) (*v1.Namespace,
 	}
 
 	object := &v1.Namespace{}
+	raw := request.Object.Raw
+
+	if request.Operation == admissionv1.Delete {
+		raw = request.OldObject.Raw
+	}
+
+	err := json.Unmarshal(raw, object)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal request object: %w", err)
+	}
+
+	return object, nil
+}
+
+// ResourceQuotaOldAndNewFromRequest gets the old and new ResourceQuota objects, respectively, from the webhook request.
+// If the request is a Delete operation, then the new object is the zero value for ResourceQuota.
+// Similarly, if the request is a Create operation, then the old object is the zero value for ResourceQuota.
+func ResourceQuotaOldAndNewFromRequest(request *admissionv1.AdmissionRequest) (*v1.ResourceQuota, *v1.ResourceQuota, error) {
+	if request == nil {
+		return nil, nil, fmt.Errorf("nil request")
+	}
+
+	object := &v1.ResourceQuota{}
+	oldObject := &v1.ResourceQuota{}
+
+	if request.Operation != admissionv1.Delete {
+		err := json.Unmarshal(request.Object.Raw, object)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to unmarshal request object: %w", err)
+		}
+	}
+
+	if request.Operation == admissionv1.Create {
+		return oldObject, object, nil
+	}
+
+	err := json.Unmarshal(request.OldObject.Raw, oldObject)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal request oldObject: %w", err)
+	}
+
+	return oldObject, object, nil
+}
+
+// ResourceQuotaFromRequest returns a ResourceQuota object from the webhook request.
+// If the operation is a Delete operation, then the old object is returned.
+// Otherwise, the new object is returned.
+func ResourceQuotaFromRequest(request *admissionv1.AdmissionRequest) (*v1.ResourceQuota, error) {
+	if request == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	object := &v1.ResourceQuota{}
+	raw := request.Object.Raw
+
+	if request.Operation == admissionv1.Delete {
+		raw = request.OldObject.Raw
+	}
+
+	err := json.Unmarshal(raw, object)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal request object: %w", err)
+	}
+
+	return object, nil
+}
+
+// SecretOldAndNewFromRequest gets the old and new Secret objects, respectively, from the webhook request.
+// If the request is a Delete operation, then the new object is the zero value for Secret.
+// Similarly, if the request is a Create operation, then the old object is the zero value for Secret.
+func SecretOldAndNewFromRequest(request *admissionv1.AdmissionRequest) (*v1.Secret, *v1.Secret, error) {
+	if request == nil {
+		return nil, nil, fmt.Errorf("nil request")
+	}
+
+	object := &v1.Secret{}
+	oldObject := &v1.Secret{}
+
+	if request.Operation != admissionv1.Delete {
+		err := json.Unmarshal(request.Object.Raw, object)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to unmarshal request object: %w", err)
+		}
+	}
+
+	if request.Operation == admissionv1.Create {
+		return oldObject, object, nil
+	}
+
+	err := json.Unmarshal(request.OldObject.Raw, oldObject)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to unmarshal request oldObject: %w", err)
+	}
+
+	return oldObject, object, nil
+}
+
+// SecretFromRequest returns a Secret object from the webhook request.
+// If the operation is a Delete operation, then the old object is returned.
+// Otherwise, the new object is returned.
+func SecretFromRequest(request *admissionv1.AdmissionRequest) (*v1.Secret, error) {
+	if request == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+
+	object := &v1.Secret{}
 	raw := request.Object.Raw
 
 	if request.Operation == admissionv1.Delete {
