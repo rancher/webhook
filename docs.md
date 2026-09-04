@@ -106,6 +106,23 @@ When a scale operation is performed on a MachineDeployment, the webhook synchron
 
 # core/v1
 
+## LimitRange
+
+### Validation Checks
+
+The checks apply only to user-initiated requests.
+Rancher-initiated requests bypass the validation.
+
+#### On delete
+
+A rancher-managed limit range cannot be deleted by users.
+
+#### On create and update
+
+A rancher-managed limit range cannot be created or modified by users.
+
+Neither is it possible to promote an unmanaged resource to rancher-managed.
+
 ## Namespace
 
 ### Validation Checks
@@ -133,6 +150,23 @@ The following labels are considered relevant for PSA enforcement:
 #### Namespace resource limit validation
 
 Validation ensures that the limits for cpu/memory must not be less than the requests for cpu/memory.
+
+## ResourceQuota
+
+### Validation Checks
+
+The checks apply only to user-initiated requests.
+Rancher-initiated requests bypass the validation.
+
+#### On delete
+
+A rancher-managed resource quota cannot be deleted by users.
+
+#### On create and update
+
+A rancher-managed resource quota cannot be created or modified by users.
+
+Neither is it possible to promote an unmanaged resource to rancher-managed.
 
 ## Secret
 
