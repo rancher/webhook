@@ -15,8 +15,8 @@ import (
 	"k8s.io/utils/trace"
 )
 
-// kubernetesNamespaceController is the system user who is allowed to all limit
-// ranges, even the rancher-managed one. because it does so only as part of
+// kubernetesNamespaceController is the system user allowed to modify all limit
+// ranges, even the rancher-managed one. It does so only as part of
 // deleting the entire namespace.
 const kubernetesNamespaceController = "system:serviceaccount:kube-system:namespace-controller"
 
