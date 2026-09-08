@@ -4,15 +4,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
 
 	ldapv3 "github.com/go-ldap/ldap/v3"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
+	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/resources/common"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/trace"
@@ -30,9 +35,12 @@ type Validator struct {
 }
 
 // NewValidator returns a new Validator instance.
-func NewValidator() *Validator {
+func NewValidator(featureCache controllerv3.FeatureCache, authConfigsCache controllerv3.AuthConfigCache) *Validator {
 	return &Validator{
-		admitter: admitter{},
+		admitter: admitter{
+			featureCache:     featureCache,
+			authConfigsCache: authConfigsCache,
+		},
 	}
 }
 
@@ -59,6 +67,8 @@ func (v *Validator) Admitters() []admission.Admitter {
 }
 
 type admitter struct {
+	featureCache     controllerv3.FeatureCache
+	authConfigsCache controllerv3.AuthConfigCache
 }
 
 // Admit handles the webhook admission requests.
@@ -97,6 +107,28 @@ func (a *admitter) admitCommonCreateUpdate(request *admission.Request, _, newAut
 		return admission.ResponseAllowed(), nil
 	}
 
+	multipleAuthConfigsEnabled, err := a.isMultipleAuthConfigsEnabled()
+	if err != nil {
+		return admission.ResponseBadRequest(err.Error()), nil
+	}
+	if !multipleAuthConfigsEnabled {
+		hasExisting, err := a.hasExistingEnabledAuthConfig()
+		if err != nil {
+			return admission.ResponseBadRequest(err.Error()), nil
+		}
+		if hasExisting {
+			return &admissionv1.AdmissionResponse{
+				Result: &metav1.Status{
+					Status:  "Failure",
+					Message: "AuthConfig already enabled",
+					Reason:  metav1.StatusReasonAlreadyExists,
+					Code:    http.StatusConflict,
+				},
+				Allowed: false,
+			}, nil
+		}
+	}
+
 	switch newAuthConfig.Type {
 	case "openLdapConfig", "freeIpaConfig":
 		err = validateLDAPConfig(request)
@@ -110,6 +142,26 @@ func (a *admitter) admitCommonCreateUpdate(request *admission.Request, _, newAut
 	}
 
 	return admission.ResponseAllowed(), nil
+}
+
+// hasExistingEnabledAuthConfig checks if there is any existing enabled
+// AuthConfig resources other than the local one.
+func (a *admitter) hasExistingEnabledAuthConfig() (bool, error) {
+	existingAuthConfigs, err := a.authConfigsCache.List(labels.Everything())
+	if err != nil {
+		return false, err
+	}
+	for _, config := range existingAuthConfigs {
+		if config.Enabled && config.Name != "local" {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (a *admitter) isMultipleAuthConfigsEnabled() (bool, error) {
+	return common.IsFeatureEnabled(a.featureCache, common.MultipleAuthConfigs)
 }
 
 func validateLDAPConfig(request *admission.Request) error {
