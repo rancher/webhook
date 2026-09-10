@@ -266,6 +266,66 @@ webhooks:
       scope: Cluster
   sideEffects: None
   timeoutSeconds: 10
+- admissionReviewVersions:
+    - v1
+    - v1beta1
+  clientConfig:
+    caBundle: {{ .Values.caBundle | default "" }}
+    service:
+      name: rancher-webhook
+      namespace: cattle-system
+      path: /v1/webhook/validation/resourcequotas
+      port: 443
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: rancher.cattle.io.resourcequotas
+  namespaceSelector: {}
+  objectSelector: {}
+  rules:
+    - apiGroups:
+        - ""
+      apiVersions:
+        - v1
+      operations:
+        - CREATE
+        - UPDATE
+        - DELETE
+      resources:
+        - resourcequotas
+        - resourcequotas/status
+      scope: Namespaced
+  sideEffects: None
+  timeoutSeconds: 10
+- admissionReviewVersions:
+    - v1
+    - v1beta1
+  clientConfig:
+    caBundle: {{ .Values.caBundle | default "" }}
+    service:
+      name: rancher-webhook
+      namespace: cattle-system
+      path: /v1/webhook/validation/limitranges
+      port: 443
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: rancher.cattle.io.limitranges
+  namespaceSelector: {}
+  objectSelector: {}
+  rules:
+    - apiGroups:
+        - ""
+      apiVersions:
+        - v1
+      operations:
+        - CREATE
+        - UPDATE
+        - DELETE
+      resources:
+        - limitranges
+        - limitranges/status
+      scope: Namespaced
+  sideEffects: None
+  timeoutSeconds: 10
 {{- if .Values.mcm.enabled }}
 - admissionReviewVersions:
     - v1
@@ -892,6 +952,92 @@ webhooks:
       resources:
         - proxyendpoints
       scope: Cluster
+  sideEffects: None
+  timeoutSeconds: 10
+- admissionReviewVersions:
+    - v1
+    - v1beta1
+  clientConfig:
+    caBundle: {{ .Values.caBundle | default "" }}
+    service:
+      name: rancher-webhook
+      namespace: cattle-system
+      path: /v1/webhook/validation/awsclusters.infrastructure.cluster.x-k8s.io
+      port: 443
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: rancher.cattle.io.awsclusters.infrastructure.cluster.x-k8s.io
+  namespaceSelector: {}
+  objectSelector: {}
+  rules:
+    - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+      apiVersions:
+        - v1beta2
+      operations:
+        - CREATE
+        - UPDATE
+      resources:
+        - awsclusters
+      scope: Namespaced
+  sideEffects: None
+  timeoutSeconds: 10
+- admissionReviewVersions:
+    - v1
+    - v1beta1
+  clientConfig:
+    caBundle: {{ .Values.caBundle | default "" }}
+    service:
+      name: rancher-webhook
+      namespace: cattle-system
+      path: /v1/webhook/validation/awsclusterstaticidentities.infrastructure.cluster.x-k8s.io
+      port: 443
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: rancher.cattle.io.awsclusterstaticidentities.infrastructure.cluster.x-k8s.io
+  namespaceSelector: {}
+  objectSelector: {}
+  rules:
+    - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+      apiVersions:
+        - v1beta2
+      operations:
+        - CREATE
+        - UPDATE
+      resources:
+        - awsclusterstaticidentities
+      scope: Cluster
+  sideEffects: None
+  timeoutSeconds: 10
+{{- end }}
+{{- if not .Values.mcm.enabled }}
+- admissionReviewVersions:
+    - v1
+    - v1beta1
+  clientConfig:
+    caBundle: {{ .Values.caBundle | default "" }}
+    service:
+      name: rancher-webhook
+      namespace: cattle-system
+      path: /v1/webhook/validation/clusterauthtokens.cluster.cattle.io
+      port: 443
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: rancher.cattle.io.clusterauthtokens.cluster.cattle.io
+  namespaceSelector: {}
+  objectSelector: {}
+  rules:
+    - apiGroups:
+        - cluster.cattle.io
+      apiVersions:
+        - v3
+      operations:
+        - CREATE
+        - UPDATE
+      resources:
+        - clusterauthtokens
+      scope: Namespaced
   sideEffects: None
   timeoutSeconds: 10
 {{- end }}
