@@ -3,8 +3,10 @@ apiVersion: v1
 metadata:
   name: rancher-webhook
   namespace: cattle-system
+  {{- if .Values.needacert.enabled }}
   annotations:
     need-a-cert.cattle.io/secret-name: cattle-webhook-tls
+  {{- end }}
 spec:
   ports:
   - port: 443

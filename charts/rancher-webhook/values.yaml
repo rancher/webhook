@@ -13,9 +13,17 @@ mcm:
   enabled: true
 
 # caBundle is populated at runtime by needacert (wrangler/pkg/needacert)
-# once the cattle-webhook-tls secret has been generated. Override only
-# when running this chart standalone without needacert.
+# once the cattle-webhook-tls secret has been generated. Override when
+# needacert.enabled is false and you are supplying your own
+# cattle-webhook-tls secret.
 caBundle: ""
+
+# needacert controls whether the Service is annotated for needacert
+# (wrangler/pkg/needacert) to generate and rotate the cattle-webhook-tls
+# serving certificate. Disable when running this chart standalone and
+# supplying your own cattle-webhook-tls secret + caBundle.
+needacert:
+  enabled: true
 
 # tolerations for the webhook deployment. See https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/ for more info
 tolerations: []
