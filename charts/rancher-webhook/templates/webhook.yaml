@@ -968,34 +968,6 @@ webhooks:
     service:
       name: rancher-webhook
       namespace: cattle-system
-      path: /v1/webhook/mutation/fleetworkspaces.management.cattle.io
-      port: 443
-  failurePolicy: Fail
-  matchPolicy: Equivalent
-  name: rancher.cattle.io.fleetworkspaces.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
-  reinvocationPolicy: Never
-  rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - CREATE
-      resources:
-        - fleetworkspaces
-      scope: Cluster
-  sideEffects: NoneOnDryRun
-  timeoutSeconds: 10
-- admissionReviewVersions:
-    - v1
-    - v1beta1
-  clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
-    service:
-      name: rancher-webhook
-      namespace: cattle-system
       path: /v1/webhook/mutation/rke-machine-config.cattle.io
       port: 443
   failurePolicy: Fail
