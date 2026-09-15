@@ -1,6 +1,6 @@
 module github.com/rancher/webhook
 
-go 1.25.11
+go 1.26.0
 
 replace (
 	github.com/google/cel-go => github.com/google/cel-go v0.22.0
@@ -139,7 +139,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
-	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/crypto v0.56.0 // indirect
 	golang.org/x/exp v0.0.0-20250210185358-939b2ce775ac // indirect
 	golang.org/x/mod v0.40.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
