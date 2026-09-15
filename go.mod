@@ -1,6 +1,6 @@
 module github.com/rancher/webhook
 
-go 1.25.11
+go 1.26.0
 
 replace (
 	github.com/google/gnostic-models => github.com/google/gnostic-models v0.6.9
@@ -45,7 +45,7 @@ require (
 	github.com/rancher/dynamiclistener v0.7.7
 	github.com/rancher/jsonpath v0.0.0-20250620213443-ad24535cf0c1
 	github.com/rancher/lasso v0.2.5
-	github.com/rancher/rancher/pkg/apis v0.0.0-20260910123333-ca663bd4bf7f
+	github.com/rancher/rancher/pkg/apis v0.0.0-20260914141327-aa3f6c452fdf
 	github.com/rancher/rke v1.8.0
 	github.com/rancher/wrangler/v3 v3.3.5
 	github.com/robfig/cron v1.2.0
