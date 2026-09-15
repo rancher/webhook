@@ -1,6 +1,6 @@
 module github.com/rancher/webhook
 
-go 1.25.11
+go 1.26.0
 
 replace (
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.35.7
@@ -38,7 +38,7 @@ require (
 	github.com/rancher/dynamiclistener v0.8.4
 	github.com/rancher/jsonpath v0.0.0-20250620213443-ad24535cf0c1
 	github.com/rancher/lasso v0.2.8
-	github.com/rancher/rancher/pkg/apis v0.0.0-20260910083701-994ab008dada
+	github.com/rancher/rancher/pkg/apis v0.0.0-20260914163029-5f7f180f5fdc
 	github.com/rancher/rke v1.8.6
 	github.com/rancher/wrangler/v3 v3.6.1
 	github.com/robfig/cron v1.2.0
