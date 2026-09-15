@@ -49,7 +49,8 @@ func TestValidateLdapConfig(t *testing.T) {
 	tests := []struct {
 		desc     string
 		fields   func() v3.LdapFields
-		disabled bool // Whether the auth provider is disabled.
+		idAttrs  map[string]any // userIDAttribute/groupIDAttribute, set as raw JSON keys.
+		disabled bool           // Whether the auth provider is disabled.
 		allowed  bool
 	}{
 		{
@@ -180,6 +181,19 @@ func TestValidateLdapConfig(t *testing.T) {
 			},
 		},
 		{
+			desc:    "valid UserIDAttribute and GroupIDAttribute",
+			idAttrs: map[string]any{"userIDAttribute": "uid", "groupIDAttribute": "cn"},
+			allowed: true,
+		},
+		{
+			desc:    "invalid UserIDAttribute",
+			idAttrs: map[string]any{"userIDAttribute": invalidAttr},
+		},
+		{
+			desc:    "invalid GroupIDAttribute",
+			idAttrs: map[string]any{"groupIDAttribute": invalidAttr},
+		},
+		{
 			desc: "invalid UserLoginFilter",
 			fields: func() v3.LdapFields {
 				fields := fields
@@ -216,7 +230,7 @@ func TestValidateLdapConfig(t *testing.T) {
 					if test.fields != nil {
 						fields = test.fields()
 					}
-					testLdapAdmit(t, validator, provider, op, fields, !test.disabled, test.allowed)
+					testLdapAdmit(t, validator, provider, op, fields, test.idAttrs, !test.disabled, test.allowed)
 				})
 			}
 		}
@@ -254,6 +268,7 @@ func TestValidateActiveDirectoryConfig(t *testing.T) {
 	tests := []struct {
 		desc    string
 		config  func() v3.ActiveDirectoryConfig
+		idAttrs map[string]any // userIDAttribute/groupIDAttribute, set as raw JSON keys.
 		allowed bool
 	}{
 		{
@@ -376,6 +391,19 @@ func TestValidateActiveDirectoryConfig(t *testing.T) {
 			},
 		},
 		{
+			desc:    "valid UserIDAttribute and GroupIDAttribute",
+			idAttrs: map[string]any{"userIDAttribute": "sAMAccountName", "groupIDAttribute": "objectSid"},
+			allowed: true,
+		},
+		{
+			desc:    "invalid UserIDAttribute",
+			idAttrs: map[string]any{"userIDAttribute": invalidAttr},
+		},
+		{
+			desc:    "invalid GroupIDAttribute",
+			idAttrs: map[string]any{"groupIDAttribute": invalidAttr},
+		},
+		{
 			desc: "invalid UserLoginFilter",
 			config: func() v3.ActiveDirectoryConfig {
 				config := config
@@ -411,8 +439,181 @@ func TestValidateActiveDirectoryConfig(t *testing.T) {
 				if test.config != nil {
 					config = test.config()
 				}
-				testActiveDirectoryAdmit(t, validator, op, config, test.allowed)
+				testActiveDirectoryAdmit(t, validator, op, config, test.idAttrs, test.allowed)
 			})
+		}
+	}
+}
+
+func TestIDAttributeImmutability(t *testing.T) {
+	t.Parallel()
+	validator := authconfig.NewValidator()
+
+	type state struct {
+		enabled bool
+		user    string
+		group   string
+	}
+
+	tests := []struct {
+		desc    string
+		old     state
+		new     state
+		allowed bool
+	}{
+		{
+			desc:    "set on first enable",
+			old:     state{enabled: false},
+			new:     state{enabled: true, user: "uid", group: "cn"},
+			allowed: true,
+		},
+		{
+			desc:    "unchanged on enabled provider",
+			old:     state{enabled: true, user: "uid", group: "cn"},
+			new:     state{enabled: true, user: "uid", group: "cn"},
+			allowed: true,
+		},
+		{
+			desc: "user attribute changed on enabled provider",
+			old:  state{enabled: true, user: "uid", group: "cn"},
+			new:  state{enabled: true, user: "entryUUID", group: "cn"},
+		},
+		{
+			desc: "group attribute changed on enabled provider",
+			old:  state{enabled: true, user: "uid", group: "cn"},
+			new:  state{enabled: true, user: "uid", group: "gidNumber"},
+		},
+		{
+			desc: "user attribute cleared on enabled provider",
+			old:  state{enabled: true, user: "uid", group: "cn"},
+			new:  state{enabled: true, group: "cn"},
+		},
+		{
+			desc: "group attribute cleared on enabled provider",
+			old:  state{enabled: true, user: "uid", group: "cn"},
+			new:  state{enabled: true, user: "uid"},
+		},
+		{
+			desc: "user attribute set on enabled provider",
+			old:  state{enabled: true},
+			new:  state{enabled: true, user: "uid"},
+		},
+		{
+			desc:    "changed while disabling provider",
+			old:     state{enabled: true, user: "uid", group: "cn"},
+			new:     state{enabled: false, user: "entryUUID", group: "gidNumber"},
+			allowed: true,
+		},
+		{
+			desc:    "changed on disabled provider",
+			old:     state{enabled: false, user: "uid", group: "cn"},
+			new:     state{enabled: false, user: "entryUUID", group: "gidNumber"},
+			allowed: true,
+		},
+	}
+
+	idAttrs := func(st state) map[string]any {
+		attrs := map[string]any{}
+		if st.user != "" {
+			attrs["userIDAttribute"] = st.user
+		}
+		if st.group != "" {
+			attrs["groupIDAttribute"] = st.group
+		}
+		return attrs
+	}
+	// SAML providers with LDAP search keep the attributes under openLdapConfig.
+	nestedIDAttrs := func(st state) map[string]any {
+		return map[string]any{"openLdapConfig": idAttrs(st)}
+	}
+
+	for _, provider := range ldapBasedProviders {
+		fields := idAttrs
+		if provider.nested {
+			fields = nestedIDAttrs
+		}
+		for _, test := range tests {
+			t.Run(provider.name+"_"+test.desc, func(t *testing.T) {
+				t.Parallel()
+				oldConfig := withFields(t, provider.config(test.old.enabled), fields(test.old))
+				newConfig := withFields(t, provider.config(test.new.enabled), fields(test.new))
+				// SAML principal IDs come from the assertion, so the LDAP search attributes stay editable.
+				allowed := test.allowed || provider.nested
+				testAdmit(t, validator, v1.Update, oldConfig, newConfig, allowed)
+			})
+		}
+	}
+}
+
+// ldapBasedProviders lists every authconfig type carrying LDAP principal identifier attributes,
+// with a minimal config that passes the other validation checks when enabled.
+var ldapBasedProviders = []struct {
+	name   string
+	nested bool
+	config func(enabled bool) any
+}{
+	{"activedirectory", false, func(enabled bool) any {
+		c := v3.ActiveDirectoryConfig{Servers: []string{"ad.example.com"}}
+		c.Name, c.Type, c.Enabled = "activedirectory", "activeDirectoryConfig", enabled
+		return c
+	}},
+	{"openldap", false, func(enabled bool) any {
+		c := v3.OpenLdapConfig{}
+		c.Name, c.Type, c.Enabled = "openldap", "openLdapConfig", enabled
+		c.Servers = []string{"ldap.example.com"}
+		return c
+	}},
+	{"freeipa", false, func(enabled bool) any {
+		c := v3.OpenLdapConfig{}
+		c.Name, c.Type, c.Enabled = "freeipa", "freeIpaConfig", enabled
+		c.Servers = []string{"ldap.example.com"}
+		return c
+	}},
+	{"shibboleth", true, func(enabled bool) any {
+		c := v3.ShibbolethConfig{}
+		c.Name, c.Type, c.Enabled = "shibboleth", "shibbolethConfig", enabled
+		return c
+	}},
+	{"okta", true, func(enabled bool) any {
+		c := v3.OKTAConfig{}
+		c.Name, c.Type, c.Enabled = "okta", "oktaConfig", enabled
+		return c
+	}},
+}
+
+func TestSamlLdapSearchIDAttributes(t *testing.T) {
+	t.Parallel()
+	validator := authconfig.NewValidator()
+
+	tests := []struct {
+		desc    string
+		attrs   map[string]any
+		enabled bool
+		allowed bool
+	}{
+		{desc: "no ldap search", enabled: true, allowed: true},
+		{desc: "valid attributes", attrs: map[string]any{"userIDAttribute": "uid", "groupIDAttribute": "cn"}, enabled: true, allowed: true},
+		{desc: "invalid user attribute", attrs: map[string]any{"userIDAttribute": "1foo"}, enabled: true},
+		{desc: "invalid group attribute", attrs: map[string]any{"groupIDAttribute": "1foo"}, enabled: true},
+		{desc: "invalid attribute on disabled provider", attrs: map[string]any{"userIDAttribute": "1foo"}, allowed: true},
+	}
+
+	for _, provider := range ldapBasedProviders {
+		if !provider.nested {
+			continue
+		}
+		for _, op := range []v1.Operation{v1.Create, v1.Update} {
+			for _, test := range tests {
+				t.Run(provider.name+"_"+string(op)+"_"+test.desc, func(t *testing.T) {
+					t.Parallel()
+					oldConfig := provider.config(false)
+					newConfig := provider.config(test.enabled)
+					if test.attrs != nil {
+						newConfig = withFields(t, newConfig, map[string]any{"openLdapConfig": test.attrs})
+					}
+					testAdmit(t, validator, op, oldConfig, newConfig, test.allowed)
+				})
+			}
 		}
 	}
 }
@@ -460,7 +661,7 @@ func TestIsValidLdapAttr(t *testing.T) {
 	}
 }
 
-func testLdapAdmit(t *testing.T, validator *authconfig.Validator, provider string, op v1.Operation, fields v3.LdapFields, enabled, allowed bool) {
+func testLdapAdmit(t *testing.T, validator *authconfig.Validator, provider string, op v1.Operation, fields v3.LdapFields, idAttrs map[string]any, enabled, allowed bool) {
 	var oldConfig, newConfig any
 	switch provider {
 	case "openldap":
@@ -481,14 +682,28 @@ func testLdapAdmit(t *testing.T, validator *authconfig.Validator, provider strin
 		oldConfig, newConfig = o, n
 	}
 
-	testAdmit(t, validator, op, oldConfig, newConfig, allowed)
+	testAdmit(t, validator, op, oldConfig, withFields(t, newConfig, idAttrs), allowed)
 }
 
-func testActiveDirectoryAdmit(t *testing.T, validator *authconfig.Validator, op v1.Operation, newConfig v3.ActiveDirectoryConfig, allowed bool) {
+func testActiveDirectoryAdmit(t *testing.T, validator *authconfig.Validator, op v1.Operation, newConfig v3.ActiveDirectoryConfig, idAttrs map[string]any, allowed bool) {
 	oldConfig := v3.ActiveDirectoryConfig{}
 	oldConfig.Name = newConfig.Name
 	oldConfig.Type = newConfig.Type
-	testAdmit(t, validator, op, oldConfig, newConfig, allowed)
+	testAdmit(t, validator, op, oldConfig, withFields(t, newConfig, idAttrs), allowed)
+}
+
+// withFields marshals config and overlays extra JSON fields. The webhook reads the principal identifier
+// attributes from the raw object, so tests set them without depending on the Rancher types carrying them.
+func withFields(t *testing.T, config any, extra map[string]any) map[string]any {
+	raw, err := json.Marshal(config)
+	require.NoError(t, err, "failed to marshal config")
+
+	var obj map[string]any
+	require.NoError(t, json.Unmarshal(raw, &obj), "failed to unmarshal config")
+	for k, v := range extra {
+		obj[k] = v
+	}
+	return obj
 }
 
 func testAdmit(t *testing.T, validator *authconfig.Validator, op v1.Operation, oldConfig, newConfig any, allowed bool) {
