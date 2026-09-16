@@ -23,3 +23,4 @@ When an LDAP (`openldap`, `freeipa`) or ActiveDirectory (`activedirectory`) auth
   - `userLoginFilter`
   - `userSearchFilter`
   - `groupSearchFilter`
+- For ActiveDirectory authconfigs, `bindMechanism` must be empty, `simple` or `ntlm`. `ntlm` also requires `tls` or `starttls`, because an NTLM bind derives its channel binding token from the server certificate.
