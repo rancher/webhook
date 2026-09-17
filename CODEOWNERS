@@ -1,1 +1,4 @@
 *       @rancher/rancher-squad-frameworks
+
+# Validator and mutator logic, do not require frameworks team approval
+/pkg/resources/
