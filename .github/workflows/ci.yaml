@@ -11,10 +11,6 @@ on:
       - 'CODEOWNERS'
       - 'LICENSE'
   pull_request:
-    paths-ignore:
-    - '.gitignore'
-    - 'CODEOWNERS'
-    - 'LICENSE'
   workflow_dispatch:
 
 permissions:
