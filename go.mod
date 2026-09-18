@@ -5,6 +5,7 @@ go 1.26.0
 replace (
 	github.com/google/cel-go => github.com/google/cel-go v0.22.0
 	github.com/rancher/rke => github.com/rancher/rke v1.8.4
+	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc => go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0
 	k8s.io/api => k8s.io/api v0.32.13
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.32.13
 	k8s.io/apimachinery => k8s.io/apimachinery v0.32.13
