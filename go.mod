@@ -113,10 +113,10 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/rancher/aks-operator v1.11.14-rc.1 // indirect
-	github.com/rancher/eks-operator v1.11.14-rc.1 // indirect
+	github.com/rancher/aks-operator v1.11.14 // indirect
+	github.com/rancher/eks-operator v1.11.14 // indirect
 	github.com/rancher/fleet/pkg/apis v0.12.18 // indirect
-	github.com/rancher/gke-operator v1.11.15-rc.1 // indirect
+	github.com/rancher/gke-operator v1.11.15 // indirect
 	github.com/rancher/norman v0.5.2 // indirect
 	github.com/spf13/cobra v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
@@ -126,7 +126,7 @@ require (
 	go.etcd.io/etcd/client/pkg/v3 v3.5.33 // indirect
 	go.etcd.io/etcd/client/v3 v3.5.17 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
-	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.53.0 // indirect
+	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.61.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect
 	go.opentelemetry.io/otel v1.44.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.33.0 // indirect
@@ -150,6 +150,7 @@ require (
 	golang.org/x/time v0.14.0 // indirect
 	golang.org/x/tools/go/expect v0.1.1-deprecated // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
+	google.golang.org/genproto v0.0.0-20260128011058-8636f8732409 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
 	google.golang.org/grpc v1.83.2 // indirect
