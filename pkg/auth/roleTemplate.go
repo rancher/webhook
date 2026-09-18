@@ -35,7 +35,8 @@ func (r *RoleTemplateResolver) RulesFromTemplateName(name string) ([]rbacv1.Poli
 	return r.RulesFromTemplate(rt)
 }
 
-// RulesFromTemplate gets all rules from the template and all referenced templates.
+// RulesFromTemplate gets all project-scoped rules from the template and all referenced templates.
+// ClusterScopedRules are not included; use ClusterScopedRulesFromTemplate to gather those.
 func (r *RoleTemplateResolver) RulesFromTemplate(roleTemplate *rancherv3.RoleTemplate) ([]rbacv1.PolicyRule, error) {
 	var rules []rbacv1.PolicyRule
 	var err error
@@ -52,6 +53,20 @@ func (r *RoleTemplateResolver) RulesFromTemplate(roleTemplate *rancherv3.RoleTem
 		return rules, err
 	}
 	return rules, nil
+}
+
+// ClusterScopedRulesFromTemplate gathers the ClusterScopedRules from the template and all referenced templates.
+// These rules are granted cluster-wide and must be validated against cluster-level permissions.
+func (r *RoleTemplateResolver) ClusterScopedRulesFromTemplate(roleTemplate *rancherv3.RoleTemplate) ([]rbacv1.PolicyRule, error) {
+	var rules []rbacv1.PolicyRule
+
+	if roleTemplate == nil {
+		return rules, nil
+	}
+
+	templatesSeen := make(map[string]bool)
+
+	return r.gatherClusterScopedRules(roleTemplate, rules, templatesSeen)
 }
 
 // gatherRules appends the rules from current template and does a recursive call to get all inherited roles referenced.
@@ -82,6 +97,29 @@ func (r *RoleTemplateResolver) gatherRules(roleTemplate *rancherv3.RoleTemplate,
 			return nil, fmt.Errorf("failed to get RoleTemplate '%s': %w", templateName, err)
 		}
 		rules, err = r.gatherRules(next, rules, seen)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return rules, nil
+}
+
+// gatherClusterScopedRules appends the ClusterScopedRules from the current template and recurses into inherited templates.
+func (r *RoleTemplateResolver) gatherClusterScopedRules(roleTemplate *rancherv3.RoleTemplate, rules []rbacv1.PolicyRule, seen map[string]bool) ([]rbacv1.PolicyRule, error) {
+	seen[roleTemplate.Name] = true
+
+	rules = append(rules, roleTemplate.ClusterScopedRules...)
+
+	for _, templateName := range roleTemplate.RoleTemplateNames {
+		// If we have already seen the roleTemplate, skip it
+		if seen[templateName] {
+			continue
+		}
+		next, err := r.roleTemplates.Get(templateName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get RoleTemplate '%s': %w", templateName, err)
+		}
+		rules, err = r.gatherClusterScopedRules(next, rules, seen)
 		if err != nil {
 			return nil, err
 		}
