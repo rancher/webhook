@@ -135,10 +135,22 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, fmt.Errorf("failed to get rules from referenced roleTemplate '%s': %w", roleTemplate.Name, err)
 	}
 
+	clusterScopedRules, err := a.roleTemplateResolver.ClusterScopedRulesFromTemplate(roleTemplate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cluster-scoped rules from referenced roleTemplate '%s': %w", roleTemplate.Name, err)
+	}
+
 	clusterNS, projectNS := clusterAndProjectID(prtb.ProjectName)
-	err = auth.ConfirmNoEscalation(request, rules, clusterNS, a.clusterResolver)
-	if err == nil {
-		return &admissionv1.AdmissionResponse{Allowed: true}, nil
+
+	// ClusterScopedRules are granted cluster-wide, so they can only be authorized by the user's
+	// cluster-level permissions. They must not fall back to the project resolver.
+	if err := auth.ConfirmNoEscalation(request, clusterScopedRules, clusterNS, a.clusterResolver); err != nil {
+		return admission.ResponseFailedEscalation(err.Error()), nil
+	}
+
+	// Project rules can be authorized by the user's permissions at either the cluster or project level.
+	if err := auth.ConfirmNoEscalation(request, rules, clusterNS, a.clusterResolver); err == nil {
+		return admission.ResponseAllowed(), nil
 	}
 
 	response := &admissionv1.AdmissionResponse{}

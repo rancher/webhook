@@ -210,6 +210,9 @@ func validateContextValue(newRole *v3.RoleTemplate, fldPath *field.Path) *field.
 	if newRole.Context != projectContext && newRole.ProjectCreatorDefault {
 		return field.Forbidden(fldPath.Child("context"), "RoleTemplate context must be project when projectCreatorDefault=true")
 	}
+	if newRole.Context != projectContext && len(newRole.ClusterScopedRules) > 0 {
+		return field.Forbidden(fldPath.Child("clusterScopedRules"), "ClusterScopedRules can only be set for project context RoleTemplates")
+	}
 	if newRole.Administrative && newRole.Context != clusterContext {
 		return field.Forbidden(fldPath.Child("administrative"), "only cluster roles can be administrative")
 	}

@@ -388,3 +388,125 @@ func (r *RoleTemplateResolverSuite) TestGetCache() {
 	resolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
 	r.Equal(resolver.RoleTemplateCache(), roleTemplateCache, "Resolver did not correctly return cache")
 }
+
+func (r *RoleTemplateResolverSuite) TestClusterScopedRulesFromTemplate() {
+	ruleReadPods := rbacv1.PolicyRule{
+		Verbs:     []string{"GET", "WATCH"},
+		APIGroups: []string{"v1"},
+		Resources: []string{"pods"},
+	}
+	ruleClusterSecrets := rbacv1.PolicyRule{
+		Verbs:     []string{"GET"},
+		APIGroups: []string{"v1"},
+		Resources: []string{"secrets"},
+	}
+	ruleClusterNodes := rbacv1.PolicyRule{
+		Verbs:     []string{"LIST"},
+		APIGroups: []string{"v1"},
+		Resources: []string{"nodes"},
+	}
+
+	childRT := &apisv3.RoleTemplate{
+		ObjectMeta:         metav1.ObjectMeta{Name: "child-cluster-scoped"},
+		Context:            "project",
+		Rules:              []rbacv1.PolicyRule{ruleReadPods},
+		ClusterScopedRules: []rbacv1.PolicyRule{ruleClusterNodes},
+	}
+	parentRT := &apisv3.RoleTemplate{
+		ObjectMeta:         metav1.ObjectMeta{Name: "parent-cluster-scoped"},
+		Context:            "project",
+		Rules:              []rbacv1.PolicyRule{ruleReadPods},
+		ClusterScopedRules: []rbacv1.PolicyRule{ruleClusterSecrets},
+		RoleTemplateNames:  []string{childRT.Name},
+	}
+	noClusterScopedRT := &apisv3.RoleTemplate{
+		ObjectMeta: metav1.ObjectMeta{Name: "no-cluster-scoped"},
+		Context:    "project",
+		Rules:      []rbacv1.PolicyRule{ruleReadPods},
+	}
+	invalidInheritRT := &apisv3.RoleTemplate{
+		ObjectMeta:         metav1.ObjectMeta{Name: "invalid-inherit-cluster-scoped"},
+		Context:            "project",
+		ClusterScopedRules: []rbacv1.PolicyRule{ruleClusterSecrets},
+		RoleTemplateNames:  []string{invalidName},
+	}
+
+	tests := []struct {
+		name     string
+		template *apisv3.RoleTemplate
+		caches   func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache)
+		want     Rules
+		wantErr  bool
+	}{
+		{
+			name:     "nil template returns no rules",
+			template: nil,
+			caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
+				ctrl := gomock.NewController(r.T())
+				return fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl),
+					fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
+			},
+			want: nil,
+		},
+		{
+			name:     "template with no cluster-scoped rules returns no rules",
+			template: noClusterScopedRT,
+			caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
+				ctrl := gomock.NewController(r.T())
+				return fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl),
+					fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
+			},
+			want: nil,
+		},
+		{
+			name:     "returns only cluster-scoped rules and excludes regular rules",
+			template: childRT,
+			caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
+				ctrl := gomock.NewController(r.T())
+				return fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl),
+					fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
+			},
+			want: Rules{ruleClusterNodes},
+		},
+		{
+			name:     "gathers cluster-scoped rules from inherited templates",
+			template: parentRT,
+			caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
+				ctrl := gomock.NewController(r.T())
+				roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
+				roleTemplateCache.EXPECT().Get(childRT.Name).Return(childRT, nil)
+				return roleTemplateCache, fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
+			},
+			want: Rules{ruleClusterSecrets, ruleClusterNodes},
+		},
+		{
+			name:     "returns error when inherited template cannot be found",
+			template: invalidInheritRT,
+			caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
+				ctrl := gomock.NewController(r.T())
+				roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
+				roleTemplateCache.EXPECT().Get(invalidName).Return(nil, errExpected)
+				return roleTemplateCache, fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
+			},
+			want:    nil,
+			wantErr: true,
+		},
+	}
+
+	for i := range tests {
+		test := tests[i]
+		r.Run(test.name, func() {
+			r.T().Parallel()
+			resolver := auth.NewRoleTemplateResolver(test.caches())
+			got, err := resolver.ClusterScopedRulesFromTemplate(test.template)
+			if test.wantErr {
+				r.Error(err, "expected test to have error.")
+			} else {
+				r.NoError(err, "unexpected err in test.")
+			}
+			if !test.want.Equal(got) {
+				r.Fail("List of rules did not match", "wanted=%+v got=%+v", test.want, got)
+			}
+		})
+	}
+}
