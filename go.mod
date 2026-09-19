@@ -38,7 +38,7 @@ require (
 	github.com/rancher/dynamiclistener v0.9.3
 	github.com/rancher/jsonpath v0.0.0-20260423141252-c4e0c565a09f
 	github.com/rancher/lasso v0.2.10
-	github.com/rancher/rancher/pkg/apis v0.0.0-20260910074722-98c730a96d25
+	github.com/rancher/rancher/pkg/apis v0.0.0-20260918171411-40cc695ae8fe
 	github.com/rancher/rancher/pkg/plan v0.0.0-20260428222332-2696373f4152
 	github.com/rancher/wrangler/v3 v3.8.0-rc.1
 	github.com/robfig/cron v1.2.0
@@ -63,8 +63,8 @@ require (
 require (
 	cel.dev/expr v0.25.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.42.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.311.0 // indirect
+	github.com/aws/aws-sdk-go-v2 v1.43.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.317.0 // indirect
 	github.com/aws/smithy-go v1.27.3 // indirect
 	github.com/go-openapi/swag/cmdutils v0.27.1 // indirect
 	github.com/go-openapi/swag/conv v0.27.1 // indirect
@@ -81,7 +81,7 @@ require (
 	github.com/google/renameio/v2 v2.0.2 // indirect
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260622175928-b703f567277d // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260724162435-b2f20204f0df // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 )
 
@@ -112,11 +112,11 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.70.0 // indirect
 	github.com/prometheus/procfs v0.21.1 // indirect
-	github.com/rancher/aks-operator v1.15.0 // indirect
-	github.com/rancher/ali-operator v1.15.0-rc.3 // indirect
-	github.com/rancher/eks-operator v1.15.0 // indirect
+	github.com/rancher/aks-operator v1.15.1 // indirect
+	github.com/rancher/ali-operator v1.15.0 // indirect
+	github.com/rancher/eks-operator v1.15.1 // indirect
 	github.com/rancher/fleet/pkg/apis v0.17.0-alpha.1 // indirect
-	github.com/rancher/gke-operator v1.15.0 // indirect
+	github.com/rancher/gke-operator v1.15.2 // indirect
 	github.com/rancher/norman v0.10.0
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
