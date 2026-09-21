@@ -243,12 +243,18 @@ type operationTest struct {
 }
 
 // TestWebhookRBACActual performs actual operations as the webhook ServiceAccount to validate RBAC.
-// This test uses impersonation to verify the webhook can perform the operations it needs.
+// This test uses impersonation to verify the webhook can perform write operations it needs.
+//
+// Unlike VerifyRegisteredWebhooksHaveRBAC which checks read permissions for validator/mutator
+// informer caches (derived from WebhookConfigurations), this test validates write operations
+// the webhook performs during admission handling (e.g., creating SubjectAccessReviews for
+// RBAC checks, creating namespaces for project management, etc.).
 //
 // To add a new operation test:
-//  1. Add an entry to the operations slice
-//  2. Define the operation function that performs the actual k8s API call
-//  3. Set shouldErr=true if the webhook should NOT be able to perform this operation
+//  1. Identify operations the webhook performs in code (grep for .Create, .Update, .Delete in pkg/)
+//  2. Add an entry to the operations slice below
+//  3. Define the operation function that performs the actual k8s API call
+//  4. Set shouldErr=true if the webhook should NOT be able to perform this operation
 func (m *IntegrationSuite) TestWebhookRBACActual() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
@@ -270,9 +276,35 @@ func (m *IntegrationSuite) TestWebhookRBACActual() {
 	// Define operations to test
 	operations := []operationTest{
 		{
+			name:      "CreateSubjectAccessReview",
+			shouldErr: false,
+			operation: func(ctx context.Context, webhookClient, _ *kubernetes.Clientset) error {
+				// Webhook creates SARs in multiple places to check permissions:
+				// - pkg/auth/escalation.go
+				// - pkg/resources/management.cattle.io/v3/cluster/validator.go
+				// - pkg/resources/provisioning.cattle.io/v1/cluster/validator.go
+				// - pkg/resources/core/v1/namespace/projectannotations.go
+				// - pkg/resources/core/v1/namespace/psalabels.go
+				sar := &authorizationv1.SubjectAccessReview{
+					Spec: authorizationv1.SubjectAccessReviewSpec{
+						User: "system:serviceaccount:default:test",
+						ResourceAttributes: &authorizationv1.ResourceAttributes{
+							Verb:     "get",
+							Group:    "",
+							Resource: "pods",
+						},
+					},
+				}
+				_, err := webhookClient.AuthorizationV1().SubjectAccessReviews().Create(ctx, sar, v1.CreateOptions{})
+				return err
+			},
+		},
+		{
 			name:      "CreateNamespace",
 			shouldErr: false,
 			operation: func(ctx context.Context, webhookClient, _ *kubernetes.Clientset) error {
+				// Webhook has permission to create namespaces (for project management)
+				// though current code may not use this permission directly.
 				ns := &corev1.Namespace{ObjectMeta: v1.ObjectMeta{GenerateName: "rbac-test-"}}
 				created, err := webhookClient.CoreV1().Namespaces().Create(ctx, ns, v1.CreateOptions{})
 				if err == nil {
