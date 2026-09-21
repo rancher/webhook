@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -34,6 +35,7 @@ const (
 type IntegrationSuite struct {
 	suite.Suite
 	clientFactory client.SharedClientFactory
+	restCfg       *rest.Config
 	testnamespace string
 }
 
@@ -47,6 +49,7 @@ func (m *IntegrationSuite) SetupSuite() {
 	logrus.Infof("Setting up test with KUBECONFIG=%s", kubeconfigPath)
 	restCfg, err := kubeconfig.GetNonInteractiveClientConfig(kubeconfigPath).ClientConfig()
 	m.Require().NoError(err, "Failed to clientFactory config")
+	m.restCfg = restCfg
 	m.clientFactory, err = client.NewSharedClientFactoryForConfig(restCfg)
 	m.Require().NoError(err, "Failed to create clientFactory Interface")
 
