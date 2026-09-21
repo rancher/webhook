@@ -44,7 +44,6 @@
 // Example:
 //
 //	{name: "delete configmaps", group: "", resource: "configmaps", verb: "delete", allowed: false}
-//
 package integration_test
 
 import (
@@ -199,7 +198,7 @@ func (m *IntegrationSuite) TestWebhookRBAC() {
 
 			assert.True(t, granted,
 				"Webhook handles %s but ClusterRole lacks read permission. "+
-				"Add the resource to charts/rancher-webhook/templates/rbac.yaml", resourceKey)
+					"Add the resource to charts/rancher-webhook/templates/rbac.yaml", resourceKey)
 		}
 	})
 
@@ -230,7 +229,7 @@ func (m *IntegrationSuite) TestWebhookRBAC() {
 // operationTest defines a test that performs an actual operation as the webhook ServiceAccount
 type operationTest struct {
 	name      string
-	shouldErr bool                                                    // true if operation should fail
+	shouldErr bool // true if operation should fail
 	operation func(ctx context.Context, webhookClient, adminClient *kubernetes.Clientset) error
 }
 
@@ -339,6 +338,7 @@ func (m *IntegrationSuite) TestWebhookRBACActual() {
 		})
 	}
 }
+
 // parseClusterRoleRules converts RBAC PolicyRules into permissionTest cases
 func parseClusterRoleRules(rules []rbacv1.PolicyRule) []permissionTest {
 	var tests []permissionTest
