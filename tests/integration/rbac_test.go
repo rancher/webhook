@@ -281,38 +281,12 @@ func (m *IntegrationSuite) TestWebhookRBACActual() {
 				return err
 			},
 		},
-		{
-			name:      "CreateRoleBinding",
-			shouldErr: false,
-			operation: func(ctx context.Context, webhookClient, _ *kubernetes.Clientset) error {
-				rb := &rbacv1.RoleBinding{
-					ObjectMeta: v1.ObjectMeta{Name: "rbac-test-rb", Namespace: m.testnamespace},
-					RoleRef:    rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "ClusterRole", Name: "view"},
-					Subjects:   []rbacv1.Subject{{Kind: "User", Name: "test-user", APIGroup: "rbac.authorization.k8s.io"}},
-				}
-				created, err := webhookClient.RbacV1().RoleBindings(m.testnamespace).Create(ctx, rb, v1.CreateOptions{})
-				if err == nil {
-					_ = webhookClient.RbacV1().RoleBindings(m.testnamespace).Delete(ctx, created.Name, v1.DeleteOptions{})
-				}
-				return err
-			},
-		},
-		{
-			name:      "CreateClusterRoleBinding",
-			shouldErr: false,
-			operation: func(ctx context.Context, webhookClient, _ *kubernetes.Clientset) error {
-				crb := &rbacv1.ClusterRoleBinding{
-					ObjectMeta: v1.ObjectMeta{GenerateName: "rbac-test-crb-"},
-					RoleRef:    rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "ClusterRole", Name: "view"},
-					Subjects:   []rbacv1.Subject{{Kind: "User", Name: "test-user", APIGroup: "rbac.authorization.k8s.io"}},
-				}
-				created, err := webhookClient.RbacV1().ClusterRoleBindings().Create(ctx, crb, v1.CreateOptions{})
-				if err == nil {
-					_ = webhookClient.RbacV1().ClusterRoleBindings().Delete(ctx, created.Name, v1.DeleteOptions{})
-				}
-				return err
-			},
-		},
+		// Note: CreateRoleBinding and CreateClusterRoleBinding tests removed.
+		// The webhook has "create" permissions for these resources in its ClusterRole,
+		// but can't actually use them without "escalate" and "bind" permissions
+		// (Kubernetes RBAC escalation prevention). The webhook doesn't create bindings
+		// in practice - that functionality was removed when the fleetworkspace mutator
+		// was deleted in PR#1590.
 		{
 			name:      "CannotDeleteClusterRole",
 			shouldErr: true,
