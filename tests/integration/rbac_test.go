@@ -133,6 +133,11 @@ func (m *IntegrationSuite) TestWebhookRBAC() {
 				for _, rule := range wh.Rules {
 					for _, group := range rule.APIGroups {
 						for _, resource := range rule.Resources {
+							// Skip subresources (e.g., "resource/status", "resource/scale")
+							// Subresources don't need separate RBAC - covered by main resource
+							if isSubresource(resource) {
+								continue
+							}
 							key := fmt.Sprintf("%s/%s", group, resource)
 							handledResources[key] = true
 						}
@@ -145,6 +150,10 @@ func (m *IntegrationSuite) TestWebhookRBAC() {
 				for _, rule := range wh.Rules {
 					for _, group := range rule.APIGroups {
 						for _, resource := range rule.Resources {
+							// Skip subresources
+							if isSubresource(resource) {
+								continue
+							}
 							key := fmt.Sprintf("%s/%s", group, resource)
 							handledResources[key] = true
 						}
@@ -415,4 +424,18 @@ func splitGroupResource(key string) [2]string {
 	// No slash found - shouldn't happen, but handle gracefully
 	parts[1] = key
 	return parts
+}
+
+// isSubresource returns true if resource is a subresource (contains a slash)
+// Examples: "pods/status", "deployments/scale", "resourcequotas/status"
+// Main resources don't have slashes: "pods", "deployments", "resourcequotas"
+func isSubresource(resource string) bool {
+	// Count slashes - subresources have format "resource/subresource"
+	slashCount := 0
+	for _, r := range resource {
+		if r == '/' {
+			slashCount++
+		}
+	}
+	return slashCount > 0
 }

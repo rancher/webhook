@@ -13,10 +13,12 @@ rules:
     - features
     - globalroles
     - globalrolebindings
+    - nodedrivers
     - nodes
     - podsecurityadmissionconfigurationtemplates
     - projects
     - projectroletemplatebindings
+    - proxyendpoints
     - roletemplates
     - settings
     - tokens
@@ -30,7 +32,7 @@ rules:
   resources: [roles, rolebindings, clusterroles, clusterrolebindings]
   verbs: [get, list, watch]
 - apiGroups: [""]
-  resources: [namespaces, secrets]
+  resources: [limitranges, namespaces, resourcequotas, secrets]
   verbs: [get, list, watch]
 - apiGroups: ["rke.cattle.io"]
   resources: [etcdsnapshots]
@@ -43,6 +45,9 @@ rules:
   verbs: [get, list, watch]
 - apiGroups: ["cluster.x-k8s.io"]
   resources: [machinedeployments, clusters]
+  verbs: [get, list, watch]
+- apiGroups: ["infrastructure.cluster.x-k8s.io"]
+  resources: [awsclusters, awsclusterstaticidentities]
   verbs: [get, list, watch]
 - apiGroups: ["rke-machine-config.cattle.io"]
   resources: ["*"]
