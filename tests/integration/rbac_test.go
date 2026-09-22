@@ -188,11 +188,12 @@ func (m *IntegrationSuite) TestWebhookRBAC() {
 
 		// Verify each handled resource has read permission
 		for resourceKey := range handledResources {
-			// Skip resources the webhook doesn't actually need to read
-			// (e.g., namespaces CREATE webhook doesn't need to read namespaces)
-			// This list should be kept minimal
+			// Skip resources with no generated controllers/caches.
+			// These have stateless validators AND are not used as caches by other validators.
 			skipResources := map[string]bool{
-				// Add exceptions here if needed, with comments explaining why
+				"management.cattle.io/nodedrivers":    true, // no generated controller, validator uses rke-machine.cattle.io wildcard
+				"management.cattle.io/proxyendpoints": true, // no generated controller, stateless hostname validation
+				"management.cattle.io/tokens":         true, // no generated controller, stateless field validation
 			}
 			if skipResources[resourceKey] {
 				continue

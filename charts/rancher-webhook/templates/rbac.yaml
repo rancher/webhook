@@ -4,6 +4,10 @@ metadata:
   name: rancher-webhook
 rules:
 # --- Read-only: informer caches for validators/mutators ---
+# Note: Some validators are stateless (validate fields only), but their resources
+# may still be needed as caches by other validators (e.g., users validator needs
+# userattributes, features, authconfigs caches).
+# Excluded: nodedrivers, proxyendpoints, tokens - no generated controllers/caches.
 - apiGroups: ["management.cattle.io"]
   resources:
     - authconfigs
@@ -13,15 +17,12 @@ rules:
     - features
     - globalroles
     - globalrolebindings
-    - nodedrivers
     - nodes
     - podsecurityadmissionconfigurationtemplates
     - projects
     - projectroletemplatebindings
-    - proxyendpoints
     - roletemplates
     - settings
-    - tokens
     - userattributes
     - users
   verbs: [get, list, watch]
@@ -70,6 +71,9 @@ rules:
 - apiGroups: ["cluster.cattle.io"]
   resources: [clusterauthtokens]
   verbs: [get, list, watch]
+- apiGroups: ["coordination.k8s.io"]
+  resources: [leases]
+  verbs: [get, list, watch, create, update]
 # --- Write operations ---
 - apiGroups: ["authorization.k8s.io"]
   resources: [subjectaccessreviews]
