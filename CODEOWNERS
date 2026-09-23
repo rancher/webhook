@@ -1,4 +1,4 @@
-*       @rancher/rancher-squad-frameworks
+*       @rancher/rancher-squad-frameworks @eio-github-actions-power-enhancer
 
 # Validator and mutator logic, do not require frameworks team approval
 /pkg/resources/
