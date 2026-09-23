@@ -1,7 +1,7 @@
 # ===============
 # Build Stage
 # ===============
-FROM --platform=$BUILDPLATFORM rancher/hardened-build-base:v1.26.7b2@sha256:236e03ea562308e143d2ef9d4060f7b7da785f895aabdb4ba48bdcf871c2c243 AS build
+FROM --platform=$BUILDPLATFORM rancher/hardened-build-base:v1.27.1b1@sha256:3c15dacfa0bce49b25e94ec2d8ae7489cfabc6d083f9e421f394da3f8e364e7a AS build
 
 # Set up build cache
 ENV GOMODCACHE=/root/.cache/go/modcache
@@ -50,11 +50,11 @@ RUN cat coverage.out | awk 'BEGIN {cov=0; stat=0;} $3!="" { cov+=($3==1?$2:0); s
 # ===============
 FROM build AS validate
 # renovate: datasource=github-releases depName=golangci/golangci-lint
-ARG GOLANGCI_LINT_VERSION=2.13.0
-# renovate: datasource=github-release-attachments depName=golangci/golangci-lint digestVersion=v2.13.0
-ARG GOLANGCI_LINT_SUM_amd64=a10e8d8359d76b9e2b41da60f9d98bb26fd53c7a453caa82e0a172d6f72fd2ca
-# renovate: datasource=github-release-attachments depName=golangci/golangci-lint digestVersion=v2.13.0
-ARG GOLANGCI_LINT_SUM_arm64=3a91c7bb9c135099a97858bea431d6dd2f54e4bf68d479c776c2350428d60e41
+ARG GOLANGCI_LINT_VERSION=2.13.2
+# renovate: datasource=github-release-attachments depName=golangci/golangci-lint digestVersion=v2.13.2
+ARG GOLANGCI_LINT_SUM_amd64=2277d43b98ec0054280f2ac26b53268bae97682444678a59a657dd565da021d6
+# renovate: datasource=github-release-attachments depName=golangci/golangci-lint digestVersion=v2.13.2
+ARG GOLANGCI_LINT_SUM_arm64=a2a4e0065aa41be71f7c5ac90f271b61751331e5d04314e62afe4027855f0893
 RUN set -e; \
     ARCH=$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/'); \
     TARBALL="golangci-lint-${GOLANGCI_LINT_VERSION}-linux-${ARCH}.tar.gz"; \
