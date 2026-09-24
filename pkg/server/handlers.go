@@ -59,7 +59,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		feature.NewValidator(),
 		clusters,
 		machineconfig.NewValidator(),
-		nshandler.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews()),
+		nshandler.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.MultiClusterManagement),
 		clusterrepo.NewValidator(),
 		auditpolicy.NewValidator(),
 		resourcequota.NewValidator(),
