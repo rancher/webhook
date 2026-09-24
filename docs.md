@@ -152,6 +152,14 @@ The following labels are considered relevant for PSA enforcement:
 
 Validation ensures that the limits for cpu/memory must not be less than the requests for cpu/memory.
 
+#### Protected namespace deletion
+
+On the Rancher management (local) cluster, the `local` and `fleet-local` namespaces may not be deleted, as removing
+them corrupts the Rancher installation.
+
+This check is only registered when the webhook runs with multi-cluster management enabled. On downstream clusters
+namespaces with those names belong to the user and can be deleted normally.
+
 ## ResourceQuota
 
 ### Validation Checks
