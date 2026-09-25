@@ -98,7 +98,7 @@ func (p *projectNamespaceAdmitter) Admit(request *admission.Request) (*admission
 	response.Result = &metav1.Status{
 		Status:  "Failure",
 		Message: constructedReason,
-		Reason:  metav1.StatusReasonUnauthorized,
+		Reason:  metav1.StatusReasonForbidden,
 		Code:    http.StatusForbidden,
 	}
 	return response, nil
