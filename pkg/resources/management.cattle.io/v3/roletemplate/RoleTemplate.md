@@ -8,7 +8,7 @@ Circular references to a `RoleTemplate` (a inherits b, b inherits a) are not all
 
 ### Rules Without Verbs, Resources, API groups
 
-Rules without verbs, resources, or apigroups are not permitted. The `rules` and `externalRules` included in a RoleTemplate are of the same type as the rules used by standard Kubernetes RBAC types (such as `Roles` from `rbac.authorization.k8s.io/v1`). Because of this, they inherit the same restrictions as these types, including this one.
+Rules without verbs, resources, or apigroups are not permitted. The `rules`, `clusterScopedRules`, and `externalRules` included in a RoleTemplate are of the same type as the rules used by standard Kubernetes RBAC types (such as `Roles` from `rbac.authorization.k8s.io/v1`). Because of this, they inherit the same restrictions as these types, including this one.
 
 ### Escalation Prevention
 
@@ -21,6 +21,8 @@ The `roletemplates.context` field must be one of the following values [`"cluster
 If the `roletemplates.administrative` is set to true the context must equal `"cluster"`.
 
 If the `roletemplate.ProjectCreatorDefault` is true, context must equal `"project"`
+If there are `clusterScopedRules`, context must equal `"project"`
+
 ### Builtin Validation
 
 The `roletemplates.builtin` field is immutable, and new builtIn RoleTemplates cannot be created.
