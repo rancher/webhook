@@ -18,6 +18,7 @@ var projectsGVR = schema.GroupVersionResource{
 
 // Validator validates the namespace admission request.
 type Validator struct {
+	mcmEnabled                 bool
 	deleteNamespaceAdmitter    deleteNamespaceAdmitter
 	psaAdmitter                psaLabelAdmitter
 	projectNamespaceAdmitter   projectNamespaceAdmitter
@@ -25,8 +26,11 @@ type Validator struct {
 }
 
 // NewValidator returns a new validator used for validation of namespace requests.
-func NewValidator(sar authorizationv1.SubjectAccessReviewInterface) *Validator {
+// mcmEnabled indicates that the webhook runs on the Rancher management (local) cluster, where the
+// protected namespaces may not be deleted.
+func NewValidator(sar authorizationv1.SubjectAccessReviewInterface, mcmEnabled bool) *Validator {
 	return &Validator{
+		mcmEnabled:              mcmEnabled,
 		deleteNamespaceAdmitter: deleteNamespaceAdmitter{},
 		psaAdmitter: psaLabelAdmitter{
 			sar: sar,
@@ -90,22 +94,35 @@ func (v *Validator) ValidatingWebhook(clientConfig admissionv1.WebhookClientConf
 	}
 	kubeSystemCreateWebhook.FailurePolicy = admission.Ptr(admissionv1.Ignore)
 
-	deleteNamespaceWebhook := admission.NewDefaultValidatingWebhook(v, clientConfig, admissionv1.ClusterScope, []admissionv1.OperationType{admissionv1.Delete})
-	deleteNamespaceWebhook.Name = admission.CreateWebhookName(v, "delete-namespace")
-	deleteNamespaceWebhook.NamespaceSelector = &metav1.LabelSelector{
-		MatchExpressions: []metav1.LabelSelectorRequirement{
-			{
-				Key:      corev1.LabelMetadataName,
-				Operator: metav1.LabelSelectorOpIn,
-				Values:   []string{"fleet-local", "local"},
+	webhooks := []admissionv1.ValidatingWebhook{*standardWebhook, *createWebhook, *kubeSystemCreateWebhook}
+
+	// The protected namespaces are only meaningful on the Rancher management cluster. Registering
+	// this webhook on a downstream cluster would prevent users from deleting their own namespaces
+	// which happen to share one of those names.
+	if v.mcmEnabled {
+		deleteNamespaceWebhook := admission.NewDefaultValidatingWebhook(v, clientConfig, admissionv1.ClusterScope, []admissionv1.OperationType{admissionv1.Delete})
+		deleteNamespaceWebhook.Name = admission.CreateWebhookName(v, "delete-namespace")
+		deleteNamespaceWebhook.NamespaceSelector = &metav1.LabelSelector{
+			MatchExpressions: []metav1.LabelSelectorRequirement{
+				{
+					Key:      corev1.LabelMetadataName,
+					Operator: metav1.LabelSelectorOpIn,
+					Values:   protectedNamespaces,
+				},
 			},
-		},
+		}
+		webhooks = append([]admissionv1.ValidatingWebhook{*deleteNamespaceWebhook}, webhooks...)
 	}
 
-	return []admissionv1.ValidatingWebhook{*deleteNamespaceWebhook, *standardWebhook, *createWebhook, *kubeSystemCreateWebhook}
+	return webhooks
 }
 
 // Admitters returns the psaAdmitter and the projectNamespaceAdmitter for namespaces.
 func (v *Validator) Admitters() []admission.Admitter {
-	return []admission.Admitter{&v.psaAdmitter, &v.projectNamespaceAdmitter, &v.requestWithinLimitAdmitter, &v.deleteNamespaceAdmitter}
+	admitters := []admission.Admitter{&v.psaAdmitter, &v.projectNamespaceAdmitter, &v.requestWithinLimitAdmitter}
+	if v.mcmEnabled {
+		admitters = append(admitters, &v.deleteNamespaceAdmitter)
+	}
+
+	return admitters
 }
