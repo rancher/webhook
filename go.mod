@@ -1,6 +1,6 @@
 module github.com/rancher/webhook
 
-go 1.26.5
+go 1.27.0
 
 replace (
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.37.0
@@ -38,15 +38,18 @@ require (
 	github.com/rancher/dynamiclistener v0.9.3
 	github.com/rancher/jsonpath v0.0.0-20260423141252-c4e0c565a09f
 	github.com/rancher/lasso v0.2.10
-	github.com/rancher/rancher/pkg/apis v0.0.0-20260910074722-98c730a96d25
+	github.com/rancher/norman v0.10.0
+	github.com/rancher/rancher/pkg/apis v0.0.0-20260925212209-952a41734a2a
 	github.com/rancher/rancher/pkg/plan v0.0.0-20260428222332-2696373f4152
 	github.com/rancher/wrangler/v3 v3.8.0-rc.1
 	github.com/robfig/cron v1.2.0
 	github.com/sirupsen/logrus v1.10.2
 	github.com/stretchr/testify v1.12.1
 	go.uber.org/mock v0.6.0
+	golang.org/x/net v0.59.0
 	golang.org/x/text v0.42.0
 	golang.org/x/tools v0.50.0
+	gopkg.in/evanphx/json-patch.v5 v5.9.11
 	k8s.io/api v0.37.0
 	k8s.io/apimachinery v0.37.0
 	k8s.io/apiserver v0.37.0
@@ -62,31 +65,11 @@ require (
 
 require (
 	cel.dev/expr v0.25.1 // indirect
-	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.42.1 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.311.0 // indirect
-	github.com/aws/smithy-go v1.27.3 // indirect
-	github.com/go-openapi/swag/cmdutils v0.27.1 // indirect
-	github.com/go-openapi/swag/conv v0.27.1 // indirect
-	github.com/go-openapi/swag/fileutils v0.27.1 // indirect
-	github.com/go-openapi/swag/jsonutils v0.27.1 // indirect
-	github.com/go-openapi/swag/loading v0.27.1 // indirect
-	github.com/go-openapi/swag/mangling v0.27.1 // indirect
-	github.com/go-openapi/swag/netutils v0.27.1 // indirect
-	github.com/go-openapi/swag/pools v0.27.1 // indirect
-	github.com/go-openapi/swag/stringutils v0.27.1 // indirect
-	github.com/go-openapi/swag/typeutils v0.27.1 // indirect
-	github.com/go-openapi/swag/yamlutils v0.27.1 // indirect
-	github.com/google/cel-go v0.30.0 // indirect
-	github.com/google/renameio/v2 v2.0.2 // indirect
-	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260622175928-b703f567277d // indirect
-	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
-)
-
-require (
 	github.com/Azure/go-ntlmssp v0.1.1 // indirect
+	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
+	github.com/aws/aws-sdk-go-v2 v1.43.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.317.0 // indirect
+	github.com/aws/smithy-go v1.27.3 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -100,7 +83,20 @@ require (
 	github.com/go-openapi/jsonpointer v1.0.0 // indirect
 	github.com/go-openapi/jsonreference v1.0.0 // indirect
 	github.com/go-openapi/swag v0.27.1 // indirect
+	github.com/go-openapi/swag/cmdutils v0.27.1 // indirect
+	github.com/go-openapi/swag/conv v0.27.1 // indirect
+	github.com/go-openapi/swag/fileutils v0.27.1 // indirect
+	github.com/go-openapi/swag/jsonutils v0.27.1 // indirect
+	github.com/go-openapi/swag/loading v0.27.1 // indirect
+	github.com/go-openapi/swag/mangling v0.27.1 // indirect
+	github.com/go-openapi/swag/netutils v0.27.1 // indirect
+	github.com/go-openapi/swag/pools v0.27.1 // indirect
+	github.com/go-openapi/swag/stringutils v0.27.1 // indirect
+	github.com/go-openapi/swag/typeutils v0.27.1 // indirect
+	github.com/go-openapi/swag/yamlutils v0.27.1 // indirect
+	github.com/google/cel-go v0.30.0 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
+	github.com/google/renameio/v2 v2.0.2 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
@@ -112,12 +108,11 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.70.0 // indirect
 	github.com/prometheus/procfs v0.21.1 // indirect
-	github.com/rancher/aks-operator v1.15.0 // indirect
-	github.com/rancher/ali-operator v1.15.0-rc.3 // indirect
-	github.com/rancher/eks-operator v1.15.0 // indirect
+	github.com/rancher/aks-operator v1.15.1 // indirect
+	github.com/rancher/ali-operator v1.15.0 // indirect
+	github.com/rancher/eks-operator v1.15.1 // indirect
 	github.com/rancher/fleet/pkg/apis v0.17.0-alpha.1 // indirect
-	github.com/rancher/gke-operator v1.15.0 // indirect
-	github.com/rancher/norman v0.10.0
+	github.com/rancher/gke-operator v1.15.2 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
@@ -126,16 +121,18 @@ require (
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.57.0 // indirect
+	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
 	golang.org/x/mod v0.41.0 // indirect
-	golang.org/x/net v0.59.0
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/term v0.46.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260724162435-b2f20204f0df // indirect
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
-	gopkg.in/evanphx/json-patch.v5 v5.9.11
+	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	k8s.io/apiextensions-apiserver v0.37.0 // indirect
