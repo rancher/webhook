@@ -20,6 +20,11 @@ func TestValidateDataDirectoryFormat(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "root directory",
+			dir:      "/",
+			expected: true,
+		},
+		{
 			name:     "relative",
 			dir:      "home",
 			expected: false,
@@ -177,6 +182,14 @@ func TestValidateDataDirectoryHierarchy(t *testing.T) {
 		dataDirs map[string]string
 		expected bool
 	}{
+		{
+			name: "parent path is root path",
+			dataDirs: map[string]string{
+				"a": "/",
+				"b": "/var/lib/rancher",
+			},
+			expected: false,
+		},
 		{
 			name: "equal paths",
 			dataDirs: map[string]string{

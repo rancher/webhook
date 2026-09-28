@@ -33,22 +33,21 @@ func ValidateDataDirectoryFormat(dir, name string) *admissionv1.AdmissionRespons
 }
 
 // ValidateDataDirectoryHierarchy ensures that no directories are equal, and no directories include other directories.
+//
 // dataDirs is a map with keys corresponding to print friendly names for these data directories, and values representing
 // the specific data directories.
 func ValidateDataDirectoryHierarchy(dataDirs map[string]string) *admissionv1.AdmissionResponse {
-	paths := make([]struct {
+	type path struct {
 		name string
 		path string
-	}, 0, len(dataDirs))
+	}
+	paths := make([]path, 0, len(dataDirs))
 	for name, dir := range dataDirs {
 		// do not attempt to validate empty directory
 		if dir == "" {
 			continue
 		}
-		paths = append(paths, struct {
-			name string
-			path string
-		}{
+		paths = append(paths, path{
 			name: name,
 			path: dir,
 		})
@@ -83,5 +82,8 @@ func ValidateDataDirectoryHierarchy(dataDirs map[string]string) *admissionv1.Adm
 // "/a/b/c/d" are both considered nested inside "/a"). Both paths are assumed to already be clean,
 // absolute paths, as enforced by ValidateDataDirectoryFormat.
 func isNestedDataDirectory(parent, child string) bool {
+	if parent == string(filepath.Separator) {
+		return child != parent && strings.HasPrefix(child, parent)
+	}
 	return strings.HasPrefix(child, parent+string(filepath.Separator))
 }
