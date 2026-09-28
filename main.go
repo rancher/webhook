@@ -1,5 +1,6 @@
 //go:generate go run pkg/codegen/cleanup/main.go
 //go:generate go run ./pkg/codegen
+//go:generate go run ./pkg/codegen/webhookconfig
 package main
 
 import (

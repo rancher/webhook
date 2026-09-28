@@ -4,8 +4,8 @@ metadata:
   name: rancher.cattle.io
 webhooks:
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -16,23 +16,20 @@ webhooks:
   failurePolicy: Ignore
   matchPolicy: Equivalent
   name: rancher.cattle.io.features.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - UPDATE
-      resources:
-        - features
-      scope: Cluster
+  - apiGroups:
+    - management.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - UPDATE
+    resources:
+    - features
+    scope: Cluster
   sideEffects: None
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -43,25 +40,22 @@ webhooks:
   failurePolicy: Ignore
   matchPolicy: Equivalent
   name: rancher.cattle.io.clusters.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - CREATE
-        - UPDATE
-        - DELETE
-      resources:
-        - clusters
-      scope: Cluster
+  - apiGroups:
+    - management.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - CREATE
+    - UPDATE
+    - DELETE
+    resources:
+    - clusters
+    scope: Cluster
   sideEffects: None
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -72,23 +66,20 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.rke-machine-config.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - rke-machine-config.cattle.io
-      apiVersions:
-        - v1
-      operations:
-        - UPDATE
-      resources:
-        - '*'
-      scope: Namespaced
-  sideEffects: None
-  timeoutSeconds: 10
-- admissionReviewVersions:
+  - apiGroups:
+    - rke-machine-config.cattle.io
+    apiVersions:
     - v1
-    - v1beta1
+    operations:
+    - UPDATE
+    resources:
+    - '*'
+    scope: Namespaced
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -101,27 +92,25 @@ webhooks:
   name: rancher.cattle.io.namespaces.delete-namespace
   namespaceSelector:
     matchExpressions:
-      - key: kubernetes.io/metadata.name
-        operator: In
-        values:
-          - fleet-local
-          - local
-  objectSelector: {}
+    - key: kubernetes.io/metadata.name
+      operator: In
+      values:
+      - fleet-local
+      - local
   rules:
-    - apiGroups:
-        - ''
-      apiVersions:
-        - v1
-      operations:
-        - DELETE
-      resources:
-        - namespaces
-      scope: Cluster
-  sideEffects: None
-  timeoutSeconds: 10
-- admissionReviewVersions:
+  - apiGroups:
+    - ""
+    apiVersions:
     - v1
-    - v1beta1
+    operations:
+    - DELETE
+    resources:
+    - namespaces
+    scope: Cluster
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -132,23 +121,20 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.namespaces
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - ''
-      apiVersions:
-        - v1
-      operations:
-        - UPDATE
-      resources:
-        - namespaces
-      scope: Cluster
-  sideEffects: None
-  timeoutSeconds: 10
-- admissionReviewVersions:
+  - apiGroups:
+    - ""
+    apiVersions:
     - v1
-    - v1beta1
+    operations:
+    - UPDATE
+    resources:
+    - namespaces
+    scope: Cluster
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -161,26 +147,24 @@ webhooks:
   name: rancher.cattle.io.namespaces.create-non-kubesystem
   namespaceSelector:
     matchExpressions:
-      - key: kubernetes.io/metadata.name
-        operator: NotIn
-        values:
-          - kube-system
-  objectSelector: {}
+    - key: kubernetes.io/metadata.name
+      operator: NotIn
+      values:
+      - kube-system
   rules:
-    - apiGroups:
-        - ''
-      apiVersions:
-        - v1
-      operations:
-        - CREATE
-      resources:
-        - namespaces
-      scope: Cluster
-  sideEffects: None
-  timeoutSeconds: 10
-- admissionReviewVersions:
+  - apiGroups:
+    - ""
+    apiVersions:
     - v1
-    - v1beta1
+    operations:
+    - CREATE
+    resources:
+    - namespaces
+    scope: Cluster
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -193,26 +177,24 @@ webhooks:
   name: rancher.cattle.io.namespaces.create-kubesystem-only
   namespaceSelector:
     matchExpressions:
-      - key: kubernetes.io/metadata.name
-        operator: In
-        values:
-          - kube-system
-  objectSelector: {}
+    - key: kubernetes.io/metadata.name
+      operator: In
+      values:
+      - kube-system
   rules:
-    - apiGroups:
-        - ''
-      apiVersions:
-        - v1
-      operations:
-        - CREATE
-      resources:
-        - namespaces
-      scope: Cluster
-  sideEffects: None
-  timeoutSeconds: 10
-- admissionReviewVersions:
+  - apiGroups:
+    - ""
+    apiVersions:
     - v1
-    - v1beta1
+    operations:
+    - CREATE
+    resources:
+    - namespaces
+    scope: Cluster
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -223,24 +205,21 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.clusterrepos.catalog.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - catalog.cattle.io
-      apiVersions:
-        - v1
-      operations:
-        - UPDATE
-        - CREATE
-      resources:
-        - clusterrepos
-      scope: Namespaced
-  sideEffects: None
-  timeoutSeconds: 10
-- admissionReviewVersions:
+  - apiGroups:
+    - catalog.cattle.io
+    apiVersions:
     - v1
-    - v1beta1
+    operations:
+    - UPDATE
+    - CREATE
+    resources:
+    - clusterrepos
+    scope: Namespaced
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -251,24 +230,21 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.auditpolicies.auditlog.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - auditlog.cattle.io
-      apiVersions:
-        - v1
-      operations:
-        - CREATE
-        - UPDATE
-      resources:
-        - auditpolicies
-      scope: Cluster
-  sideEffects: None
-  timeoutSeconds: 10
-- admissionReviewVersions:
+  - apiGroups:
+    - auditlog.cattle.io
+    apiVersions:
     - v1
-    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - auditpolicies
+    scope: Cluster
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -279,26 +255,23 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.resourcequotas
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - ""
-      apiVersions:
-        - v1
-      operations:
-        - CREATE
-        - UPDATE
-        - DELETE
-      resources:
-        - resourcequotas
-        - resourcequotas/status
-      scope: Namespaced
-  sideEffects: None
-  timeoutSeconds: 10
-- admissionReviewVersions:
+  - apiGroups:
+    - ""
+    apiVersions:
     - v1
-    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    - DELETE
+    resources:
+    - resourcequotas
+    - resourcequotas/status
+    scope: Namespaced
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -309,27 +282,24 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.limitranges
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - ""
-      apiVersions:
-        - v1
-      operations:
-        - CREATE
-        - UPDATE
-        - DELETE
-      resources:
-        - limitranges
-        - limitranges/status
-      scope: Namespaced
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    - DELETE
+    resources:
+    - limitranges
+    - limitranges/status
+    scope: Namespaced
   sideEffects: None
-  timeoutSeconds: 10
 {{- if .Values.mcm.enabled }}
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -340,25 +310,22 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.clusters.provisioning.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - provisioning.cattle.io
-      apiVersions:
-        - v1
-      operations:
-        - UPDATE
-        - CREATE
-        - DELETE
-      resources:
-        - clusters
-      scope: Namespaced
-  sideEffects: None
-  timeoutSeconds: 10
-- admissionReviewVersions:
+  - apiGroups:
+    - provisioning.cattle.io
+    apiVersions:
     - v1
-    - v1beta1
+    operations:
+    - UPDATE
+    - CREATE
+    - DELETE
+    resources:
+    - clusters
+    scope: Namespaced
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -369,23 +336,20 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.clusterproxyconfigs.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - CREATE
-      resources:
-        - clusterproxyconfigs
-      scope: Namespaced
+  - apiGroups:
+    - management.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - CREATE
+    resources:
+    - clusterproxyconfigs
+    scope: Namespaced
   sideEffects: None
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -396,25 +360,22 @@ webhooks:
   failurePolicy: Ignore
   matchPolicy: Equivalent
   name: rancher.cattle.io.podsecurityadmissionconfigurationtemplates.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - UPDATE
-        - CREATE
-        - DELETE
-      resources:
-        - podsecurityadmissionconfigurationtemplates
-      scope: '*'
+  - apiGroups:
+    - management.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - UPDATE
+    - CREATE
+    - DELETE
+    resources:
+    - podsecurityadmissionconfigurationtemplates
+    scope: '*'
   sideEffects: None
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -425,25 +386,22 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.globalroles.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - UPDATE
-        - CREATE
-        - DELETE
-      resources:
-        - globalroles
-      scope: Cluster
+  - apiGroups:
+    - management.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - UPDATE
+    - CREATE
+    - DELETE
+    resources:
+    - globalroles
+    scope: Cluster
   sideEffects: None
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -454,24 +412,21 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.globalrolebindings.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - CREATE
-        - UPDATE
-      resources:
-        - globalrolebindings
-      scope: Cluster
+  - apiGroups:
+    - management.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - globalrolebindings
+    scope: Cluster
   sideEffects: None
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -482,24 +437,21 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.projectroletemplatebindings.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - UPDATE
-        - CREATE
-      resources:
-        - projectroletemplatebindings
-      scope: Namespaced
+  - apiGroups:
+    - management.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - UPDATE
+    - CREATE
+    resources:
+    - projectroletemplatebindings
+    scope: Namespaced
   sideEffects: None
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -510,24 +462,21 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.clusterroletemplatebindings.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - UPDATE
-        - CREATE
-      resources:
-        - clusterroletemplatebindings
-      scope: Namespaced
+  - apiGroups:
+    - management.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - UPDATE
+    - CREATE
+    resources:
+    - clusterroletemplatebindings
+    scope: Namespaced
   sideEffects: None
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -538,25 +487,22 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.roletemplates.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - UPDATE
-        - CREATE
-        - DELETE
-      resources:
-        - roletemplates
-      scope: Cluster
+  - apiGroups:
+    - management.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - UPDATE
+    - CREATE
+    - DELETE
+    resources:
+    - roletemplates
+    scope: Cluster
   sideEffects: None
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -567,23 +513,22 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.secrets
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - ''
-      apiVersions:
-        - v1
-      operations:
-        - DELETE
-      resources:
-        - secrets
-      scope: Namespaced
-  sideEffects: None
-  timeoutSeconds: 10
-- admissionReviewVersions:
+  - apiGroups:
+    - ""
+    apiVersions:
     - v1
-    - v1beta1
+    operations:
+    - DELETE
+    - CREATE
+    - UPDATE
+    resources:
+    - secrets
+    scope: Namespaced
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -594,24 +539,21 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.nodedrivers.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - UPDATE
-        - DELETE
-      resources:
-        - nodedrivers
-      scope: Cluster
+  - apiGroups:
+    - management.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - UPDATE
+    - DELETE
+    resources:
+    - nodedrivers
+    scope: Cluster
   sideEffects: None
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -622,25 +564,22 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.projects.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - CREATE
-        - UPDATE
-        - DELETE
-      resources:
-        - projects
-      scope: Namespaced
+  - apiGroups:
+    - management.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - CREATE
+    - UPDATE
+    - DELETE
+    resources:
+    - projects
+    scope: Namespaced
   sideEffects: None
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -651,26 +590,24 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.roles.rbac.authorization.k8s.io
-  namespaceSelector: {}
   objectSelector:
     matchExpressions:
-      - key: authz.management.cattle.io/gr-owner
-        operator: Exists
+    - key: authz.management.cattle.io/gr-owner
+      operator: Exists
   rules:
-    - apiGroups:
-        - rbac.authorization.k8s.io
-      apiVersions:
-        - v1
-      operations:
-        - UPDATE
-      resources:
-        - roles
-      scope: Namespaced
-  sideEffects: None
-  timeoutSeconds: 10
-- admissionReviewVersions:
+  - apiGroups:
+    - rbac.authorization.k8s.io
+    apiVersions:
     - v1
-    - v1beta1
+    operations:
+    - UPDATE
+    resources:
+    - roles
+    scope: Namespaced
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -681,26 +618,24 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.rolebindings.rbac.authorization.k8s.io
-  namespaceSelector: {}
   objectSelector:
     matchExpressions:
-      - key: authz.management.cattle.io/grb-owner
-        operator: Exists
+    - key: authz.management.cattle.io/grb-owner
+      operator: Exists
   rules:
-    - apiGroups:
-        - rbac.authorization.k8s.io
-      apiVersions:
-        - v1
-      operations:
-        - UPDATE
-      resources:
-        - rolebindings
-      scope: Namespaced
-  sideEffects: None
-  timeoutSeconds: 10
-- admissionReviewVersions:
+  - apiGroups:
+    - rbac.authorization.k8s.io
+    apiVersions:
     - v1
-    - v1beta1
+    operations:
+    - UPDATE
+    resources:
+    - rolebindings
+    scope: Namespaced
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -711,24 +646,21 @@ webhooks:
   failurePolicy: Ignore
   matchPolicy: Equivalent
   name: rancher.cattle.io.settings.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - UPDATE
-        - CREATE
-      resources:
-        - settings
-      scope: Cluster
+  - apiGroups:
+    - management.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - UPDATE
+    - CREATE
+    resources:
+    - settings
+    scope: Cluster
   sideEffects: None
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -739,24 +671,21 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.tokens.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - UPDATE
-        - CREATE
-      resources:
-        - tokens
-      scope: Cluster
+  - apiGroups:
+    - management.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - UPDATE
+    - CREATE
+    resources:
+    - tokens
+    scope: Cluster
   sideEffects: None
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -767,24 +696,21 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.userattributes.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - UPDATE
-        - CREATE
-      resources:
-        - userattributes
-      scope: Cluster
+  - apiGroups:
+    - management.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - UPDATE
+    - CREATE
+    resources:
+    - userattributes
+    scope: Cluster
   sideEffects: None
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -795,26 +721,24 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.clusterroles.rbac.authorization.k8s.io
-  namespaceSelector: {}
   objectSelector:
     matchExpressions:
-      - key: authz.management.cattle.io/gr-owner
-        operator: Exists
+    - key: authz.management.cattle.io/gr-owner
+      operator: Exists
   rules:
-    - apiGroups:
-        - rbac.authorization.k8s.io
-      apiVersions:
-        - v1
-      operations:
-        - UPDATE
-      resources:
-        - clusterroles
-      scope: Cluster
-  sideEffects: None
-  timeoutSeconds: 10
-- admissionReviewVersions:
+  - apiGroups:
+    - rbac.authorization.k8s.io
+    apiVersions:
     - v1
-    - v1beta1
+    operations:
+    - UPDATE
+    resources:
+    - clusterroles
+    scope: Cluster
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -825,26 +749,24 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.clusterrolebindings.rbac.authorization.k8s.io
-  namespaceSelector: {}
   objectSelector:
     matchExpressions:
-      - key: authz.management.cattle.io/grb-owner
-        operator: Exists
+    - key: authz.management.cattle.io/grb-owner
+      operator: Exists
   rules:
-    - apiGroups:
-        - rbac.authorization.k8s.io
-      apiVersions:
-        - v1
-      operations:
-        - UPDATE
-      resources:
-        - clusterrolebindings
-      scope: Cluster
-  sideEffects: None
-  timeoutSeconds: 10
-- admissionReviewVersions:
+  - apiGroups:
+    - rbac.authorization.k8s.io
+    apiVersions:
     - v1
-    - v1beta1
+    operations:
+    - UPDATE
+    resources:
+    - clusterrolebindings
+    scope: Cluster
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -855,24 +777,21 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.authconfigs.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - UPDATE
-        - CREATE
-      resources:
-        - authconfigs
-      scope: Cluster
+  - apiGroups:
+    - management.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - UPDATE
+    - CREATE
+    resources:
+    - authconfigs
+    scope: Cluster
   sideEffects: None
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -883,25 +802,22 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.users.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - CREATE
-        - UPDATE
-        - DELETE
-      resources:
-        - users
-      scope: Cluster
+  - apiGroups:
+    - management.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - CREATE
+    - UPDATE
+    - DELETE
+    resources:
+    - users
+    scope: Cluster
   sideEffects: None
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -912,23 +828,20 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.machinedeployments-scale.cluster.x-k8s.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - cluster.x-k8s.io
-      apiVersions:
-        - v1beta1
-      operations:
-        - UPDATE
-      resources:
-        - machinedeployments/scale
-      scope: Namespaced
+  - apiGroups:
+    - cluster.x-k8s.io
+    apiVersions:
+    - v1beta2
+    operations:
+    - UPDATE
+    resources:
+    - machinedeployments/scale
+    scope: Namespaced
   sideEffects: NoneOnDryRun
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -939,24 +852,21 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.proxyendpoints.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - CREATE
-        - UPDATE
-      resources:
-        - proxyendpoints
-      scope: Cluster
+  - apiGroups:
+    - management.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - proxyendpoints
+    scope: Cluster
   sideEffects: None
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -967,24 +877,21 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.awsclusters.infrastructure.cluster.x-k8s.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - infrastructure.cluster.x-k8s.io
-      apiVersions:
-        - v1beta2
-      operations:
-        - CREATE
-        - UPDATE
-      resources:
-        - awsclusters
-      scope: Namespaced
+  - apiGroups:
+    - infrastructure.cluster.x-k8s.io
+    apiVersions:
+    - v1beta2
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - awsclusters
+    scope: Namespaced
   sideEffects: None
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -995,26 +902,23 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.awsclusterstaticidentities.infrastructure.cluster.x-k8s.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - infrastructure.cluster.x-k8s.io
-      apiVersions:
-        - v1beta2
-      operations:
-        - CREATE
-        - UPDATE
-      resources:
-        - awsclusterstaticidentities
-      scope: Cluster
+  - apiGroups:
+    - infrastructure.cluster.x-k8s.io
+    apiVersions:
+    - v1beta2
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - awsclusterstaticidentities
+    scope: Cluster
   sideEffects: None
-  timeoutSeconds: 10
 {{- end }}
 {{- if not .Values.mcm.enabled }}
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -1025,21 +929,18 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.clusterauthtokens.cluster.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
   rules:
-    - apiGroups:
-        - cluster.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - CREATE
-        - UPDATE
-      resources:
-        - clusterauthtokens
-      scope: Namespaced
+  - apiGroups:
+    - cluster.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - UPDATE
+    - CREATE
+    resources:
+    - clusterauthtokens
+    scope: Namespaced
   sideEffects: None
-  timeoutSeconds: 10
 {{- end }}
 ---
 apiVersion: admissionregistration.k8s.io/v1
@@ -1048,8 +949,8 @@ metadata:
   name: rancher.cattle.io
 webhooks:
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -1060,26 +961,22 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.clusters.provisioning.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
-  reinvocationPolicy: Never
   rules:
-    - apiGroups:
-        - provisioning.cattle.io
-      apiVersions:
-        - v1
-      operations:
-        - CREATE
-        - UPDATE
-        - DELETE
-      resources:
-        - clusters
-      scope: Namespaced
-  sideEffects: NoneOnDryRun
-  timeoutSeconds: 10
-- admissionReviewVersions:
+  - apiGroups:
+    - provisioning.cattle.io
+    apiVersions:
     - v1
-    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    - DELETE
+    resources:
+    - clusters
+    scope: Namespaced
+  sideEffects: NoneOnDryRun
+- admissionReviewVersions:
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -1090,25 +987,21 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.clusters.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
-  reinvocationPolicy: Never
   rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - CREATE
-        - UPDATE
-      resources:
-        - clusters
-      scope: Cluster
+  - apiGroups:
+    - management.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - clusters
+    scope: Cluster
   sideEffects: NoneOnDryRun
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -1119,25 +1012,21 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.rke-machine-config.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
-  reinvocationPolicy: Never
   rules:
-    - apiGroups:
-        - rke-machine-config.cattle.io
-      apiVersions:
-        - v1
-      operations:
-        - CREATE
-      resources:
-        - '*'
-      scope: Namespaced
+  - apiGroups:
+    - rke-machine-config.cattle.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    resources:
+    - '*'
+    scope: Namespaced
   sideEffects: NoneOnDryRun
-  timeoutSeconds: 10
 {{- if .Values.mcm.enabled }}
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -1147,32 +1036,29 @@ webhooks:
       port: 443
   failurePolicy: Fail
   matchConditions:
-    - expression: request.operation == 'DELETE' || (object != null && object.type
-        == "provisioning.cattle.io/cloud-credential" && request.operation == 'CREATE')
-        || (object != null && object.metadata.namespace == "cattle-local-user-passwords")
-      name: filter-by-secret-type-cloud-credential
+  - expression: request.operation == 'DELETE' || (object != null && object.type ==
+      "provisioning.cattle.io/cloud-credential" && request.operation == 'CREATE')
+      || (object != null && object.metadata.namespace == "cattle-local-user-passwords")
+    name: filter-by-secret-type-cloud-credential
   matchPolicy: Equivalent
   name: rancher.cattle.io.secrets
-  namespaceSelector: {}
-  objectSelector: {}
-  reinvocationPolicy: Never
   rules:
-    - apiGroups:
-        - ''
-      apiVersions:
-        - v1
-      operations:
-        - CREATE
-        - DELETE
-        - UPDATE
-      resources:
-        - secrets
-      scope: Namespaced
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - DELETE
+    - UPDATE
+    resources:
+    - secrets
+    scope: Namespaced
   sideEffects: NoneOnDryRun
   timeoutSeconds: 15
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -1183,25 +1069,21 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.projects.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
-  reinvocationPolicy: Never
   rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - CREATE
-        - UPDATE
-      resources:
-        - projects
-      scope: Namespaced
+  - apiGroups:
+    - management.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - projects
+    scope: Namespaced
   sideEffects: None
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -1212,24 +1094,20 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.globalrolebindings.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
-  reinvocationPolicy: Never
   rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - CREATE
-      resources:
-        - globalrolebindings
-      scope: Cluster
+  - apiGroups:
+    - management.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - CREATE
+    resources:
+    - globalrolebindings
+    scope: Cluster
   sideEffects: None
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -1240,24 +1118,20 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.projectroletemplatebindings.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
-  reinvocationPolicy: Never
   rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - CREATE
-      resources:
-        - projectroletemplatebindings
-      scope: Namespaced
+  - apiGroups:
+    - management.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - CREATE
+    resources:
+    - projectroletemplatebindings
+    scope: Namespaced
   sideEffects: None
-  timeoutSeconds: 10
 - admissionReviewVersions:
-    - v1
-    - v1beta1
+  - v1
+  - v1beta1
   clientConfig:
     caBundle: {{ .Values.caBundle | default "" }}
     service:
@@ -1268,19 +1142,15 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: rancher.cattle.io.clusterroletemplatebindings.management.cattle.io
-  namespaceSelector: {}
-  objectSelector: {}
-  reinvocationPolicy: Never
   rules:
-    - apiGroups:
-        - management.cattle.io
-      apiVersions:
-        - v3
-      operations:
-        - CREATE
-      resources:
-        - clusterroletemplatebindings
-      scope: Namespaced
+  - apiGroups:
+    - management.cattle.io
+    apiVersions:
+    - v3
+    operations:
+    - CREATE
+    resources:
+    - clusterroletemplatebindings
+    scope: Namespaced
   sideEffects: None
-  timeoutSeconds: 10
 {{- end }}
