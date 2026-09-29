@@ -254,7 +254,57 @@ func validateActiveDirectoryConfig(request *admission.Request) error {
 		}
 	}
 
+	if fieldErr := validateBindMechanism(request); fieldErr != nil {
+		err = errors.Join(err, fieldErr)
+	}
+
 	return err
+}
+
+// Values of the Active Directory bindMechanism field.
+const (
+	bindMechanismSimple   = "simple"
+	bindMechanismNTLM     = "ntlm"
+	bindMechanismKerberos = "kerberos"
+)
+
+// bindConfig holds the Active Directory bind settings. They are read from the
+// raw object so the webhook does not depend on the Rancher types carrying them.
+type bindConfig struct {
+	BindMechanism string `json:"bindMechanism"`
+	TLS           bool   `json:"tls"`
+	StartTLS      bool   `json:"starttls"`
+}
+
+// validateBindMechanism reports whether the config selects a bind mechanism
+// Rancher supports on the configured transport. An NTLM bind derives its
+// channel binding token from the server certificate, so it requires TLS or
+// StartTLS.
+//
+// Rancher runs the same check on its testAndApply path. This one also covers a
+// config written directly through the API.
+func validateBindMechanism(request *admission.Request) error {
+	var config bindConfig
+	if err := json.Unmarshal(request.Object.Raw, &config); err != nil {
+		return fmt.Errorf("failed to unmarshal bind settings: %w", err)
+	}
+
+	path := field.NewPath("bindMechanism")
+
+	switch config.BindMechanism {
+	case "", bindMechanismSimple:
+		return nil
+	case bindMechanismNTLM:
+		if !config.TLS && !config.StartTLS {
+			return field.Forbidden(path, fmt.Sprintf("%q requires tls or starttls", bindMechanismNTLM))
+		}
+		return nil
+	case bindMechanismKerberos:
+		return field.Forbidden(path, fmt.Sprintf("%q is reserved and not yet supported", bindMechanismKerberos))
+	default:
+		return field.Forbidden(path, fmt.Sprintf("invalid value %q, must be one of %q or %q",
+			config.BindMechanism, bindMechanismSimple, bindMechanismNTLM))
+	}
 }
 
 // According to RFC4512 https://datatracker.ietf.org/doc/html/rfc4512#section-1.4

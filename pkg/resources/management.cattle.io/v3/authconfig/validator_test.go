@@ -417,6 +417,106 @@ func TestValidateActiveDirectoryConfig(t *testing.T) {
 	}
 }
 
+func TestValidateActiveDirectoryBindMechanism(t *testing.T) {
+	t.Parallel()
+
+	config := v3.ActiveDirectoryConfig{
+		Servers:     []string{"ad.example.com"},
+		Certificate: "CERTIFICATE",
+	}
+	config.Name = "activedirectory"
+	config.Type = "activeDirectoryConfig"
+	config.Enabled = true
+
+	tests := []struct {
+		desc     string
+		bind     map[string]any // bindMechanism/tls/starttls, set as raw JSON keys.
+		disabled bool
+		allowed  bool
+	}{
+		{
+			desc:    "no bind mechanism",
+			bind:    map[string]any{"tls": true},
+			allowed: true,
+		},
+		{
+			desc:    "simple over tls",
+			bind:    map[string]any{"bindMechanism": "simple", "tls": true},
+			allowed: true,
+		},
+		{
+			desc:    "simple over plaintext",
+			bind:    map[string]any{"bindMechanism": "simple"},
+			allowed: true,
+		},
+		{
+			desc:    "ntlm over tls",
+			bind:    map[string]any{"bindMechanism": "ntlm", "tls": true},
+			allowed: true,
+		},
+		{
+			desc:    "ntlm over starttls",
+			bind:    map[string]any{"bindMechanism": "ntlm", "starttls": true},
+			allowed: true,
+		},
+		{
+			desc: "ntlm over plaintext",
+			bind: map[string]any{"bindMechanism": "ntlm"},
+		},
+		{
+			desc:     "ntlm over plaintext for the disabled provider",
+			bind:     map[string]any{"bindMechanism": "ntlm"},
+			disabled: true,
+			allowed:  true,
+		},
+		{
+			desc: "kerberos is reserved",
+			bind: map[string]any{"bindMechanism": "kerberos", "tls": true},
+		},
+		{
+			desc: "unknown mechanism",
+			bind: map[string]any{"bindMechanism": "gssapi", "tls": true},
+		},
+		{
+			desc: "mechanism is case sensitive",
+			bind: map[string]any{"bindMechanism": "NTLM", "tls": true},
+		},
+	}
+
+	validator := authconfig.NewValidator()
+
+	for _, op := range []v1.Operation{v1.Create, v1.Update} {
+		for _, test := range tests {
+			name := string(op) + "_" + test.desc
+			t.Run(name, func(t *testing.T) {
+				config := config
+				config.Enabled = !test.disabled
+
+				oldConfig := v3.ActiveDirectoryConfig{}
+				oldConfig.Name = config.Name
+				oldConfig.Type = config.Type
+
+				testAdmit(t, validator, op, oldConfig, withFields(t, config, test.bind), test.allowed)
+			})
+		}
+	}
+}
+
+// withFields marshals config and overlays extra JSON fields. The webhook reads
+// the bind settings from the raw object, so tests set them without depending on
+// the Rancher types carrying them.
+func withFields(t *testing.T, config any, extra map[string]any) map[string]any {
+	raw, err := json.Marshal(config)
+	require.NoError(t, err, "failed to marshal config")
+
+	var obj map[string]any
+	require.NoError(t, json.Unmarshal(raw, &obj), "failed to unmarshal config")
+	for k, v := range extra {
+		obj[k] = v
+	}
+	return obj
+}
+
 func TestIsValidLdapAttr(t *testing.T) {
 	t.Parallel()
 
