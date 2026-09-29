@@ -133,6 +133,7 @@ func main() {
 		"rke.cattle.io": {
 			Types: []interface{}{
 				&rkev1.ETCDSnapshot{},
+				&rkev1.RKEControlPlane{},
 			},
 		},
 	}); err != nil {
