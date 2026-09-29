@@ -23,3 +23,4 @@ When an LDAP (`openldap`, `freeipa`) or ActiveDirectory (`activedirectory`) auth
   - `userLoginFilter`
   - `userSearchFilter`
   - `groupSearchFilter`
+- Only local and one other provider can be enabled without the multiple-auth-providers feature in Rancher being enabled.
