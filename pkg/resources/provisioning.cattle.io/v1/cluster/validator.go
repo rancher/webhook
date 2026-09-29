@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"reflect"
 	"regexp"
 	"slices"
@@ -270,12 +269,12 @@ func (p *provisioningAdmitter) validateDataDirectories(request *admission.Reques
 			"System Agent": systemAgent,
 		}
 		for name, dir := range dataDirectories {
-			response := validateDataDirectoryFormat(dir, name)
+			response := common.ValidateDataDirectoryFormat(dir, name)
 			if !response.Allowed {
 				return response
 			}
 		}
-		response := validateDataDirectoryHierarchy(dataDirectories)
+		response := common.ValidateDataDirectoryHierarchy(dataDirectories)
 		if !response.Allowed {
 			return response
 		}
@@ -297,82 +296,6 @@ func (p *provisioningAdmitter) validateDataDirectories(request *admission.Reques
 	}
 	if oldCluster.Spec.RKEConfig.DataDirectories.Provisioning != provisioning {
 		return admission.ResponseBadRequest("Provisioning data directory cannot be changed after cluster creation")
-	}
-
-	return admission.ResponseAllowed()
-}
-
-// validateDataDirectoryFormat ensures that no data directory contains a relative path, environment variables,
-// shell expressions, or references to the current or parent directory via use of "./" and "../" respectively.
-// dir is the path of the data directory, and name corresponds to a print friendly name for this data directory.
-func validateDataDirectoryFormat(dir, name string) *admissionv1.AdmissionResponse {
-	if dir == "" {
-		return admission.ResponseAllowed()
-	}
-	if !filepath.IsAbs(dir) {
-		return admission.ResponseBadRequest(
-			fmt.Sprintf("%s data directory must be an absolute path", name))
-	}
-	if strings.ContainsAny(dir, "\"'`*?#~=%$|&;<>{}[]()") {
-		return admission.ResponseBadRequest(
-			fmt.Sprintf("%s data directory cannot contain shell expressions", name))
-	}
-	if filepath.Clean(dir) != dir {
-		return admission.ResponseBadRequest(
-			fmt.Sprintf("%s data directory is not clean", name))
-	}
-
-	return admission.ResponseAllowed()
-}
-
-// validateDataDirectoryHierarchy ensures that no directories are equal, and no directories include other directories.
-// dataDirs is a map with keys corresponding to print friendly names for these data directories, and values representing
-// the specific data directories.
-func validateDataDirectoryHierarchy(dataDirs map[string]string) *admissionv1.AdmissionResponse {
-	paths := make([]struct {
-		name string
-		path string
-	}, 0, len(dataDirs))
-	for name, dir := range dataDirs {
-		// do not attempt to validate empty directory
-		if dir == "" {
-			continue
-		}
-		paths = append(paths, struct {
-			name string
-			path string
-		}{
-			name: name,
-			path: dir,
-		})
-	}
-
-	for i := range paths {
-		for j := i + 1; j < len(paths); j++ {
-			path1 := paths[i]
-			path2 := paths[j]
-
-			if path1.path == path2.path {
-				return admission.ResponseBadRequest(
-					fmt.Sprintf("%s data directory cannot be equal to %s data directory", path1.name, path2.name))
-			}
-
-			// check if paths contain one another
-			if matched, err := filepath.Match(fmt.Sprintf("%s%c*", path1.path, filepath.Separator), path2.path); err != nil {
-				return admission.ResponseBadRequest(
-					fmt.Sprintf("error determining if %s data directory is nested inside %s data directory: %s", path2.name, path1.name, err.Error()))
-			} else if matched {
-				return admission.ResponseBadRequest(
-					fmt.Sprintf("%s data directory cannot be nested inside %s data directory", path2.name, path1.name))
-			}
-			if matched, err := filepath.Match(fmt.Sprintf("%s%c*", path2.path, filepath.Separator), path1.path); err != nil {
-				return admission.ResponseBadRequest(
-					fmt.Sprintf("error determining if %s data directory is nested inside %s data directory: %s", path1.name, path2.name, err.Error()))
-			} else if matched {
-				return admission.ResponseBadRequest(
-					fmt.Sprintf("%s data directory cannot be nested inside %s data directory", path1.name, path2.name))
-			}
-		}
 	}
 
 	return admission.ResponseAllowed()

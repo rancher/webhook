@@ -1071,3 +1071,35 @@ If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creator
 When a cluster is created `field.cattle.io/creatorId` is set to the Username from the request.
 
 If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` does not get set.
+
+# rke.cattle.io/v1
+
+## RKEControlPlane
+
+### Validation Checks
+
+#### On Create
+
+##### Data Directories
+
+Prevent the creation of new objects with an invalid data directory. An invalid data directory is defined as the
+following:
+- Is not an absolute path (i.e. does not start with `/`)
+- Attempts to include environment variables (e.g. `$VARIABLE` or `${VARIABLE}`)
+- Attempts to include shell expressions (e.g. `$(command)` or `` `command` ``)
+- Is not clean (e.g. contains `.` or `..`)
+- Equal to another data directory
+- Attempts to nest another data directory
+
+#### On Update
+
+##### Data Directories
+
+Prevent updating objects with an invalid data directory. An invalid data directory is defined as the
+following:
+- Is not an absolute path (i.e. does not start with `/`)
+- Attempts to include environment variables (e.g. `$VARIABLE` or `${VARIABLE}`)
+- Attempts to include shell expressions (e.g. `$(command)` or `` `command` ``)
+- Is not clean (e.g. contains `.` or `..`)
+- Equal to another data directory
+- Attempts to nest another data directory
