@@ -38,6 +38,7 @@ import (
 	"github.com/rancher/webhook/pkg/resources/rbac.authorization.k8s.io/v1/role"
 	"github.com/rancher/webhook/pkg/resources/rbac.authorization.k8s.io/v1/rolebinding"
 	"github.com/rancher/webhook/pkg/resources/rke-machine-config.cattle.io/v1/machineconfig"
+	"github.com/rancher/webhook/pkg/resources/rke.cattle.io/v1/controlplane"
 )
 
 // Validation returns a list of all ValidatingAdmissionHandlers used by the webhook.
@@ -106,6 +107,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			proxyendpoint.NewValidator(),
 			awscluster.NewValidator(clients.Dynamic, clients.Core.Secret(), clients.K8s.AuthorizationV1().SubjectAccessReviews()),
 			awsclusterstaticidentity.NewValidator(clients.Core.Secret(), clients.K8s.AuthorizationV1().SubjectAccessReviews()),
+			controlplane.NewValidator(),
 		)
 	} else {
 		handlers = append(handlers, clusterauthtoken.NewValidator())
