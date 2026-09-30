@@ -14,6 +14,14 @@ on:
         description: "New Webhook version (eg: v0.5.0-rc.14)"
         required: true
         default: ""
+      bump_major:
+        description: "Set 'true' to bump chart major version when the Webhook minor version increases (e.g., v0.5.0 → v0.6.0-rc.0). Default: false"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "true"
+          - "false"
 
 env:
   RANCHER_REF: ${{ github.event.inputs.rancher_ref }}
@@ -108,7 +116,7 @@ jobs:
           BRANCH="bump-webhook-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           echo "BRANCH=${BRANCH}" >> $GITHUB_ENV
           git checkout -b "$BRANCH" "$RANCHER_REF"
-          ../webhook/.github/workflows/scripts/release-against-rancher.sh . "$NEW_WEBHOOK"
+          ../webhook/.github/workflows/scripts/release-against-rancher.sh . "$NEW_WEBHOOK" ${{ github.event.inputs.bump_major }}
 
       - name: Push and create pull request
         env:
