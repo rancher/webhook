@@ -579,6 +579,11 @@ var ldapBasedProviders = []struct {
 		c.Name, c.Type, c.Enabled = "okta", "oktaConfig", enabled
 		return c
 	}},
+	{"adfs", true, func(enabled bool) any {
+		c := v3.ADFSConfig{}
+		c.Name, c.Type, c.Enabled = "adfs", "adfsConfig", enabled
+		return c
+	}},
 }
 
 func TestSamlLdapSearchIDAttributes(t *testing.T) {

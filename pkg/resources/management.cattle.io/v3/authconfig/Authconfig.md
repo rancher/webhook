@@ -26,7 +26,7 @@ When an LDAP (`openldap`, `freeipa`) or ActiveDirectory (`activedirectory`) auth
   - `userSearchFilter`
   - `groupSearchFilter`
 
-When a SAML authconfig with LDAP search (`shibboleth`, `okta`) is created or updated, the following fields of the embedded `openLdapConfig` should have valid LDAP attribute names according to RFC4512 if set:
+When a SAML authconfig with LDAP search (`shibboleth`, `okta`, `adfs`) is created or updated, the following fields of the embedded `openLdapConfig` should have valid LDAP attribute names according to RFC4512 if set:
 
 - `userIDAttribute`
 - `groupIDAttribute`

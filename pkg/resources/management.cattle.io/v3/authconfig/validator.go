@@ -111,7 +111,7 @@ func idAttributesFromRaw(authConfigType string, raw []byte) (idAttributes, bool,
 			return idAttributes{}, false, fmt.Errorf("failed to unmarshal identifier attributes: %w", err)
 		}
 		return attrs, true, nil
-	case "shibbolethConfig", "oktaConfig":
+	case "shibbolethConfig", "oktaConfig", "adfsConfig":
 		var config struct {
 			OpenLdapConfig idAttributes `json:"openLdapConfig"`
 		}
@@ -150,7 +150,7 @@ func validateIDAttributes(authConfigType string, request *admission.Request) err
 // exempt: their principal IDs come from the SAML assertion and the LDAP attribute only has to mirror it.
 func validateIDAttributeImmutability(authConfigType string, request *admission.Request) error {
 	switch authConfigType {
-	case "shibbolethConfig", "oktaConfig":
+	case "shibbolethConfig", "oktaConfig", "adfsConfig":
 		return nil
 	}
 
@@ -185,7 +185,7 @@ func (a *admitter) admitCommonCreateUpdate(request *admission.Request, _, newAut
 		err = validateLDAPConfig(request)
 	case "activeDirectoryConfig":
 		err = validateActiveDirectoryConfig(request)
-	case "shibbolethConfig", "oktaConfig":
+	case "shibbolethConfig", "oktaConfig", "adfsConfig":
 		err = validateIDAttributes(newAuthConfig.Type, request)
 	default:
 	}
