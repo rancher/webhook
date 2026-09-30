@@ -12,6 +12,13 @@ global:
 mcm:
   enabled: true
 
+# caBundle is the base64-encoded CA bundle for the webhook's serving certificate.
+# If empty, the Service will be annotated for needacert (wrangler/pkg/needacert)
+# to generate and rotate a self-signed cattle-webhook-tls secret automatically.
+# Set this when running the chart standalone and supplying your own cattle-webhook-tls
+# secret + CA bundle.
+caBundle: ""
+
 # tolerations for the webhook deployment. See https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/ for more info
 tolerations: []
 nodeSelector: {}
