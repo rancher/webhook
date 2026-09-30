@@ -36,7 +36,7 @@ rules:
   resources: [limitranges, namespaces, resourcequotas, secrets]
   verbs: [get, list, watch]
 - apiGroups: ["rke.cattle.io"]
-  resources: [etcdsnapshots]
+  resources: [etcdsnapshots, rkecontrolplanes]
   verbs: [get, list, watch]
 - apiGroups: ["apiregistration.k8s.io"]
   resources: [apiservices]
