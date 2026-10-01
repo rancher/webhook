@@ -321,6 +321,33 @@ func (m *IntegrationSuite) TestWebhookRBACActual() {
 		// in practice - that functionality was removed when the fleetworkspace mutator
 		// was deleted in PR#1590.
 		{
+			name:      "UpdateCloudCredentialRoleToDeleteOnly",
+			shouldErr: false,
+			operation: func(ctx context.Context, webhookClient, adminClient *kubernetes.Clientset) error {
+				// The secrets mutator rewrites the owner Role Rancher creates for a cloud credential
+				// (apiGroups ["*"]) so it only grants delete. RBAC escalation prevention requires the
+				// webhook to hold the permissions in the rule it writes, including the "*" apiGroup.
+				role := &rbacv1.Role{
+					ObjectMeta: v1.ObjectMeta{GenerateName: "rbac-test-cc-", Namespace: "default"},
+					Rules: []rbacv1.PolicyRule{{
+						Verbs:         []string{"*"},
+						APIGroups:     []string{"*"},
+						Resources:     []string{"secrets"},
+						ResourceNames: []string{"cc-test"},
+					}},
+				}
+				created, err := adminClient.RbacV1().Roles("default").Create(ctx, role, v1.CreateOptions{})
+				if err != nil {
+					return fmt.Errorf("admin failed to create Role: %w", err)
+				}
+				defer adminClient.RbacV1().Roles("default").Delete(ctx, created.Name, v1.DeleteOptions{})
+
+				created.Rules[0].Verbs = []string{"delete"}
+				_, err = webhookClient.RbacV1().Roles("default").Update(ctx, created, v1.UpdateOptions{})
+				return err
+			},
+		},
+		{
 			name:      "CannotDeleteClusterRole",
 			shouldErr: true,
 			operation: func(ctx context.Context, webhookClient, adminClient *kubernetes.Clientset) error {
