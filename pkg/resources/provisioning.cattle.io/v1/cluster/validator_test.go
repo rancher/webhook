@@ -3291,3 +3291,390 @@ func TestValidatePSACTDryRun(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateManagementClusterNameOnCreate(t *testing.T) {
+	t.Parallel()
+
+	const (
+		validName = "c-m-abcd1234"
+		provName  = "my-cluster"
+		provNS    = "fleet-default"
+	)
+	now := metav1.Now()
+	errBoom := fmt.Errorf("boom")
+
+	mgmtCluster := func(annotations map[string]string, deleting bool) *v3.Cluster {
+		c := &v3.Cluster{ObjectMeta: metav1.ObjectMeta{Name: validName, Annotations: annotations}}
+		if deleting {
+			c.DeletionTimestamp = &now
+		}
+		return c
+	}
+	ownedBy := func(ns, name string) map[string]string {
+		return map[string]string{
+			"objectset.rio.cattle.io/owner-gvk":       "provisioning.cattle.io/v1, Kind=Cluster",
+			"objectset.rio.cattle.io/owner-namespace": ns,
+			"objectset.rio.cattle.io/owner-name":      name,
+		}
+	}
+	provClusterWithStatus := func(name, ns, statusClusterName string) *v1.Cluster {
+		return &v1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+			Status:     v1.ClusterStatus{ClusterName: statusClusterName},
+		}
+	}
+	provCluster := func(name, ns, annotation string) *v1.Cluster {
+		return &v1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        name,
+				Namespace:   ns,
+				Annotations: map[string]string{mgmtClusterNameAnn: annotation},
+			},
+		}
+	}
+	notFound := apierrors.NewNotFound(schema.GroupResource{Group: "management.cattle.io", Resource: "clusters"}, validName)
+
+	tests := []struct {
+		name        string
+		annotations map[string]string
+		setup       func(mgmt *fake.MockNonNamespacedClientInterface[*v3.Cluster, *v3.ClusterList], prov *fake.MockCacheInterface[*v1.Cluster])
+		wantAllowed bool
+		wantErr     bool
+	}{
+		{
+			name:        "annotation not set",
+			annotations: nil,
+			wantAllowed: true,
+		},
+		{
+			name:        "annotation empty",
+			annotations: map[string]string{mgmtClusterNameAnn: ""},
+			wantAllowed: true,
+		},
+		{
+			name:        "invalid format",
+			annotations: map[string]string{mgmtClusterNameAnn: "my-cluster"},
+		},
+		{
+			name:        "valid name and no conflict",
+			annotations: map[string]string{mgmtClusterNameAnn: validName},
+			setup: func(mgmt *fake.MockNonNamespacedClientInterface[*v3.Cluster, *v3.ClusterList], prov *fake.MockCacheInterface[*v1.Cluster]) {
+				mgmt.EXPECT().Get(validName, metav1.GetOptions{}).Return(nil, notFound)
+				prov.EXPECT().GetByIndex(mgmtClusterNameIndex, validName).Return(nil, nil)
+			},
+			wantAllowed: true,
+		},
+		{
+			name:        "management cluster exists without owner",
+			annotations: map[string]string{mgmtClusterNameAnn: validName},
+			setup: func(mgmt *fake.MockNonNamespacedClientInterface[*v3.Cluster, *v3.ClusterList], _ *fake.MockCacheInterface[*v1.Cluster]) {
+				mgmt.EXPECT().Get(validName, metav1.GetOptions{}).Return(mgmtCluster(nil, false), nil)
+			},
+		},
+		{
+			name:        "management cluster owned by another provisioning cluster",
+			annotations: map[string]string{mgmtClusterNameAnn: validName},
+			setup: func(mgmt *fake.MockNonNamespacedClientInterface[*v3.Cluster, *v3.ClusterList], _ *fake.MockCacheInterface[*v1.Cluster]) {
+				mgmt.EXPECT().Get(validName, metav1.GetOptions{}).Return(mgmtCluster(ownedBy(provNS, "someone-else"), false), nil)
+			},
+		},
+		{
+			name:        "management cluster owned by provisioning cluster with the same name in another namespace",
+			annotations: map[string]string{mgmtClusterNameAnn: validName},
+			setup: func(mgmt *fake.MockNonNamespacedClientInterface[*v3.Cluster, *v3.ClusterList], _ *fake.MockCacheInterface[*v1.Cluster]) {
+				mgmt.EXPECT().Get(validName, metav1.GetOptions{}).Return(mgmtCluster(ownedBy("other-ns", provName), false), nil)
+			},
+		},
+		{
+			name:        "management cluster owner has a different kind",
+			annotations: map[string]string{mgmtClusterNameAnn: validName},
+			setup: func(mgmt *fake.MockNonNamespacedClientInterface[*v3.Cluster, *v3.ClusterList], _ *fake.MockCacheInterface[*v1.Cluster]) {
+				owned := ownedBy(provNS, provName)
+				owned["objectset.rio.cattle.io/owner-gvk"] = "v1, Kind=Secret"
+				mgmt.EXPECT().Get(validName, metav1.GetOptions{}).Return(mgmtCluster(owned, false), nil)
+			},
+		},
+		{
+			name:        "management cluster owned by the same provisioning cluster (restore)",
+			annotations: map[string]string{mgmtClusterNameAnn: validName},
+			setup: func(mgmt *fake.MockNonNamespacedClientInterface[*v3.Cluster, *v3.ClusterList], prov *fake.MockCacheInterface[*v1.Cluster]) {
+				mgmt.EXPECT().Get(validName, metav1.GetOptions{}).Return(mgmtCluster(ownedBy(provNS, provName), false), nil)
+				prov.EXPECT().GetByIndex(mgmtClusterNameIndex, validName).Return(nil, nil)
+			},
+			wantAllowed: true,
+		},
+		{
+			name:        "management cluster owned by the same provisioning cluster but being deleted",
+			annotations: map[string]string{mgmtClusterNameAnn: validName},
+			setup: func(mgmt *fake.MockNonNamespacedClientInterface[*v3.Cluster, *v3.ClusterList], _ *fake.MockCacheInterface[*v1.Cluster]) {
+				mgmt.EXPECT().Get(validName, metav1.GetOptions{}).Return(mgmtCluster(ownedBy(provNS, provName), true), nil)
+			},
+		},
+		{
+			name:        "the cluster in the request is the only one with the name",
+			annotations: map[string]string{mgmtClusterNameAnn: validName},
+			setup: func(mgmt *fake.MockNonNamespacedClientInterface[*v3.Cluster, *v3.ClusterList], prov *fake.MockCacheInterface[*v1.Cluster]) {
+				mgmt.EXPECT().Get(validName, metav1.GetOptions{}).Return(nil, notFound)
+				prov.EXPECT().GetByIndex(mgmtClusterNameIndex, validName).Return([]*v1.Cluster{
+					provCluster(provName, provNS, validName),
+				}, nil)
+			},
+			wantAllowed: true,
+		},
+		{
+			name:        "another provisioning cluster requests the same name",
+			annotations: map[string]string{mgmtClusterNameAnn: validName},
+			setup: func(mgmt *fake.MockNonNamespacedClientInterface[*v3.Cluster, *v3.ClusterList], prov *fake.MockCacheInterface[*v1.Cluster]) {
+				mgmt.EXPECT().Get(validName, metav1.GetOptions{}).Return(nil, notFound)
+				prov.EXPECT().GetByIndex(mgmtClusterNameIndex, validName).Return([]*v1.Cluster{
+					provCluster("other", "other-ns", validName),
+				}, nil)
+			},
+		},
+		{
+			name:        "another provisioning cluster already uses the name in its status",
+			annotations: map[string]string{mgmtClusterNameAnn: validName},
+			setup: func(mgmt *fake.MockNonNamespacedClientInterface[*v3.Cluster, *v3.ClusterList], prov *fake.MockCacheInterface[*v1.Cluster]) {
+				mgmt.EXPECT().Get(validName, metav1.GetOptions{}).Return(nil, notFound)
+				prov.EXPECT().GetByIndex(mgmtClusterNameIndex, validName).Return([]*v1.Cluster{
+					provClusterWithStatus("other", provNS, validName),
+				}, nil)
+			},
+		},
+		{
+			name:        "another provisioning cluster conflicts while the management cluster is restored",
+			annotations: map[string]string{mgmtClusterNameAnn: validName},
+			setup: func(mgmt *fake.MockNonNamespacedClientInterface[*v3.Cluster, *v3.ClusterList], prov *fake.MockCacheInterface[*v1.Cluster]) {
+				mgmt.EXPECT().Get(validName, metav1.GetOptions{}).Return(mgmtCluster(ownedBy(provNS, provName), false), nil)
+				prov.EXPECT().GetByIndex(mgmtClusterNameIndex, validName).Return([]*v1.Cluster{
+					provCluster("other", provNS, validName),
+				}, nil)
+			},
+		},
+		{
+			name:        "management cluster lookup fails",
+			annotations: map[string]string{mgmtClusterNameAnn: validName},
+			setup: func(mgmt *fake.MockNonNamespacedClientInterface[*v3.Cluster, *v3.ClusterList], _ *fake.MockCacheInterface[*v1.Cluster]) {
+				mgmt.EXPECT().Get(validName, metav1.GetOptions{}).Return(nil, errBoom)
+			},
+			wantErr: true,
+		},
+		{
+			name:        "provisioning cluster index lookup fails",
+			annotations: map[string]string{mgmtClusterNameAnn: validName},
+			setup: func(mgmt *fake.MockNonNamespacedClientInterface[*v3.Cluster, *v3.ClusterList], prov *fake.MockCacheInterface[*v1.Cluster]) {
+				mgmt.EXPECT().Get(validName, metav1.GetOptions{}).Return(nil, notFound)
+				prov.EXPECT().GetByIndex(mgmtClusterNameIndex, validName).Return(nil, errBoom)
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			ctrl := gomock.NewController(t)
+			mgmt := fake.NewMockNonNamespacedClientInterface[*v3.Cluster, *v3.ClusterList](ctrl)
+			prov := fake.NewMockCacheInterface[*v1.Cluster](ctrl)
+			if tt.setup != nil {
+				tt.setup(mgmt, prov)
+			}
+			a := provisioningAdmitter{mgmtClusterClient: mgmt, provClusterCache: prov}
+
+			cluster := &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{Name: provName, Namespace: provNS, Annotations: tt.annotations},
+			}
+			req := &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}}
+
+			resp, err := a.validateManagementClusterName(req, nil, cluster)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantAllowed, resp.Allowed)
+		})
+	}
+}
+
+func TestRequestedMgmtNameRegex(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		value string
+		want  bool
+	}{
+		{name: "letters and numbers", value: "c-m-abcd1234", want: true},
+		{name: "only letters", value: "c-m-abcdefgh", want: true},
+		{name: "numbers after the first letter", value: "c-m-a1234567", want: true},
+		{name: "ends with a number", value: "c-m-abcdefg1", want: true},
+		{name: "hyphen in the middle", value: "c-m-ab-d-23x", want: true},
+		{name: "starts with a number", value: "c-m-1bcd1234"},
+		{name: "only numbers", value: "c-m-12345678"},
+		{name: "missing prefix", value: "my-cluster"},
+		{name: "legacy name format", value: "c-abcde"},
+		{name: "local", value: "local"},
+		{name: "prefix only", value: "c-m-"},
+		{name: "7 characters after the prefix", value: "c-m-abcd123"},
+		{name: "9 characters after the prefix", value: "c-m-abcd12345"},
+		{name: "uppercase character", value: "c-m-ABCD1234"},
+		{name: "underscore character", value: "c-m-abcd_234"},
+		{name: "starts with hyphen after the prefix", value: "c-m--bcd1234"},
+		{name: "ends with hyphen", value: "c-m-abcd123-"},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.want, requestedMgmtNameRegex.MatchString(tt.value))
+		})
+	}
+}
+
+func TestProvClusterByMgmtClusterName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		annotations map[string]string
+		statusName  string
+		want        []string
+	}{
+		{name: "no annotation and no status"},
+		{name: "annotation empty", annotations: map[string]string{mgmtClusterNameAnn: ""}},
+		{name: "status only", statusName: "c-m-abcd1234", want: []string{"c-m-abcd1234"}},
+		{name: "annotation only", annotations: map[string]string{mgmtClusterNameAnn: "c-m-abcd1234"}, want: []string{"c-m-abcd1234"}},
+		{
+			name:        "annotation and status differ",
+			annotations: map[string]string{mgmtClusterNameAnn: "c-m-abcd1234"},
+			statusName:  "c-m-wxyz5678",
+			want:        []string{"c-m-abcd1234", "c-m-wxyz5678"},
+		},
+		{
+			name:        "annotation and status are equal",
+			annotations: map[string]string{mgmtClusterNameAnn: "c-m-abcd1234"},
+			statusName:  "c-m-abcd1234",
+			want:        []string{"c-m-abcd1234"},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := provClusterByMgmtClusterName(&v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{Annotations: tt.annotations},
+				Status:     v1.ClusterStatus{ClusterName: tt.statusName},
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestValidateManagementClusterNameOnUpdate(t *testing.T) {
+	t.Parallel()
+
+	withAnnotations := func(annotations map[string]string) *v1.Cluster {
+		return &v1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "my-cluster", Namespace: "fleet-default", Annotations: annotations}}
+	}
+
+	tests := []struct {
+		name        string
+		oldCluster  *v1.Cluster
+		newCluster  *v1.Cluster
+		wantAllowed bool
+	}{
+		{
+			name:        "no annotation before and after",
+			oldCluster:  withAnnotations(nil),
+			newCluster:  withAnnotations(map[string]string{"other": "value"}),
+			wantAllowed: true,
+		},
+		{
+			name:        "annotation unchanged",
+			oldCluster:  withAnnotations(map[string]string{mgmtClusterNameAnn: "c-m-abcd1234"}),
+			newCluster:  withAnnotations(map[string]string{mgmtClusterNameAnn: "c-m-abcd1234", "other": "value"}),
+			wantAllowed: true,
+		},
+		{
+			name:        "annotation unchanged and invalid",
+			oldCluster:  withAnnotations(map[string]string{mgmtClusterNameAnn: "anything"}),
+			newCluster:  withAnnotations(map[string]string{mgmtClusterNameAnn: "anything"}),
+			wantAllowed: true,
+		},
+		{
+			name:        "annotation unchanged and empty",
+			oldCluster:  withAnnotations(map[string]string{mgmtClusterNameAnn: ""}),
+			newCluster:  withAnnotations(map[string]string{mgmtClusterNameAnn: ""}),
+			wantAllowed: true,
+		},
+		{
+			name:       "annotation value changed",
+			oldCluster: withAnnotations(map[string]string{mgmtClusterNameAnn: "c-m-abcd1234"}),
+			newCluster: withAnnotations(map[string]string{mgmtClusterNameAnn: "c-m-wxyz5678"}),
+		},
+		{
+			name:       "annotation removed",
+			oldCluster: withAnnotations(map[string]string{mgmtClusterNameAnn: "c-m-abcd1234"}),
+			newCluster: withAnnotations(nil),
+		},
+		{
+			name:       "annotation added",
+			oldCluster: withAnnotations(nil),
+			newCluster: withAnnotations(map[string]string{mgmtClusterNameAnn: "c-m-abcd1234"}),
+		},
+		{
+			name:       "annotation set to empty",
+			oldCluster: withAnnotations(map[string]string{mgmtClusterNameAnn: "c-m-abcd1234"}),
+			newCluster: withAnnotations(map[string]string{mgmtClusterNameAnn: ""}),
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			// No mocks are set. The update path must not call any client or cache.
+			a := provisioningAdmitter{}
+			req := &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}}
+
+			resp, err := a.validateManagementClusterName(req, tt.oldCluster, tt.newCluster)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantAllowed, resp.Allowed)
+			if !tt.wantAllowed {
+				require.NotNil(t, resp.Result)
+				assert.Contains(t, resp.Result.Message, "immutable")
+			}
+		})
+	}
+}
+
+// TestAdmitRejectsChangesAfterManagementClusterNameCheck is a regression test. The management cluster name check
+// must not replace the response that later checks use to report their failure.
+func TestAdmitRejectsChangesAfterManagementClusterNameCheck(t *testing.T) {
+	t.Parallel()
+
+	toRaw := func(cluster *v1.Cluster) runtime.RawExtension {
+		raw, err := json.Marshal(cluster)
+		require.NoError(t, err)
+		return runtime.RawExtension{Raw: raw}
+	}
+	oldCluster := &v1.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "my-cluster", Namespace: "fleet-default"}}
+	newCluster := oldCluster.DeepCopy()
+	newCluster.Annotations = map[string]string{common.CreatorIDAnn: "foobar"}
+
+	admitter := &provisioningAdmitter{}
+	response, err := admitter.Admit(&admission.Request{
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Update,
+			Object:    toRaw(newCluster),
+			OldObject: toRaw(oldCluster),
+		},
+	})
+	require.NoError(t, err)
+	assert.False(t, response.Allowed)
+}

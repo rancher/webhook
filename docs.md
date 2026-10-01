@@ -876,6 +876,22 @@ The annotation `field.cattle.io/creatorId` must be set to the Username of the Us
 
 If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` cannot be set.
 
+##### Management Cluster Name Annotation
+
+The annotation `provisioning.cattle.io/management-cluster-name` sets the name of the management cluster that Rancher creates.
+Rancher ignores an empty value. The webhook accepts an empty value and skips the checks in this section.
+
+If the annotation has a value, all of these conditions must be true:
+- The value has the format `c-m-<8 characters>`. Each of the 8 characters is a lowercase letter, a digit or `-`. The first of the 8 characters is a lowercase letter. The last of the 8 characters is a lowercase letter or a digit.
+- No other provisioning cluster sets the same value in this annotation or in `status.clusterName`.
+- No management cluster has this name.
+
+If a management cluster has this name, the webhook accepts the request only when both of these conditions are true:
+- The annotations `objectset.rio.cattle.io/owner-gvk`, `objectset.rio.cattle.io/owner-namespace` and `objectset.rio.cattle.io/owner-name` of the management cluster point to the provisioning cluster in the request.
+- The management cluster is not being deleted.
+
+This exception allows a restore from a backup, because the restore creates the management cluster before the provisioning cluster.
+
 ##### NO_PROXY value
 
 Prevent the creation of new objects with an env var (under `spec.agentEnvVars`) with a name of `NO_PROXY` if its value contains one or more spaces. This ensures that the provided value adheres to
@@ -914,6 +930,10 @@ the check that the secret was removed is skipped on dry-run deletes.
 The annotation `field.cattle.io/creatorId` cannot be changed, but it can be removed.
 
 If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` cannot be set.
+
+##### Management Cluster Name Annotation
+
+The annotation `provisioning.cattle.io/management-cluster-name` cannot be added, changed or removed.
 
 ##### RKEConfig changed
 
