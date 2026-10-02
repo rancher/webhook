@@ -3,10 +3,12 @@ package common
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/validate/content"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -78,11 +80,43 @@ func ValidatePDB(pdb *PDB, path *field.Path) field.ErrorList {
 	return errList
 }
 
-// ValidateAppendTolerations validates that toleration keys follow k8s label name rules.
+// ValidateAppendTolerations validates that toleration keys, values, and operators follow K8s rules.
 func ValidateAppendTolerations(tolerations []corev1.Toleration, path *field.Path) field.ErrorList {
 	var errList field.ErrorList
+
+	validOperators := []string{
+		string(""), // defaults to Equal
+		string(corev1.TolerationOpEqual),
+		string(corev1.TolerationOpExists),
+		// Include if supporting the TaintTolerationComparisonOperators alpha feature:
+		// string(corev1.TolerationOpGt),
+		// string(corev1.TolerationOpLt)
+	}
+
 	for k, s := range tolerations {
-		errList = append(errList, validation.ValidateLabelName(s.Key, path.Index(k))...)
+		idxPath := path.Index(k)
+
+		// Validate Operator
+		isValidOp := slices.Contains(validOperators, string(s.Operator))
+
+		if !isValidOp {
+			errList = append(errList, field.NotSupported(idxPath.Child("operator"), s.Operator, validOperators))
+		}
+
+		//  Validate Key
+		errList = append(errList, validation.ValidateLabelName(s.Key, idxPath.Child("key"))...)
+
+		// Validate Value
+		if s.Operator == corev1.TolerationOpExists {
+			if len(s.Value) > 0 {
+				errList = append(errList, field.Invalid(idxPath.Child("value"), s.Value, "value must be empty when operator is Exists"))
+			}
+		} else if len(s.Value) > 0 {
+			// the value can be empty, but if it is defined, it need to be validated.
+			for _, msg := range content.IsLabelValue(s.Value) {
+				errList = append(errList, field.Invalid(idxPath.Child("value"), s.Value, msg))
+			}
+		}
 	}
 	return errList
 }
