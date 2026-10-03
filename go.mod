@@ -38,7 +38,7 @@ require (
 	github.com/rancher/dynamiclistener v0.9.3
 	github.com/rancher/jsonpath v0.0.0-20260423141252-c4e0c565a09f
 	github.com/rancher/lasso v0.2.9
-	github.com/rancher/rancher/pkg/apis v0.0.0-20260924163627-a8cf1e59ec7d
+	github.com/rancher/rancher/pkg/apis v0.0.0-20261002064932-6bc4fe6bc4b0
 	github.com/rancher/rancher/pkg/plan v0.0.0-20260428222332-2696373f4152
 	github.com/rancher/wrangler/v3 v3.7.2
 	github.com/robfig/cron v1.2.0
@@ -47,8 +47,8 @@ require (
 	go.uber.org/mock v0.6.0
 	golang.org/x/text v0.41.0
 	golang.org/x/tools v0.49.0
-	k8s.io/api v0.36.4
-	k8s.io/apimachinery v0.36.4
+	k8s.io/api v0.36.5
+	k8s.io/apimachinery v0.36.5
 	k8s.io/apiserver v0.36.4
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/kubernetes v1.36.4
@@ -133,7 +133,7 @@ require (
 	gopkg.in/evanphx/json-patch.v5 v5.9.11
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	k8s.io/apiextensions-apiserver v0.36.4 // indirect
+	k8s.io/apiextensions-apiserver v0.36.5 // indirect
 	k8s.io/code-generator v0.36.4 // indirect
 	k8s.io/component-base v0.36.4 // indirect
 	k8s.io/component-helpers v0.36.4 // indirect
