@@ -174,6 +174,10 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 			return response, err
 		}
 
+		if err := p.validateMachineSelectorFilesAccess(request, response, oldCluster, cluster); err != nil || response.Result != nil {
+			return response, err
+		}
+
 		if response = validateHTTPNoProxyVariable(request, oldCluster, cluster); !response.Allowed {
 			return response, nil
 		}
@@ -363,6 +367,112 @@ func (p *provisioningAdmitter) validateCloudCredentialAccess(request *admission.
 		Code:    http.StatusUnauthorized,
 	}
 	return nil
+}
+
+// machineSelectorFileSource identifies a source by resource type and name.
+// Adding fields changes map-key equality and deduplication.
+type machineSelectorFileSource struct {
+	resource string
+	name     string
+}
+
+// validateMachineSelectorFilesAccess checks that the requesting user has get permission on
+// sources referenced by new or changed entries, since the planner writes their contents to nodes.
+func (p *provisioningAdmitter) validateMachineSelectorFilesAccess(request *admission.Request, response *admissionv1.AdmissionResponse, oldCluster, newCluster *v1.Cluster) error {
+	for _, source := range machineSelectorFileSourcesToCheck(oldCluster, newCluster) {
+		review, err := p.sar.Create(request.Context, &authv1.SubjectAccessReview{
+			Spec: authv1.SubjectAccessReviewSpec{
+				ResourceAttributes: &authv1.ResourceAttributes{
+					Verb:      "get",
+					Version:   "v1",
+					Resource:  source.resource,
+					Group:     "",
+					Name:      source.name,
+					Namespace: newCluster.Namespace, // The planner only reads sources from the cluster's namespace.
+				},
+				User:   request.UserInfo.Username,
+				Groups: request.UserInfo.Groups,
+				Extra:  common.ConvertAuthnExtras(request.UserInfo.Extra),
+				UID:    request.UserInfo.UID,
+			},
+		}, metav1.CreateOptions{})
+		if err != nil {
+			return err
+		}
+		if review.Status.Allowed {
+			continue
+		}
+		message := fmt.Sprintf("user %q does not have get access to %s %s/%s referenced by machineSelectorFiles",
+			request.UserInfo.Username, source.resource, newCluster.Namespace, source.name)
+		response.Result = &metav1.Status{
+			Status:  failureStatus,
+			Message: message,
+			Reason:  metav1.StatusReasonForbidden,
+			Code:    http.StatusForbidden,
+		}
+		return nil
+	}
+	return nil
+}
+
+// machineSelectorFileSourcesToCheck returns distinct sources from new or changed entries.
+// Entries are compared in full, so any field change, including hashes, requires a check.
+// On create, oldCluster is empty. Unchanged entries are skipped, and the generated PSACT entry is exempt.
+// Source order is preserved for consistent first-denial messages.
+func machineSelectorFileSourcesToCheck(oldCluster, newCluster *v1.Cluster) []machineSelectorFileSource {
+	if newCluster.Spec.RKEConfig == nil || len(newCluster.Spec.RKEConfig.MachineSelectorFiles) == 0 {
+		return nil
+	}
+
+	var oldFiles []rkev1.RKEProvisioningFiles
+	if oldCluster.Spec.RKEConfig != nil {
+		oldFiles = oldCluster.Spec.RKEConfig.MachineSelectorFiles
+	}
+
+	seen := make(map[machineSelectorFileSource]struct{})
+	var sources []machineSelectorFileSource
+	for _, file := range newCluster.Spec.RKEConfig.MachineSelectorFiles {
+		if isPSACTMachineSelectorFile(newCluster, &file) {
+			continue
+		}
+		if slices.ContainsFunc(oldFiles, func(oldFile rkev1.RKEProvisioningFiles) bool {
+			return equality.Semantic.DeepEqual(oldFile, file)
+		}) {
+			continue
+		}
+		for _, source := range file.FileSources {
+			refs := []machineSelectorFileSource{
+				{resource: "secrets", name: source.Secret.Name},
+				{resource: "configmaps", name: source.ConfigMap.Name},
+			}
+			for _, ref := range refs {
+				if ref.name == "" {
+					continue
+				}
+				if _, ok := seen[ref]; ok {
+					continue
+				}
+				seen[ref] = struct{}{}
+				sources = append(sources, ref)
+			}
+		}
+	}
+	return sources
+}
+
+// isPSACTMachineSelectorFile matches the complete generated PSACT entry, ignoring
+// only hashes. A matching secret name alone must not exempt user-defined files.
+// The mutator manages this entry and its Secret, so users do not need read access to it.
+func isPSACTMachineSelectorFile(cluster *v1.Cluster, file *rkev1.RKEProvisioningFiles) bool {
+	if cluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName == "" {
+		return false
+	}
+
+	expected := machineSelectorFileForPSA(fmt.Sprintf(secretName, cluster.Name),
+		fmt.Sprintf(mountPath, getRuntime(cluster.Spec.KubernetesVersion)), "")
+	file = file.DeepCopy()
+	cleanupHash(file)
+	return equality.Semantic.DeepEqual(expected, file)
 }
 
 // getCloudCredentialSecretInfo returns the namespace and name of the secret based off the old cloud cred or new style

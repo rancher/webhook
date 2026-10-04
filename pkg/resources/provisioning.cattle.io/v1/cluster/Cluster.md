@@ -46,6 +46,16 @@ If the action is an update, and the old cluster had a `nil` `.spec.rkeConfig`, a
 
 Prevent the creation of objects if the secret specified in `.spec.rkeConfig.etcd.s3.cloudCredentialName` does not exist.
 
+#### Machine Selector Files
+
+Prevent the creation of objects if the requesting user does not have `get` permission on each Secret or ConfigMap
+referenced by `spec.rkeConfig.machineSelectorFiles` in the cluster's namespace. These checks also apply to
+server-side dry-run requests.
+
+The generated Pod Security Admission Configuration Template (PSACT) file entry is exempt when
+`spec.defaultPodSecurityAdmissionConfigurationTemplateName` is set and the entire entry matches the generated
+entry for this cluster, ignoring only hashes. A matching Secret name alone does not qualify.
+
 #### Pod Security Admission Configuration Template
 
 When `spec.defaultPodSecurityAdmissionConfigurationTemplateName` is set, the referenced
@@ -72,6 +82,14 @@ The annotation `provisioning.cattle.io/management-cluster-name` cannot be added,
 The `spec.rkeConfig` field cannot be changed from `nil`/ not `nil` after creation.
 
 The local cluster is an exemption, as the rancherd use case allows managing the local cluster via this mechanism.
+
+#### Machine Selector Files
+
+The same access checks and PSACT exemption as on create apply to new or changed
+`spec.rkeConfig.machineSelectorFiles` entries. Entries are compared in full, including `machineLabelSelector` and
+item hashes, regardless of their position in the list.
+
+Unchanged entries are skipped.
 
 #### Data Directories
 

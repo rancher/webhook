@@ -3,12 +3,17 @@ package cluster
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
+	jsonpatch "github.com/evanphx/json-patch"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
@@ -19,13 +24,444 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	admissionv1 "k8s.io/api/admission/v1"
+	authenticationv1 "k8s.io/api/authentication/v1"
+	authv1 "k8s.io/api/authorization/v1"
 	k8sv1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	k8sfake "k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 )
+
+func TestAdmitMachineSelectorFilesAccess(t *testing.T) {
+	file := func(secret, configmap string) rkev1.RKEProvisioningFiles {
+		return rkev1.RKEProvisioningFiles{FileSources: []rkev1.ProvisioningFileSource{{
+			Secret:    rkev1.K8sObjectFileSource{Name: secret, Items: []rkev1.KeyToPath{{Key: "config", Path: "/etc/config"}}},
+			ConfigMap: rkev1.K8sObjectFileSource{Name: configmap},
+		}}}
+	}
+	denied := file("denied", "")
+	allowed := file("allowed-secret", "")
+	allowedCM := file("", "allowed-cm")
+	tests := []struct {
+		name          string
+		operation     admissionv1.Operation
+		configure     func(oldCluster, newCluster *v1.Cluster)
+		wantSources   []string
+		wantMessage   string
+		wantDenied    bool
+		wantError     bool
+		dryRun        bool
+		checkIdentity bool
+	}{
+		{name: "create denied Secret", wantSources: []string{"secrets/denied"}, wantMessage: "secrets fleet-default/denied", wantDenied: true},
+		{
+			name: "create allowed Secret",
+			configure: func(_, newCluster *v1.Cluster) {
+				newCluster.Spec.RKEConfig.MachineSelectorFiles = []rkev1.RKEProvisioningFiles{allowed}
+			},
+			wantSources:   []string{"secrets/allowed-secret"},
+			checkIdentity: true,
+		},
+		{
+			name: "create denied ConfigMap",
+			configure: func(_, newCluster *v1.Cluster) {
+				newCluster.Spec.RKEConfig.MachineSelectorFiles = []rkev1.RKEProvisioningFiles{file("", "denied")}
+			},
+			wantSources: []string{"configmaps/denied"}, wantDenied: true,
+			wantMessage: "configmaps fleet-default/denied",
+		},
+		{name: "update identical denied source", operation: admissionv1.Update},
+		{
+			name: "update reorders unchanged entries", operation: admissionv1.Update,
+			configure: func(oldCluster, newCluster *v1.Cluster) {
+				oldCluster.Spec.RKEConfig.MachineSelectorFiles = append(oldCluster.Spec.RKEConfig.MachineSelectorFiles, file("another-denied", ""))
+				// Clone the slice so reversing the new list leaves the old order intact.
+				newCluster.Spec.RKEConfig.MachineSelectorFiles = slices.Clone(oldCluster.Spec.RKEConfig.MachineSelectorFiles)
+				slices.Reverse(newCluster.Spec.RKEConfig.MachineSelectorFiles)
+			},
+		},
+		{
+			name: "update removes entry without checking unchanged source", operation: admissionv1.Update,
+			configure: func(oldCluster, _ *v1.Cluster) {
+				// Only the old list has a second entry; the new list retains the unchanged denied entry.
+				oldCluster.Spec.RKEConfig.MachineSelectorFiles = append(oldCluster.Spec.RKEConfig.MachineSelectorFiles, file("another-denied", ""))
+			},
+		},
+		{
+			name: "update changes unrelated field", operation: admissionv1.Update,
+			configure: func(_, newCluster *v1.Cluster) {
+				newCluster.Spec.KubernetesVersion = "v1.34.2+rke2r1"
+			},
+		},
+		{
+			name:      "create without RKE config",
+			configure: func(_, newCluster *v1.Cluster) { newCluster.Spec.RKEConfig = nil },
+		},
+		{
+			name: "update changes path with denied source", operation: admissionv1.Update,
+			configure: func(_, newCluster *v1.Cluster) {
+				newCluster.Spec.RKEConfig.MachineSelectorFiles[0].FileSources[0].Secret.Items[0].Path = "/other"
+			},
+			wantSources: []string{"secrets/denied"}, wantMessage: "secrets fleet-default/denied", wantDenied: true,
+		},
+		{
+			name: "update changes only hash in ordinary entry", operation: admissionv1.Update,
+			configure: func(_, newCluster *v1.Cluster) {
+				newCluster.Spec.RKEConfig.MachineSelectorFiles[0].FileSources[0].Secret.Items[0].Hash = "other-hash"
+			},
+			wantSources: []string{"secrets/denied"}, wantMessage: "secrets fleet-default/denied", wantDenied: true,
+		},
+		{
+			name: "update changes machine selector with denied source", operation: admissionv1.Update,
+			configure: func(oldCluster, newCluster *v1.Cluster) {
+				oldCluster.Spec.RKEConfig.MachineSelectorFiles[0].MachineLabelSelector = &metav1.LabelSelector{
+					MatchLabels: map[string]string{"pool": "pool1"},
+				}
+				newCluster.Spec.RKEConfig.MachineSelectorFiles[0].MachineLabelSelector = &metav1.LabelSelector{
+					MatchLabels: map[string]string{"pool": "pool2"},
+				}
+			},
+			wantSources: []string{"secrets/denied"}, wantMessage: "secrets fleet-default/denied", wantDenied: true,
+		},
+		{
+			name: "label-only update skips unchanged denied Secret", operation: admissionv1.Update,
+			configure: func(_, newCluster *v1.Cluster) { newCluster.Labels = map[string]string{"env": "dev"} },
+		},
+		{
+			name: "adding an allowed entry checks only its source during label edit", operation: admissionv1.Update,
+			configure: func(_, newCluster *v1.Cluster) {
+				newCluster.Labels = map[string]string{"env": "dev"}
+				newCluster.Spec.RKEConfig.MachineSelectorFiles = append(newCluster.Spec.RKEConfig.MachineSelectorFiles, allowed)
+			},
+			wantSources: []string{"secrets/allowed-secret"},
+		},
+		{
+			name: "multiple sources in one entry",
+			configure: func(_, newCluster *v1.Cluster) {
+				newCluster.Spec.RKEConfig.MachineSelectorFiles = []rkev1.RKEProvisioningFiles{{
+					FileSources: append(allowed.FileSources, allowedCM.FileSources...),
+				}}
+			},
+			wantSources: []string{"secrets/allowed-secret", "configmaps/allowed-cm"},
+		},
+		{
+			name:      "unchanged entry does not suppress check for newly added entry with same denied Secret",
+			operation: admissionv1.Update,
+			configure: func(_, newCluster *v1.Cluster) {
+				other := denied.DeepCopy()
+				// A different path makes this a new entry that still needs access to the same Secret.
+				other.FileSources[0].Secret.Items[0].Path = "/other"
+				newCluster.Spec.RKEConfig.MachineSelectorFiles = append(newCluster.Spec.RKEConfig.MachineSelectorFiles, *other)
+			},
+			wantSources: []string{"secrets/denied"}, wantMessage: "secrets fleet-default/denied", wantDenied: true,
+		},
+		{
+			name: "duplicate sources in different entries",
+			configure: func(_, newCluster *v1.Cluster) {
+				first := file("allowed-secret", "allowed-cm")
+				other := first.DeepCopy()
+				// Distinct entries share both sources, so each resource should receive only one SAR.
+				other.FileSources[0].Secret.Items[0].Path = "/other"
+				newCluster.Spec.RKEConfig.MachineSelectorFiles = []rkev1.RKEProvisioningFiles{first, *other}
+			},
+			wantSources: []string{"secrets/allowed-secret", "configmaps/allowed-cm"},
+		},
+		{
+			name: "Secret and ConfigMap with same name are checked separately",
+			configure: func(_, newCluster *v1.Cluster) {
+				newCluster.Spec.RKEConfig.MachineSelectorFiles = []rkev1.RKEProvisioningFiles{file("allowed-shared", "allowed-shared")}
+			},
+			wantSources: []string{"secrets/allowed-shared", "configmaps/allowed-shared"},
+		},
+		{
+			name: "empty source names skipped",
+			configure: func(_, newCluster *v1.Cluster) {
+				newCluster.Spec.RKEConfig.MachineSelectorFiles = []rkev1.RKEProvisioningFiles{file("", "")}
+			},
+		},
+		{
+			name: "stop at first denial",
+			configure: func(_, newCluster *v1.Cluster) {
+				newCluster.Spec.RKEConfig.MachineSelectorFiles = []rkev1.RKEProvisioningFiles{allowed, denied, allowedCM}
+			},
+			wantSources: []string{"secrets/allowed-secret", "secrets/denied"}, wantDenied: true,
+			wantMessage: "secrets fleet-default/denied",
+		},
+		{
+			name: "SAR error fails closed",
+			configure: func(_, newCluster *v1.Cluster) {
+				newCluster.Spec.RKEConfig.MachineSelectorFiles = []rkev1.RKEProvisioningFiles{file("sar-error", ""), allowed}
+			},
+			wantSources: []string{"secrets/sar-error"}, wantError: true,
+		},
+		{name: "dry-run still checks source access", dryRun: true, wantSources: []string{"secrets/denied"}, wantMessage: "secrets fleet-default/denied", wantDenied: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Build a create request by default; update cases need the previous object too.
+			operation := tt.operation
+			if operation == "" {
+				operation = admissionv1.Create
+			}
+			// Each case starts with one denied Secret entry, unchanged unless configure edits it.
+			newCluster := &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "fleet-default", Annotations: map[string]string{common.CreatorIDAnn: "alice"}},
+				Spec: v1.ClusterSpec{KubernetesVersion: "v1.34.1+rke2r1", RKEConfig: &v1.RKEConfig{
+					ClusterConfiguration: rkev1.ClusterConfiguration{MachineSelectorFiles: []rkev1.RKEProvisioningFiles{*denied.DeepCopy()}},
+				}},
+			}
+			// Keep independent old/new objects so configure can describe exactly what changed.
+			oldCluster := newCluster.DeepCopy()
+			if tt.configure != nil {
+				tt.configure(oldCluster, newCluster)
+			}
+			raw, err := json.Marshal(newCluster)
+			require.NoError(t, err)
+			oldRaw, err := json.Marshal(oldCluster)
+			require.NoError(t, err)
+			request := &admission.Request{
+				Context: context.Background(),
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Operation: operation, Namespace: newCluster.Namespace,
+					UserInfo: authenticationv1.UserInfo{Username: "alice", UID: "alice-uid", Groups: []string{"developers"}, Extra: map[string]authenticationv1.ExtraValue{"scope": {"clusters"}}},
+					Object:   runtime.RawExtension{Raw: raw},
+				},
+			}
+			if operation == admissionv1.Update {
+				request.OldObject.Raw = oldRaw
+			}
+			// Send the dry-run flag through Admit to verify that it still performs access checks.
+			if tt.dryRun {
+				request.DryRun = admission.Ptr(true)
+			}
+			client := k8sfake.NewSimpleClientset()
+			sarError := errors.New("SAR unavailable")
+			// Names starting with "allowed" pass; "sar-error" returns an error; all others are denied.
+			client.PrependReactor("create", "subjectaccessreviews", func(action k8stesting.Action) (bool, runtime.Object, error) {
+				review := action.(k8stesting.CreateAction).GetObject().(*authv1.SubjectAccessReview)
+				if review.Spec.ResourceAttributes.Name == "sar-error" {
+					return true, nil, sarError
+				}
+				return true, &authv1.SubjectAccessReview{Status: authv1.SubjectAccessReviewStatus{
+					Allowed: strings.HasPrefix(review.Spec.ResourceAttributes.Name, "allowed"),
+				}}, nil
+			})
+			// Satisfy the other validators so each case reaches the machineSelectorFiles check.
+			ctrl := gomock.NewController(t)
+			mgmtClient := fake.NewMockNonNamespacedClientInterface[*v3.Cluster, *v3.ClusterList](ctrl)
+			if operation == admissionv1.Create {
+				// Creation checks for a conflicting management cluster; updates skip that lookup.
+				mgmtClient.EXPECT().Get(newCluster.Name, gomock.Any()).Return(nil, apierrors.NewNotFound(schema.GroupResource{Resource: "clusters"}, newCluster.Name))
+			}
+			secretCache := fake.NewMockCacheInterface[*k8sv1.Secret](ctrl)
+			// These cases select no PSACT; its validator expects the generated Secret to be absent.
+			secretCache.EXPECT().Get(newCluster.Namespace, "test-cluster-admission-configuration-psact").Return(nil,
+				apierrors.NewNotFound(k8sv1.Resource("secrets"), "test-cluster-admission-configuration-psact")).AnyTimes()
+			p := provisioningAdmitter{sar: client.AuthorizationV1().SubjectAccessReviews(), mgmtClusterClient: mgmtClient, secretCache: secretCache}
+			response, err := p.Admit(request)
+			// A failed SAR returns an error; a completed SAR denying access returns a Forbidden response.
+			if tt.wantError {
+				require.ErrorIs(t, err, sarError)
+				assert.False(t, response.Allowed)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, response)
+				assert.Equal(t, !tt.wantDenied, response.Allowed)
+				if tt.wantDenied {
+					require.NotNil(t, response.Result)
+					assert.EqualValues(t, http.StatusForbidden, response.Result.Code)
+					assert.Equal(t, metav1.StatusReasonForbidden, response.Result.Reason)
+					assert.Equal(t, failureStatus, response.Result.Status)
+					assert.Contains(t, response.Result.Message, tt.wantMessage)
+				}
+			}
+			// Inspect the actual SAR calls to verify selection, deduplication and first-denial order.
+			var sources []string
+			for _, action := range client.Actions() {
+				require.Equal(t, "create", action.GetVerb())
+				require.Equal(t, "subjectaccessreviews", action.GetResource().Resource)
+				review := action.(k8stesting.CreateAction).GetObject().(*authv1.SubjectAccessReview)
+				attrs := review.Spec.ResourceAttributes
+				sources = append(sources, attrs.Resource+"/"+attrs.Name)
+				assert.Equal(t, newCluster.Namespace, attrs.Namespace)
+				if tt.checkIdentity {
+					// One allowed case verifies that the requesting user's full identity reaches the SAR.
+					assert.Equal(t, authv1.SubjectAccessReviewSpec{
+						ResourceAttributes: &authv1.ResourceAttributes{Verb: "get", Version: "v1", Resource: "secrets", Name: "allowed-secret", Namespace: "fleet-default"},
+						User:               "alice", UID: "alice-uid", Groups: []string{"developers"},
+						Extra: map[string]authv1.ExtraValue{"scope": {"clusters"}},
+					}, review.Spec)
+				}
+			}
+			assert.Equal(t, tt.wantSources, sources)
+		})
+	}
+}
+
+func TestAdmitMachineSelectorFilesAccessPSACT(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	// Provide the real mutator with a template and simulate its Secret storage below.
+	template := &v3.PodSecurityAdmissionConfigurationTemplate{
+		ObjectMeta: metav1.ObjectMeta{Name: "template"},
+		Configuration: v3.PodSecurityAdmissionConfigurationTemplateSpec{
+			Defaults: v3.PodSecurityAdmissionConfigurationTemplateDefaults{Enforce: "baseline", EnforceVersion: "latest"},
+		},
+	}
+	psactCache := fake.NewMockNonNamespacedCacheInterface[*v3.PodSecurityAdmissionConfigurationTemplate](ctrl)
+	psactCache.EXPECT().Get("template").Return(template, nil).AnyTimes()
+	// Share Secret state between mutator writes and validator reads across the workflow steps.
+	var storedSecret *k8sv1.Secret
+	secretCache := fake.NewMockCacheInterface[*k8sv1.Secret](ctrl)
+	secretCache.EXPECT().Get("fleet-default", "test-cluster-admission-configuration-psact").DoAndReturn(
+		func(_, name string) (*k8sv1.Secret, error) {
+			if storedSecret == nil {
+				return nil, apierrors.NewNotFound(k8sv1.Resource("secrets"), name)
+			}
+			// Return a copy so in-place edits cannot bypass the mocked client writes.
+			return storedSecret.DeepCopy(), nil
+		}).AnyTimes()
+	secretClient := fake.NewMockControllerInterface[*k8sv1.Secret, *k8sv1.SecretList](ctrl)
+	secretClient.EXPECT().Cache().Return(secretCache).AnyTimes()
+	secretClient.EXPECT().Create(gomock.Any()).DoAndReturn(func(secret *k8sv1.Secret) (*k8sv1.Secret, error) {
+		storedSecret = secret.DeepCopy()
+		return secret, nil
+	})
+	// Template content and Kubernetes version changes each update the generated Secret.
+	secretClient.EXPECT().Update(gomock.Any()).DoAndReturn(func(secret *k8sv1.Secret) (*k8sv1.Secret, error) {
+		storedSecret = secret.DeepCopy()
+		return secret, nil
+	}).Times(2)
+	mgmtClient := fake.NewMockNonNamespacedClientInterface[*v3.Cluster, *v3.ClusterList](ctrl)
+	// The first workflow step creates the cluster, so its management name must be available.
+	mgmtClient.EXPECT().Get("test-cluster", gomock.Any()).Return(nil, apierrors.NewNotFound(schema.GroupResource{Resource: "clusters"}, "test-cluster"))
+	client := k8sfake.NewSimpleClientset()
+	// Deny every SAR so an accidentally checked PSACT entry would reject the request.
+	client.PrependReactor("create", "subjectaccessreviews", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, &authv1.SubjectAccessReview{Status: authv1.SubjectAccessReviewStatus{Allowed: false}}, nil
+	})
+	mutator := ProvisioningClusterMutator{secret: secretClient, psact: psactCache}
+	validator := provisioningAdmitter{sar: client.AuthorizationV1().SubjectAccessReviews(),
+		mgmtClusterClient: mgmtClient, secretCache: secretCache, psactCache: psactCache}
+	cluster := &v1.Cluster{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "fleet-default"},
+		Spec: v1.ClusterSpec{KubernetesVersion: "v1.24.9+rke2r1", RKEConfig: &v1.RKEConfig{},
+			DefaultPodSecurityAdmissionConfigurationTemplateName: "template"},
+	}
+	var oldRaw []byte
+	var previousHash string
+	// Crossing Kubernetes 1.25 changes the generated PSA config from v1beta1 to v1, changing its hash.
+	steps := []struct {
+		name        string
+		change      func()
+		hashChanges bool
+	}{
+		{name: "create"},
+		{name: "template content changes", change: func() { template.Configuration.Defaults.Enforce = "restricted" }, hashChanges: true},
+		{name: "Kubernetes version changes", change: func() { cluster.Spec.KubernetesVersion = "v1.25.16+rke2r1" }, hashChanges: true},
+		{name: "cluster labels change", change: func() { cluster.Labels = map[string]string{"env": "dev"} }},
+	}
+	for _, step := range steps {
+		t.Run(step.name, func(t *testing.T) {
+			// Apply this step's change to the cluster or template left by the previous step.
+			if step.change != nil {
+				step.change()
+			}
+			raw, err := json.Marshal(cluster)
+			require.NoError(t, err)
+			operation := admissionv1.Update
+			// With no saved object yet, the first step is a create; later steps are updates.
+			if oldRaw == nil {
+				operation = admissionv1.Create
+			}
+			request := &admission.Request{
+				Context: context.Background(),
+				AdmissionRequest: admissionv1.AdmissionRequest{Operation: operation, Namespace: cluster.Namespace,
+					UserInfo: authenticationv1.UserInfo{Username: "alice"},
+					Object:   runtime.RawExtension{Raw: raw}, OldObject: runtime.RawExtension{Raw: oldRaw}},
+			}
+			response, err := mutator.Admit(request)
+			require.NoError(t, err)
+			require.True(t, response.Allowed)
+			// Validate the patched object, as Kubernetes does after mutating admission.
+			if len(response.Patch) > 0 {
+				patch, err := jsonpatch.DecodePatch(response.Patch)
+				require.NoError(t, err)
+				raw, err = patch.Apply(raw)
+				require.NoError(t, err)
+			}
+			request.Object.Raw = raw
+			// Both webhooks must accept the request without asking for read access to the generated Secret.
+			response, err = validator.Admit(request)
+			require.NoError(t, err)
+			require.True(t, response.Allowed, "user without Secret access must be able to use PSACT")
+			assert.Empty(t, client.Actions(), "generated PSACT entry must not send a SAR")
+			require.NoError(t, json.Unmarshal(raw, cluster))
+			require.Len(t, cluster.Spec.RKEConfig.MachineSelectorFiles, 1)
+			hash := cluster.Spec.RKEConfig.MachineSelectorFiles[0].FileSources[0].Secret.Items[0].Hash
+			require.NotEmpty(t, hash)
+			// Confirm that content/version updates regenerated the entry, exercising the hash exemption.
+			if step.hashChanges {
+				assert.NotEqual(t, previousHash, hash)
+			}
+			previousHash = hash
+			// The next update starts from the complete object saved by this step.
+			oldRaw = raw
+		})
+	}
+}
+
+func TestIsPSACTMachineSelectorFile(t *testing.T) {
+	tests := []struct {
+		name      string
+		runtime   string
+		configure func(cluster *v1.Cluster, file *rkev1.RKEProvisioningFiles)
+		want      bool
+	}{
+		{name: "generated RKE2 entry with hash", runtime: "rke2", want: true},
+		{name: "generated K3s entry with hash", runtime: "k3s", want: true},
+		{name: "no template", configure: func(cluster *v1.Cluster, _ *rkev1.RKEProvisioningFiles) {
+			cluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName = ""
+		}},
+		{name: "different cluster", configure: func(cluster *v1.Cluster, _ *rkev1.RKEProvisioningFiles) { cluster.Name = "other" }},
+		{name: "different path", configure: func(_ *v1.Cluster, file *rkev1.RKEProvisioningFiles) {
+			file.FileSources[0].Secret.Items[0].Path = "/other"
+		}},
+		{name: "additional source", configure: func(_ *v1.Cluster, file *rkev1.RKEProvisioningFiles) {
+			file.FileSources = append(file.FileSources, rkev1.ProvisioningFileSource{Secret: rkev1.K8sObjectFileSource{Name: "other"}})
+		}},
+		{name: "configmap with PSACT name", configure: func(_ *v1.Cluster, file *rkev1.RKEProvisioningFiles) {
+			file.FileSources[0].ConfigMap = file.FileSources[0].Secret
+			file.FileSources[0].Secret = rkev1.K8sObjectFileSource{}
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			distro := tt.runtime
+			if distro == "" {
+				distro = "rke2"
+			}
+			cluster := &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec: v1.ClusterSpec{
+					KubernetesVersion: "v1.34.1+" + distro + "r1",
+					DefaultPodSecurityAdmissionConfigurationTemplateName: "template",
+				},
+			}
+			file := machineSelectorFileForPSA("test-cluster-admission-configuration-psact",
+				"/etc/rancher/"+distro+"/config/rancher-psact.yaml", "generated-hash")
+			if tt.configure != nil {
+				tt.configure(cluster, file)
+			}
+			before := file.DeepCopy()
+			assert.Equal(t, tt.want, isPSACTMachineSelectorFile(cluster, file))
+			assert.Equal(t, before, file, "hash cleanup must not mutate the entry")
+		})
+	}
+}
 
 func Test_isValidName(t *testing.T) {
 	tests := []struct {
