@@ -167,19 +167,32 @@ You can choose your favourite method to test your webhook development:
 
 ### Using an external webhook
 
-1. Get a new address that forwards to `https://localhost:9443` using ngrok.
+The `rancher.cattle.io` Validating/MutatingWebhookConfigurations are owned by the Helm chart and the webhook has no RBAC to edit them. To test a locally running webhook, point them at it with `dev-scripts/set-webhook-url`.
+
+1. Get an address reachable from the cluster's API server that forwards to `https://localhost:9443`, e.g. with a tunnel.
+
+2. Point the webhook configurations at that address, using an admin kubeconfig for the cluster hosting Rancher.
 
     ```bash
-    ngrok http https://localhost:9443
+    export KUBECONFIG=<rancher_kube_config>
+    ./dev-scripts/set-webhook-url https://<TUNNEL_HOST>
     ```
 
-2. Run the webhook with the given address and the kubeconfig for the cluster hosting Rancher.
+    Pass `--ca-bundle-file` if the address does not have a publicly trusted certificate. Use `--dry-run` to preview.
 
-    ``` bash
-    export KUBECONFIG=<rancher_kube_config>
-    export CATTLE_WEBHOOK_URL="https://<NGROK_URL>.ngrok.io"
+3. Run the webhook locally.
+
+    ```bash
     ./bin/webhook
     ```
+
+4. When done, restore the in-cluster service configuration.
+
+    ```bash
+    ./dev-scripts/set-webhook-url --reset
+    ```
+
+Anything that re-applies the chart (`helm upgrade`, a Rancher restart) reverts the change; re-run the script afterwards.
 
 ### Importing the built webhook
 
@@ -201,10 +214,6 @@ You can choose your favourite method to test your webhook development:
     kubectl patch deployment rancher-webhook -n cattle-system -p '{"spec": {"template": {"spec": {"containers": [{"image": "rancher/webhook:dev", "imagePullPolicy": "Never"}]}}}}'
     ```
     
-After 15 seconds the webhook will update the `ValidatingWebhookConfiguration` and `MutatingWebhookConfiguration` in the Kubernetes cluster to point at the locally running instance.
-
-> :warning: Kubernetes API server authentication will not work with ngrok.
-
 ## License
 
 Copyright (c) 2019-2021 [Rancher Labs, Inc.](http://rancher.com)
