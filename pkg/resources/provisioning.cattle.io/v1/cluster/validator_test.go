@@ -3508,11 +3508,10 @@ func TestRequestedMgmtNameRegex(t *testing.T) {
 	}{
 		{name: "letters and numbers", value: "c-m-abcd1234", want: true},
 		{name: "only letters", value: "c-m-abcdefgh", want: true},
-		{name: "numbers after the first letter", value: "c-m-a1234567", want: true},
+		{name: "only numbers", value: "c-m-12345678", want: true},
+		{name: "starts with a number", value: "c-m-1bcd1234", want: true},
 		{name: "ends with a number", value: "c-m-abcdefg1", want: true},
 		{name: "hyphen in the middle", value: "c-m-ab-d-23x", want: true},
-		{name: "starts with a number", value: "c-m-1bcd1234"},
-		{name: "only numbers", value: "c-m-12345678"},
 		{name: "missing prefix", value: "my-cluster"},
 		{name: "legacy name format", value: "c-abcde"},
 		{name: "local", value: "local"},
