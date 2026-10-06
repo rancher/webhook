@@ -76,6 +76,12 @@ func (v *Validator) Operations() []admissionregistrationv1.OperationType {
 func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.WebhookClientConfig) []admissionregistrationv1.ValidatingWebhook {
 	validatingWebhook := admission.NewDefaultValidatingWebhook(v, clientConfig, admissionregistrationv1.NamespacedScope, v.Operations())
 	validatingWebhook.SideEffects = admission.Ptr(admissionregistrationv1.SideEffectClassNone)
+	validatingWebhook.MatchConditions = []admissionregistrationv1.MatchCondition{
+		{
+			Name:       "filter-by-secret-type-machine-plan",
+			Expression: `request.operation == 'DELETE' || (object != null && object.type == "` + machinePlanSecretType + `")`,
+		},
+	}
 	return []admissionregistrationv1.ValidatingWebhook{*validatingWebhook}
 }
 
