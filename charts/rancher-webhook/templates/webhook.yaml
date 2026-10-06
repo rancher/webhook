@@ -941,6 +941,106 @@ webhooks:
     - rkecontrolplanes
     scope: Namespaced
   sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    caBundle: {{ .Values.caBundle | default "" }}
+    service:
+      name: rancher-webhook
+      namespace: cattle-system
+      path: /v1/webhook/validation/etcdsnapshotsaves.operation.cattle.io
+      port: 443
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: rancher.cattle.io.etcdsnapshotsaves.operation.cattle.io
+  rules:
+  - apiGroups:
+    - operation.cattle.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - etcdsnapshotsaves
+    scope: Namespaced
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    caBundle: {{ .Values.caBundle | default "" }}
+    service:
+      name: rancher-webhook
+      namespace: cattle-system
+      path: /v1/webhook/validation/etcdsnapshotrestores.operation.cattle.io
+      port: 443
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: rancher.cattle.io.etcdsnapshotrestores.operation.cattle.io
+  rules:
+  - apiGroups:
+    - operation.cattle.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - etcdsnapshotrestores
+    scope: Namespaced
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    caBundle: {{ .Values.caBundle | default "" }}
+    service:
+      name: rancher-webhook
+      namespace: cattle-system
+      path: /v1/webhook/validation/encryptionkeyrotations.operation.cattle.io
+      port: 443
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: rancher.cattle.io.encryptionkeyrotations.operation.cattle.io
+  rules:
+  - apiGroups:
+    - operation.cattle.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - encryptionkeyrotations
+    scope: Namespaced
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    caBundle: {{ .Values.caBundle | default "" }}
+    service:
+      name: rancher-webhook
+      namespace: cattle-system
+      path: /v1/webhook/validation/certificaterotations.operation.cattle.io
+      port: 443
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: rancher.cattle.io.certificaterotations.operation.cattle.io
+  rules:
+  - apiGroups:
+    - operation.cattle.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - certificaterotations
+    scope: Namespaced
+  sideEffects: None
 {{- end }}
 {{- if not .Values.mcm.enabled }}
 - admissionReviewVersions:

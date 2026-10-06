@@ -32,6 +32,7 @@ import (
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/token"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/userattribute"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/users"
+	"github.com/rancher/webhook/pkg/resources/operation.cattle.io/v1alpha1/operation"
 	provisioningCluster "github.com/rancher/webhook/pkg/resources/provisioning.cattle.io/v1/cluster"
 	"github.com/rancher/webhook/pkg/resources/rbac.authorization.k8s.io/v1/clusterrole"
 	"github.com/rancher/webhook/pkg/resources/rbac.authorization.k8s.io/v1/clusterrolebinding"
@@ -109,6 +110,9 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			awsclusterstaticidentity.NewValidator(clients.Core.Secret(), clients.K8s.AuthorizationV1().SubjectAccessReviews()),
 			controlplane.NewValidator(),
 		)
+		for _, gvr := range operation.Kinds {
+			handlers = append(handlers, operation.NewValidator(gvr, clients.Dynamic, clients.RESTMapper, clients.K8s.AuthorizationV1().SubjectAccessReviews()))
+		}
 	} else {
 		handlers = append(handlers, clusterauthtoken.NewValidator())
 	}

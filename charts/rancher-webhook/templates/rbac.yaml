@@ -71,6 +71,10 @@ rules:
 - apiGroups: ["cluster.cattle.io"]
   resources: [clusterauthtokens]
   verbs: [get, list, watch]
+# The operation validators find the operations in progress on a cluster from these.
+- apiGroups: ["operation.cattle.io"]
+  resources: [etcdsnapshotsaves, etcdsnapshotrestores, encryptionkeyrotations, certificaterotations]
+  verbs: [get, list, watch]
 - apiGroups: ["coordination.k8s.io"]
   resources: [leases]
   verbs: [get, list, watch, create, update]
