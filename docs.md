@@ -958,7 +958,7 @@ The same access checks and PSACT exemption as on create apply to new or changed
 item hashes, regardless of their position in the list.
 
 When the cluster's labels change, the same access checks also apply to unchanged entries whose source has the
-`rke.cattle.io/object-authorized-for-cluster-selector` annotation, including an empty value. This applies to any
+`rke.cattle.io/object-authorized-for-clusters-selector` annotation, including an empty value. This applies to any
 cluster label change. Missing unchanged sources are skipped for this additional check; other source lookup
 errors reject the request. New or changed entries still require access checks even when a source is missing.
 

@@ -48,7 +48,7 @@ func TestAdmitMachineSelectorFilesAccess(t *testing.T) {
 	allowedCM := file("", "allowed-cm")
 	sarError := errors.New("SAR unavailable")
 	readError := errors.New("source read unavailable")
-	selectorMessage := "changing cluster labels requires get access to sources shared by cluster selector"
+	selectorMessage := "changing cluster labels requires GET access to sources shared by cluster selector"
 	changeLabels := func(_, newCluster *v1.Cluster) { newCluster.Labels = map[string]string{"env": "dev"} }
 	tests := []struct {
 		name          string

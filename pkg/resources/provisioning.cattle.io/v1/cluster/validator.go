@@ -52,7 +52,7 @@ const (
 	mgmtClusterNameIndex = "mgmt-cluster-name"
 
 	// authorizedObjectSelectorAnnotation mirrors capr.AuthorizedObjectSelectorAnnotation in rancher/rancher.
-	authorizedObjectSelectorAnnotation = "rke.cattle.io/object-authorized-for-cluster-selector"
+	authorizedObjectSelectorAnnotation = "rke.cattle.io/object-authorized-for-clusters-selector"
 )
 
 var (
@@ -434,10 +434,10 @@ func (p *provisioningAdmitter) validateMachineSelectorFilesAccess(request *admis
 		if review.Status.Allowed {
 			continue
 		}
-		message := fmt.Sprintf("user %q does not have get access to %s %s/%s referenced by machineSelectorFiles",
+		message := fmt.Sprintf("user %q does not have GET access to %s %s/%s referenced by machineSelectorFiles",
 			request.UserInfo.Username, source.resource, newCluster.Namespace, source.name)
 		if !fromChangedEntry && hasSelector {
-			message += "; changing cluster labels requires get access to sources shared by cluster selector"
+			message += "; changing cluster labels requires GET access to sources shared by cluster selector"
 		}
 		response.Result = &metav1.Status{
 			Status:  failureStatus,
