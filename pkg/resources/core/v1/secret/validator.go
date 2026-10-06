@@ -30,8 +30,9 @@ type Validator struct {
 }
 
 // NewValidator creates a new secret validator which ensures secrets which own rbac objects aren't deleted with options
-// to orphan those RBAC resources.
-func NewValidator(roleCache v1.RoleCache, roleBindingCache v1.RoleBindingCache) *Validator {
+// to orphan those RBAC resources, and validates machine-plan secrets, reading the beacons that fence
+// their writers through beacons.
+func NewValidator(roleCache v1.RoleCache, roleBindingCache v1.RoleBindingCache, beacons beaconReader) *Validator {
 	roleCache.AddIndexer(roleOwnerIndex, func(obj *rbacv1.Role) ([]string, error) {
 		return secretOwnerIndexer(obj.ObjectMeta), nil
 	})
@@ -43,7 +44,7 @@ func NewValidator(roleCache v1.RoleCache, roleBindingCache v1.RoleBindingCache) 
 			roleCache:        roleCache,
 			roleBindingCache: roleBindingCache,
 		},
-		planAdmitter: planAdmitter{},
+		planAdmitter: planAdmitter{beacons: beacons},
 	}
 }
 

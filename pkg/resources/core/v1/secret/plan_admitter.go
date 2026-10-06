@@ -33,11 +33,15 @@ var immutablePlanLabels = []string{
 	rkeClusterNameLabel,
 }
 
-type planAdmitter struct{}
+type planAdmitter struct {
+	beacons beaconReader
+}
 
-// Admit validates machine-plan Secrets at admission time: data.plan, when present, must parse as a plan,
-// and on update the labels tying the secret to its cluster and machine can't be changed or removed once
-// set.
+// Admit validates machine-plan Secrets at admission time: data.plan, when present, must parse as a plan;
+// on update the labels tying the secret to its cluster and machine can't be changed or removed once set;
+// and on create and update a write that assigns, retries, cancels or pauses the plan must come from
+// whoever holds the cluster's beacon (see checkWriter). Deletes are part of node removal, not plan
+// assignment, and aren't checked.
 func (p *planAdmitter) Admit(request *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	listTrace := trace.New("secret planAdmitter Admit", trace.Field{Key: "user", Value: request.UserInfo.Username})
 	defer listTrace.LogIfLong(admission.SlowTraceDuration)
@@ -57,14 +61,23 @@ func (p *planAdmitter) Admit(request *admission.Request) (*admissionv1.Admission
 		}
 	}
 
+	if request.Operation != admissionv1.Create && request.Operation != admissionv1.Update {
+		return admission.ResponseAllowed(), nil
+	}
+
+	old, _, err := objectsv1.SecretOldAndNewFromRequest(&request.AdmissionRequest)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read secret from request: %w", err)
+	}
+
 	if request.Operation == admissionv1.Update {
-		old, _, err := objectsv1.SecretOldAndNewFromRequest(&request.AdmissionRequest)
-		if err != nil {
-			return nil, fmt.Errorf("unable to read secret from request: %w", err)
-		}
 		if problem := changedPlanLabel(old.Labels, secret.Labels); problem != "" {
 			return admission.ResponseBadRequest(fmt.Sprintf("machine-plan secret %s/%s: %s", secret.Namespace, secret.Name, problem)), nil
 		}
+	}
+
+	if response, err := p.checkWriter(request.Context, old, secret, request.Operation == admissionv1.Create); response != nil || err != nil {
+		return response, err
 	}
 
 	return admission.ResponseAllowed(), nil

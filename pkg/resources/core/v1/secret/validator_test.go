@@ -211,7 +211,7 @@ func TestAdmit(t *testing.T) {
 
 			roleCache.EXPECT().AddIndexer(roleOwnerIndex, gomock.Any())
 			roleBindingCache.EXPECT().AddIndexer(roleBindingOwnerIndex, gomock.Any())
-			validator := NewValidator(roleCache, roleBindingCache)
+			validator := NewValidator(roleCache, roleBindingCache, nil)
 
 			admitters := validator.Admitters()
 			assert.Len(t, admitters, 2)

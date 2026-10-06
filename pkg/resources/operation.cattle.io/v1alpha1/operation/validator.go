@@ -7,16 +7,15 @@ package operation
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
 	"strings"
-	"time"
 
 	opv1alpha1 "github.com/rancher/rancher/pkg/apis/operation.cattle.io/v1alpha1"
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
+	"github.com/rancher/webhook/pkg/resources/common"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -47,10 +46,6 @@ var operationGVKs = []schema.GroupVersionKind{
 	opv1alpha1.SchemeGroupVersion.WithKind("EncryptionKeyRotation"),
 	opv1alpha1.SchemeGroupVersion.WithKind("CertificateRotation"),
 }
-
-// cacheSyncTimeout bounds how long a create waits for a cache of the dynamic controller to sync (see
-// waitForSync).
-var cacheSyncTimeout = 10 * time.Second
 
 // dynamicReader is the subset of lasso's dynamic.Controller used to read the operations on a cluster,
 // and the cluster object an operation names.
@@ -344,24 +339,10 @@ func (a *admitter) list(ctx context.Context, gvk schema.GroupVersionKind) ([]run
 	return objects, nil
 }
 
-// waitForSync waits for the dynamic controller's cache of gvk to sync. The controller registers an
-// informer the first time a kind is asked for, and an unsynced cache would read as empty: no operation
-// in progress, no cluster. It fails, for the client to retry, if the cache doesn't sync in time.
+// waitForSync waits for the dynamic controller's cache of gvk to sync: an unsynced cache would read as
+// empty, with no operation in progress and no cluster. See common.WaitForDynamicCache.
 func (a *admitter) waitForSync(ctx context.Context, gvk schema.GroupVersionKind) error {
-	informer, synced, err := a.dynamic.GetCache(ctx, gvk)
-	if err != nil {
-		return fmt.Errorf("failed to get the %s cache: %w", gvk.Kind, err)
-	}
-	if synced {
-		return nil
-	}
-
-	waitCtx, cancel := context.WithTimeout(ctx, cacheSyncTimeout)
-	defer cancel()
-	if !cache.WaitForCacheSync(waitCtx.Done(), informer.HasSynced) {
-		return errors.New("timed out waiting for the " + gvk.Kind + " cache to sync, retry the request")
-	}
-	return nil
+	return common.WaitForDynamicCache(ctx, a.dynamic, gvk)
 }
 
 func decode(raw []byte) (*opv1alpha1.Operation, error) {

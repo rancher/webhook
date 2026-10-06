@@ -11,6 +11,7 @@ import (
 
 	opv1alpha1 "github.com/rancher/rancher/pkg/apis/operation.cattle.io/v1alpha1"
 	"github.com/rancher/webhook/pkg/admission"
+	"github.com/rancher/webhook/pkg/resources/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	admissionv1 "k8s.io/api/admission/v1"
@@ -461,9 +462,9 @@ func TestAdmit_Update(t *testing.T) {
 // An unsynced cache would read as no operation in progress, so a create waits for it to sync, and
 // fails, for the client to retry, rather than read one that doesn't.
 func TestAdmit_CreateWaitsForTheCacheToSync(t *testing.T) {
-	previous := cacheSyncTimeout
-	cacheSyncTimeout = 500 * time.Millisecond
-	t.Cleanup(func() { cacheSyncTimeout = previous })
+	previous := common.DynamicCacheSyncTimeout
+	common.DynamicCacheSyncTimeout = 500 * time.Millisecond
+	t.Cleanup(func() { common.DynamicCacheSyncTimeout = previous })
 
 	t.Run("syncing in time", func(t *testing.T) {
 		operations := newFakeOperations(t, rotation("rotate", capiRef()))
