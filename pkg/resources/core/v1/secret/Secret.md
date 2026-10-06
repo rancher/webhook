@@ -10,6 +10,16 @@ and the secret has roles or role bindings dependent on it.
 For Secrets of type `rke.cattle.io/machine-plan`, if `data.plan` is present, its value is parsed using the shared plan schema from `pkg/plan`.
 If the value is not valid JSON or does not conform to the plan schema, the request is rejected.
 
+### On update
+
+For Secrets of type `rke.cattle.io/machine-plan`, the labels tying the secret to its cluster and its machine can't be changed or removed once set:
+
+- `plan.cattle.io/cluster-group`, `plan.cattle.io/cluster-kind`, `plan.cattle.io/cluster-name`
+- `plan.cattle.io/machine-group`, `plan.cattle.io/machine-kind`, `plan.cattle.io/machine-name`
+- `rke.cattle.io/cluster-name`
+
+Each label is compared with the same key on the old and new secret. A label the old secret doesn't have may be added, which is how the controllers that register a machine stamp them. Changing one, including to an empty value, or removing one, is rejected (400 Bad Request). The cluster's beacon is found through `plan.cattle.io/cluster-name`, so changing the cluster labels would let a writer point a plan at a beacon it holds; changing the machine labels would detach a plan from its machine.
+
 ## Mutation Checks
 
 ### On create
