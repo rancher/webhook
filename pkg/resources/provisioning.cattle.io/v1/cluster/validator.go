@@ -11,12 +11,14 @@ import (
 	"strconv"
 	"strings"
 
+	mgmtv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1/snapshotutil"
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/clients"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
+	provcontrollers "github.com/rancher/webhook/pkg/generated/controllers/provisioning.cattle.io/v1"
 	rkecontrollers "github.com/rancher/webhook/pkg/generated/controllers/rke.cattle.io/v1"
 	psa "github.com/rancher/webhook/pkg/podsecurityadmission"
 	"github.com/rancher/webhook/pkg/resources/common"
@@ -40,19 +42,35 @@ const (
 	systemAgentVarDirEnvVar = "CATTLE_AGENT_VAR_DIR"
 	failureStatus           = "Failure"
 	localCluster            = "local"
+
+	// mgmtClusterNameAnn is the annotation that a user sets on a provisioning cluster to choose the name of the
+	// management cluster that Rancher generates for it.
+	mgmtClusterNameAnn = "provisioning.cattle.io/management-cluster-name"
+
+	// mgmtClusterNameIndex is the name of the provisioning cluster cache index. It maps a management cluster name
+	// to the provisioning clusters that request it in mgmtClusterNameAnn or use it in status.clusterName.
+	mgmtClusterNameIndex = "mgmt-cluster-name"
 )
 
 var (
 	mgmtNameRegex  = regexp.MustCompile("^c-[a-z0-9]{5}$")
 	fleetNameRegex = regexp.MustCompile("^[^-][-a-z0-9]+$")
+
+	// requestedMgmtNameRegex matches the format `c-m-<8-char>`, where the 8-character string contains only
+	// lowercase letters and numbers.
+	requestedMgmtNameRegex = regexp.MustCompile("^c-m-[a-z0-9]{8}$")
+
+	annotationsFieldPath = field.NewPath("metadata", "annotations")
 )
 
 // NewProvisioningClusterValidator returns a new validator for provisioning clusters
 func NewProvisioningClusterValidator(client *clients.Clients) *ProvisioningClusterValidator {
+	client.Provisioning.Cluster().Cache().AddIndexer(mgmtClusterNameIndex, provClusterByMgmtClusterName)
 	return &ProvisioningClusterValidator{
 		admitter: provisioningAdmitter{
 			sar:               client.K8s.AuthorizationV1().SubjectAccessReviews(),
 			mgmtClusterClient: client.Management.Cluster(),
+			provClusterCache:  client.Provisioning.Cluster().Cache(),
 			secretClient:      client.Core.Secret(),
 			secretCache:       client.Core.Secret().Cache(),
 			psactCache:        client.Management.PodSecurityAdmissionConfigurationTemplate().Cache(),
@@ -89,6 +107,7 @@ func (p *ProvisioningClusterValidator) Admitters() []admission.Admitter {
 type provisioningAdmitter struct {
 	sar               authorizationv1.SubjectAccessReviewInterface
 	mgmtClusterClient v3.ClusterClient
+	provClusterCache  provcontrollers.ClusterCache
 	secretClient      corev1controller.SecretController
 	secretCache       corev1controller.SecretCache
 	psactCache        v3.PodSecurityAdmissionConfigurationTemplateCache
@@ -114,6 +133,10 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 	response := &admissionv1.AdmissionResponse{}
 	if request.Operation == admissionv1.Create || request.Operation == admissionv1.Update {
 		if err := p.validateClusterName(request, response, cluster); err != nil || response.Result != nil {
+			return response, err
+		}
+
+		if response, err := p.validateManagementClusterName(request, oldCluster, cluster); err != nil || !response.Allowed {
 			return response, err
 		}
 
@@ -374,6 +397,100 @@ func (p *provisioningAdmitter) validateClusterName(request *admission.Request, r
 	}
 
 	return nil
+}
+
+// validateManagementClusterName validates the provisioning.cattle.io/management-cluster-name annotation.
+// On create, the value must be a valid and unused management cluster name.
+// On update, the annotation must not change.
+func (p *provisioningAdmitter) validateManagementClusterName(request *admission.Request, oldCluster, cluster *v1.Cluster) (*admissionv1.AdmissionResponse, error) {
+	switch request.Operation {
+	case admissionv1.Create:
+		return p.validateManagementClusterNameOnCreate(cluster)
+	case admissionv1.Update:
+		return validateManagementClusterNameUnchanged(oldCluster, cluster), nil
+	}
+	return admission.ResponseAllowed(), nil
+}
+
+func (p *provisioningAdmitter) validateManagementClusterNameOnCreate(cluster *v1.Cluster) (*admissionv1.AdmissionResponse, error) {
+	name := cluster.Annotations[mgmtClusterNameAnn]
+	if name == "" {
+		return admission.ResponseAllowed(), nil
+	}
+
+	invalid := func(detail string) *admissionv1.AdmissionResponse {
+		return admission.ResponseBadRequest(field.Invalid(annotationsFieldPath, name, detail).Error())
+	}
+
+	if !requestedMgmtNameRegex.MatchString(name) {
+		return invalid("Management cluster names must use the format `c-m-<8-char>`, " +
+			"where the 8-character string contains only lowercase letters and numbers"), nil
+	}
+
+	// Management clusters are cluster-scoped, so the name must be unique.
+	mgmtCluster, err := p.mgmtClusterClient.Get(name, metav1.GetOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return nil, fmt.Errorf("failed to get management cluster %s: %w", name, err)
+	}
+	if err == nil {
+		// Restoring a backup creates the management cluster before the provisioning cluster. Allow the name if the
+		// management cluster already belongs to this provisioning cluster.
+		if !isManagementClusterOwnedBy(mgmtCluster, cluster) {
+			return invalid("a management cluster with this name already exists"), nil
+		}
+		if mgmtCluster.DeletionTimestamp != nil {
+			return invalid("the management cluster with this name is being deleted"), nil
+		}
+	}
+
+	// Another provisioning cluster must not request the name in its annotation or already use it in its status.
+	// Only clusters that set one of these values are in the index.
+	provClusters, err := p.provClusterCache.GetByIndex(mgmtClusterNameIndex, name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get provisioning clusters by management cluster name %s: %w", name, err)
+	}
+	for _, other := range provClusters {
+		if other.Namespace != cluster.Namespace || other.Name != cluster.Name {
+			return invalid("this management cluster name is already requested or used by another provisioning cluster"), nil
+		}
+	}
+
+	return admission.ResponseAllowed(), nil
+}
+
+// provClusterByMgmtClusterName indexes a provisioning cluster by the management cluster name that it requests in the
+// annotation and by the one that it uses in the status. It skips empty values. The status covers a cluster whose
+// management cluster is gone, because Rancher recreates the management cluster with the name from the status.
+func provClusterByMgmtClusterName(cluster *v1.Cluster) ([]string, error) {
+	var names []string
+	annotationName := cluster.Annotations[mgmtClusterNameAnn]
+	if annotationName != "" {
+		names = append(names, annotationName)
+	}
+	if statusName := cluster.Status.ClusterName; statusName != "" && statusName != annotationName {
+		names = append(names, statusName)
+	}
+	return names, nil
+}
+
+// isManagementClusterOwnedBy returns true if the owner annotations of the management cluster point to the
+// provisioning cluster.
+func isManagementClusterOwnedBy(mgmtCluster *mgmtv3.Cluster, cluster *v1.Cluster) bool {
+	annotations := mgmtCluster.Annotations
+	return annotations["objectset.rio.cattle.io/owner-gvk"] == gvr.GroupVersion().WithKind("Cluster").String() &&
+		annotations["objectset.rio.cattle.io/owner-namespace"] == cluster.Namespace &&
+		annotations["objectset.rio.cattle.io/owner-name"] == cluster.Name
+}
+
+// validateManagementClusterNameUnchanged rejects any change to the management cluster name annotation, including
+// adding and removing it, on updating a provisioning cluster.
+func validateManagementClusterNameUnchanged(oldCluster, cluster *v1.Cluster) *admissionv1.AdmissionResponse {
+	oldValue, oldSet := oldCluster.Annotations[mgmtClusterNameAnn]
+	newValue, newSet := cluster.Annotations[mgmtClusterNameAnn]
+	if oldSet == newSet && oldValue == newValue {
+		return admission.ResponseAllowed()
+	}
+	return admission.ResponseBadRequest(field.Invalid(annotationsFieldPath, mgmtClusterNameAnn, "annotation is immutable").Error())
 }
 
 func validateHTTPNoProxyVariable(request *admission.Request, oldCluster, newCluster *v1.Cluster) *admissionv1.AdmissionResponse {
