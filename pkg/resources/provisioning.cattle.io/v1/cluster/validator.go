@@ -57,8 +57,8 @@ var (
 	fleetNameRegex = regexp.MustCompile("^[^-][-a-z0-9]+$")
 
 	// requestedMgmtNameRegex matches the format `c-m-<8-char>`, where the 8-character string contains only
-	// lowercase letters, numbers, or hyphens, and the first and last of the 8 characters are not hyphen.
-	requestedMgmtNameRegex = regexp.MustCompile("^c-m-[a-z0-9][-a-z0-9]{6}[a-z0-9]$")
+	// lowercase letters and numbers.
+	requestedMgmtNameRegex = regexp.MustCompile("^c-m-[a-z0-9]{8}$")
 
 	annotationsFieldPath = field.NewPath("metadata", "annotations")
 )
@@ -424,8 +424,7 @@ func (p *provisioningAdmitter) validateManagementClusterNameOnCreate(cluster *v1
 
 	if !requestedMgmtNameRegex.MatchString(name) {
 		return invalid("Management cluster names must use the format `c-m-<8-char>`, " +
-			"where the 8-character string contains only lowercase letters, numbers, or hyphens, " +
-			"the first and last of the 8 characters are not hyphen."), nil
+			"where the 8-character string contains only lowercase letters and numbers"), nil
 	}
 
 	// Management clusters are cluster-scoped, so the name must be unique.

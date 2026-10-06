@@ -14,7 +14,7 @@ The annotation `provisioning.cattle.io/management-cluster-name` sets the name of
 Rancher ignores an empty value. The webhook accepts an empty value and skips the checks in this section.
 
 If the annotation has a value, all of these conditions must be true:
-- The value has the format `c-m-<8 characters>`. Each of the 8 characters is a lowercase letter, a digit or hyphen. The first and last of the 8 characters are not hyphen.
+- The value has the format `c-m-<8 characters>`. Each of the 8 characters is a lowercase letter or a digit.
 - No other provisioning cluster sets the same value in this annotation or in `status.clusterName`.
 - No management cluster has this name.
 

@@ -3511,7 +3511,7 @@ func TestRequestedMgmtNameRegex(t *testing.T) {
 		{name: "only numbers", value: "c-m-12345678", want: true},
 		{name: "starts with a number", value: "c-m-1bcd1234", want: true},
 		{name: "ends with a number", value: "c-m-abcdefg1", want: true},
-		{name: "hyphen in the middle", value: "c-m-ab-d-23x", want: true},
+		{name: "hyphen in the middle", value: "c-m-ab-d-23x"},
 		{name: "missing prefix", value: "my-cluster"},
 		{name: "legacy name format", value: "c-abcde"},
 		{name: "local", value: "local"},
@@ -3522,6 +3522,7 @@ func TestRequestedMgmtNameRegex(t *testing.T) {
 		{name: "underscore character", value: "c-m-abcd_234"},
 		{name: "starts with hyphen after the prefix", value: "c-m--bcd1234"},
 		{name: "ends with hyphen", value: "c-m-abcd123-"},
+		{name: "63 characters", value: "c-m-" + strings.Repeat("a", 59)},
 	}
 
 	for _, tt := range tests {
