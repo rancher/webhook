@@ -505,7 +505,6 @@ func TestValidateMachinePoolName(t *testing.T) {
 					},
 				},
 			)
-
 			if err != nil {
 				t.Errorf("got error when none was expected: %v", err)
 			}
@@ -1471,10 +1470,12 @@ func Test_validateAgentDeploymentCustomization(t *testing.T) {
 				customization: &v1.AgentDeploymentCustomization{
 					AppendTolerations: []k8sv1.Toleration{
 						{
-							Key: "validkey",
+							Key:   "validkey",
+							Value: "validValue",
 						},
 						{
-							Key: "validkey.dot/dash",
+							Key:   "validkey.dot/dash",
+							Value: "true",
 						},
 					},
 					OverrideAffinity: &k8sv1.Affinity{
@@ -1628,6 +1629,26 @@ func Test_validateAgentDeploymentCustomization(t *testing.T) {
 						{
 							Key: "`{}invalidKey.dot/dash",
 						},
+						{
+							Key:      "ValidKey",
+							Operator: "Equal",
+							Value:    "InvalidValue[]!-=123",
+						},
+						{
+							Key:      "ValidKey",
+							Operator: "InvalidOperator",
+							Value:    "ValidValue",
+						},
+						{
+							Key:      "ValidKey",
+							Operator: "Equal",
+							Value:    " ", // empty space also not allowed
+						},
+						{
+							Key:      "ValidKey",
+							Operator: "Exists",
+							Value:    "Contains should not have a value",
+						},
 					},
 					OverrideAffinity: &k8sv1.Affinity{
 						NodeAffinity: &k8sv1.NodeAffinity{
@@ -1768,8 +1789,12 @@ func Test_validateAgentDeploymentCustomization(t *testing.T) {
 				path: field.NewPath("test"),
 			},
 			validateFunc: validateFailedPaths([]string{
-				"test.appendTolerations[0]",
-				"test.appendTolerations[1]",
+				"test.appendTolerations[0].key",
+				"test.appendTolerations[1].key",
+				"test.appendTolerations[2].value",
+				"test.appendTolerations[3].operator",
+				"test.appendTolerations[4].value",
+				"test.appendTolerations[5].value",
 				"test.overrideAffinity.nodeAffinity.preferredDuringSchedulingIgnoredDuringExecution[0].preferences.matchFields[0].key",
 				"test.overrideAffinity.nodeAffinity.preferredDuringSchedulingIgnoredDuringExecution[0].preferences.matchFields[1].key",
 				"test.overrideAffinity.nodeAffinity.preferredDuringSchedulingIgnoredDuringExecution[0].preferences.matchExpressions[0].key",
@@ -2171,9 +2196,7 @@ func Test_validateAgentSchedulingCustomizationPodDisruptionBudget(t *testing.T) 
 					featureCache: createMockFeatureCache(ctrl, common.SchedulingCustomizationFeatureName, tt.featureEnabled),
 				}
 
-				var (
-					oldCluster, cluster *v1.Cluster
-				)
+				var oldCluster, cluster *v1.Cluster
 
 				switch agentType {
 				case common.AgentTypeCluster:
@@ -3031,10 +3054,34 @@ func Test_validateWebhookDeploymentCustomization(t *testing.T) {
 			name: "invalid toleration key",
 			customization: &v1.WebhookDeploymentCustomization{
 				AppendTolerations: []k8sv1.Toleration{
-					{Key: "-invalid-key"},
+					{Key: "-invalid-key", Operator: k8sv1.TolerationOpExists},
 				},
 			},
-			validateFunc: validateFailedPaths([]string{"test.appendTolerations[0]"}),
+			validateFunc: validateFailedPaths([]string{
+				"test.appendTolerations[0].key",
+			}),
+		},
+		{
+			name: "invalid toleration operator",
+			customization: &v1.WebhookDeploymentCustomization{
+				AppendTolerations: []k8sv1.Toleration{
+					{Key: "Valid-key", Operator: "InvalidOperator", Value: "valid"},
+				},
+			},
+			validateFunc: validateFailedPaths([]string{
+				"test.appendTolerations[0].operator",
+			}),
+		},
+		{
+			name: "invalid toleration value",
+			customization: &v1.WebhookDeploymentCustomization{
+				AppendTolerations: []k8sv1.Toleration{
+					{Key: "Valid-key", Operator: k8sv1.TolerationOpEqual, Value: "invalid-[]-value"},
+				},
+			},
+			validateFunc: validateFailedPaths([]string{
+				"test.appendTolerations[0].value",
+			}),
 		},
 		{
 			name: "valid affinity",
