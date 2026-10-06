@@ -49,6 +49,23 @@ func TestAdmit(t *testing.T) {
 		},
 	}
 
+	roleWithUUIDAnnotation := &v1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "default",
+			Annotations: map[string]string{
+				clusterRoleOwnerInstallUUID: "some-uuid",
+			},
+		},
+	}
+	roleWithNewUUIDAnnotation := &v1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "default",
+			Annotations: map[string]string{
+				clusterRoleOwnerInstallUUID: "new-uuid",
+			},
+		},
+	}
+
 	type args struct {
 		oldRole *v1.ClusterRole
 		newRole *v1.ClusterRole
@@ -131,6 +148,62 @@ func TestAdmit(t *testing.T) {
 			},
 			allowed: false,
 		},
+		{
+			name: "updating annotations other than uuid annotation allowed",
+			args: args{
+				oldRole: roleWithUUIDAnnotation.DeepCopy(),
+				newRole: &v1.ClusterRole{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "default",
+						Annotations: map[string]string{
+							"new-annotation":            "test-value",
+							clusterRoleOwnerInstallUUID: "some-uuid",
+						},
+					},
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "adding uuid annotation allowed",
+			args: args{
+				oldRole: defaultRole.DeepCopy(),
+				newRole: roleWithNewUUIDAnnotation.DeepCopy(),
+			},
+			allowed: true,
+		},
+		{
+			name: "adding uuid annotation to empty annotations map allowed",
+			args: args{
+				oldRole: emptyRole.DeepCopy(),
+				newRole: roleWithNewUUIDAnnotation.DeepCopy(),
+			},
+			allowed: true,
+		},
+		{
+			name: "modifying uuid annotation not allowed",
+			args: args{
+				oldRole: roleWithUUIDAnnotation.DeepCopy(),
+				newRole: roleWithNewUUIDAnnotation.DeepCopy(),
+			},
+			allowed: false,
+		},
+		{
+			name: "removing uuid annotation not allowed",
+			args: args{
+				oldRole: roleWithUUIDAnnotation.DeepCopy(),
+				newRole: defaultRole.DeepCopy(),
+			},
+			allowed: false,
+		},
+		{
+			name: "replacing annotations with empty map not allowed",
+			args: args{
+				oldRole: roleWithUUIDAnnotation.DeepCopy(),
+				newRole: emptyRole.DeepCopy(),
+			},
+			allowed: false,
+		},
 	}
 
 	for _, test := range tests {
@@ -161,7 +234,9 @@ func TestAdmit(t *testing.T) {
 			admitter := validator.Admitters()
 			response, err := admitter[0].Admit(req)
 			require.NoError(t, err)
-			require.Equalf(t, test.allowed, response.Allowed, "Response was incorrectly validated wanted response.Allowed = '%v' got '%v' message=%+v", test.allowed, response.Allowed, response.Result)
+			require.Equalf(t, test.allowed, response.Allowed,
+				"Response was incorrectly validated; wanted = '%v' got '%v' message=%+v",
+				test.allowed, response.Allowed, response.Result)
 		})
 	}
 }

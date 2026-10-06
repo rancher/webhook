@@ -14,7 +14,8 @@ import (
 )
 
 const (
-	grOwnerLabel = "authz.management.cattle.io/gr-owner"
+	grOwnerLabel                = "authz.management.cattle.io/gr-owner"
+	clusterRoleOwnerInstallUUID = "authz.cluster.cattle.io/clusterrole-owner-install-uuid"
 )
 
 // Validator implements admission.ValidatingAdmissionHandler.
@@ -79,6 +80,11 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 
 	if common.IsModifyingLabel(oldRole.Labels, newRole.Labels, grOwnerLabel) {
 		return admission.ResponseBadRequest(fmt.Sprintf("cannot modify or remove label %s", grOwnerLabel)), nil
+	}
+
+	if common.IsModifyingLabel(oldRole.Annotations, newRole.Annotations, clusterRoleOwnerInstallUUID) {
+		return admission.ResponseBadRequest(fmt.Sprintf("cannot modify or remove annotation %s",
+			clusterRoleOwnerInstallUUID)), nil
 	}
 
 	return admission.ResponseAllowed(), nil
