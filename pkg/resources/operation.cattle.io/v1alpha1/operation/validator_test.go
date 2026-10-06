@@ -17,6 +17,7 @@ import (
 	authenticationv1 "k8s.io/api/authentication/v1"
 	authorizationv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -54,19 +55,28 @@ type fakeInformer struct {
 
 func (f *fakeInformer) HasSynced() bool { return f.synced.Load() }
 
-// fakeOperations serves the operations of each kind, as the dynamic controller does: unstructured,
-// with their kind set.
+// fakeOperations serves the operations of each kind, and the cluster objects operations name, as the
+// dynamic controller does: unstructured, with their kind set. It starts with the CAPI cluster capiRef
+// names and the management cluster mgmtRef names, neither of them whitelisted.
 type fakeOperations struct {
 	objects  map[schema.GroupVersionKind][]runtime.Object
+	clusters map[string]*unstructured.Unstructured
 	informer *fakeInformer
 	listErr  error
+	getErr   error
+}
+
+func clusterKey(gvk schema.GroupVersionKind, namespace, name string) string {
+	return gvk.String() + "|" + namespace + "/" + name
 }
 
 func newFakeOperations(t *testing.T, operations ...runtime.Object) *fakeOperations {
 	t.Helper()
 
-	f := &fakeOperations{objects: map[schema.GroupVersionKind][]runtime.Object{}, informer: &fakeInformer{}}
+	f := &fakeOperations{objects: map[schema.GroupVersionKind][]runtime.Object{}, clusters: map[string]*unstructured.Unstructured{}, informer: &fakeInformer{}}
 	f.informer.synced.Store(true)
+	f.addCluster(capiCluster, "fleet-default", "c")
+	f.addCluster(mgmtCluster, "", "c-abc")
 	for _, operation := range operations {
 		object, err := runtime.DefaultUnstructuredConverter.ToUnstructured(operation)
 		require.NoError(t, err)
@@ -82,8 +92,42 @@ func (f *fakeOperations) GetCache(_ context.Context, _ schema.GroupVersionKind) 
 	return f.informer, f.informer.HasSynced(), nil
 }
 
+// addCluster adds a cluster object, and returns it for the test to annotate.
+func (f *fakeOperations) addCluster(gvk schema.GroupVersionKind, namespace, name string) *unstructured.Unstructured {
+	u := &unstructured.Unstructured{}
+	u.SetGroupVersionKind(gvk)
+	u.SetNamespace(namespace)
+	u.SetName(name)
+	f.clusters[clusterKey(gvk, namespace, name)] = u
+	return u
+}
+
+func (f *fakeOperations) cluster(gvk schema.GroupVersionKind, namespace, name string) *unstructured.Unstructured {
+	return f.clusters[clusterKey(gvk, namespace, name)]
+}
+
+func (f *fakeOperations) Get(gvk schema.GroupVersionKind, namespace, name string) (runtime.Object, error) {
+	if f.getErr != nil {
+		return nil, f.getErr
+	}
+	u, ok := f.clusters[clusterKey(gvk, namespace, name)]
+	if !ok {
+		return nil, apierrors.NewNotFound(schema.GroupResource{Group: gvk.Group, Resource: gvk.Kind}, name)
+	}
+	return u, nil
+}
+
 func (f *fakeOperations) List(gvk schema.GroupVersionKind, _ string, _ labels.Selector) ([]runtime.Object, error) {
 	return f.objects[gvk], f.listErr
+}
+
+func resourceOf(obj runtime.Object) string {
+	return map[string]string{
+		"ETCDSnapshotSave":      "etcdsnapshotsaves",
+		"ETCDSnapshotRestore":   "etcdsnapshotrestores",
+		"EncryptionKeyRotation": "encryptionkeyrotations",
+		"CertificateRotation":   "certificaterotations",
+	}[kindOf(obj)]
 }
 
 func kindOf(obj runtime.Object) string {
@@ -122,6 +166,13 @@ func save(name string, ref *corev1.ObjectReference) *opv1alpha1.ETCDSnapshotSave
 	}
 }
 
+func restore(name string, ref *corev1.ObjectReference) *opv1alpha1.ETCDSnapshotRestore {
+	return &opv1alpha1.ETCDSnapshotRestore{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "fleet-default", Name: name},
+		Spec:       opv1alpha1.ETCDSnapshotRestoreSpec{OperationSpec: opv1alpha1.OperationSpec{ClusterRef: ref}},
+	}
+}
+
 func rotation(name string, ref *corev1.ObjectReference) *opv1alpha1.CertificateRotation {
 	return &opv1alpha1.CertificateRotation{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "fleet-default", Name: name},
@@ -152,6 +203,7 @@ func request(t *testing.T, operation admissionv1.Operation, obj, old runtime.Obj
 		AdmissionRequest: admissionv1.AdmissionRequest{
 			Operation: operation,
 			Kind:      metav1.GroupVersionKind{Group: opv1alpha1.SchemeGroupVersion.Group, Version: "v1alpha1", Kind: kindOf(obj)},
+			Resource:  metav1.GroupVersionResource{Group: opv1alpha1.SchemeGroupVersion.Group, Version: "v1alpha1", Resource: resourceOf(obj)},
 			Object:    runtime.RawExtension{Raw: raw(obj)},
 			OldObject: runtime.RawExtension{Raw: raw(old)},
 			UserInfo:  authenticationv1.UserInfo{Username: "alice"},
@@ -160,7 +212,7 @@ func request(t *testing.T, operation admissionv1.Operation, obj, old runtime.Obj
 }
 
 func newAdmitter(operations *fakeOperations, sar *fakeSAR) *admitter {
-	return &admitter{operations: operations, mapper: newMapper(), sar: sar}
+	return &admitter{dynamic: operations, mapper: newMapper(), sar: sar}
 }
 
 func TestAdmit_Create(t *testing.T) {
@@ -475,3 +527,135 @@ func TestValidators(t *testing.T) {
 		assert.Len(t, v.Admitters(), 1)
 	}
 }
+
+// While a cluster carries a whitelist, only the operations it lists may be created for it. An operation
+// stopped after pausing the cluster whitelists restores, since only a restore can repair the cluster
+// from there. Without a whitelist, or with an empty one, any operation may be.
+func TestAdmit_CreateHonorsTheWhitelist(t *testing.T) {
+	t.Parallel()
+
+	const restores = opv1alpha1.ETCDSnapshotRestoreResource
+
+	for name, tc := range map[string]struct {
+		cluster     schema.GroupVersionKind
+		namespace   string
+		clusterName string
+		whitelist   *string
+		obj         runtime.Object
+
+		wantAllowed bool
+		wantMessage string
+	}{
+		"a save on a cluster without a whitelist": {
+			cluster: capiCluster, namespace: "fleet-default", clusterName: "c",
+			obj:         save("nightly", capiRef()),
+			wantAllowed: true,
+		},
+		"a save on a cluster with an empty whitelist": {
+			cluster: capiCluster, namespace: "fleet-default", clusterName: "c",
+			whitelist:   ptr(" "),
+			obj:         save("nightly", capiRef()),
+			wantAllowed: true,
+		},
+		"a save on a cluster whitelisted for restores": {
+			cluster: capiCluster, namespace: "fleet-default", clusterName: "c",
+			whitelist:   ptr(restores),
+			obj:         save("nightly", capiRef()),
+			wantMessage: "cluster fleet-default/c only permits " + restores + ": an earlier operation was stopped after pausing it, and the cluster requires an etcd snapshot restore",
+		},
+		"a restore on a cluster whitelisted for restores": {
+			cluster: capiCluster, namespace: "fleet-default", clusterName: "c",
+			whitelist:   ptr(restores),
+			obj:         restore("repair", capiRef()),
+			wantAllowed: true,
+		},
+		"a rotation one of several entries names": {
+			cluster: capiCluster, namespace: "fleet-default", clusterName: "c",
+			whitelist:   ptr(restores + ", " + opv1alpha1.CertificateRotationResource),
+			obj:         rotation("rotate", capiRef()),
+			wantAllowed: true,
+		},
+		"a save on a whitelisted management cluster": {
+			cluster: mgmtCluster, clusterName: "c-abc",
+			whitelist:   ptr(restores),
+			obj:         save("nightly", mgmtRef()),
+			wantMessage: "cluster c-abc only permits " + restores,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			operations := newFakeOperations(t)
+			if tc.whitelist != nil {
+				operations.cluster(tc.cluster, tc.namespace, tc.clusterName).SetAnnotations(map[string]string{opv1alpha1.WhitelistedAnnotation: *tc.whitelist})
+			}
+
+			response, err := newAdmitter(operations, &fakeSAR{allowed: true}).Admit(request(t, admissionv1.Create, tc.obj, nil))
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantAllowed, response.Allowed)
+			if !tc.wantAllowed {
+				require.NotNil(t, response.Result)
+				assert.Equal(t, int32(http.StatusBadRequest), response.Result.Code)
+				assert.Contains(t, response.Result.Message, tc.wantMessage)
+			}
+		})
+	}
+}
+
+// An operation in progress is reported ahead of the whitelist it may have added, since waiting for it,
+// or canceling it, is what the user has to do first.
+func TestAdmit_CreateReportsAnOperationInProgressBeforeTheWhitelist(t *testing.T) {
+	t.Parallel()
+
+	operations := newFakeOperations(t, rotation("rotate", capiRef()))
+	operations.cluster(capiCluster, "fleet-default", "c").SetAnnotations(map[string]string{opv1alpha1.WhitelistedAnnotation: opv1alpha1.ETCDSnapshotRestoreResource})
+
+	response, err := newAdmitter(operations, &fakeSAR{allowed: true}).Admit(request(t, admissionv1.Create, save("nightly", capiRef()), nil))
+	require.NoError(t, err)
+	require.False(t, response.Allowed)
+	assert.Contains(t, response.Result.Message, "CertificateRotation fleet-default/rotate is still in progress")
+}
+
+// An operation on a cluster that doesn't exist can never run, so it is rejected; a cluster that can't
+// be read is a failure for the client to retry.
+func TestAdmit_CreateReadsTheCluster(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a cluster that doesn't exist", func(t *testing.T) {
+		t.Parallel()
+
+		ref := capiRef()
+		ref.Name = "gone"
+		response, err := newAdmitter(newFakeOperations(t), &fakeSAR{allowed: true}).Admit(request(t, admissionv1.Create, save("nightly", ref), nil))
+		require.NoError(t, err)
+		require.False(t, response.Allowed)
+		assert.Equal(t, int32(http.StatusBadRequest), response.Result.Code)
+		assert.Contains(t, response.Result.Message, "spec.clusterRef names Cluster fleet-default/gone, which does not exist")
+	})
+
+	t.Run("a cluster that can't be read", func(t *testing.T) {
+		t.Parallel()
+
+		operations := newFakeOperations(t)
+		operations.getErr = errors.New("apiserver is down")
+		_, err := newAdmitter(operations, &fakeSAR{allowed: true}).Admit(request(t, admissionv1.Create, save("nightly", capiRef()), nil))
+		assert.ErrorContains(t, err, "apiserver is down")
+	})
+}
+
+// The whitelist restricts which operations may be created; canceling one already running on a
+// whitelisted cluster is always allowed, since that is how the way is cleared.
+func TestAdmit_UpdateIgnoresTheWhitelist(t *testing.T) {
+	t.Parallel()
+
+	operations := newFakeOperations(t)
+	operations.cluster(capiCluster, "fleet-default", "c").SetAnnotations(map[string]string{opv1alpha1.WhitelistedAnnotation: opv1alpha1.ETCDSnapshotRestoreResource})
+
+	canceled := save("nightly", capiRef())
+	canceled.Spec.Cancel = true
+	response, err := newAdmitter(operations, &fakeSAR{allowed: true}).Admit(request(t, admissionv1.Update, canceled, save("nightly", capiRef())))
+	require.NoError(t, err)
+	assert.True(t, response.Allowed)
+}
+
+func ptr[T any](v T) *T { return &v }

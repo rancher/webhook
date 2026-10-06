@@ -32,3 +32,20 @@ On create, the request is rejected (400 Bad Request) if another operation on the
 Two references name the same cluster when their API group, kind and name match and, where both name one, their namespace does too. An operation on a cluster-scoped cluster can be in any namespace.
 
 The operations are read from a cache, so two creates in quick succession can both be admitted. The operation controllers then reject whichever one finds the cluster's beacon already held by the other. If the cache hasn't synced yet, which can happen just after the webhook starts, the request fails with a server error for the client to retry, rather than being admitted against an empty cache.
+
+### The cluster's operation whitelist
+
+On create, the webhook reads the object `spec.clusterRef` names, and checks its `operation.cattle.io/whitelisted` annotation. An operation stopped after pausing the cluster (its point of no return) leaves the cluster whitelisted for `etcdsnapshotrestores.operation.cattle.io`, since only an etcd snapshot restore can repair it from there.
+
+- The annotation's value is a comma-separated list of operation resources, each named `<plural>.<group>`. If it is present with at least one entry, the request is rejected (400 Bad Request) unless the resource being created is one of them:
+
+  ```text
+  cluster fleet-default/c only permits etcdsnapshotrestores.operation.cattle.io: an earlier operation was stopped after pausing it, and the cluster requires an etcd snapshot restore
+  ```
+
+- Without the annotation, or with an empty one, any operation may be created.
+- If the object doesn't exist, the request is rejected (400 Bad Request), since an operation on it could never run. If it can't be read for any other reason, the request fails with a server error for the client to retry.
+
+An operation in progress on the cluster is reported first, since it may be the operation that added the whitelist. Updates aren't checked, so an operation running on a whitelisted cluster can always be canceled. The operation controllers check the whitelist again before they change anything, so an operation admitted on a stale read is still turned away.
+
+A succeeded restore removes the annotation. An administrator who has repaired the cluster by other means can remove it by hand; doing so doesn't unpause the cluster.
