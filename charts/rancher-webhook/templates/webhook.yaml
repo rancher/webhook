@@ -513,6 +513,9 @@ webhooks:
       path: /v1/webhook/validation/secrets
       port: 443
   failurePolicy: Fail
+  matchConditions:
+  - expression: '(object != null ? object.type : oldObject.type) == "rke.cattle.io/machine-plan"'
+    name: filter-by-secret-type-machine-plan
   matchPolicy: Equivalent
   name: rancher.cattle.io.secrets
   rules:

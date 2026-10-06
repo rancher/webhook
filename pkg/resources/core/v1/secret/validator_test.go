@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	admissionv1 "k8s.io/api/admission/v1"
+	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	v1authentication "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -295,4 +296,13 @@ func Test_secretOwnerIndexer(t *testing.T) {
 			assert.Equal(t, test.wantStrings, secretOwnerIndexer(meta))
 		})
 	}
+}
+
+func TestValidatingWebhook(t *testing.T) {
+	v := &Validator{}
+	whs := v.ValidatingWebhook(admissionregistrationv1.WebhookClientConfig{})
+	assert.Len(t, whs, 1)
+	assert.Len(t, whs[0].MatchConditions, 1)
+	assert.Equal(t, "filter-by-secret-type-machine-plan", whs[0].MatchConditions[0].Name)
+	assert.Equal(t, `(object != null ? object.type : oldObject.type) == "rke.cattle.io/machine-plan"`, whs[0].MatchConditions[0].Expression)
 }
