@@ -50,7 +50,7 @@ const (
 	// mgmtClusterNameIndex is the name of the provisioning cluster cache index. It maps a management cluster name
 	// to the provisioning clusters that request it in mgmtClusterNameAnn or use it in status.clusterName.
 	mgmtClusterNameIndex = "mgmt-cluster-name"
-	
+
 	// authorizedObjectSelectorAnnotation mirrors capr.AuthorizedObjectSelectorAnnotation in rancher/rancher.
 	authorizedObjectSelectorAnnotation = "rke.cattle.io/object-authorized-for-cluster-selector"
 )
