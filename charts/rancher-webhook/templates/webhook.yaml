@@ -514,8 +514,7 @@ webhooks:
       port: 443
   failurePolicy: Fail
   matchConditions:
-  - expression: request.operation == 'DELETE' || (object != null && object.type ==
-      "rke.cattle.io/machine-plan")
+  - expression: '(object != null ? object.type : oldObject.type) == "rke.cattle.io/machine-plan"'
     name: filter-by-secret-type-machine-plan
   matchPolicy: Equivalent
   name: rancher.cattle.io.secrets

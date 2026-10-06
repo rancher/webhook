@@ -304,5 +304,5 @@ func TestValidatingWebhook(t *testing.T) {
 	assert.Len(t, whs, 1)
 	assert.Len(t, whs[0].MatchConditions, 1)
 	assert.Equal(t, "filter-by-secret-type-machine-plan", whs[0].MatchConditions[0].Name)
-	assert.Equal(t, `request.operation == 'DELETE' || (object != null && object.type == "rke.cattle.io/machine-plan")`, whs[0].MatchConditions[0].Expression)
+	assert.Equal(t, `(object != null ? object.type : oldObject.type) == "rke.cattle.io/machine-plan"`, whs[0].MatchConditions[0].Expression)
 }

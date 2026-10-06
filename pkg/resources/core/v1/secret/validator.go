@@ -79,7 +79,7 @@ func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.Webho
 	validatingWebhook.MatchConditions = []admissionregistrationv1.MatchCondition{
 		{
 			Name:       "filter-by-secret-type-machine-plan",
-			Expression: `request.operation == 'DELETE' || (object != null && object.type == "` + machinePlanSecretType + `")`,
+			Expression: `(object != null ? object.type : oldObject.type) == "` + machinePlanSecretType + `"`,
 		},
 	}
 	return []admissionregistrationv1.ValidatingWebhook{*validatingWebhook}
