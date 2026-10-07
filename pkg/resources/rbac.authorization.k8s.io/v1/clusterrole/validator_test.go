@@ -49,6 +49,23 @@ func TestAdmit(t *testing.T) {
 		},
 	}
 
+	roleWithUUIDLabel := &v1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "default",
+			Labels: map[string]string{
+				clusterRoleOwnerInstallUUIDLabel: "some-uuid",
+			},
+		},
+	}
+	roleWithNewUUIDLabel := &v1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "default",
+			Labels: map[string]string{
+				clusterRoleOwnerInstallUUIDLabel: "new-uuid",
+			},
+		},
+	}
+
 	type args struct {
 		oldRole *v1.ClusterRole
 		newRole *v1.ClusterRole
@@ -131,6 +148,62 @@ func TestAdmit(t *testing.T) {
 			},
 			allowed: false,
 		},
+		{
+			name: "updating labels other than uuid label allowed",
+			args: args{
+				oldRole: roleWithUUIDLabel.DeepCopy(),
+				newRole: &v1.ClusterRole{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "default",
+						Labels: map[string]string{
+							"new-label":                      "test-value",
+							clusterRoleOwnerInstallUUIDLabel: "some-uuid",
+						},
+					},
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "adding uuid label allowed",
+			args: args{
+				oldRole: defaultRole.DeepCopy(),
+				newRole: roleWithNewUUIDLabel.DeepCopy(),
+			},
+			allowed: true,
+		},
+		{
+			name: "adding uuid label to empty labels map allowed",
+			args: args{
+				oldRole: emptyRole.DeepCopy(),
+				newRole: roleWithNewUUIDLabel.DeepCopy(),
+			},
+			allowed: true,
+		},
+		{
+			name: "modifying uuid label not allowed",
+			args: args{
+				oldRole: roleWithUUIDLabel.DeepCopy(),
+				newRole: roleWithNewUUIDLabel.DeepCopy(),
+			},
+			allowed: false,
+		},
+		{
+			name: "removing uuid label not allowed",
+			args: args{
+				oldRole: roleWithUUIDLabel.DeepCopy(),
+				newRole: defaultRole.DeepCopy(),
+			},
+			allowed: false,
+		},
+		{
+			name: "replacing labels with empty map not allowed (uuid label)",
+			args: args{
+				oldRole: roleWithUUIDLabel.DeepCopy(),
+				newRole: emptyRole.DeepCopy(),
+			},
+			allowed: false,
+		},
 	}
 
 	for _, test := range tests {
@@ -161,7 +234,9 @@ func TestAdmit(t *testing.T) {
 			admitter := validator.Admitters()
 			response, err := admitter[0].Admit(req)
 			require.NoError(t, err)
-			require.Equalf(t, test.allowed, response.Allowed, "Response was incorrectly validated wanted response.Allowed = '%v' got '%v' message=%+v", test.allowed, response.Allowed, response.Result)
+			require.Equalf(t, test.allowed, response.Allowed,
+				"Response was incorrectly validated; wanted = '%v' got '%v' message=%+v",
+				test.allowed, response.Allowed, response.Result)
 		})
 	}
 }

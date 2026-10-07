@@ -61,7 +61,7 @@ func ConvertAuthnExtras(extra map[string]authnv1.ExtraValue) map[string]authzv1.
 	return result
 }
 
-// ValidateLabel checks if a user is removing or modifying a label. If the label is newly added, return false.
+// IsModifyingLabel checks if a user is removing or modifying a label. If the label is newly added, return false.
 func IsModifyingLabel(oldLabels, newLabels map[string]string, label string) bool {
 	var oldValue, newValue string
 	var oldLabelExists, newLabelExists bool
