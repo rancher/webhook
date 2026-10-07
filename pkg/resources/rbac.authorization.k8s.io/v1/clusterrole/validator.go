@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	grOwnerLabel                = "authz.management.cattle.io/gr-owner"
-	clusterRoleOwnerInstallUUID = "authz.cluster.cattle.io/clusterrole-owner-install-uuid"
+	grOwnerLabel                     = "authz.management.cattle.io/gr-owner"
+	clusterRoleOwnerInstallUUIDLabel = "authz.cluster.cattle.io/clusterrole-owner-install-uuid"
 )
 
 // Validator implements admission.ValidatingAdmissionHandler.
@@ -48,8 +48,10 @@ func (v *Validator) Operations() []admissionregistrationv1.OperationType {
 
 // ValidatingWebhook returns the ValidatingWebhook used for this CRD.
 func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.WebhookClientConfig) []admissionregistrationv1.ValidatingWebhook {
-	webhook := admission.NewDefaultValidatingWebhook(v, clientConfig, admissionregistrationv1.ClusterScope, v.Operations())
-	webhook.ObjectSelector = &metav1.LabelSelector{
+	// grOwnerWebhook routes requests to this handler only if the gr-owner label is present.
+	grOwnerWebhook := admission.NewDefaultValidatingWebhook(v, clientConfig, admissionregistrationv1.ClusterScope, v.Operations())
+	grOwnerWebhook.Name = admission.CreateWebhookName(v, "gr-owner")
+	grOwnerWebhook.ObjectSelector = &metav1.LabelSelector{
 		MatchExpressions: []metav1.LabelSelectorRequirement{
 			{
 				Key:      grOwnerLabel,
@@ -57,7 +59,22 @@ func (v *Validator) ValidatingWebhook(clientConfig admissionregistrationv1.Webho
 			},
 		},
 	}
-	return []admissionregistrationv1.ValidatingWebhook{*webhook}
+
+	// installUUIDWebhook is a separate webhook configuration that routes to this handler only if the
+	// clusterrole-owner-install-uuid label is present. It is kept separate from grOwnerWebhook because
+	// label selectors AND their match expressions together, and these two labels are not always both present.
+	installUUIDWebhook := admission.NewDefaultValidatingWebhook(v, clientConfig, admissionregistrationv1.ClusterScope, v.Operations())
+	installUUIDWebhook.Name = admission.CreateWebhookName(v, "install-uuid")
+	installUUIDWebhook.ObjectSelector = &metav1.LabelSelector{
+		MatchExpressions: []metav1.LabelSelectorRequirement{
+			{
+				Key:      clusterRoleOwnerInstallUUIDLabel,
+				Operator: metav1.LabelSelectorOpExists,
+			},
+		},
+	}
+
+	return []admissionregistrationv1.ValidatingWebhook{*grOwnerWebhook, *installUUIDWebhook}
 }
 
 // Admitters returns the admitter objects used to validate roles.
@@ -82,9 +99,9 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return admission.ResponseBadRequest(fmt.Sprintf("cannot modify or remove label %s", grOwnerLabel)), nil
 	}
 
-	if common.IsModifyingLabel(oldRole.Annotations, newRole.Annotations, clusterRoleOwnerInstallUUID) {
-		return admission.ResponseBadRequest(fmt.Sprintf("cannot modify or remove annotation %s",
-			clusterRoleOwnerInstallUUID)), nil
+	if common.IsModifyingLabel(oldRole.Labels, newRole.Labels, clusterRoleOwnerInstallUUIDLabel) {
+		return admission.ResponseBadRequest(fmt.Sprintf("cannot modify or remove label %s",
+			clusterRoleOwnerInstallUUIDLabel)), nil
 	}
 
 	return admission.ResponseAllowed(), nil

@@ -1042,12 +1042,9 @@ persist.
 
 #### Invalid Fields - Update
 
-Users cannot update or remove the following label after it has been added:
+Users cannot update or remove the following labels after they have been added:
 
   - authz.management.cattle.io/gr-owner
-
-Users cannot update or remove the following annotation after it has been added:
-
   - authz.cluster.cattle.io/clusterrole-owner-install-uuid
 
 ## ClusterRoleBinding

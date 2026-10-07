@@ -49,19 +49,19 @@ func TestAdmit(t *testing.T) {
 		},
 	}
 
-	roleWithUUIDAnnotation := &v1.ClusterRole{
+	roleWithUUIDLabel := &v1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "default",
-			Annotations: map[string]string{
-				clusterRoleOwnerInstallUUID: "some-uuid",
+			Labels: map[string]string{
+				clusterRoleOwnerInstallUUIDLabel: "some-uuid",
 			},
 		},
 	}
-	roleWithNewUUIDAnnotation := &v1.ClusterRole{
+	roleWithNewUUIDLabel := &v1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "default",
-			Annotations: map[string]string{
-				clusterRoleOwnerInstallUUID: "new-uuid",
+			Labels: map[string]string{
+				clusterRoleOwnerInstallUUIDLabel: "new-uuid",
 			},
 		},
 	}
@@ -149,15 +149,15 @@ func TestAdmit(t *testing.T) {
 			allowed: false,
 		},
 		{
-			name: "updating annotations other than uuid annotation allowed",
+			name: "updating labels other than uuid label allowed",
 			args: args{
-				oldRole: roleWithUUIDAnnotation.DeepCopy(),
+				oldRole: roleWithUUIDLabel.DeepCopy(),
 				newRole: &v1.ClusterRole{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "default",
-						Annotations: map[string]string{
-							"new-annotation":            "test-value",
-							clusterRoleOwnerInstallUUID: "some-uuid",
+						Labels: map[string]string{
+							"new-label":                      "test-value",
+							clusterRoleOwnerInstallUUIDLabel: "some-uuid",
 						},
 					},
 				},
@@ -165,41 +165,41 @@ func TestAdmit(t *testing.T) {
 			allowed: true,
 		},
 		{
-			name: "adding uuid annotation allowed",
+			name: "adding uuid label allowed",
 			args: args{
 				oldRole: defaultRole.DeepCopy(),
-				newRole: roleWithNewUUIDAnnotation.DeepCopy(),
+				newRole: roleWithNewUUIDLabel.DeepCopy(),
 			},
 			allowed: true,
 		},
 		{
-			name: "adding uuid annotation to empty annotations map allowed",
+			name: "adding uuid label to empty labels map allowed",
 			args: args{
 				oldRole: emptyRole.DeepCopy(),
-				newRole: roleWithNewUUIDAnnotation.DeepCopy(),
+				newRole: roleWithNewUUIDLabel.DeepCopy(),
 			},
 			allowed: true,
 		},
 		{
-			name: "modifying uuid annotation not allowed",
+			name: "modifying uuid label not allowed",
 			args: args{
-				oldRole: roleWithUUIDAnnotation.DeepCopy(),
-				newRole: roleWithNewUUIDAnnotation.DeepCopy(),
+				oldRole: roleWithUUIDLabel.DeepCopy(),
+				newRole: roleWithNewUUIDLabel.DeepCopy(),
 			},
 			allowed: false,
 		},
 		{
-			name: "removing uuid annotation not allowed",
+			name: "removing uuid label not allowed",
 			args: args{
-				oldRole: roleWithUUIDAnnotation.DeepCopy(),
+				oldRole: roleWithUUIDLabel.DeepCopy(),
 				newRole: defaultRole.DeepCopy(),
 			},
 			allowed: false,
 		},
 		{
-			name: "replacing annotations with empty map not allowed",
+			name: "replacing labels with empty map not allowed (uuid label)",
 			args: args{
-				oldRole: roleWithUUIDAnnotation.DeepCopy(),
+				oldRole: roleWithUUIDLabel.DeepCopy(),
 				newRole: emptyRole.DeepCopy(),
 			},
 			allowed: false,
