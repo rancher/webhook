@@ -34,10 +34,14 @@ func NewValidator(prtb *resolvers.PRTBRuleResolver, crtb *resolvers.CRTBRuleReso
 	defaultResolver k8validation.AuthorizationRuleResolver, roleTemplateResolver *auth.RoleTemplateResolver,
 	clusterCache v3.ClusterCache, projectCache v3.ProjectCache, prtbCache v3.ProjectRoleTemplateBindingCache) *Validator {
 	clusterResolver := resolvers.NewAggregateRuleResolver(defaultResolver, crtb)
+	// CRTBs are indexed by cluster name, so the CRTB resolver still receives the cluster namespace, but the default
+	// resolver must not consider RoleBindings in that namespace.
+	clusterWideResolver := resolvers.NewAggregateRuleResolver(resolvers.NewClusterWideRuleResolver(defaultResolver), crtb)
 	projectResolver := resolvers.NewAggregateRuleResolver(defaultResolver, prtb)
 	return &Validator{
 		admitter: admitter{
 			clusterResolver:      clusterResolver,
+			clusterWideResolver:  clusterWideResolver,
 			projectResolver:      projectResolver,
 			roleTemplateResolver: roleTemplateResolver,
 			clusterCache:         clusterCache,
@@ -74,6 +78,7 @@ func (v *Validator) Admitters() []admission.Admitter {
 
 type admitter struct {
 	clusterResolver      k8validation.AuthorizationRuleResolver
+	clusterWideResolver  k8validation.AuthorizationRuleResolver
 	projectResolver      k8validation.AuthorizationRuleResolver
 	roleTemplateResolver *auth.RoleTemplateResolver
 	clusterCache         v3.ClusterCache
@@ -143,8 +148,9 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	clusterNS, projectNS := clusterAndProjectID(prtb.ProjectName)
 
 	// ClusterScopedRules are granted cluster-wide, so they can only be authorized by the user's
-	// cluster-level permissions. They must not fall back to the project resolver.
-	if err := auth.ConfirmNoEscalation(request, clusterScopedRules, clusterNS, a.clusterResolver); err != nil {
+	// cluster-wide permissions (ClusterRoleBindings and CRTBs). They must not be satisfied by
+	// RoleBindings in the cluster namespace or fall back to the project resolver.
+	if err := auth.ConfirmNoEscalation(request, clusterScopedRules, clusterNS, a.clusterWideResolver); err != nil {
 		return admission.ResponseFailedEscalation(err.Error()), nil
 	}
 

@@ -37,7 +37,7 @@ require (
 	github.com/rancher/jsonpath v0.0.0-20260423141252-c4e0c565a09f
 	github.com/rancher/lasso v0.2.10
 	github.com/rancher/norman v0.10.1
-	github.com/rancher/rancher/pkg/apis v0.0.0-20261007170748-9d0fd908e55e
+	github.com/rancher/rancher/pkg/apis v0.0.0-20261005150612-53f9191a8069
 	github.com/rancher/rancher/pkg/plan v0.0.0-20260428222332-2696373f4152
 	github.com/rancher/wrangler/v3 v3.8.0-rc.2
 	github.com/robfig/cron v1.2.0
@@ -109,11 +109,11 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.70.0 // indirect
 	github.com/prometheus/procfs v0.21.1 // indirect
-	github.com/rancher/aks-operator v1.16.0-rc.2 // indirect
+	github.com/rancher/aks-operator v1.16.0-rc.1 // indirect
 	github.com/rancher/ali-operator v1.16.0-rc.1 // indirect
-	github.com/rancher/eks-operator v1.16.0-rc.2 // indirect
+	github.com/rancher/eks-operator v1.16.0-rc.1 // indirect
 	github.com/rancher/fleet/pkg/apis v0.17.0-alpha.1 // indirect
-	github.com/rancher/gke-operator v1.16.0-rc.2 // indirect
+	github.com/rancher/gke-operator v1.16.0-rc.1 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/spf13/cobra v1.10.2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect

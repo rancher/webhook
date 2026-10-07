@@ -351,6 +351,8 @@ func (p *ProjectRoleTemplateBindingSuite) TestClusterScopedRuleEscalation() {
 	const adminUser = "admin-userid"
 	const clusterWriteUser = "cluster-write-userid"
 	const projectWriteUser = "project-write-userid"
+	const clusterNSWriteUser = "cluster-ns-write-userid"
+	const crtbWriteUser = "crtb-write-userid"
 
 	ruleWriteNodes := p.writeNodeCR.Rules[0]
 
@@ -368,6 +370,19 @@ func (p *ProjectRoleTemplateBindingSuite) TestClusterScopedRuleEscalation() {
 		Context:     "project",
 		Rules:       []rbacv1.PolicyRule{ruleWriteNodes},
 	}
+	// Cluster RoleTemplate granted to crtbWriteUser through a CRTB.
+	clusterWriteRT := &apisv3.RoleTemplate{
+		ObjectMeta:  metav1.ObjectMeta{Name: "cluster-write-role"},
+		DisplayName: "Cluster Write Role",
+		Context:     "cluster",
+		Rules:       []rbacv1.PolicyRule{ruleWriteNodes},
+	}
+	crtbWrite := &apisv3.ClusterRoleTemplateBinding{
+		ObjectMeta:       metav1.ObjectMeta{Namespace: clusterID, Name: "crtb-write"},
+		ClusterName:      clusterID,
+		UserName:         crtbWriteUser,
+		RoleTemplateName: clusterWriteRT.Name,
+	}
 
 	// Role granting write nodes only within the project namespace.
 	projectWriteRole := &rbacv1.Role{
@@ -380,6 +395,12 @@ func (p *ProjectRoleTemplateBindingSuite) TestClusterScopedRuleEscalation() {
 			ObjectMeta: metav1.ObjectMeta{Namespace: projectID},
 			Subjects:   []rbacv1.Subject{{Kind: rbacv1.UserKind, Name: projectWriteUser}},
 			RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: projectWriteRole.Name},
+		},
+		// Namespaced binding in the cluster namespace, which does not grant cluster-wide permissions.
+		{
+			ObjectMeta: metav1.ObjectMeta{Namespace: clusterID},
+			Subjects:   []rbacv1.Subject{{Kind: rbacv1.UserKind, Name: clusterNSWriteUser}},
+			RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: p.writeNodeCR.Name},
 		},
 	}
 	clusterRoles := []*rbacv1.ClusterRole{p.adminCR, p.writeNodeCR}
@@ -399,6 +420,7 @@ func (p *ProjectRoleTemplateBindingSuite) TestClusterScopedRuleEscalation() {
 	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 	roleTemplateCache.EXPECT().Get(clusterScopedRT.Name).Return(clusterScopedRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().Get(projectScopedRT.Name).Return(projectScopedRT, nil).AnyTimes()
+	roleTemplateCache.EXPECT().Get(clusterWriteRT.Name).Return(clusterWriteRT, nil).AnyTimes()
 	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
 
@@ -409,6 +431,7 @@ func (p *ProjectRoleTemplateBindingSuite) TestClusterScopedRuleEscalation() {
 
 	crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
 	crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
+	crtbCache.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(crtbWriteUser, clusterID)).Return([]*apisv3.ClusterRoleTemplateBinding{crtbWrite}, nil).AnyTimes()
 	crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 
 	crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
@@ -459,6 +482,27 @@ func (p *ProjectRoleTemplateBindingSuite) TestClusterScopedRuleEscalation() {
 			name:             "user with project-level permissions can grant project-scoped rules",
 			username:         projectWriteUser,
 			roleTemplateName: projectScopedRT.Name,
+			allowed:          true,
+		},
+		// user only holds the permission through a RoleBinding in the cluster namespace, which is not cluster-wide {FAIL}.
+		{
+			name:             "user with only cluster namespace permissions cannot grant cluster-scoped rules",
+			username:         clusterNSWriteUser,
+			roleTemplateName: clusterScopedRT.Name,
+			allowed:          false,
+		},
+		// project-scoped rules can still be authorized by a RoleBinding in the cluster namespace {PASS}.
+		{
+			name:             "user with cluster namespace permissions can grant project-scoped rules",
+			username:         clusterNSWriteUser,
+			roleTemplateName: projectScopedRT.Name,
+			allowed:          true,
+		},
+		// user holds the permission through a CRTB for the cluster {PASS}.
+		{
+			name:             "user with CRTB permissions can grant cluster-scoped rules",
+			username:         crtbWriteUser,
+			roleTemplateName: clusterScopedRT.Name,
 			allowed:          true,
 		},
 	}
