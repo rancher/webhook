@@ -193,6 +193,40 @@ and the secret has roles or role bindings dependent on it.
 For Secrets of type `rke.cattle.io/machine-plan`, if `data.plan` is present, its value is parsed using the shared plan schema from `pkg/plan`.
 If the value is not valid JSON or does not conform to the plan schema, the request is rejected.
 
+#### On update
+
+For Secrets of type `rke.cattle.io/machine-plan`, the labels tying the secret to its cluster and its machine can't be changed or removed once set:
+
+- `plan.cattle.io/cluster-group`, `plan.cattle.io/cluster-kind`, `plan.cattle.io/cluster-name`
+- `plan.cattle.io/machine-group`, `plan.cattle.io/machine-kind`, `plan.cattle.io/machine-name`
+- `rke.cattle.io/cluster-name`
+
+Each label is compared with the same key on the old and new secret. A label the old secret doesn't have may be added, which is how the controllers that register a machine stamp them. Changing one, including to an empty value, or removing one, is rejected (400 Bad Request). The cluster's beacon is found through `plan.cattle.io/cluster-name`, so changing the cluster labels would let a writer point a plan at a beacon it holds; changing the machine labels would detach a plan from its machine.
+
+#### Machine-plan writers
+
+For Secrets of type `rke.cattle.io/machine-plan`, on create and update, a write that assigns, retries, cancels or pauses the plan must come from whoever holds the cluster's beacon. That keeps an operation that has been canceled, or has lost the beacon, from writing a plan once the next operation holds it.
+
+A write is checked only if it changes, from the old secret (or from nothing, on create), any of:
+
+- data: `plan`, `max-failures`, `failure-threshold`, or `plan-state` when it becomes `pending`;
+- annotations: `plan.cattle.io/canceled`, `plan.cattle.io/paused`, `plan.cattle.io/writer`, `plan.cattle.io/attempt`.
+
+Everything else, which is the agent's feedback (plan-state progress, revisions, checkpoints, probe statuses, outputs) and other controllers' bookkeeping, is allowed without a lookup, since it keeps being written after the writer has released the beacon.
+
+For a checked write:
+
+1. The beacon is `(namespace, labels["plan.cattle.io/cluster-name"])` of the secret, the old one on update. If the label isn't set, the write is allowed.
+2. The beacon is read from the webhook's cache. If it doesn't exist, the write is allowed. If it can't be read, the request fails with a server error for the writer to retry.
+3. If the new secret has no `plan.cattle.io/writer` annotation, the write is allowed. This is for one release, so the webhook can run alongside a Rancher that doesn't name its writers yet.
+4. The write is allowed if the writer is the beacon's owner, or the delegate the owner last handed the beacon to. Otherwise, including when nobody holds the beacon, it is rejected (403 Forbidden):
+
+   ```text
+   machine-plan fleet-default/m-plan written by <writer>, but the beacon fleet-default/c is held by <owner>
+   ```
+
+The cache can trail the beacon by a moment after it changes hands, so the new holder's first writes can be rejected; writers retry.
+
 ### Mutation Checks
 
 #### On create
@@ -861,6 +895,62 @@ When a UserAttribute is updated, the following checks take place:
 - If set, `lastLogin` must be a valid date time according to RFC3339 (e.g. `2023-11-29T00:00:00Z`).
 - If set, `disableAfter` must be zero or a positive duration (e.g. `240h`).
 - If set, `deleteAfter` must be zero or a positive duration (e.g. `240h`).
+
+# operation.cattle.io/v1alpha1
+
+## Operations
+
+### Validation Checks
+
+The operation resources share one set of rules, since every operation kind has the same `spec` and `status` fields for them. Each resource is served by its own webhook:
+
+- `operation.cattle.io/v1alpha1/etcdsnapshotsaves`
+- `operation.cattle.io/v1alpha1/etcdsnapshotrestores`
+- `operation.cattle.io/v1alpha1/encryptionkeyrotations`
+- `operation.cattle.io/v1alpha1/certificaterotations`
+
+Scope: Namespaced. Operations: CREATE, UPDATE. Deletes are not validated.
+
+The CRDs' own CEL rules require `spec.clusterRef` to name an `apiVersion`, `kind` and `name`, keep it from changing once set, latch `spec.cancel`, and keep `spec.cancel` from being set on a terminal operation. The webhook covers what CEL can't, because it needs a request type or other objects to decide.
+
+#### Canceling on create
+
+On create, `spec.cancel` can't be set. CEL can't tell a create from an update, so this is checked here. The request is rejected (400 Bad Request).
+
+#### Access to the cluster
+
+On create, and on an update that changes the `spec` (for example, setting `spec.cancel`), the requesting user must have `update` on the cluster `spec.clusterRef` names. Operations change the cluster, so being able to read it isn't enough. The webhook resolves `spec.clusterRef`'s `apiVersion` and `kind` to a resource and performs a SubjectAccessReview: verb `update`, that resource, and the cluster's name, along with its namespace if the resource is namespaced.
+
+- If `spec.clusterRef` doesn't resolve to a resource the cluster serves, the request is rejected (400 Bad Request), since the permission can't be established.
+- If it resolves to a namespaced resource but doesn't name a namespace, the request is rejected (400 Bad Request).
+- If the review is denied, the request is rejected (403 Forbidden).
+
+Updates that leave the `spec` alone (finalizers, labels) aren't checked, so an operation whose cluster can no longer be resolved can still finish deleting.
+
+#### One operation at a time
+
+On create, the request is rejected (400 Bad Request) if another operation on the same cluster, of any kind, is still in progress. An operation is in progress until it has terminated (`status.terminatedAt` is set), which happens after it reaches a terminal phase and its controller has finished with it. Users wait for an operation to finish, or cancel it (`spec.cancel: true`), before creating the next one.
+
+Two references name the same cluster when their API group, kind and name match and, where both name one, their namespace does too. An operation on a cluster-scoped cluster can be in any namespace.
+
+The operations are read from a cache, so two creates in quick succession can both be admitted. The operation controllers then reject whichever one finds the cluster's beacon already held by the other. If the cache hasn't synced yet, which can happen just after the webhook starts, the request fails with a server error for the client to retry, rather than being admitted against an empty cache.
+
+#### The cluster's operation whitelist
+
+On create, the webhook reads the object `spec.clusterRef` names, and checks its `operation.cattle.io/whitelisted` annotation. An operation stopped after pausing the cluster (its point of no return) leaves the cluster whitelisted for `etcdsnapshotrestores.operation.cattle.io`, since only an etcd snapshot restore can repair it from there.
+
+- The annotation's value is a comma-separated list of operation resources, each named `<plural>.<group>`. If it is present with at least one entry, the request is rejected (400 Bad Request) unless the resource being created is one of them:
+
+  ```text
+  cluster fleet-default/c only permits etcdsnapshotrestores.operation.cattle.io: an earlier operation was stopped after pausing it, and the cluster requires an etcd snapshot restore
+  ```
+
+- Without the annotation, or with an empty one, any operation may be created.
+- If the object doesn't exist, the request is rejected (400 Bad Request), since an operation on it could never run. If it can't be read for any other reason, the request fails with a server error for the client to retry.
+
+An operation in progress on the cluster is reported first, since it may be the operation that added the whitelist. Updates aren't checked, so an operation running on a whitelisted cluster can always be canceled. The operation controllers check the whitelist again before they change anything, so an operation admitted on a stale read is still turned away.
+
+A succeeded restore removes the annotation. An administrator who has repaired the cluster by other means can remove it by hand; doing so doesn't unpause the cluster.
 
 # provisioning.cattle.io/v1
 
