@@ -16,6 +16,7 @@ import (
 	"github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1/snapshotutil"
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/webhook/pkg/admission"
+	"github.com/rancher/webhook/pkg/auth"
 	"github.com/rancher/webhook/pkg/clients"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	provcontrollers "github.com/rancher/webhook/pkg/generated/controllers/provisioning.cattle.io/v1"
@@ -33,6 +34,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/apiserver/pkg/authentication/user"
+	"k8s.io/apiserver/pkg/authorization/authorizer"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/utils/trace"
 )
@@ -72,6 +75,7 @@ func NewProvisioningClusterValidator(client *clients.Clients) *ProvisioningClust
 	return &ProvisioningClusterValidator{
 		admitter: provisioningAdmitter{
 			sar:               client.K8s.AuthorizationV1().SubjectAccessReviews(),
+			sourceAuthorizer:  client.Authorizer,
 			mgmtClusterClient: client.Management.Cluster(),
 			provClusterCache:  client.Provisioning.Cluster().Cache(),
 			secretClient:      client.Core.Secret(),
@@ -110,6 +114,7 @@ func (p *ProvisioningClusterValidator) Admitters() []admission.Admitter {
 
 type provisioningAdmitter struct {
 	sar               authorizationv1.SubjectAccessReviewInterface
+	sourceAuthorizer  authorizer.Authorizer
 	mgmtClusterClient v3.ClusterClient
 	provClusterCache  provcontrollers.ClusterCache
 	secretClient      corev1controller.SecretController
@@ -412,26 +417,24 @@ func (p *provisioningAdmitter) validateMachineSelectorFilesAccess(request *admis
 		if !fromChangedEntry && !hasSelector {
 			continue
 		}
-		review, err := p.sar.Create(request.Context, &authv1.SubjectAccessReview{
-			Spec: authv1.SubjectAccessReviewSpec{
-				ResourceAttributes: &authv1.ResourceAttributes{
-					Verb:      "get",
-					Version:   "v1",
-					Resource:  source.resource,
-					Group:     "",
-					Name:      source.name,
-					Namespace: newCluster.Namespace, // The planner only reads sources from the cluster's namespace.
-				},
-				User:   request.UserInfo.Username,
-				Groups: request.UserInfo.Groups,
-				Extra:  common.ConvertAuthnExtras(request.UserInfo.Extra),
+		decision, _, err := p.sourceAuthorizer.Authorize(request.Context, authorizer.AttributesRecord{
+			User: &user.DefaultInfo{
+				Name:   request.UserInfo.Username,
 				UID:    request.UserInfo.UID,
+				Groups: request.UserInfo.Groups,
+				Extra:  auth.ToExtraString(request.UserInfo.Extra),
 			},
-		}, metav1.CreateOptions{})
+			Verb:            "get",
+			APIVersion:      "v1",
+			Resource:        source.resource,
+			Name:            source.name,
+			Namespace:       newCluster.Namespace, // The planner only reads sources from the cluster's namespace.
+			ResourceRequest: true,
+		})
 		if err != nil {
 			return err
 		}
-		if review.Status.Allowed {
+		if decision == authorizer.DecisionAllow {
 			continue
 		}
 		message := fmt.Sprintf("user %q does not have GET access to %s %s/%s referenced by machineSelectorFiles",

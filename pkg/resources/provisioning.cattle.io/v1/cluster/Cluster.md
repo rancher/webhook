@@ -52,6 +52,8 @@ Prevent the creation of objects if the requesting user does not have `get` permi
 referenced by `spec.rkeConfig.machineSelectorFiles` in the cluster's namespace. These checks also apply to
 server-side dry-run requests.
 
+Access check results are cached for up to 10 seconds per user identity and source.
+
 The generated Pod Security Admission Configuration Template (PSACT) file entry is exempt when
 `spec.defaultPodSecurityAdmissionConfigurationTemplateName` is set and the entire entry matches the generated
 entry for this cluster, ignoring only hashes. A matching Secret name alone does not qualify.

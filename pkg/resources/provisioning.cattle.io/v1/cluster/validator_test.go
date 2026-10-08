@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/webhook/pkg/admission"
+	"github.com/rancher/webhook/pkg/clients"
 	"github.com/rancher/webhook/pkg/resources/common"
 	"github.com/rancher/wrangler/v3/pkg/generic/fake"
 	"github.com/stretchr/testify/assert"
@@ -32,9 +34,45 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/apiserver/pkg/authorization/authorizer"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
+	"k8s.io/client-go/rest"
+	restfake "k8s.io/client-go/rest/fake"
 	k8stesting "k8s.io/client-go/testing"
 )
+
+func newTestSourceAuthorizer(t *testing.T, client authorizationv1.AuthorizationV1Interface) authorizer.Authorizer {
+	t.Helper()
+	// The authorizer uses RESTClient(), which k8sfake leaves empty. Forward REST calls to its reactors.
+	cfg := &rest.Config{
+		Host: "https://sar-test.invalid",
+		Transport: restfake.CreateHTTPClient(func(request *http.Request) (*http.Response, error) {
+			if request.Method != http.MethodPost || request.URL.Path != "/apis/authorization.k8s.io/v1/subjectaccessreviews" {
+				return nil, fmt.Errorf("unexpected request: %s %s", request.Method, request.URL.Path)
+			}
+			review := &authv1.SubjectAccessReview{}
+			if err := json.NewDecoder(request.Body).Decode(review); err != nil {
+				return nil, err
+			}
+			result, err := client.SubjectAccessReviews().Create(request.Context(), review, metav1.CreateOptions{})
+			if err != nil {
+				// Reactor errors reach the authorizer as transport errors, which still unwrap to the API error.
+				return nil, err
+			}
+			body, err := json.Marshal(result)
+			if err != nil {
+				return nil, err
+			}
+			return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"application/json"}},
+				Body: io.NopCloser(bytes.NewReader(body))}, nil
+		}).Transport,
+	}
+	// Use the production constructor and settings, without informer watches. Each case gets its own cache.
+	sharedClients, err := clients.NewWithOptions(context.Background(), cfg, &clients.Options{StartCache: false})
+	require.NoError(t, err)
+	return sharedClients.Authorizer
+}
 
 func TestAdmitMachineSelectorFilesAccess(t *testing.T) {
 	file := func(secret, configmap string) rkev1.RKEProvisioningFiles {
@@ -446,7 +484,7 @@ func TestAdmitMachineSelectorFilesAccess(t *testing.T) {
 					}
 					return &k8sv1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, Annotations: annotations}}, nil
 				}).AnyTimes()
-			p := provisioningAdmitter{sar: client.AuthorizationV1().SubjectAccessReviews(), mgmtClusterClient: mgmtClient,
+			p := provisioningAdmitter{sourceAuthorizer: newTestSourceAuthorizer(t, client.AuthorizationV1()), mgmtClusterClient: mgmtClient,
 				secretCache: secretCache, secretClient: secretClient, configMapClient: configMapClient}
 			response, err := p.Admit(request)
 			// Read and SAR failures return errors; a completed SAR denying access returns a Forbidden response.
@@ -492,6 +530,119 @@ func TestAdmitMachineSelectorFilesAccess(t *testing.T) {
 			}
 			assert.Equal(t, tt.wantSources, sources)
 			assert.Equal(t, tt.wantReads, reads)
+		})
+	}
+}
+
+func TestAdmitMachineSelectorFilesAccessCache(t *testing.T) {
+	sarError := errors.New("SAR unavailable")
+	allowed := authv1.SubjectAccessReviewStatus{Allowed: true}
+	denied := authv1.SubjectAccessReviewStatus{Denied: true}
+	noOpinion := authv1.SubjectAccessReviewStatus{} // Neither allowed nor denied.
+	tests := []struct {
+		name string
+		// statuses holds the SAR response for each call, in order.
+		statuses    []authv1.SubjectAccessReviewStatus
+		changeUser  func(*authenticationv1.UserInfo)
+		wantAllowed []bool
+		wantCalls   int
+		wantError   error
+	}{
+		{name: "allowed result reused", statuses: []authv1.SubjectAccessReviewStatus{allowed}, wantAllowed: []bool{true, true}, wantCalls: 1},
+		{name: "denied result reused", statuses: []authv1.SubjectAccessReviewStatus{denied}, wantAllowed: []bool{false, false}, wantCalls: 1},
+		{name: "no opinion rejects both requests", statuses: []authv1.SubjectAccessReviewStatus{noOpinion}, wantAllowed: []bool{false, false}, wantCalls: 1},
+		{name: "SAR error is not cached", wantError: sarError, wantCalls: 2},
+		{name: "transient error is not retried or cached", wantError: apierrors.NewInternalError(sarError), wantCalls: 2},
+		{
+			name:        "different user cannot reuse allowed result",
+			statuses:    []authv1.SubjectAccessReviewStatus{allowed, denied},
+			changeUser:  func(info *authenticationv1.UserInfo) { info.Username = "bob" },
+			wantAllowed: []bool{true, false}, wantCalls: 2,
+		},
+		{
+			name:        "different UID cannot reuse allowed result",
+			statuses:    []authv1.SubjectAccessReviewStatus{allowed, denied},
+			changeUser:  func(info *authenticationv1.UserInfo) { info.UID = "other-uid" },
+			wantAllowed: []bool{true, false}, wantCalls: 2,
+		},
+		{
+			name:        "different groups cannot reuse allowed result",
+			statuses:    []authv1.SubjectAccessReviewStatus{allowed, denied},
+			changeUser:  func(info *authenticationv1.UserInfo) { info.Groups = []string{"other-group"} },
+			wantAllowed: []bool{true, false}, wantCalls: 2,
+		},
+		{
+			name:     "different extras cannot reuse allowed result",
+			statuses: []authv1.SubjectAccessReviewStatus{allowed, denied},
+			changeUser: func(info *authenticationv1.UserInfo) {
+				info.Extra["scope"] = authenticationv1.ExtraValue{"other-scope"}
+			},
+			wantAllowed: []bool{true, false}, wantCalls: 2,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := k8sfake.NewSimpleClientset()
+			calls := 0
+			client.PrependReactor("create", "subjectaccessreviews", func(_ k8stesting.Action) (bool, runtime.Object, error) {
+				calls++
+				if tt.wantError != nil {
+					return true, nil, tt.wantError
+				}
+				if calls > len(tt.statuses) {
+					return true, nil, fmt.Errorf("unexpected SAR call %d", calls)
+				}
+				return true, &authv1.SubjectAccessReview{Status: tt.statuses[calls-1]}, nil
+			})
+			ctrl := gomock.NewController(t)
+			secretCache := fake.NewMockCacheInterface[*k8sv1.Secret](ctrl)
+			// No PSACT is selected; its validator must find no generated Secret.
+			secretCache.EXPECT().Get("fleet-default", "test-cluster-admission-configuration-psact").Return(nil,
+				apierrors.NewNotFound(k8sv1.Resource("secrets"), "test-cluster-admission-configuration-psact")).AnyTimes()
+			p := provisioningAdmitter{sourceAuthorizer: newTestSourceAuthorizer(t, client.AuthorizationV1()), secretCache: secretCache}
+			oldCluster := &v1.Cluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "fleet-default"},
+				Spec: v1.ClusterSpec{KubernetesVersion: "v1.34.1+rke2r1", RKEConfig: &v1.RKEConfig{
+					ClusterConfiguration: rkev1.ClusterConfiguration{MachineSelectorFiles: []rkev1.RKEProvisioningFiles{{
+						FileSources: []rkev1.ProvisioningFileSource{{Secret: rkev1.K8sObjectFileSource{
+							Name: "source", Items: []rkev1.KeyToPath{{Key: "config", Path: "/etc/config"}},
+						}}},
+					}}},
+				}},
+			}
+			// Both admissions change the file path, so both must perform authorization even with unchanged labels.
+			newCluster := oldCluster.DeepCopy()
+			newCluster.Spec.RKEConfig.MachineSelectorFiles[0].FileSources[0].Secret.Items[0].Path = "/other"
+			oldRaw, err := json.Marshal(oldCluster)
+			require.NoError(t, err)
+			raw, err := json.Marshal(newCluster)
+			require.NoError(t, err)
+			request := &admission.Request{
+				Context: context.Background(),
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Operation: admissionv1.Update, Namespace: newCluster.Namespace,
+					UserInfo: authenticationv1.UserInfo{Username: "alice", UID: "alice-uid", Groups: []string{"developers"},
+						Extra: map[string]authenticationv1.ExtraValue{"scope": {"clusters"}}},
+					Object: runtime.RawExtension{Raw: raw}, OldObject: runtime.RawExtension{Raw: oldRaw},
+				},
+			}
+			for i := range 2 {
+				if i == 1 && tt.changeUser != nil {
+					tt.changeUser(&request.UserInfo)
+				}
+				response, err := p.Admit(request)
+				if tt.wantError != nil {
+					require.ErrorIs(t, err, tt.wantError)
+					require.False(t, response.Allowed)
+					continue
+				}
+				require.NoError(t, err)
+				require.Equal(t, tt.wantAllowed[i], response.Allowed)
+				if !response.Allowed {
+					require.EqualValues(t, http.StatusForbidden, response.Result.Code)
+				}
+			}
+			assert.Equal(t, tt.wantCalls, calls)
 		})
 	}
 }
@@ -549,7 +700,7 @@ func TestAdmitMachineSelectorFilesAccessPSACT(t *testing.T) {
 		}}, nil
 	})
 	mutator := ProvisioningClusterMutator{secret: secretClient, psact: psactCache}
-	validator := provisioningAdmitter{sar: client.AuthorizationV1().SubjectAccessReviews(),
+	validator := provisioningAdmitter{sourceAuthorizer: newTestSourceAuthorizer(t, client.AuthorizationV1()),
 		mgmtClusterClient: mgmtClient, secretCache: secretCache, secretClient: secretClient, psactCache: psactCache}
 	cluster := &v1.Cluster{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "fleet-default"},
@@ -583,9 +734,10 @@ func TestAdmitMachineSelectorFilesAccessPSACT(t *testing.T) {
 			wantFiles: 2, wantSources: []string{"secrets/allowed-selector"},
 		},
 		{
-			name:      "label change with unchanged PSACT and ordinary selector source",
-			change:    func() { cluster.Labels["test"] = "test" },
-			wantFiles: 2, wantReads: []string{"secrets/allowed-selector"}, wantSources: []string{"secrets/allowed-selector"},
+			name:   "label change with unchanged PSACT and ordinary selector source",
+			change: func() { cluster.Labels["test"] = "test" },
+			// The annotation is read again, but the preceding step's allowed SAR is cached.
+			wantFiles: 2, wantReads: []string{"secrets/allowed-selector"},
 		},
 	}
 	for _, step := range steps {
