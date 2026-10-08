@@ -16,7 +16,6 @@ import (
 	"github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1/snapshotutil"
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/webhook/pkg/admission"
-	"github.com/rancher/webhook/pkg/auth"
 	"github.com/rancher/webhook/pkg/clients"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	provcontrollers "github.com/rancher/webhook/pkg/generated/controllers/provisioning.cattle.io/v1"
@@ -34,7 +33,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/utils/trace"
@@ -418,12 +416,7 @@ func (p *provisioningAdmitter) validateMachineSelectorFilesAccess(request *admis
 			continue
 		}
 		decision, _, err := p.sourceAuthorizer.Authorize(request.Context, authorizer.AttributesRecord{
-			User: &user.DefaultInfo{
-				Name:   request.UserInfo.Username,
-				UID:    request.UserInfo.UID,
-				Groups: request.UserInfo.Groups,
-				Extra:  auth.ToExtraString(request.UserInfo.Extra),
-			},
+			User:            request.User(),
 			Verb:            "get",
 			APIVersion:      "v1",
 			Resource:        source.resource,
