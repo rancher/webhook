@@ -33,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/apiserver/pkg/authorization/authorizer"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/utils/trace"
 )
@@ -50,6 +51,9 @@ const (
 	// mgmtClusterNameIndex is the name of the provisioning cluster cache index. It maps a management cluster name
 	// to the provisioning clusters that request it in mgmtClusterNameAnn or use it in status.clusterName.
 	mgmtClusterNameIndex = "mgmt-cluster-name"
+
+	// authorizedObjectSelectorAnnotation mirrors capr.AuthorizedObjectSelectorAnnotation in rancher/rancher.
+	authorizedObjectSelectorAnnotation = "rke.cattle.io/object-authorized-for-clusters-selector"
 )
 
 var (
@@ -69,9 +73,11 @@ func NewProvisioningClusterValidator(client *clients.Clients) *ProvisioningClust
 	return &ProvisioningClusterValidator{
 		admitter: provisioningAdmitter{
 			sar:               client.K8s.AuthorizationV1().SubjectAccessReviews(),
+			sourceAuthorizer:  client.Authorizer,
 			mgmtClusterClient: client.Management.Cluster(),
 			provClusterCache:  client.Provisioning.Cluster().Cache(),
 			secretClient:      client.Core.Secret(),
+			configMapClient:   client.Core.ConfigMap(),
 			secretCache:       client.Core.Secret().Cache(),
 			psactCache:        client.Management.PodSecurityAdmissionConfigurationTemplate().Cache(),
 			featureCache:      client.Management.Feature().Cache(),
@@ -106,9 +112,11 @@ func (p *ProvisioningClusterValidator) Admitters() []admission.Admitter {
 
 type provisioningAdmitter struct {
 	sar               authorizationv1.SubjectAccessReviewInterface
+	sourceAuthorizer  authorizer.Authorizer
 	mgmtClusterClient v3.ClusterClient
 	provClusterCache  provcontrollers.ClusterCache
 	secretClient      corev1controller.SecretController
+	configMapClient   corev1controller.ConfigMapController
 	secretCache       corev1controller.SecretCache
 	psactCache        v3.PodSecurityAdmissionConfigurationTemplateCache
 	featureCache      v3.FeatureCache
@@ -171,6 +179,10 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 		}
 
 		if err := p.validateCloudCredentialAccess(request, response, oldCluster, cluster); err != nil || response.Result != nil {
+			return response, err
+		}
+
+		if err := p.validateMachineSelectorFilesAccess(request, response, oldCluster, cluster); err != nil || response.Result != nil {
 			return response, err
 		}
 
@@ -363,6 +375,164 @@ func (p *provisioningAdmitter) validateCloudCredentialAccess(request *admission.
 		Code:    http.StatusUnauthorized,
 	}
 	return nil
+}
+
+// machineSelectorFileSource identifies a source by resource type and name.
+// Adding fields changes map-key equality and deduplication.
+type machineSelectorFileSource struct {
+	resource string
+	name     string
+}
+
+// validateMachineSelectorFilesAccess requires get permission for new or changed entries and,
+// when cluster labels change, unchanged sources carrying the cluster selector annotation.
+func (p *provisioningAdmitter) validateMachineSelectorFilesAccess(request *admission.Request, response *admissionv1.AdmissionResponse, oldCluster, newCluster *v1.Cluster) error {
+	changed, unchanged := splitMachineSelectorFiles(oldCluster, newCluster)
+	labelsChanged := request.Operation == admissionv1.Update &&
+		!equality.Semantic.DeepEqual(oldCluster.Labels, newCluster.Labels)
+	seen := make(map[machineSelectorFileSource]struct{})
+	// Changed sources come first so deduplication preserves their required check.
+	sources := appendDistinctSources(nil, seen, changed)
+	numChanged := len(sources)
+	// Label changes also require examining unchanged sources for the selector annotation.
+	if labelsChanged {
+		sources = appendDistinctSources(sources, seen, unchanged)
+	}
+	// Check sources from new or changed entries directly with SAR. On label changes,
+	// read unchanged sources and check only those with the selector annotation.
+	// Stop at the first error or denial.
+	for i, source := range sources {
+		fromChangedEntry := i < numChanged
+		hasSelector := false
+		if labelsChanged && !fromChangedEntry {
+			var err error
+			hasSelector, err = p.sourceHasClusterSelector(newCluster.Namespace, source)
+			if err != nil {
+				return err
+			}
+		}
+		// Keep unchanged sources without the selector annotation usable without a new access check.
+		if !fromChangedEntry && !hasSelector {
+			continue
+		}
+		decision, _, err := p.sourceAuthorizer.Authorize(request.Context, authorizer.AttributesRecord{
+			User:            request.User(),
+			Verb:            "get",
+			APIVersion:      "v1",
+			Resource:        source.resource,
+			Name:            source.name,
+			Namespace:       newCluster.Namespace, // The planner only reads sources from the cluster's namespace.
+			ResourceRequest: true,
+		})
+		if err != nil {
+			return err
+		}
+		if decision == authorizer.DecisionAllow {
+			continue
+		}
+		message := fmt.Sprintf("user %q does not have GET access to %s %s/%s referenced by machineSelectorFiles",
+			request.UserInfo.Username, source.resource, newCluster.Namespace, source.name)
+		if !fromChangedEntry && hasSelector {
+			message += "; changing cluster labels requires GET access to sources shared by cluster selector"
+		}
+		response.Result = &metav1.Status{
+			Status:  failureStatus,
+			Message: message,
+			Reason:  metav1.StatusReasonForbidden,
+			Code:    http.StatusForbidden,
+		}
+		return nil
+	}
+	return nil
+}
+
+// splitMachineSelectorFiles compares whole entries, including hashes, regardless of list position.
+// On create every entry is changed; the generated PSACT entry is excluded from both lists.
+func splitMachineSelectorFiles(oldCluster, newCluster *v1.Cluster) (changed, unchanged []rkev1.RKEProvisioningFiles) {
+	if newCluster.Spec.RKEConfig == nil || len(newCluster.Spec.RKEConfig.MachineSelectorFiles) == 0 {
+		return nil, nil
+	}
+
+	var oldFiles []rkev1.RKEProvisioningFiles
+	if oldCluster.Spec.RKEConfig != nil {
+		oldFiles = oldCluster.Spec.RKEConfig.MachineSelectorFiles
+	}
+
+	for _, file := range newCluster.Spec.RKEConfig.MachineSelectorFiles {
+		if isPSACTMachineSelectorFile(newCluster, &file) {
+			continue
+		}
+		if slices.ContainsFunc(oldFiles, func(oldFile rkev1.RKEProvisioningFiles) bool {
+			return equality.Semantic.DeepEqual(oldFile, file)
+		}) {
+			unchanged = append(unchanged, file)
+		} else {
+			changed = append(changed, file)
+		}
+	}
+	return changed, unchanged
+}
+
+// appendDistinctSources preserves first-seen order and deduplicates by resource type and name.
+func appendDistinctSources(sources []machineSelectorFileSource, seen map[machineSelectorFileSource]struct{}, files []rkev1.RKEProvisioningFiles) []machineSelectorFileSource {
+	for _, file := range files {
+		for _, source := range file.FileSources {
+			refs := []machineSelectorFileSource{
+				{resource: "secrets", name: source.Secret.Name},
+				{resource: "configmaps", name: source.ConfigMap.Name},
+			}
+			for _, ref := range refs {
+				if ref.name == "" {
+					continue
+				}
+				if _, ok := seen[ref]; ok {
+					continue
+				}
+				seen[ref] = struct{}{}
+				sources = append(sources, ref)
+			}
+		}
+	}
+	return sources
+}
+
+// sourceHasClusterSelector reports whether the source has the cluster selector annotation.
+// A missing source returns false without an error.
+func (p *provisioningAdmitter) sourceHasClusterSelector(namespace string, source machineSelectorFileSource) (bool, error) {
+	var object metav1.Object
+	var err error
+	// Read directly so stale cached annotations cannot cause an access check to be skipped.
+	switch source.resource {
+	case "secrets":
+		object, err = p.secretClient.Get(namespace, source.name, metav1.GetOptions{})
+	case "configmaps":
+		object, err = p.configMapClient.Get(namespace, source.name, metav1.GetOptions{})
+	default:
+		return false, fmt.Errorf("unsupported machineSelectorFiles resource %q", source.resource)
+	}
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to read %s %s/%s: %w", source.resource, namespace, source.name, err)
+	}
+	_, present := object.GetAnnotations()[authorizedObjectSelectorAnnotation]
+	return present, nil
+}
+
+// isPSACTMachineSelectorFile matches the complete generated PSACT entry, ignoring
+// only hashes. A matching secret name alone must not exempt user-defined files.
+// The mutator manages this entry and its Secret, so users do not need read access to it.
+func isPSACTMachineSelectorFile(cluster *v1.Cluster, file *rkev1.RKEProvisioningFiles) bool {
+	if cluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName == "" {
+		return false
+	}
+
+	expected := machineSelectorFileForPSA(fmt.Sprintf(secretName, cluster.Name),
+		fmt.Sprintf(mountPath, getRuntime(cluster.Spec.KubernetesVersion)), "")
+	file = file.DeepCopy()
+	cleanupHash(file)
+	return equality.Semantic.DeepEqual(expected, file)
 }
 
 // getCloudCredentialSecretInfo returns the namespace and name of the secret based off the old cloud cred or new style

@@ -2,6 +2,7 @@ package clients
 
 import (
 	"context"
+	"time"
 
 	"github.com/rancher/webhook/pkg/auth"
 	"github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io"
@@ -13,13 +14,25 @@ import (
 	"github.com/rancher/wrangler/v3/pkg/clients"
 	"github.com/rancher/wrangler/v3/pkg/schemes"
 	v1 "k8s.io/api/admissionregistration/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apiserver/pkg/authorization/authorizer"
+	"k8s.io/apiserver/pkg/authorization/authorizerfactory"
+	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/kubernetes/pkg/registry/rbac/validation"
+)
+
+const (
+	// Ten seconds reduces repeated SAR calls while keeping the delay after
+	// permission grants or revocations short.
+	sarAllowCacheTTL = 10 * time.Second
+	sarDenyCacheTTL  = 10 * time.Second
 )
 
 type Clients struct {
 	clients.Clients
 
+	Authorizer             authorizer.Authorizer
 	MultiClusterManagement bool
 	Management             managementv3.Interface
 	Provisioning           provv1.Interface
@@ -48,6 +61,12 @@ func New(ctx context.Context, rest *rest.Config, mcmEnabled bool) (*Clients, err
 
 func NewWithOptions(ctx context.Context, rest *rest.Config, opts *Options) (*Clients, error) {
 	clients, err := clients.NewFromConfig(rest, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create one authorizer to share cached SAR decisions across validators and admission requests.
+	sarAuthorizer, err := newSARAuthorizer(clients.K8s.AuthorizationV1())
 	if err != nil {
 		return nil, err
 	}
@@ -91,6 +110,7 @@ func NewWithOptions(ctx context.Context, rest *rest.Config, opts *Options) (*Cli
 
 	result := &Clients{
 		Clients:                *clients,
+		Authorizer:             sarAuthorizer,
 		Management:             mgmt.Management().V3(),
 		Provisioning:           prov.Provisioning().V1(),
 		RKE:                    rke.Rke().V1(),
@@ -104,4 +124,15 @@ func NewWithOptions(ctx context.Context, rest *rest.Config, opts *Options) (*Cli
 	}
 
 	return result, nil
+}
+
+// newSARAuthorizer caches allowed and denied decisions for the full SubjectAccessReview spec.
+func newSARAuthorizer(client authorizationv1.AuthorizationV1Interface) (authorizer.Authorizer, error) {
+	return authorizerfactory.DelegatingAuthorizerConfig{
+		SubjectAccessReviewClient: client,
+		AllowCacheTTL:             sarAllowCacheTTL,
+		DenyCacheTTL:              sarDenyCacheTTL,
+		// Use one attempt so retries do not consume the admission webhook's timeout.
+		WebhookRetryBackoff: &wait.Backoff{Steps: 1},
+	}.New()
 }

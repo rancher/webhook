@@ -10,3 +10,4 @@
 *~
 .opencode
 kubeconfig.yaml
+/vendor

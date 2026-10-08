@@ -14,9 +14,11 @@ import (
 	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	v1 "k8s.io/api/admissionregistration/v1"
+	authenticationv1 "k8s.io/api/authentication/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/authentication/user"
 )
 
 const (
@@ -90,6 +92,29 @@ type MutatingAdmissionHandler interface {
 type Request struct {
 	admissionv1.AdmissionRequest
 	Context context.Context
+}
+
+// requestUser implements user.Info over the request's UserInfo.
+type requestUser struct {
+	*authenticationv1.UserInfo
+}
+
+func (u requestUser) GetName() string     { return u.Username }
+func (u requestUser) GetUID() string      { return u.UID }
+func (u requestUser) GetGroups() []string { return u.Groups }
+func (u requestUser) GetExtra() map[string][]string {
+	extra := make(map[string][]string, len(u.Extra))
+	for k, v := range u.Extra {
+		extra[k] = v
+	}
+	return extra
+}
+
+var _ user.Info = requestUser{}
+
+// User returns the requesting user as a user.Info for authorizers and RBAC checks.
+func (r *Request) User() user.Info {
+	return requestUser{UserInfo: &r.UserInfo}
 }
 
 // NewDefaultValidatingWebhook creates a new ValidatingWebhook based on the WebhookHandler provided.
