@@ -279,12 +279,13 @@ func (c *CRTBResolverSuite) TestCRTBRuleResolver() {
 			wantErr:     false,
 		},
 
-		// user with a CRTB whose RoleTemplate inherits cluster-scoped rules from a project RoleTemplate
+		// user with a CRTB whose RoleTemplate inherits cluster-scoped rules from a project RoleTemplate. The CRTB does not
+		// grant the inherited cluster-scoped rules, so they must not be counted.
 		{
-			name:        "inherited cluster-scoped rules",
+			name:        "inherited cluster-scoped rules are not granted",
 			user:        NewUserInfo(c.user3InheritsCRTB.UserName),
 			clusterName: c.user3InheritsCRTB.ClusterName,
-			wantRules:   copySlices(c.inheritsScopedRT.Rules, c.projectScopedRT.Rules, c.projectScopedRT.ClusterScopedRules),
+			wantRules:   copySlices(c.inheritsScopedRT.Rules, c.projectScopedRT.Rules),
 			wantErr:     false,
 		},
 	}

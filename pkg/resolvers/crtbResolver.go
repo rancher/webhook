@@ -59,7 +59,7 @@ func (c *CRTBRuleResolver) VisitRulesFor(_ context.Context, user user.Info, name
 			continue
 		}
 		for _, crtb := range crtbs {
-			rtRules, err := c.RoleTemplateResolver.ClusterRulesFromTemplateName(crtb.RoleTemplateName)
+			rtRules, err := c.RoleTemplateResolver.RulesFromTemplateName(crtb.RoleTemplateName)
 			if !visitRules(nil, rtRules, err, visitor) {
 				return
 			}
@@ -73,7 +73,7 @@ func (c *CRTBRuleResolver) VisitRulesFor(_ context.Context, user user.Info, name
 		return
 	}
 	for _, crtb := range crtbs {
-		rtRules, err := c.RoleTemplateResolver.ClusterRulesFromTemplateName(crtb.RoleTemplateName)
+		rtRules, err := c.RoleTemplateResolver.RulesFromTemplateName(crtb.RoleTemplateName)
 		if !visitRules(nil, rtRules, err, visitor) {
 			return
 		}

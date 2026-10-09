@@ -403,7 +403,7 @@ Only 1 clusterproxyconfig per downstream cluster is ever permitted.
 #### Escalation Prevention
 
 Users can only create/update ClusterRoleTemplateBindings which grant permissions to RoleTemplates with rights less than or equal to those they currently possess. This is to prevent privilege escalation.
-If the RoleTemplate inherits RoleTemplates with `clusterScopedRules`, the user must hold those rights cluster-wide, through ClusterRoleBindings or ClusterRoleTemplateBindings for the cluster. RoleBindings in the cluster namespace are not sufficient.
+`clusterScopedRules` inherited from project RoleTemplates are not granted by ClusterRoleTemplateBindings, so they are neither required nor counted as held.
 For external RoleTemplates (RoleTemplates with `external` set to `true`), if the `external-rules` feature flag is enabled and `ExternalRules` is specified in the roleTemplate in `RoleTemplateName`,
 `ExternalRules` will be used for authorization. Otherwise (if the feature flag is off or `ExternalRules` are nil), the rules from the backing `ClusterRole` in the local cluster will be used.
 
@@ -512,7 +512,7 @@ Rules without verbs, resources, or apigroups are not permitted. The `rules` incl
 
  Escalation checks are bypassed if a user has the `escalate` verb on the GlobalRole that they are attempting to update or create. This can also be given through a wildcard permission (i.e. the `*` verb also gives `escalate`).
 
-Users can only change GlobalRoles with rights less than or equal to those they currently possess. This is to prevent privilege escalation. This includes the rules (and any inherited `clusterScopedRules`) in the RoleTemplates referred to in `inheritedClusterRoles` and the rules in `inheritedFleetWorkspacePermissions`.
+Users can only change GlobalRoles with rights less than or equal to those they currently possess. This is to prevent privilege escalation. This includes the rules in the RoleTemplates referred to in `inheritedClusterRoles` (excluding inherited `clusterScopedRules`, which are not granted on downstream clusters) and the rules in `inheritedFleetWorkspacePermissions`.
 
 Users can only grant rules in the `NamespacedRules` field with rights less than or equal to those they currently possess. This works on a per namespace basis, meaning that the user must have the permission
 in the namespace specified. The `Rules` field apply to every namespace, which means a user can create `NamespacedRules` in any namespace that are equal to or less than the `Rules` they currently possess.
@@ -624,7 +624,7 @@ If the BackingNamespace field is empty, populate the BackingNamespace field with
 
 Users can only create/update ProjectRoleTemplateBindings with rights less than or equal to those they currently possess.
 This is to prevent privilege escalation.
-If the RoleTemplate has `clusterScopedRules` (including inherited ones), the user must hold those rights cluster-wide, through ClusterRoleBindings or ClusterRoleTemplateBindings for the cluster. Project-level permissions and RoleBindings in the cluster namespace are not sufficient.
+If the RoleTemplate has `clusterScopedRules` (including inherited ones), the user must hold those rights cluster-wide, through ClusterRoleBindings, ClusterRoleTemplateBindings for the cluster, or the `clusterScopedRules` of their existing ProjectRoleTemplateBindings in the cluster. Project-level permissions (including the project-scoped rules of existing ProjectRoleTemplateBindings) and RoleBindings in the cluster namespace are not sufficient.
 For external RoleTemplates (RoleTemplates with `external` set to `true`), if the `external-rules` feature flag is enabled and `ExternalRules` is specified in the roleTemplate in `RoleTemplateName`,
 `ExternalRules` will be used for authorization. Otherwise, if `ExternalRules` are nil when the feature flag is on, the rules from the backing `ClusterRole` in the local cluster will be used.
 

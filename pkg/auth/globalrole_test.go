@@ -219,7 +219,8 @@ func TestClusterRulesFromRole(t *testing.T) {
 			wantRules: append(append(noInheritRules, firstRTRules...), secondRTRules...),
 		},
 		{
-			name: "test role template inheriting cluster-scoped rules",
+			// cluster-scoped rules inherited from a project RoleTemplate are not granted on downstream clusters.
+			name: "test role template inheriting cluster-scoped rules excludes them",
 			globalRole: &v3.GlobalRole{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-gr",
@@ -231,7 +232,7 @@ func TestClusterRulesFromRole(t *testing.T) {
 				state.rtCacheMock.EXPECT().Get(clusterInheritsClusterScopedRT.Name).Return(clusterInheritsClusterScopedRT, nil)
 				state.rtCacheMock.EXPECT().Get(projectClusterScopedRT.Name).Return(projectClusterScopedRT, nil)
 			},
-			wantRules: append(append(append([]rbacv1.PolicyRule{}, firstRTRules...), secondRTRules...), clusterScopedRules...),
+			wantRules: append(append([]rbacv1.PolicyRule{}, firstRTRules...), secondRTRules...),
 		},
 		{
 			name: "test rt resolver error",

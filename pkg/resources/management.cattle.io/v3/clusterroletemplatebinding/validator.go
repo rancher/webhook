@@ -36,13 +36,9 @@ const (
 func NewValidator(crtb *resolvers.CRTBRuleResolver, defaultResolver k8validation.AuthorizationRuleResolver,
 	roleTemplateResolver *auth.RoleTemplateResolver, grbCache v3.GlobalRoleBindingCache, clusterCache v3.ClusterCache, crtbCache v3.ClusterRoleTemplateBindingCache) *Validator {
 	resolver := resolvers.NewAggregateRuleResolver(defaultResolver, crtb)
-	// CRTBs are indexed by cluster name, so the CRTB resolver still receives the cluster namespace, but the default
-	// resolver must not consider RoleBindings in that namespace.
-	clusterWideResolver := resolvers.NewAggregateRuleResolver(resolvers.NewClusterWideRuleResolver(defaultResolver), crtb)
 	return &Validator{
 		admitter: admitter{
 			resolver:             resolver,
-			clusterWideResolver:  clusterWideResolver,
 			roleTemplateResolver: roleTemplateResolver,
 			grbCache:             grbCache,
 			clusterCache:         clusterCache,
@@ -78,7 +74,6 @@ func (v *Validator) Admitters() []admission.Admitter {
 
 type admitter struct {
 	resolver             k8validation.AuthorizationRuleResolver
-	clusterWideResolver  k8validation.AuthorizationRuleResolver
 	roleTemplateResolver *auth.RoleTemplateResolver
 	grbCache             v3.GlobalRoleBindingCache
 	clusterCache         v3.ClusterCache
@@ -135,21 +130,12 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, fmt.Errorf("failed to get roletemplate '%s': %w", crtb.RoleTemplateName, err)
 	}
 
+	// ClusterScopedRules (including those inherited from project RoleTemplates) are not checked here: they are only
+	// aggregated into a cluster-scoped role for project-context templates, so a CRTB never grants them.
 	rules, err := a.roleTemplateResolver.RulesFromTemplate(roleTemplate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve rules from roletemplate '%s': %w", crtb.RoleTemplateName, err)
 	}
-
-	// A cluster RoleTemplate can inherit project RoleTemplates with ClusterScopedRules, which are aggregated into the
-	// cluster role. They can only be authorized by the user's cluster-wide permissions (ClusterRoleBindings and CRTBs).
-	clusterScopedRules, err := a.roleTemplateResolver.ClusterScopedRulesFromTemplate(roleTemplate)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve cluster-scoped rules from roletemplate '%s': %w", crtb.RoleTemplateName, err)
-	}
-	if err := auth.ConfirmNoEscalation(request, clusterScopedRules, crtb.ClusterName, a.clusterWideResolver); err != nil {
-		return admission.ResponseFailedEscalation(err.Error()), nil
-	}
-
 	response := &admissionv1.AdmissionResponse{}
 	auth.SetEscalationResponse(response, auth.ConfirmNoEscalation(request, rules, crtb.ClusterName, a.resolver))
 
