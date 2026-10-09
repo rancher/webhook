@@ -38,7 +38,7 @@ require (
 	github.com/rancher/dynamiclistener v0.8.4
 	github.com/rancher/jsonpath v0.0.0-20250620213443-ad24535cf0c1
 	github.com/rancher/lasso v0.2.8
-	github.com/rancher/rancher/pkg/apis v0.0.0-20260924163623-d4874660e41b
+	github.com/rancher/rancher/pkg/apis v0.0.0-20261009045727-fbb6ff11445d
 	github.com/rancher/rke v1.8.6
 	github.com/rancher/wrangler/v3 v3.6.1
 	github.com/robfig/cron v1.2.0
@@ -51,7 +51,7 @@ require (
 	k8s.io/apimachinery v0.35.8
 	k8s.io/apiserver v0.35.7
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/kubernetes v1.35.7
+	k8s.io/kubernetes v1.35.9
 	k8s.io/pod-security-admission v0.35.7
 	k8s.io/utils v0.0.0-20260108192941-914a6e750570
 	sigs.k8s.io/controller-runtime v0.23.3
@@ -104,8 +104,8 @@ require (
 	github.com/prometheus/procfs v0.19.2 // indirect
 	github.com/rancher/aks-operator v1.14.6 // indirect
 	github.com/rancher/ali-operator v1.14.5 // indirect
-	github.com/rancher/eks-operator v1.14.6 // indirect
-	github.com/rancher/fleet/pkg/apis v0.15.7 // indirect
+	github.com/rancher/eks-operator v1.14.7-rc.1 // indirect
+	github.com/rancher/fleet/pkg/apis v0.15.8-alpha.2 // indirect
 	github.com/rancher/gke-operator v1.14.7 // indirect
 	github.com/rancher/norman v0.8.9
 	github.com/robfig/cron/v3 v3.0.1 // indirect
