@@ -59,7 +59,7 @@ require (
 )
 
 require (
-	cel.dev/expr v0.25.1 // indirect
+	cel.dev/expr v0.25.2 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.42.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.311.0 // indirect
@@ -93,7 +93,7 @@ require (
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260622175928-b703f567277d // indirect
-	google.golang.org/grpc v1.82.1 // indirect
+	google.golang.org/grpc v1.83.1 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.36.0 // indirect
 )
