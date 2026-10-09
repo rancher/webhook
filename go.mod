@@ -37,7 +37,7 @@ require (
 	github.com/rancher/jsonpath v0.0.0-20260423141252-c4e0c565a09f
 	github.com/rancher/lasso v0.2.10
 	github.com/rancher/norman v0.10.1
-	github.com/rancher/rancher/pkg/apis v0.0.0-20261007170748-9d0fd908e55e
+	github.com/rancher/rancher/pkg/apis v0.0.0-20261009144438-9262b09fcc6d
 	github.com/rancher/rancher/pkg/plan v0.0.0-20260428222332-2696373f4152
 	github.com/rancher/wrangler/v3 v3.8.0-rc.2
 	github.com/robfig/cron v1.2.0
