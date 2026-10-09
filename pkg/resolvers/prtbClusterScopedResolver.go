@@ -9,14 +9,11 @@ import (
 	"github.com/rancher/webhook/pkg/auth"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apiserver/pkg/authentication/serviceaccount"
 	"k8s.io/apiserver/pkg/authentication/user"
 )
 
 const (
 	prtbClusterSubjectIndex = "management.cattle.io/prtb-by-cluster-subject"
-	// principalIDExtraKey is the user extra in which Rancher passes the requesting user's principal IDs when impersonating.
-	principalIDExtraKey = "principalid"
 )
 
 // PRTBClusterScopedRuleResolver implements the validation.AuthorizationRuleResolver interface. It resolves the
@@ -57,13 +54,9 @@ func (p *PRTBClusterScopedRuleResolver) RulesFor(ctx context.Context, user user.
 // VisitRulesFor invokes visitor() with each cluster-scoped rule that applies to a given user in a given cluster, and each error encountered resolving those rules.
 // If visitor() returns false, visiting is short-circuited.
 func (p *PRTBClusterScopedRuleResolver) VisitRulesFor(_ context.Context, user user.Info, clusterName string, visitor func(source fmt.Stringer, rule *rbacv1.PolicyRule, err error) bool) {
-	principals := user.GetExtra()[principalIDExtraKey]
-	keys := make([]string, 0, len(user.GetGroups())+len(principals)+1)
+	keys := make([]string, 0, len(user.GetGroups())+1)
 	for _, group := range user.GetGroups() {
 		keys = append(keys, GetGroupKey(group, clusterName))
-	}
-	for _, principal := range principals {
-		keys = append(keys, GetPrincipalKey(principal, clusterName))
 	}
 	keys = append(keys, GetUserKey(user.GetName(), clusterName))
 
@@ -86,49 +79,28 @@ func (p *PRTBClusterScopedRuleResolver) VisitRulesFor(_ context.Context, user us
 	}
 }
 
-// prtbByClusterSubject indexes a PRTB by its cluster and the subject it actually grants permissions to, using the same
-// precedence as the binding's effective subject: UserPrincipalName, UserName, GroupPrincipalName, GroupName, ServiceAccount.
-// Only that one subject is indexed, so a binding with both a name and a principal is never credited to the wrong subject.
+// prtbByClusterSubject indexes a PRTB by its cluster and subject, using the same subject fields as the other binding
+// resolvers. UserPrincipalName is not indexed: Rancher always resolves it to a user and sets UserName, which is the subject
+// that is granted permissions.
 func prtbByClusterSubject(prtb *apisv3.ProjectRoleTemplateBinding) ([]string, error) {
 	clusterName, ok := clusterFromProject(prtb.ProjectName)
 	if !ok {
 		// if we can not determine the cluster from the project name do not index
 		return nil, nil
 	}
-	switch {
-	case prtb.UserPrincipalName != "":
-		return []string{GetPrincipalKey(prtb.UserPrincipalName, clusterName)}, nil
-	case prtb.UserName != "":
+	if prtb.UserName != "" {
 		return []string{GetUserKey(prtb.UserName, clusterName)}, nil
-	case prtb.GroupPrincipalName != "":
-		return []string{GetGroupKey(prtb.GroupPrincipalName, clusterName)}, nil
-	case prtb.GroupName != "":
-		return []string{GetGroupKey(prtb.GroupName, clusterName)}, nil
-	case prtb.ServiceAccount != "":
-		// A service account is an identity within the binding's cluster. Requests to this webhook are made in the local
-		// cluster, where a service account with the same namespace and name is a different identity, so only bindings in
-		// the local cluster can be matched to the requester.
-		if clusterName != localCluster {
-			return nil, nil
-		}
-		namespace, name, ok := strings.Cut(prtb.ServiceAccount, ":")
-		if !ok || namespace == "" || name == "" {
-			return nil, nil
-		}
-		return []string{GetUserKey(serviceaccount.MakeUsername(namespace, name), clusterName)}, nil
-	default:
-		return nil, nil
 	}
+	if prtb.GroupName != "" {
+		return []string{GetGroupKey(prtb.GroupName, clusterName)}, nil
+	}
+	if prtb.GroupPrincipalName != "" {
+		return []string{GetGroupKey(prtb.GroupPrincipalName, clusterName)}, nil
+	}
+	return nil, nil
 }
 
-// GetPrincipalKey creates an indexer key based on a user principal ID and cluster name. Principals use their own key
-// prefix so they can only be matched against the requester's principal IDs, never their username.
-func GetPrincipalKey(principal, clusterName string) string {
-	return fmt.Sprintf("principal:%s-%s", principal, clusterName)
-}
-
-// clusterFromProject splits a project name on ":" and returns the cluster part. If there are not two parts
-// then we can not confidently discern which cluster this project belongs to.
+// clusterFromProject splits a project name on ":" and returns the cluster part
 func clusterFromProject(projectName string) (string, bool) {
 	// example projectName c-m-csdf:p-sersd
 	pieces := strings.Split(projectName, ":")

@@ -357,8 +357,6 @@ func (p *ProjectRoleTemplateBindingSuite) TestClusterScopedRuleEscalation() {
 	const prtbProjectRulesUser = "prtb-project-rules-userid"
 	const prtbOtherClusterUser = "prtb-other-cluster-userid"
 	const noPermsUser = "no-perms-userid"
-	const principalHolderUser = "principal-holder-userid"
-	const holderPrincipal = "github_user://holder"
 	const otherProject = clusterID + ":other-project-id"
 
 	ruleWriteNodes := p.writeNodeCR.Rules[0]
@@ -457,10 +455,6 @@ func (p *ProjectRoleTemplateBindingSuite) TestClusterScopedRuleEscalation() {
 	prtbCache.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(prtbProjectRulesUser, clusterID)).Return([]*apisv3.ProjectRoleTemplateBinding{
 		{UserName: prtbProjectRulesUser, ProjectName: otherProject, RoleTemplateName: projectScopedRT.Name},
 	}, nil).AnyTimes()
-	// existing PRTB in this cluster whose subject is a user principal, granting ruleWriteNodes cluster-wide.
-	prtbCache.EXPECT().GetByIndex(gomock.Any(), resolvers.GetPrincipalKey(holderPrincipal, clusterID)).Return([]*apisv3.ProjectRoleTemplateBinding{
-		{UserPrincipalName: holderPrincipal, ProjectName: otherProject, RoleTemplateName: clusterScopedRT.Name},
-	}, nil).AnyTimes()
 	// existing PRTB granting ruleWriteNodes cluster-wide in a different cluster.
 	prtbCache.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(prtbOtherClusterUser, "other-cluster-id")).Return([]*apisv3.ProjectRoleTemplateBinding{
 		{UserName: prtbOtherClusterUser, ProjectName: "other-cluster-id:p-other", RoleTemplateName: clusterScopedRT.Name},
@@ -492,7 +486,6 @@ func (p *ProjectRoleTemplateBindingSuite) TestClusterScopedRuleEscalation() {
 	tests := []struct {
 		name             string
 		username         string
-		principals       []string
 		roleTemplateName string
 		allowed          bool
 	}{
@@ -580,21 +573,6 @@ func (p *ProjectRoleTemplateBindingSuite) TestClusterScopedRuleEscalation() {
 			roleTemplateName: clusterScopedRT.Name,
 			allowed:          false,
 		},
-		// user holds the permission through an existing PRTB bound to their principal {PASS}.
-		{
-			name:             "user with cluster-scoped rules from a PRTB bound to their principal can grant them",
-			username:         principalHolderUser,
-			principals:       []string{holderPrincipal},
-			roleTemplateName: clusterScopedRT.Name,
-			allowed:          true,
-		},
-		// control: the same user without the principal in their request does not hold the permission {FAIL}.
-		{
-			name:             "PRTB bound to a principal is not credited without that principal",
-			username:         principalHolderUser,
-			roleTemplateName: clusterScopedRT.Name,
-			allowed:          false,
-		},
 	}
 
 	for i := range tests {
@@ -604,10 +582,6 @@ func (p *ProjectRoleTemplateBindingSuite) TestClusterScopedRuleEscalation() {
 			newPRTB := newBasePRTB()
 			newPRTB.RoleTemplateName = test.roleTemplateName
 			req := createPRTBRequest(p.T(), nil, newPRTB, test.username)
-			if len(test.principals) > 0 {
-				// Rancher passes the requesting user's principal IDs in this extra when impersonating.
-				req.UserInfo.Extra = map[string]v1authentication.ExtraValue{"principalid": test.principals}
-			}
 			admitters := validator.Admitters()
 			p.Len(admitters, 1)
 			resp, err := admitters[0].Admit(req)

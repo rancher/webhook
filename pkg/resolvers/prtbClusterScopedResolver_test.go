@@ -82,55 +82,29 @@ func TestPRTBClusterScopedRuleResolver(t *testing.T) {
 		deletingPRTB,
 		// binding to a missing RoleTemplate returns an error.
 		newPRTB("invalid", clusterA+":p-one", "user-invalid", "", invalidName),
-		// user principal subject.
+		// user principal only: Rancher has not yet set UserName, so it is not indexed.
 		{
 			ObjectMeta:        metav1.ObjectMeta{Name: "principal-only"},
 			ProjectName:       clusterA + ":p-one",
 			UserPrincipalName: "github_user://principal-only",
 			RoleTemplateName:  nodesRT.Name,
 		},
-		// both a user name and a user principal: the principal is the effective subject.
+		// both a user name and a user principal: UserName is the subject that is granted permissions.
 		{
 			ObjectMeta:        metav1.ObjectMeta{Name: "name-and-principal"},
 			ProjectName:       clusterA + ":p-one",
-			UserName:          "user-name-mismatch",
+			UserName:          "user-name-and-principal",
 			UserPrincipalName: "github_user://principal-owner",
 			RoleTemplateName:  secretsRT.Name,
 		},
-		// both a group principal and a group name: the group principal is the effective subject.
+		// group principal subject.
 		{
-			ObjectMeta:         metav1.ObjectMeta{Name: "group-principal-and-name"},
+			ObjectMeta:         metav1.ObjectMeta{Name: "group-principal"},
 			ProjectName:        clusterA + ":p-one",
 			GroupPrincipalName: "github_team://team",
-			GroupName:          "group-name-only",
-			RoleTemplateName:   nodesRT.Name,
-		},
-		// service account subject in the local cluster.
-		{
-			ObjectMeta:       metav1.ObjectMeta{Name: "sa-local"},
-			ProjectName:      localCluster + ":p-local",
-			ServiceAccount:   "cattle-system:robot",
-			RoleTemplateName: nodesRT.Name,
-		},
-		// service account subject in a downstream cluster is a different identity from any local requester.
-		{
-			ObjectMeta:       metav1.ObjectMeta{Name: "sa-downstream"},
-			ProjectName:      clusterA + ":p-one",
-			ServiceAccount:   "cattle-system:robot",
-			RoleTemplateName: secretsRT.Name,
-		},
-		// service account without a namespace is not indexed.
-		{
-			ObjectMeta:       metav1.ObjectMeta{Name: "sa-malformed"},
-			ProjectName:      localCluster + ":p-local",
-			ServiceAccount:   "no-namespace",
-			RoleTemplateName: secretsRT.Name,
+			RoleTemplateName:   secretsRT.Name,
 		},
 	}
-	withPrincipals := func(name string, principals ...string) user.Info {
-		return &user.DefaultInfo{Name: name, Extra: map[string][]string{principalIDExtraKey: principals}}
-	}
-	const robotUsername = "system:serviceaccount:cattle-system:robot"
 
 	ctrl := gomock.NewController(t)
 	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
@@ -192,52 +166,22 @@ func TestPRTBClusterScopedRuleResolver(t *testing.T) {
 			wantErr:     true,
 		},
 		{
-			name:        "user principal binding is credited to the user holding that principal",
-			user:        withPrincipals("u-principal-only", "github_user://principal-only"),
-			clusterName: clusterA,
-			wantRules:   Rules{ruleWriteNodes},
-		},
-		{
-			name:        "user principal binding is not credited to a username equal to the principal",
+			name:        "user principal is not indexed until UserName is set",
 			user:        NewUserInfo("github_user://principal-only"),
 			clusterName: clusterA,
 			wantRules:   nil,
 		},
 		{
-			name:        "binding with a name and a principal is credited to the principal",
-			user:        withPrincipals("u-principal-owner", "github_user://principal-owner"),
+			name:        "binding with a name and a principal is credited to the user name",
+			user:        NewUserInfo("user-name-and-principal"),
 			clusterName: clusterA,
 			wantRules:   Rules{ruleReadSecrets},
 		},
 		{
-			name:        "binding with a name and a principal is not credited to the name",
-			user:        NewUserInfo("user-name-mismatch"),
-			clusterName: clusterA,
-			wantRules:   nil,
-		},
-		{
-			name:        "binding with a group principal and name is credited to the group principal",
+			name:        "cluster-scoped rules from group principal PRTBs",
 			user:        NewUserInfo("user-in-team", "github_team://team"),
 			clusterName: clusterA,
-			wantRules:   Rules{ruleWriteNodes},
-		},
-		{
-			name:        "binding with a group principal and name is not credited to the group name",
-			user:        NewUserInfo("user-in-group-name", "group-name-only"),
-			clusterName: clusterA,
-			wantRules:   nil,
-		},
-		{
-			name:        "local cluster service account binding is credited to the service account username",
-			user:        NewUserInfo(robotUsername),
-			clusterName: localCluster,
-			wantRules:   Rules{ruleWriteNodes},
-		},
-		{
-			name:        "downstream service account binding is not credited to a local service account",
-			user:        NewUserInfo(robotUsername),
-			clusterName: clusterA,
-			wantRules:   nil,
+			wantRules:   Rules{ruleReadSecrets},
 		},
 	}
 

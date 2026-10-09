@@ -130,8 +130,6 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, fmt.Errorf("failed to get roletemplate '%s': %w", crtb.RoleTemplateName, err)
 	}
 
-	// ClusterScopedRules (including those inherited from project RoleTemplates) are not checked here: they are only
-	// aggregated into a cluster-scoped role for project-context templates, so a CRTB never grants them.
 	rules, err := a.roleTemplateResolver.RulesFromTemplate(roleTemplate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve rules from roletemplate '%s': %w", crtb.RoleTemplateName, err)
