@@ -13,7 +13,7 @@ Rules without verbs, resources, or apigroups are not permitted. The `rules`, `cl
 ### Escalation Prevention
 
 Users can only change RoleTemplates with rights less than or equal to those they currently possess. This prevents privilege escalation. 
-This applies to both `rules` and `clusterScopedRules`, including those inherited from other RoleTemplates.
+This applies to both `rules` and `clusterScopedRules`, including those inherited from other RoleTemplates. Only `clusterScopedRules` inherited through project-context RoleTemplates are considered, since inheritance through a cluster-context RoleTemplate does not grant them.
 Users can't create external RoleTemplates (or update existing RoleTemplates) with `ExternalRules` without having the `escalate` verb on that RoleTemplate.
 
 ### Context Validation

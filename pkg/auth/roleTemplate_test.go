@@ -600,7 +600,7 @@ func (r *RoleTemplateResolverSuite) TestRulesFromTemplateExcludesClusterScopedRu
 	}
 }
 
-func (r *RoleTemplateResolverSuite) TestGrantedClusterScopedRulesFromTemplateName() {
+func (r *RoleTemplateResolverSuite) TestClusterScopedRulesFromTemplateName() {
 	ruleReadPods := rbacv1.PolicyRule{
 		Verbs:     []string{"GET", "WATCH"},
 		APIGroups: []string{"v1"},
@@ -692,7 +692,7 @@ func (r *RoleTemplateResolverSuite) TestGrantedClusterScopedRulesFromTemplateNam
 			roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 			test.setup(roleTemplateCache)
 			resolver := auth.NewRoleTemplateResolver(roleTemplateCache, fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl))
-			got, err := resolver.GrantedClusterScopedRulesFromTemplateName(test.templateName)
+			got, err := resolver.ClusterScopedRulesFromTemplateName(test.templateName)
 			if test.wantErr {
 				r.Error(err, "expected test to have error.")
 			} else {

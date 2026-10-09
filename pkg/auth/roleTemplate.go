@@ -60,8 +60,20 @@ func (r *RoleTemplateResolver) RulesFromTemplate(roleTemplate *rancherv3.RoleTem
 	return rules, nil
 }
 
-// ClusterScopedRulesFromTemplate gathers the ClusterScopedRules from the template and all referenced templates.
-// These rules are granted cluster-wide and must be validated against cluster-level permissions.
+// ClusterScopedRulesFromTemplateName gets the ClusterScopedRules for a roleTemplate with a given name. Simple wrapper around ClusterScopedRulesFromTemplate.
+func (r *RoleTemplateResolver) ClusterScopedRulesFromTemplateName(name string) ([]rbacv1.PolicyRule, error) {
+	rt, err := r.roleTemplates.Get(name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get RoleTemplate '%s': %w", name, err)
+	}
+	return r.ClusterScopedRulesFromTemplate(rt)
+}
+
+// ClusterScopedRulesFromTemplate gets the ClusterScopedRules that a project binding (PRTB) to the template grants
+// cluster-wide. Rancher only builds the cluster-scoped role for project-context templates and aggregates the cluster-scoped
+// roles of the project-context templates they inherit, so only the template and inherited project-context templates are
+// followed; inheritance through any other template is not. This is used both for the rules a binding would grant and for
+// the rules a user already holds, so the two stay consistent.
 func (r *RoleTemplateResolver) ClusterScopedRulesFromTemplate(roleTemplate *rancherv3.RoleTemplate) ([]rbacv1.PolicyRule, error) {
 	var rules []rbacv1.PolicyRule
 
@@ -71,22 +83,7 @@ func (r *RoleTemplateResolver) ClusterScopedRulesFromTemplate(roleTemplate *ranc
 
 	templatesSeen := make(map[string]bool)
 
-	return r.gatherClusterScopedRules(roleTemplate, rules, templatesSeen, false)
-}
-
-// GrantedClusterScopedRulesFromTemplateName gets the ClusterScopedRules that a project binding (PRTB) to the named
-// roleTemplate is known to grant. Rancher only builds the cluster-scoped role for project-context templates, so only the
-// template and inherited project-context templates are followed; inheritance through any other template is not.
-// Use this when resolving permissions a user already holds, where over-counting would allow escalation.
-func (r *RoleTemplateResolver) GrantedClusterScopedRulesFromTemplateName(name string) ([]rbacv1.PolicyRule, error) {
-	rt, err := r.roleTemplates.Get(name)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get RoleTemplate '%s': %w", name, err)
-	}
-
-	templatesSeen := make(map[string]bool)
-
-	return r.gatherClusterScopedRules(rt, nil, templatesSeen, true)
+	return r.gatherClusterScopedRules(roleTemplate, rules, templatesSeen)
 }
 
 // gatherRules appends the rules from current template and does a recursive call to get all inherited roles referenced.
@@ -125,11 +122,11 @@ func (r *RoleTemplateResolver) gatherRules(roleTemplate *rancherv3.RoleTemplate,
 }
 
 // gatherClusterScopedRules appends the ClusterScopedRules from the current template and recurses into inherited templates.
-// If projectContextOnly is true, templates that are not project-context (and the templates they inherit) are skipped.
-func (r *RoleTemplateResolver) gatherClusterScopedRules(roleTemplate *rancherv3.RoleTemplate, rules []rbacv1.PolicyRule, seen map[string]bool, projectContextOnly bool) ([]rbacv1.PolicyRule, error) {
+// Templates that are not project-context, and the templates they inherit, are skipped since they have no cluster-scoped role.
+func (r *RoleTemplateResolver) gatherClusterScopedRules(roleTemplate *rancherv3.RoleTemplate, rules []rbacv1.PolicyRule, seen map[string]bool) ([]rbacv1.PolicyRule, error) {
 	seen[roleTemplate.Name] = true
 
-	if projectContextOnly && roleTemplate.Context != projectContext {
+	if roleTemplate.Context != projectContext {
 		return rules, nil
 	}
 
@@ -144,7 +141,7 @@ func (r *RoleTemplateResolver) gatherClusterScopedRules(roleTemplate *rancherv3.
 		if err != nil {
 			return nil, fmt.Errorf("failed to get RoleTemplate '%s': %w", templateName, err)
 		}
-		rules, err = r.gatherClusterScopedRules(next, rules, seen, projectContextOnly)
+		rules, err = r.gatherClusterScopedRules(next, rules, seen)
 		if err != nil {
 			return nil, err
 		}

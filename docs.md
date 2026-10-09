@@ -624,7 +624,7 @@ If the BackingNamespace field is empty, populate the BackingNamespace field with
 
 Users can only create/update ProjectRoleTemplateBindings with rights less than or equal to those they currently possess.
 This is to prevent privilege escalation.
-If the RoleTemplate has `clusterScopedRules` (including inherited ones), the user must hold those rights cluster-wide, through ClusterRoleBindings, ClusterRoleTemplateBindings for the cluster, or the `clusterScopedRules` of their existing ProjectRoleTemplateBindings in the cluster. Project-level permissions (including the project-scoped rules of existing ProjectRoleTemplateBindings) and RoleBindings in the cluster namespace are not sufficient.
+If the RoleTemplate has `clusterScopedRules` (including those inherited through project-context RoleTemplates; inheritance through a cluster-context RoleTemplate does not grant them), the user must hold those rights cluster-wide, through ClusterRoleBindings, ClusterRoleTemplateBindings for the cluster, or the `clusterScopedRules` of their existing ProjectRoleTemplateBindings in the cluster. Project-level permissions (including the project-scoped rules of existing ProjectRoleTemplateBindings) and RoleBindings in the cluster namespace are not sufficient.
 For external RoleTemplates (RoleTemplates with `external` set to `true`), if the `external-rules` feature flag is enabled and `ExternalRules` is specified in the roleTemplate in `RoleTemplateName`,
 `ExternalRules` will be used for authorization. Otherwise, if `ExternalRules` are nil when the feature flag is on, the rules from the backing `ClusterRole` in the local cluster will be used.
 
@@ -737,7 +737,7 @@ Rules without verbs, resources, or apigroups are not permitted. The `rules`, `cl
 #### Escalation Prevention
 
 Users can only change RoleTemplates with rights less than or equal to those they currently possess. This prevents privilege escalation. 
-This applies to both `rules` and `clusterScopedRules`, including those inherited from other RoleTemplates.
+This applies to both `rules` and `clusterScopedRules`, including those inherited from other RoleTemplates. Only `clusterScopedRules` inherited through project-context RoleTemplates are considered, since inheritance through a cluster-context RoleTemplate does not grant them.
 Users can't create external RoleTemplates (or update existing RoleTemplates) with `ExternalRules` without having the `escalate` verb on that RoleTemplate.
 
 #### Context Validation

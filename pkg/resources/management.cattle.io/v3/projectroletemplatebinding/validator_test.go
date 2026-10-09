@@ -356,6 +356,9 @@ func (p *ProjectRoleTemplateBindingSuite) TestClusterScopedRuleEscalation() {
 	const prtbClusterScopedUser = "prtb-cluster-scoped-userid"
 	const prtbProjectRulesUser = "prtb-project-rules-userid"
 	const prtbOtherClusterUser = "prtb-other-cluster-userid"
+	const noPermsUser = "no-perms-userid"
+	const principalHolderUser = "principal-holder-userid"
+	const holderPrincipal = "github_user://holder"
 	const otherProject = clusterID + ":other-project-id"
 
 	ruleWriteNodes := p.writeNodeCR.Rules[0]
@@ -380,6 +383,20 @@ func (p *ProjectRoleTemplateBindingSuite) TestClusterScopedRuleEscalation() {
 		DisplayName: "Cluster Write Role",
 		Context:     "cluster",
 		Rules:       []rbacv1.PolicyRule{ruleWriteNodes},
+	}
+	// project -> cluster -> project chain. Cluster templates have no cluster-scoped role, so a PRTB to chainRT does not
+	// grant clusterScopedRT's cluster-scoped rules.
+	clusterInheritsScopedRT := &apisv3.RoleTemplate{
+		ObjectMeta:        metav1.ObjectMeta{Name: "cluster-inherits-cluster-scoped-role"},
+		DisplayName:       "Cluster Inherits Cluster Scoped Role",
+		Context:           "cluster",
+		RoleTemplateNames: []string{clusterScopedRT.Name},
+	}
+	chainRT := &apisv3.RoleTemplate{
+		ObjectMeta:        metav1.ObjectMeta{Name: "project-inherits-cluster-role"},
+		DisplayName:       "Project Inherits Cluster Role",
+		Context:           "project",
+		RoleTemplateNames: []string{clusterInheritsScopedRT.Name},
 	}
 	crtbWrite := &apisv3.ClusterRoleTemplateBinding{
 		ObjectMeta:       metav1.ObjectMeta{Namespace: clusterID, Name: "crtb-write"},
@@ -425,6 +442,8 @@ func (p *ProjectRoleTemplateBindingSuite) TestClusterScopedRuleEscalation() {
 	roleTemplateCache.EXPECT().Get(clusterScopedRT.Name).Return(clusterScopedRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().Get(projectScopedRT.Name).Return(projectScopedRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().Get(clusterWriteRT.Name).Return(clusterWriteRT, nil).AnyTimes()
+	roleTemplateCache.EXPECT().Get(clusterInheritsScopedRT.Name).Return(clusterInheritsScopedRT, nil).AnyTimes()
+	roleTemplateCache.EXPECT().Get(chainRT.Name).Return(chainRT, nil).AnyTimes()
 	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
 
@@ -437,6 +456,10 @@ func (p *ProjectRoleTemplateBindingSuite) TestClusterScopedRuleEscalation() {
 	// existing PRTB in another project of this cluster whose RoleTemplate grants ruleWriteNodes only in that project.
 	prtbCache.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(prtbProjectRulesUser, clusterID)).Return([]*apisv3.ProjectRoleTemplateBinding{
 		{UserName: prtbProjectRulesUser, ProjectName: otherProject, RoleTemplateName: projectScopedRT.Name},
+	}, nil).AnyTimes()
+	// existing PRTB in this cluster whose subject is a user principal, granting ruleWriteNodes cluster-wide.
+	prtbCache.EXPECT().GetByIndex(gomock.Any(), resolvers.GetPrincipalKey(holderPrincipal, clusterID)).Return([]*apisv3.ProjectRoleTemplateBinding{
+		{UserPrincipalName: holderPrincipal, ProjectName: otherProject, RoleTemplateName: clusterScopedRT.Name},
 	}, nil).AnyTimes()
 	// existing PRTB granting ruleWriteNodes cluster-wide in a different cluster.
 	prtbCache.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(prtbOtherClusterUser, "other-cluster-id")).Return([]*apisv3.ProjectRoleTemplateBinding{
@@ -469,6 +492,7 @@ func (p *ProjectRoleTemplateBindingSuite) TestClusterScopedRuleEscalation() {
 	tests := []struct {
 		name             string
 		username         string
+		principals       []string
 		roleTemplateName string
 		allowed          bool
 	}{
@@ -542,6 +566,35 @@ func (p *ProjectRoleTemplateBindingSuite) TestClusterScopedRuleEscalation() {
 			roleTemplateName: clusterScopedRT.Name,
 			allowed:          false,
 		},
+		// the binding grants nothing: cluster-scoped rules inherited through a cluster RoleTemplate are not granted {PASS}.
+		{
+			name:             "cluster-scoped rules inherited through a cluster RoleTemplate are not required",
+			username:         noPermsUser,
+			roleTemplateName: chainRT.Name,
+			allowed:          true,
+		},
+		// control: without the cluster template in between, the cluster-scoped rules are required {FAIL}.
+		{
+			name:             "user without permissions cannot grant cluster-scoped rules",
+			username:         noPermsUser,
+			roleTemplateName: clusterScopedRT.Name,
+			allowed:          false,
+		},
+		// user holds the permission through an existing PRTB bound to their principal {PASS}.
+		{
+			name:             "user with cluster-scoped rules from a PRTB bound to their principal can grant them",
+			username:         principalHolderUser,
+			principals:       []string{holderPrincipal},
+			roleTemplateName: clusterScopedRT.Name,
+			allowed:          true,
+		},
+		// control: the same user without the principal in their request does not hold the permission {FAIL}.
+		{
+			name:             "PRTB bound to a principal is not credited without that principal",
+			username:         principalHolderUser,
+			roleTemplateName: clusterScopedRT.Name,
+			allowed:          false,
+		},
 	}
 
 	for i := range tests {
@@ -551,6 +604,10 @@ func (p *ProjectRoleTemplateBindingSuite) TestClusterScopedRuleEscalation() {
 			newPRTB := newBasePRTB()
 			newPRTB.RoleTemplateName = test.roleTemplateName
 			req := createPRTBRequest(p.T(), nil, newPRTB, test.username)
+			if len(test.principals) > 0 {
+				// Rancher passes the requesting user's principal IDs in this extra when impersonating.
+				req.UserInfo.Extra = map[string]v1authentication.ExtraValue{"principalid": test.principals}
+			}
 			admitters := validator.Admitters()
 			p.Len(admitters, 1)
 			resp, err := admitters[0].Admit(req)
