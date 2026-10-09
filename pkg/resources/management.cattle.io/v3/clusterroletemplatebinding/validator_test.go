@@ -306,6 +306,153 @@ func (c *ClusterRoleTemplateBindingSuite) Test_PrivilegeEscalation() {
 	}
 }
 
+func (c *ClusterRoleTemplateBindingSuite) Test_InheritedClusterScopedRuleEscalation() {
+	const adminUser = "admin-userid"
+	const clusterWriteUser = "cluster-write-userid"
+	const readOnlyUser = "read-only-userid"
+	const clusterNSWriteUser = "cluster-ns-write-userid"
+	const crtbWriteUser = "crtb-write-userid"
+	const crtbInheritsUser = "crtb-inherits-userid"
+	const targetUser = "target-userid"
+
+	ruleReadPods := c.readPodsCR.Rules[0]
+	ruleWriteNodes := c.writeNodeCR.Rules[0]
+
+	// Project RoleTemplate whose permissions are only granted cluster-wide.
+	projectScopedRT := &apisv3.RoleTemplate{
+		ObjectMeta:         metav1.ObjectMeta{Name: "project-cluster-scoped-role"},
+		DisplayName:        "Project Cluster Scoped Role",
+		Context:            "project",
+		ClusterScopedRules: []rbacv1.PolicyRule{ruleWriteNodes},
+	}
+	// Cluster RoleTemplate inheriting the project RoleTemplate, so it grants ruleWriteNodes through clusterScopedRules.
+	inheritsScopedRT := &apisv3.RoleTemplate{
+		ObjectMeta:        metav1.ObjectMeta{Name: "inherits-cluster-scoped-role"},
+		DisplayName:       "Inherits Cluster Scoped Role",
+		Context:           "cluster",
+		Rules:             []rbacv1.PolicyRule{ruleReadPods},
+		RoleTemplateNames: []string{projectScopedRT.Name},
+	}
+
+	clusterRoles := []*rbacv1.ClusterRole{c.adminCR, c.writeNodeCR, c.readPodsCR}
+	clusterRoleBindings := []*rbacv1.ClusterRoleBinding{
+		{
+			Subjects: []rbacv1.Subject{{Kind: rbacv1.UserKind, Name: adminUser}},
+			RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: c.adminCR.Name},
+		},
+		{
+			Subjects: []rbacv1.Subject{
+				{Kind: rbacv1.UserKind, Name: clusterWriteUser},
+				{Kind: rbacv1.UserKind, Name: readOnlyUser},
+				{Kind: rbacv1.UserKind, Name: clusterNSWriteUser},
+			},
+			RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: c.readPodsCR.Name},
+		},
+		{
+			Subjects: []rbacv1.Subject{{Kind: rbacv1.UserKind, Name: clusterWriteUser}},
+			RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: c.writeNodeCR.Name},
+		},
+	}
+	roleBindings := []*rbacv1.RoleBinding{
+		// Namespaced binding in the cluster namespace, which does not grant cluster-wide permissions.
+		{
+			ObjectMeta: metav1.ObjectMeta{Namespace: defaultClusterID},
+			Subjects:   []rbacv1.Subject{{Kind: rbacv1.UserKind, Name: clusterNSWriteUser}},
+			RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: c.writeNodeCR.Name},
+		},
+	}
+	resolver, _ := validation.NewTestRuleResolver(nil, roleBindings, clusterRoles, clusterRoleBindings)
+
+	ctrl := gomock.NewController(c.T())
+	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
+	roleTemplateCache.EXPECT().Get(c.readNodesRT.Name).Return(c.readNodesRT, nil).AnyTimes()
+	roleTemplateCache.EXPECT().Get(projectScopedRT.Name).Return(projectScopedRT, nil).AnyTimes()
+	roleTemplateCache.EXPECT().Get(inheritsScopedRT.Name).Return(inheritsScopedRT, nil).AnyTimes()
+	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
+	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
+
+	crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
+	crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
+	crtbCache.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	// readNodesRT grants both ruleReadPods and ruleWriteNodes directly.
+	crtbCache.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(crtbWriteUser, defaultClusterID)).Return([]*apisv3.ClusterRoleTemplateBinding{
+		{UserName: crtbWriteUser, ClusterName: defaultClusterID, RoleTemplateName: c.readNodesRT.Name},
+	}, nil).AnyTimes()
+	// inheritsScopedRT grants ruleWriteNodes only through the inherited clusterScopedRules.
+	crtbCache.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(crtbInheritsUser, defaultClusterID)).Return([]*apisv3.ClusterRoleTemplateBinding{
+		{UserName: crtbInheritsUser, ClusterName: defaultClusterID, RoleTemplateName: inheritsScopedRT.Name},
+	}, nil).AnyTimes()
+	crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
+	clusterCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.Cluster](ctrl)
+	clusterCache.EXPECT().Get(defaultClusterID).Return(&apisv3.Cluster{
+		ObjectMeta: metav1.ObjectMeta{Name: defaultClusterID},
+	}, nil).AnyTimes()
+
+	crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
+	validator := clusterroletemplatebinding.NewValidator(crtbResolver, resolver, roleResolver, nil, clusterCache, crtbCache)
+
+	tests := []struct {
+		name     string
+		username string
+		allowed  bool
+	}{
+		// cluster admin holds every permission cluster-wide {PASS}.
+		{
+			name:     "cluster admin can grant inherited cluster-scoped rules",
+			username: adminUser,
+			allowed:  true,
+		},
+		// user holds both the rules and the inherited cluster-scoped rules through ClusterRoleBindings {PASS}.
+		{
+			name:     "user with cluster-wide permissions can grant inherited cluster-scoped rules",
+			username: clusterWriteUser,
+			allowed:  true,
+		},
+		// user holds the rules but not the inherited cluster-scoped rules {FAIL}.
+		{
+			name:     "user without inherited cluster-scoped permissions is denied",
+			username: readOnlyUser,
+			allowed:  false,
+		},
+		// user only holds the inherited cluster-scoped rules through a RoleBinding in the cluster namespace {FAIL}.
+		{
+			name:     "user with only cluster namespace permissions cannot grant inherited cluster-scoped rules",
+			username: clusterNSWriteUser,
+			allowed:  false,
+		},
+		// user holds the permissions through a CRTB for the cluster {PASS}.
+		{
+			name:     "user with CRTB permissions can grant inherited cluster-scoped rules",
+			username: crtbWriteUser,
+			allowed:  true,
+		},
+		// user's existing CRTB permissions include cluster-scoped rules inherited by its RoleTemplate {PASS}.
+		{
+			name:     "user with CRTB granting inherited cluster-scoped rules can grant them",
+			username: crtbInheritsUser,
+			allowed:  true,
+		},
+	}
+
+	for i := range tests {
+		test := tests[i]
+		c.Run(test.name, func() {
+			newCRTB := newDefaultCRTB()
+			newCRTB.UserName = targetUser
+			newCRTB.RoleTemplateName = inheritsScopedRT.Name
+			req := createCRTBRequest(c.T(), nil, newCRTB, test.username)
+			admitters := validator.Admitters()
+			assert.Len(c.T(), admitters, 1)
+			resp, err := admitters[0].Admit(req)
+			c.NoError(err, "Admit failed")
+			if resp.Allowed != test.allowed {
+				c.Failf("Response was incorrectly validated", "Wanted response.Allowed = '%v' got %v: result=%+v", test.allowed, resp.Allowed, resp.Result)
+			}
+		})
+	}
+}
+
 func (c *ClusterRoleTemplateBindingSuite) Test_UpdateValidation() {
 	const (
 		adminUser    = "admin-userid"

@@ -37,7 +37,8 @@ func (g *GlobalRoleResolver) GlobalRulesFromRole(gr *v3.GlobalRole) []rbacv1.Pol
 	return gr.Rules
 }
 
-// ClusterRulesFromRole finds all rules that this gr gives on downstream clusters.
+// ClusterRulesFromRole finds all rules that this gr gives on downstream clusters, including ClusterScopedRules
+// from inherited RoleTemplates.
 func (g *GlobalRoleResolver) ClusterRulesFromRole(gr *v3.GlobalRole) ([]rbacv1.PolicyRule, error) {
 	if gr == nil {
 		return nil, nil
@@ -45,7 +46,7 @@ func (g *GlobalRoleResolver) ClusterRulesFromRole(gr *v3.GlobalRole) ([]rbacv1.P
 
 	var rules []rbacv1.PolicyRule
 	for _, inheritedRoleTemplate := range gr.InheritedClusterRoles {
-		templateRules, err := g.roleTemplateResolver.RulesFromTemplateName(inheritedRoleTemplate)
+		templateRules, err := g.roleTemplateResolver.ClusterRulesFromTemplateName(inheritedRoleTemplate)
 		if err != nil {
 			return nil, fmt.Errorf("unable to get cluster rules for roleTemplate %s: %w", inheritedRoleTemplate, err)
 		}

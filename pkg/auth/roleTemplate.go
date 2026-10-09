@@ -36,7 +36,8 @@ func (r *RoleTemplateResolver) RulesFromTemplateName(name string) ([]rbacv1.Poli
 }
 
 // RulesFromTemplate gets all project-scoped rules from the template and all referenced templates.
-// ClusterScopedRules are not included; use ClusterScopedRulesFromTemplate to gather those.
+// ClusterScopedRules are not included; use ClusterScopedRulesFromTemplate to gather those, or
+// ClusterRulesFromTemplate when the template is bound at the cluster level.
 func (r *RoleTemplateResolver) RulesFromTemplate(roleTemplate *rancherv3.RoleTemplate) ([]rbacv1.PolicyRule, error) {
 	var rules []rbacv1.PolicyRule
 	var err error
@@ -48,11 +49,35 @@ func (r *RoleTemplateResolver) RulesFromTemplate(roleTemplate *rancherv3.RoleTem
 	templatesSeen := make(map[string]bool)
 
 	// Kickoff gathering rules
-	rules, err = r.gatherRules(roleTemplate, rules, templatesSeen)
+	rules, err = r.gatherRules(roleTemplate, rules, templatesSeen, false)
 	if err != nil {
 		return rules, err
 	}
 	return rules, nil
+}
+
+// ClusterRulesFromTemplateName gets the cluster-level rules for a roleTemplate with a given name. Simple wrapper around ClusterRulesFromTemplate.
+func (r *RoleTemplateResolver) ClusterRulesFromTemplateName(name string) ([]rbacv1.PolicyRule, error) {
+	rt, err := r.roleTemplates.Get(name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get RoleTemplate '%s': %w", name, err)
+	}
+	return r.ClusterRulesFromTemplate(rt)
+}
+
+// ClusterRulesFromTemplate gets all rules the template grants when it is bound at the cluster level, such as through a
+// ClusterRoleTemplateBinding or a GlobalRole's InheritedClusterRoles. Inherited roles are aggregated into the cluster-level
+// role, so this includes both the rules and the ClusterScopedRules from the template and all referenced templates.
+func (r *RoleTemplateResolver) ClusterRulesFromTemplate(roleTemplate *rancherv3.RoleTemplate) ([]rbacv1.PolicyRule, error) {
+	var rules []rbacv1.PolicyRule
+
+	if roleTemplate == nil {
+		return rules, nil
+	}
+
+	templatesSeen := make(map[string]bool)
+
+	return r.gatherRules(roleTemplate, rules, templatesSeen, true)
 }
 
 // ClusterScopedRulesFromTemplate gathers the ClusterScopedRules from the template and all referenced templates.
@@ -70,7 +95,8 @@ func (r *RoleTemplateResolver) ClusterScopedRulesFromTemplate(roleTemplate *ranc
 }
 
 // gatherRules appends the rules from current template and does a recursive call to get all inherited roles referenced.
-func (r *RoleTemplateResolver) gatherRules(roleTemplate *rancherv3.RoleTemplate, rules []rbacv1.PolicyRule, seen map[string]bool) ([]rbacv1.PolicyRule, error) {
+// If includeClusterScoped is true, the ClusterScopedRules from each template are appended as well.
+func (r *RoleTemplateResolver) gatherRules(roleTemplate *rancherv3.RoleTemplate, rules []rbacv1.PolicyRule, seen map[string]bool, includeClusterScoped bool) ([]rbacv1.PolicyRule, error) {
 	seen[roleTemplate.Name] = true
 
 	if roleTemplate.External {
@@ -86,6 +112,9 @@ func (r *RoleTemplateResolver) gatherRules(roleTemplate *rancherv3.RoleTemplate,
 	}
 
 	rules = append(rules, roleTemplate.Rules...)
+	if includeClusterScoped {
+		rules = append(rules, roleTemplate.ClusterScopedRules...)
+	}
 
 	for _, templateName := range roleTemplate.RoleTemplateNames {
 		// If we have already seen the roleTemplate, skip it
@@ -96,7 +125,7 @@ func (r *RoleTemplateResolver) gatherRules(roleTemplate *rancherv3.RoleTemplate,
 		if err != nil {
 			return nil, fmt.Errorf("failed to get RoleTemplate '%s': %w", templateName, err)
 		}
-		rules, err = r.gatherRules(next, rules, seen)
+		rules, err = r.gatherRules(next, rules, seen, includeClusterScoped)
 		if err != nil {
 			return nil, err
 		}
