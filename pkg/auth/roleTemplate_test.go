@@ -388,3 +388,319 @@ func (r *RoleTemplateResolverSuite) TestGetCache() {
 	resolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
 	r.Equal(resolver.RoleTemplateCache(), roleTemplateCache, "Resolver did not correctly return cache")
 }
+
+func (r *RoleTemplateResolverSuite) TestClusterScopedRulesFromTemplate() {
+	ruleReadPods := rbacv1.PolicyRule{
+		Verbs:     []string{"GET", "WATCH"},
+		APIGroups: []string{"v1"},
+		Resources: []string{"pods"},
+	}
+	ruleClusterSecrets := rbacv1.PolicyRule{
+		Verbs:     []string{"GET"},
+		APIGroups: []string{"v1"},
+		Resources: []string{"secrets"},
+	}
+	ruleClusterNodes := rbacv1.PolicyRule{
+		Verbs:     []string{"LIST"},
+		APIGroups: []string{"v1"},
+		Resources: []string{"nodes"},
+	}
+
+	childRT := &apisv3.RoleTemplate{
+		ObjectMeta:         metav1.ObjectMeta{Name: "child-cluster-scoped"},
+		Context:            "project",
+		Rules:              []rbacv1.PolicyRule{ruleReadPods},
+		ClusterScopedRules: []rbacv1.PolicyRule{ruleClusterNodes},
+	}
+	parentRT := &apisv3.RoleTemplate{
+		ObjectMeta:         metav1.ObjectMeta{Name: "parent-cluster-scoped"},
+		Context:            "project",
+		Rules:              []rbacv1.PolicyRule{ruleReadPods},
+		ClusterScopedRules: []rbacv1.PolicyRule{ruleClusterSecrets},
+		RoleTemplateNames:  []string{childRT.Name},
+	}
+	noClusterScopedRT := &apisv3.RoleTemplate{
+		ObjectMeta: metav1.ObjectMeta{Name: "no-cluster-scoped"},
+		Context:    "project",
+		Rules:      []rbacv1.PolicyRule{ruleReadPods},
+	}
+	invalidInheritRT := &apisv3.RoleTemplate{
+		ObjectMeta:         metav1.ObjectMeta{Name: "invalid-inherit-cluster-scoped"},
+		Context:            "project",
+		ClusterScopedRules: []rbacv1.PolicyRule{ruleClusterSecrets},
+		RoleTemplateNames:  []string{invalidName},
+	}
+
+	tests := []struct {
+		name     string
+		template *apisv3.RoleTemplate
+		caches   func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache)
+		want     Rules
+		wantErr  bool
+	}{
+		{
+			name:     "nil template returns no rules",
+			template: nil,
+			caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
+				ctrl := gomock.NewController(r.T())
+				return fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl),
+					fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
+			},
+			want: nil,
+		},
+		{
+			name:     "template with no cluster-scoped rules returns no rules",
+			template: noClusterScopedRT,
+			caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
+				ctrl := gomock.NewController(r.T())
+				return fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl),
+					fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
+			},
+			want: nil,
+		},
+		{
+			name:     "returns only cluster-scoped rules and excludes regular rules",
+			template: childRT,
+			caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
+				ctrl := gomock.NewController(r.T())
+				return fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl),
+					fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
+			},
+			want: Rules{ruleClusterNodes},
+		},
+		{
+			name:     "gathers cluster-scoped rules from inherited templates",
+			template: parentRT,
+			caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
+				ctrl := gomock.NewController(r.T())
+				roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
+				roleTemplateCache.EXPECT().Get(childRT.Name).Return(childRT, nil)
+				return roleTemplateCache, fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
+			},
+			want: Rules{ruleClusterSecrets, ruleClusterNodes},
+		},
+		{
+			name:     "returns error when inherited template cannot be found",
+			template: invalidInheritRT,
+			caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
+				ctrl := gomock.NewController(r.T())
+				roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
+				roleTemplateCache.EXPECT().Get(invalidName).Return(nil, errExpected)
+				return roleTemplateCache, fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
+			},
+			want:    nil,
+			wantErr: true,
+		},
+	}
+
+	for i := range tests {
+		test := tests[i]
+		r.Run(test.name, func() {
+			r.T().Parallel()
+			resolver := auth.NewRoleTemplateResolver(test.caches())
+			got, err := resolver.ClusterScopedRulesFromTemplate(test.template)
+			if test.wantErr {
+				r.Error(err, "expected test to have error.")
+			} else {
+				r.NoError(err, "unexpected err in test.")
+			}
+			if !test.want.Equal(got) {
+				r.Fail("List of rules did not match", "wanted=%+v got=%+v", test.want, got)
+			}
+		})
+	}
+}
+
+// TestRulesFromTemplateExcludesClusterScopedRules ensures RulesFromTemplate never includes ClusterScopedRules, including
+// those inherited by cluster templates: Rancher does not aggregate them into the role bound by a CRTB or GlobalRole.
+func (r *RoleTemplateResolverSuite) TestRulesFromTemplateExcludesClusterScopedRules() {
+	ruleReadPods := rbacv1.PolicyRule{
+		Verbs:     []string{"GET", "WATCH"},
+		APIGroups: []string{"v1"},
+		Resources: []string{"pods"},
+	}
+	ruleWriteConfigMaps := rbacv1.PolicyRule{
+		Verbs:     []string{"CREATE", "UPDATE"},
+		APIGroups: []string{"v1"},
+		Resources: []string{"configmaps"},
+	}
+	ruleClusterSecrets := rbacv1.PolicyRule{
+		Verbs:     []string{"GET"},
+		APIGroups: []string{"v1"},
+		Resources: []string{"secrets"},
+	}
+	ruleClusterNodes := rbacv1.PolicyRule{
+		Verbs:     []string{"LIST"},
+		APIGroups: []string{"v1"},
+		Resources: []string{"nodes"},
+	}
+
+	nestedProjectRT := &apisv3.RoleTemplate{
+		ObjectMeta:         metav1.ObjectMeta{Name: "nested-project-cluster-scoped"},
+		Context:            "project",
+		ClusterScopedRules: []rbacv1.PolicyRule{ruleClusterNodes},
+	}
+	projectRT := &apisv3.RoleTemplate{
+		ObjectMeta:         metav1.ObjectMeta{Name: "project-cluster-scoped"},
+		Context:            "project",
+		Rules:              []rbacv1.PolicyRule{ruleWriteConfigMaps},
+		ClusterScopedRules: []rbacv1.PolicyRule{ruleClusterSecrets},
+		RoleTemplateNames:  []string{nestedProjectRT.Name},
+	}
+	// Cluster RoleTemplates can't set clusterScopedRules directly, but can inherit them from project RoleTemplates.
+	clusterRT := &apisv3.RoleTemplate{
+		ObjectMeta:        metav1.ObjectMeta{Name: "cluster-inherits-cluster-scoped"},
+		Context:           "cluster",
+		Rules:             []rbacv1.PolicyRule{ruleReadPods},
+		RoleTemplateNames: []string{projectRT.Name},
+	}
+
+	tests := []struct {
+		name     string
+		template *apisv3.RoleTemplate
+		caches   func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache)
+		want     Rules
+	}{
+		{
+			name:     "project template excludes its own and inherited cluster-scoped rules",
+			template: projectRT,
+			caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
+				ctrl := gomock.NewController(r.T())
+				roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
+				roleTemplateCache.EXPECT().Get(nestedProjectRT.Name).Return(nestedProjectRT, nil)
+				return roleTemplateCache, fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
+			},
+			want: Rules{ruleWriteConfigMaps},
+		},
+		{
+			name:     "cluster template excludes cluster-scoped rules inherited from project templates",
+			template: clusterRT,
+			caches: func() (v3.RoleTemplateCache, wranglerv1.ClusterRoleCache) {
+				ctrl := gomock.NewController(r.T())
+				roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
+				roleTemplateCache.EXPECT().Get(projectRT.Name).Return(projectRT, nil)
+				roleTemplateCache.EXPECT().Get(nestedProjectRT.Name).Return(nestedProjectRT, nil)
+				return roleTemplateCache, fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
+			},
+			want: Rules{ruleReadPods, ruleWriteConfigMaps},
+		},
+	}
+
+	for i := range tests {
+		test := tests[i]
+		r.Run(test.name, func() {
+			r.T().Parallel()
+			resolver := auth.NewRoleTemplateResolver(test.caches())
+			got, err := resolver.RulesFromTemplate(test.template)
+			r.NoError(err, "unexpected err in test.")
+			if !test.want.Equal(got) {
+				r.Fail("List of rules did not match", "wanted=%+v got=%+v", test.want, got)
+			}
+		})
+	}
+}
+
+func (r *RoleTemplateResolverSuite) TestClusterScopedRulesFromTemplateName() {
+	ruleReadPods := rbacv1.PolicyRule{
+		Verbs:     []string{"GET", "WATCH"},
+		APIGroups: []string{"v1"},
+		Resources: []string{"pods"},
+	}
+	ruleClusterSecrets := rbacv1.PolicyRule{
+		Verbs:     []string{"GET"},
+		APIGroups: []string{"v1"},
+		Resources: []string{"secrets"},
+	}
+	ruleClusterNodes := rbacv1.PolicyRule{
+		Verbs:     []string{"LIST"},
+		APIGroups: []string{"v1"},
+		Resources: []string{"nodes"},
+	}
+	ruleClusterNamespaces := rbacv1.PolicyRule{
+		Verbs:     []string{"GET"},
+		APIGroups: []string{"v1"},
+		Resources: []string{"namespaces"},
+	}
+
+	nestedProjectRT := &apisv3.RoleTemplate{
+		ObjectMeta:         metav1.ObjectMeta{Name: "nested-project-cluster-scoped"},
+		Context:            "project",
+		ClusterScopedRules: []rbacv1.PolicyRule{ruleClusterNodes},
+	}
+	// project RoleTemplate reached only through a cluster RoleTemplate, so its cluster-scoped rules are not counted.
+	// It is never fetched: the mock cache has no expectation for it, so traversing past clusterRT fails the test.
+	behindClusterRT := &apisv3.RoleTemplate{
+		ObjectMeta:         metav1.ObjectMeta{Name: "behind-cluster-cluster-scoped"},
+		Context:            "project",
+		ClusterScopedRules: []rbacv1.PolicyRule{ruleClusterNamespaces},
+	}
+	clusterRT := &apisv3.RoleTemplate{
+		ObjectMeta:        metav1.ObjectMeta{Name: "cluster-inherits-cluster-scoped"},
+		Context:           "cluster",
+		Rules:             []rbacv1.PolicyRule{ruleReadPods},
+		RoleTemplateNames: []string{behindClusterRT.Name},
+	}
+	projectRT := &apisv3.RoleTemplate{
+		ObjectMeta:         metav1.ObjectMeta{Name: "project-cluster-scoped"},
+		Context:            "project",
+		Rules:              []rbacv1.PolicyRule{ruleReadPods},
+		ClusterScopedRules: []rbacv1.PolicyRule{ruleClusterSecrets},
+		RoleTemplateNames:  []string{nestedProjectRT.Name, clusterRT.Name},
+	}
+
+	tests := []struct {
+		name         string
+		templateName string
+		setup        func(*fake.MockNonNamespacedCacheInterface[*apisv3.RoleTemplate])
+		want         Rules
+		wantErr      bool
+	}{
+		{
+			name:         "includes cluster-scoped rules from the template and inherited project templates only",
+			templateName: projectRT.Name,
+			setup: func(cache *fake.MockNonNamespacedCacheInterface[*apisv3.RoleTemplate]) {
+				cache.EXPECT().Get(projectRT.Name).Return(projectRT, nil)
+				cache.EXPECT().Get(nestedProjectRT.Name).Return(nestedProjectRT, nil)
+				cache.EXPECT().Get(clusterRT.Name).Return(clusterRT, nil)
+			},
+			want: Rules{ruleClusterSecrets, ruleClusterNodes},
+		},
+		{
+			name:         "cluster template grants no cluster-scoped rules",
+			templateName: clusterRT.Name,
+			setup: func(cache *fake.MockNonNamespacedCacheInterface[*apisv3.RoleTemplate]) {
+				cache.EXPECT().Get(clusterRT.Name).Return(clusterRT, nil)
+			},
+			want: nil,
+		},
+		{
+			name:         "returns error when the template cannot be found",
+			templateName: invalidName,
+			setup: func(cache *fake.MockNonNamespacedCacheInterface[*apisv3.RoleTemplate]) {
+				cache.EXPECT().Get(invalidName).Return(nil, errExpected)
+			},
+			want:    nil,
+			wantErr: true,
+		},
+	}
+
+	for i := range tests {
+		test := tests[i]
+		r.Run(test.name, func() {
+			r.T().Parallel()
+			ctrl := gomock.NewController(r.T())
+			roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
+			test.setup(roleTemplateCache)
+			resolver := auth.NewRoleTemplateResolver(roleTemplateCache, fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl))
+			got, err := resolver.ClusterScopedRulesFromTemplateName(test.templateName)
+			if test.wantErr {
+				r.Error(err, "expected test to have error.")
+			} else {
+				r.NoError(err, "unexpected err in test.")
+			}
+			if !test.want.Equal(got) {
+				r.Fail("List of rules did not match", "wanted=%+v got=%+v", test.want, got)
+			}
+		})
+	}
+}

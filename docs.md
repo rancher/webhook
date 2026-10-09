@@ -403,6 +403,7 @@ Only 1 clusterproxyconfig per downstream cluster is ever permitted.
 #### Escalation Prevention
 
 Users can only create/update ClusterRoleTemplateBindings which grant permissions to RoleTemplates with rights less than or equal to those they currently possess. This is to prevent privilege escalation.
+`clusterScopedRules` inherited from project RoleTemplates are not granted by ClusterRoleTemplateBindings, so they are neither required nor counted as held.
 For external RoleTemplates (RoleTemplates with `external` set to `true`), if the `external-rules` feature flag is enabled and `ExternalRules` is specified in the roleTemplate in `RoleTemplateName`,
 `ExternalRules` will be used for authorization. Otherwise (if the feature flag is off or `ExternalRules` are nil), the rules from the backing `ClusterRole` in the local cluster will be used.
 
@@ -511,7 +512,7 @@ Rules without verbs, resources, or apigroups are not permitted. The `rules` incl
 
  Escalation checks are bypassed if a user has the `escalate` verb on the GlobalRole that they are attempting to update or create. This can also be given through a wildcard permission (i.e. the `*` verb also gives `escalate`).
 
-Users can only change GlobalRoles with rights less than or equal to those they currently possess. This is to prevent privilege escalation. This includes the rules in the RoleTemplates referred to in `inheritedClusterRoles` and the rules in `inheritedFleetWorkspacePermissions`.
+Users can only change GlobalRoles with rights less than or equal to those they currently possess. This is to prevent privilege escalation. This includes the rules in the RoleTemplates referred to in `inheritedClusterRoles` (excluding inherited `clusterScopedRules`, which are not granted on downstream clusters) and the rules in `inheritedFleetWorkspacePermissions`.
 
 Users can only grant rules in the `NamespacedRules` field with rights less than or equal to those they currently possess. This works on a per namespace basis, meaning that the user must have the permission
 in the namespace specified. The `Rules` field apply to every namespace, which means a user can create `NamespacedRules` in any namespace that are equal to or less than the `Rules` they currently possess.
@@ -623,6 +624,7 @@ If the BackingNamespace field is empty, populate the BackingNamespace field with
 
 Users can only create/update ProjectRoleTemplateBindings with rights less than or equal to those they currently possess.
 This is to prevent privilege escalation.
+If the RoleTemplate has `clusterScopedRules` (including those inherited through project-context RoleTemplates; inheritance through a cluster-context RoleTemplate does not grant them), the user must hold those rights cluster-wide, through ClusterRoleBindings, ClusterRoleTemplateBindings for the cluster, or the `clusterScopedRules` of their existing ProjectRoleTemplateBindings in the cluster. Project-level permissions (including the project-scoped rules of existing ProjectRoleTemplateBindings) and RoleBindings in the cluster namespace are not sufficient.
 For external RoleTemplates (RoleTemplates with `external` set to `true`), if the `external-rules` feature flag is enabled and `ExternalRules` is specified in the roleTemplate in `RoleTemplateName`,
 `ExternalRules` will be used for authorization. Otherwise, if `ExternalRules` are nil when the feature flag is on, the rules from the backing `ClusterRole` in the local cluster will be used.
 
@@ -730,11 +732,12 @@ Circular references to a `RoleTemplate` (a inherits b, b inherits a) are not all
 
 #### Rules Without Verbs, Resources, API groups
 
-Rules without verbs, resources, or apigroups are not permitted. The `rules` and `externalRules` included in a RoleTemplate are of the same type as the rules used by standard Kubernetes RBAC types (such as `Roles` from `rbac.authorization.k8s.io/v1`). Because of this, they inherit the same restrictions as these types, including this one.
+Rules without verbs, resources, or apigroups are not permitted. The `rules`, `clusterScopedRules`, and `externalRules` included in a RoleTemplate are of the same type as the rules used by standard Kubernetes RBAC types (such as `Roles` from `rbac.authorization.k8s.io/v1`). Because of this, they inherit the same restrictions as these types, including this one.
 
 #### Escalation Prevention
 
 Users can only change RoleTemplates with rights less than or equal to those they currently possess. This prevents privilege escalation. 
+This applies to both `rules` and `clusterScopedRules`, including those inherited from other RoleTemplates. Only `clusterScopedRules` inherited through project-context RoleTemplates are considered, since inheritance through a cluster-context RoleTemplate does not grant them.
 Users can't create external RoleTemplates (or update existing RoleTemplates) with `ExternalRules` without having the `escalate` verb on that RoleTemplate.
 
 #### Context Validation
@@ -743,6 +746,8 @@ The `roletemplates.context` field must be one of the following values [`"cluster
 If the `roletemplates.administrative` is set to true the context must equal `"cluster"`.
 
 If the `roletemplate.ProjectCreatorDefault` is true, context must equal `"project"`
+If there are `clusterScopedRules`, context must equal `"project"`
+
 #### Builtin Validation
 
 The `roletemplates.builtin` field is immutable, and new builtIn RoleTemplates cannot be created.

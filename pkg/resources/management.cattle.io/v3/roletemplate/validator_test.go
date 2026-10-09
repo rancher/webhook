@@ -51,14 +51,31 @@ func (r *RoleTemplateSuite) Test_PrivilegeEscalation() {
 	}
 	resolver, _ := validation.NewTestRuleResolver(nil, nil, clusterRoles, clusterRoleBindings)
 
+	clusterScopedRT := &v3.RoleTemplate{
+		ObjectMeta:         metav1.ObjectMeta{Name: "cluster-scoped-role"},
+		DisplayName:        "Cluster Scoped Role",
+		Context:            "project",
+		ClusterScopedRules: r.adminCR.Rules,
+	}
+	// Cluster RoleTemplate inheriting clusterScopedRT. Cluster templates have no cluster-scoped role, so project templates
+	// inheriting it do not receive clusterScopedRT's cluster-scoped rules.
+	clusterInheritsScopedRT := &v3.RoleTemplate{
+		ObjectMeta:        metav1.ObjectMeta{Name: "cluster-inherits-cluster-scoped-role"},
+		DisplayName:       "Cluster Inherits Cluster Scoped Role",
+		Context:           "cluster",
+		RoleTemplateNames: []string{clusterScopedRT.Name},
+	}
+
 	ctrl := gomock.NewController(r.T())
 
 	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*v3.RoleTemplate](ctrl)
 	roleTemplateCache.EXPECT().AddIndexer(expectedIndexerName, gomock.Any()).AnyTimes()
 	roleTemplateCache.EXPECT().Get(r.adminRT.Name).Return(r.adminRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().Get(r.readNodesRT.Name).Return(r.readNodesRT, nil).AnyTimes()
+	roleTemplateCache.EXPECT().Get(clusterScopedRT.Name).Return(clusterScopedRT, nil).AnyTimes()
+	roleTemplateCache.EXPECT().Get(clusterInheritsScopedRT.Name).Return(clusterInheritsScopedRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().Get(notFoundRoleTemplateName).Return(nil, newNotFound(notFoundRoleTemplateName)).AnyTimes()
-	roleTemplateCache.EXPECT().List(gomock.Any()).Return([]*v3.RoleTemplate{r.adminRT, r.readNodesRT}, nil).AnyTimes()
+	roleTemplateCache.EXPECT().List(gomock.Any()).Return([]*v3.RoleTemplate{r.adminRT, r.readNodesRT, clusterScopedRT, clusterInheritsScopedRT}, nil).AnyTimes()
 	grCache := fake.NewMockNonNamespacedCacheInterface[*v3.GlobalRole](ctrl)
 	grCache.EXPECT().AddIndexer(expectedGlobalRefIndex, gomock.Any()).AnyTimes()
 
@@ -143,6 +160,95 @@ func (r *RoleTemplateSuite) Test_PrivilegeEscalation() {
 					baseRT := newDefaultRT()
 					baseRT.Rules = nil
 					baseRT.RoleTemplateNames = []string{r.readNodesRT.Name}
+					return baseRT
+				},
+				oldRT: func() *v3.RoleTemplate { return nil },
+			},
+			allowed: false,
+		},
+		{
+			name: "cluster-scoped privileges at user's level",
+			args: args{
+				username: adminUser,
+				newRT: func() *v3.RoleTemplate {
+					baseRT := newDefaultRT()
+					baseRT.Context = "project"
+					baseRT.ClusterScopedRules = r.adminCR.Rules
+					return baseRT
+				},
+				oldRT: func() *v3.RoleTemplate { return nil },
+			},
+			allowed: true,
+		},
+		{
+			name: "cluster-scoped privilege escalation denied",
+			args: args{
+				username: noPrivUser,
+				newRT: func() *v3.RoleTemplate {
+					baseRT := newDefaultRT()
+					baseRT.Context = "project"
+					baseRT.ClusterScopedRules = r.adminCR.Rules
+					return baseRT
+				},
+				oldRT: func() *v3.RoleTemplate { return nil },
+			},
+			allowed: false,
+		},
+		{
+			name: "cluster-scoped privilege escalation denied on update",
+			args: args{
+				username: noPrivUser,
+				newRT: func() *v3.RoleTemplate {
+					baseRT := newDefaultRT()
+					baseRT.Context = "project"
+					baseRT.ClusterScopedRules = r.adminCR.Rules
+					return baseRT
+				},
+				oldRT: func() *v3.RoleTemplate {
+					baseRT := newDefaultRT()
+					baseRT.Context = "project"
+					return baseRT
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "cluster-scoped privilege escalation with escalate",
+			args: args{
+				username: testUser,
+				newRT: func() *v3.RoleTemplate {
+					baseRT := newDefaultRT()
+					baseRT.Context = "project"
+					baseRT.ClusterScopedRules = r.adminCR.Rules
+					return baseRT
+				},
+				oldRT: func() *v3.RoleTemplate { return nil },
+			},
+			allowed: true,
+		},
+		{
+			// project -> cluster -> project: the nested project template's cluster-scoped rules are not granted.
+			name: "cluster-scoped privileges inherited through a cluster RoleTemplate are not required",
+			args: args{
+				username: noPrivUser,
+				newRT: func() *v3.RoleTemplate {
+					baseRT := newDefaultRT()
+					baseRT.Context = "project"
+					baseRT.RoleTemplateNames = []string{clusterInheritsScopedRT.Name}
+					return baseRT
+				},
+				oldRT: func() *v3.RoleTemplate { return nil },
+			},
+			allowed: true,
+		},
+		{
+			name: "inherited cluster-scoped privileges check",
+			args: args{
+				username: noPrivUser,
+				newRT: func() *v3.RoleTemplate {
+					baseRT := newDefaultRT()
+					baseRT.Context = "project"
+					baseRT.RoleTemplateNames = []string{clusterScopedRT.Name}
 					return baseRT
 				},
 				oldRT: func() *v3.RoleTemplate { return nil },
@@ -723,6 +829,54 @@ func (r *RoleTemplateSuite) Test_Create() {
 					baseRT.Rules = r.manageNodeRole.Rules
 					baseRT.Context = "cluster"
 					baseRT.ProjectCreatorDefault = true
+					return baseRT
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "project context with clusterScopedRules",
+			args: args{
+				username: adminUser,
+				oldRT: func() *v3.RoleTemplate {
+					return nil
+				},
+				newRT: func() *v3.RoleTemplate {
+					baseRT := newDefaultRT()
+					baseRT.Context = "project"
+					baseRT.ClusterScopedRules = r.manageNodeRole.Rules
+					return baseRT
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "cluster context with clusterScopedRules",
+			args: args{
+				username: adminUser,
+				oldRT: func() *v3.RoleTemplate {
+					return nil
+				},
+				newRT: func() *v3.RoleTemplate {
+					baseRT := newDefaultRT()
+					baseRT.Context = "cluster"
+					baseRT.ClusterScopedRules = r.manageNodeRole.Rules
+					return baseRT
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "missing clusterScopedRules verbs",
+			args: args{
+				username: adminUser,
+				oldRT: func() *v3.RoleTemplate {
+					return nil
+				},
+				newRT: func() *v3.RoleTemplate {
+					baseRT := newDefaultRT()
+					baseRT.Context = "project"
+					baseRT.ClusterScopedRules = []rbacv1.PolicyRule{r.ruleEmptyVerbs}
 					return baseRT
 				},
 			},

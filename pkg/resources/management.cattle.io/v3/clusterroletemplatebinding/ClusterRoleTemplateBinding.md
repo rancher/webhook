@@ -3,6 +3,7 @@
 ### Escalation Prevention
 
 Users can only create/update ClusterRoleTemplateBindings which grant permissions to RoleTemplates with rights less than or equal to those they currently possess. This is to prevent privilege escalation.
+`clusterScopedRules` inherited from project RoleTemplates are not granted by ClusterRoleTemplateBindings, so they are neither required nor counted as held.
 For external RoleTemplates (RoleTemplates with `external` set to `true`), if the `external-rules` feature flag is enabled and `ExternalRules` is specified in the roleTemplate in `RoleTemplateName`,
 `ExternalRules` will be used for authorization. Otherwise (if the feature flag is off or `ExternalRules` are nil), the rules from the backing `ClusterRole` in the local cluster will be used.
 
