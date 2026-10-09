@@ -31,6 +31,10 @@ const (
 	// hiding of the local auth provider when an external auth provider is
 	// activate
 	HideLocalAuthProvider = "hide-local-auth-provider"
+
+	// MultipleAuthConfigs is enabled to allow multiple auth-providers.
+	// This is a prime-only feature.
+	MultipleAuthConfigs = "multiple-auth-providers"
 )
 
 // PdbPercentageRegex ensures that a given string is a properly formatted percentage value
