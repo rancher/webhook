@@ -50,11 +50,11 @@ RUN cat coverage.out | awk 'BEGIN {cov=0; stat=0;} $3!="" { cov+=($3==1?$2:0); s
 # ===============
 FROM build AS validate
 # renovate: datasource=github-releases depName=golangci/golangci-lint
-ARG GOLANGCI_LINT_VERSION=2.13.0
-# renovate: datasource=github-release-attachments depName=golangci/golangci-lint digestVersion=v2.13.0
-ARG GOLANGCI_LINT_SUM_amd64=a10e8d8359d76b9e2b41da60f9d98bb26fd53c7a453caa82e0a172d6f72fd2ca
-# renovate: datasource=github-release-attachments depName=golangci/golangci-lint digestVersion=v2.13.0
-ARG GOLANGCI_LINT_SUM_arm64=3a91c7bb9c135099a97858bea431d6dd2f54e4bf68d479c776c2350428d60e41
+ARG GOLANGCI_LINT_VERSION=2.14.0
+# renovate: datasource=github-release-attachments depName=golangci/golangci-lint digestVersion=v2.14.0
+ARG GOLANGCI_LINT_SUM_amd64=ab90aeb7b066f92a33415b638a50fe5344bbb75a0d32ad30cc248d88f81032ab
+# renovate: datasource=github-release-attachments depName=golangci/golangci-lint digestVersion=v2.14.0
+ARG GOLANGCI_LINT_SUM_arm64=ee7ec5f3453d15ddf106fae5a4d6c71737712348a979d1fe9cd52ec7ea299bae
 RUN set -e; \
     ARCH=$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/'); \
     TARBALL="golangci-lint-${GOLANGCI_LINT_VERSION}-linux-${ARCH}.tar.gz"; \
