@@ -20,7 +20,10 @@ type CRTBResolverSuite struct {
 	adminRT             *apisv3.RoleTemplate
 	readRT              *apisv3.RoleTemplate
 	writeRT             *apisv3.RoleTemplate
+	projectScopedRT     *apisv3.RoleTemplate
+	inheritsScopedRT    *apisv3.RoleTemplate
 	user1AdminCRTB      *apisv3.ClusterRoleTemplateBinding
+	user3InheritsCRTB   *apisv3.ClusterRoleTemplateBinding
 	user1AReadNS2CRTB   *apisv3.ClusterRoleTemplateBinding
 	user1InvalidNS2CRTB *apisv3.ClusterRoleTemplateBinding
 	user2WriteCRTB      *apisv3.ClusterRoleTemplateBinding
@@ -83,6 +86,33 @@ func (c *CRTBResolverSuite) SetupSuite() {
 		Rules:       []rbacv1.PolicyRule{ruleWriteNodes},
 		Locked:      true,
 		Context:     "cluster",
+	}
+	c.projectScopedRT = &apisv3.RoleTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "project-cluster-scoped-role",
+		},
+		DisplayName:        "Project Cluster Scoped Role",
+		Rules:              []rbacv1.PolicyRule{ruleReadServices},
+		ClusterScopedRules: []rbacv1.PolicyRule{ruleWriteNodes},
+		Context:            "project",
+	}
+	// cluster RoleTemplate inheriting a project RoleTemplate with clusterScopedRules.
+	c.inheritsScopedRT = &apisv3.RoleTemplate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "inherits-cluster-scoped-role",
+		},
+		DisplayName:       "Inherits Cluster Scoped Role",
+		Rules:             []rbacv1.PolicyRule{ruleReadPods},
+		RoleTemplateNames: []string{c.projectScopedRT.Name},
+		Context:           "cluster",
+	}
+	c.user3InheritsCRTB = &apisv3.ClusterRoleTemplateBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "user3-inherits-cluster-scoped",
+		},
+		ClusterName:      "namespace1",
+		UserName:         "user3",
+		RoleTemplateName: c.inheritsScopedRT.Name,
 	}
 	c.user1AdminCRTB = &apisv3.ClusterRoleTemplateBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -248,6 +278,16 @@ func (c *CRTBResolverSuite) TestCRTBRuleResolver() {
 			wantRules:   copySlices(c.readRT.Rules, c.writeRT.Rules, c.adminRT.Rules),
 			wantErr:     false,
 		},
+
+		// user with a CRTB whose RoleTemplate inherits cluster-scoped rules from a project RoleTemplate. The CRTB does not
+		// grant the inherited cluster-scoped rules, so they must not be counted.
+		{
+			name:        "inherited cluster-scoped rules are not granted",
+			user:        NewUserInfo(c.user3InheritsCRTB.UserName),
+			clusterName: c.user3InheritsCRTB.ClusterName,
+			wantRules:   copySlices(c.inheritsScopedRT.Rules, c.projectScopedRT.Rules),
+			wantErr:     false,
+		},
 	}
 	for _, tt := range tests {
 		c.Run(tt.name, func() {
@@ -271,13 +311,15 @@ func (c *CRTBResolverSuite) TestCRTBRuleResolver() {
 func (c *CRTBResolverSuite) NewTestCRTBResolver() *CRTBRuleResolver {
 	ctrl := gomock.NewController(c.T())
 	bindings := []*apisv3.ClusterRoleTemplateBinding{c.user1AdminCRTB, c.user1AReadNS2CRTB, c.user1InvalidNS2CRTB,
-		c.user2WriteCRTB, c.user2ReadCRTB, c.groupAdminCRTB, c.groupReadCRTB, c.groupWriteCRTB, c.group2WriteCRTB}
+		c.user2WriteCRTB, c.user2ReadCRTB, c.groupAdminCRTB, c.groupReadCRTB, c.groupWriteCRTB, c.group2WriteCRTB, c.user3InheritsCRTB}
 	crtbCache := NewCRTBCache(ctrl, bindings)
 	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 	roleTemplateCache.EXPECT().Get(c.adminRT.Name).Return(c.adminRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().Get(c.readRT.Name).Return(c.readRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().Get(c.writeRT.Name).Return(c.writeRT, nil).AnyTimes()
+	roleTemplateCache.EXPECT().Get(c.projectScopedRT.Name).Return(c.projectScopedRT, nil).AnyTimes()
+	roleTemplateCache.EXPECT().Get(c.inheritsScopedRT.Name).Return(c.inheritsScopedRT, nil).AnyTimes()
 	roleTemplateCache.EXPECT().Get(invalidName).Return(nil, errNotFound).AnyTimes()
 	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
 	return NewCRTBRuleResolver(crtbCache, roleResolver)

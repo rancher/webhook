@@ -72,6 +72,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 	if clients.MultiClusterManagement {
 		crtbResolver := resolvers.NewCRTBRuleResolver(clients.Management.ClusterRoleTemplateBinding().Cache(), clients.RoleTemplateResolver)
 		prtbResolver := resolvers.NewPRTBRuleResolver(clients.Management.ProjectRoleTemplateBinding().Cache(), clients.RoleTemplateResolver)
+		prtbClusterScopedResolver := resolvers.NewPRTBClusterScopedRuleResolver(clients.Management.ProjectRoleTemplateBinding().Cache(), clients.RoleTemplateResolver)
 		grbResolvers := resolvers.NewGRBRuleResolvers(clients.Management.GlobalRoleBinding().Cache(), clients.GlobalRoleResolver)
 
 		handlers = append(
@@ -81,7 +82,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			podsecurityadmissionconfigurationtemplate.NewValidator(clients.Management.Cluster().Cache(), clients.Provisioning.Cluster().Cache()),
 			globalrole.NewValidator(clients.DefaultResolver, grbResolvers, clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.GlobalRoleResolver),
 			globalrolebinding.NewValidator(clients.DefaultResolver, grbResolvers, clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.GlobalRoleResolver),
-			projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver, clients.Management.Cluster().Cache(), clients.Management.Project().Cache(), clients.Management.ProjectRoleTemplateBinding().Cache()),
+			projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, prtbClusterScopedResolver, clients.DefaultResolver, clients.RoleTemplateResolver, clients.Management.Cluster().Cache(), clients.Management.Project().Cache(), clients.Management.ProjectRoleTemplateBinding().Cache()),
 			clusterroletemplatebinding.NewValidator(crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver, clients.Management.GlobalRoleBinding().Cache(), clients.Management.Cluster().Cache(), clients.Management.ClusterRoleTemplateBinding().Cache()),
 			roletemplate.NewValidator(clients.DefaultResolver, clients.RoleTemplateResolver, clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.Management.GlobalRole().Cache()),
 			secret.NewValidator(clients.RBAC.Role().Cache(), clients.RBAC.RoleBinding().Cache()),

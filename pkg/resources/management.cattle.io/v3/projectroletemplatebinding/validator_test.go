@@ -184,7 +184,7 @@ func (p *ProjectRoleTemplateBindingSuite) TestPrivilegeEscalation() {
 	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
 	prtbCache := fake.NewMockCacheInterface[*apisv3.ProjectRoleTemplateBinding](ctrl)
-	prtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
+	prtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any()).Times(2)
 	prtbCache.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(prtbUser, projectID)).Return([]*apisv3.ProjectRoleTemplateBinding{{
 		UserName:         prtbUser,
 		RoleTemplateName: p.adminRT.Name,
@@ -222,7 +222,7 @@ func (p *ProjectRoleTemplateBindingSuite) TestPrivilegeEscalation() {
 			ClusterName: clusterID,
 		},
 	}, nil).AnyTimes()
-	validator := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, resolver, roleResolver, clusterCache, projectCache, prtbCache)
+	validator := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, resolvers.NewPRTBClusterScopedRuleResolver(prtbCache, roleResolver), resolver, roleResolver, clusterCache, projectCache, prtbCache)
 	type args struct {
 		oldPRTB  func() *apisv3.ProjectRoleTemplateBinding
 		newPRTB  func() *apisv3.ProjectRoleTemplateBinding
@@ -347,6 +347,252 @@ func (p *ProjectRoleTemplateBindingSuite) TestPrivilegeEscalation() {
 	}
 }
 
+func (p *ProjectRoleTemplateBindingSuite) TestClusterScopedRuleEscalation() {
+	const adminUser = "admin-userid"
+	const clusterWriteUser = "cluster-write-userid"
+	const projectWriteUser = "project-write-userid"
+	const clusterNSWriteUser = "cluster-ns-write-userid"
+	const crtbWriteUser = "crtb-write-userid"
+	const prtbClusterScopedUser = "prtb-cluster-scoped-userid"
+	const prtbProjectRulesUser = "prtb-project-rules-userid"
+	const prtbOtherClusterUser = "prtb-other-cluster-userid"
+	const noPermsUser = "no-perms-userid"
+	const otherProject = clusterID + ":other-project-id"
+
+	ruleWriteNodes := p.writeNodeCR.Rules[0]
+
+	// RoleTemplate whose permissions are only granted cluster-wide.
+	clusterScopedRT := &apisv3.RoleTemplate{
+		ObjectMeta:         metav1.ObjectMeta{Name: "cluster-scoped-role"},
+		DisplayName:        "Cluster Scoped Role",
+		Context:            "project",
+		ClusterScopedRules: []rbacv1.PolicyRule{ruleWriteNodes},
+	}
+	// RoleTemplate whose permissions are only granted within the project.
+	projectScopedRT := &apisv3.RoleTemplate{
+		ObjectMeta:  metav1.ObjectMeta{Name: "project-scoped-role"},
+		DisplayName: "Project Scoped Role",
+		Context:     "project",
+		Rules:       []rbacv1.PolicyRule{ruleWriteNodes},
+	}
+	// Cluster RoleTemplate granted to crtbWriteUser through a CRTB.
+	clusterWriteRT := &apisv3.RoleTemplate{
+		ObjectMeta:  metav1.ObjectMeta{Name: "cluster-write-role"},
+		DisplayName: "Cluster Write Role",
+		Context:     "cluster",
+		Rules:       []rbacv1.PolicyRule{ruleWriteNodes},
+	}
+	// project -> cluster -> project chain. Cluster templates have no cluster-scoped role, so a PRTB to chainRT does not
+	// grant clusterScopedRT's cluster-scoped rules.
+	clusterInheritsScopedRT := &apisv3.RoleTemplate{
+		ObjectMeta:        metav1.ObjectMeta{Name: "cluster-inherits-cluster-scoped-role"},
+		DisplayName:       "Cluster Inherits Cluster Scoped Role",
+		Context:           "cluster",
+		RoleTemplateNames: []string{clusterScopedRT.Name},
+	}
+	chainRT := &apisv3.RoleTemplate{
+		ObjectMeta:        metav1.ObjectMeta{Name: "project-inherits-cluster-role"},
+		DisplayName:       "Project Inherits Cluster Role",
+		Context:           "project",
+		RoleTemplateNames: []string{clusterInheritsScopedRT.Name},
+	}
+	crtbWrite := &apisv3.ClusterRoleTemplateBinding{
+		ObjectMeta:       metav1.ObjectMeta{Namespace: clusterID, Name: "crtb-write"},
+		ClusterName:      clusterID,
+		UserName:         crtbWriteUser,
+		RoleTemplateName: clusterWriteRT.Name,
+	}
+
+	// Role granting write nodes only within the project namespace.
+	projectWriteRole := &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{Namespace: projectID, Name: "project-write-nodes"},
+		Rules:      []rbacv1.PolicyRule{ruleWriteNodes},
+	}
+	roles := []*rbacv1.Role{projectWriteRole}
+	roleBindings := []*rbacv1.RoleBinding{
+		{
+			ObjectMeta: metav1.ObjectMeta{Namespace: projectID},
+			Subjects:   []rbacv1.Subject{{Kind: rbacv1.UserKind, Name: projectWriteUser}},
+			RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: projectWriteRole.Name},
+		},
+		// Namespaced binding in the cluster namespace, which does not grant cluster-wide permissions.
+		{
+			ObjectMeta: metav1.ObjectMeta{Namespace: clusterID},
+			Subjects:   []rbacv1.Subject{{Kind: rbacv1.UserKind, Name: clusterNSWriteUser}},
+			RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: p.writeNodeCR.Name},
+		},
+	}
+	clusterRoles := []*rbacv1.ClusterRole{p.adminCR, p.writeNodeCR}
+	clusterRoleBindings := []*rbacv1.ClusterRoleBinding{
+		{
+			Subjects: []rbacv1.Subject{{Kind: rbacv1.UserKind, Name: adminUser}},
+			RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: p.adminCR.Name},
+		},
+		{
+			Subjects: []rbacv1.Subject{{Kind: rbacv1.UserKind, Name: clusterWriteUser}},
+			RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: p.writeNodeCR.Name},
+		},
+	}
+	resolver, _ := validation.NewTestRuleResolver(roles, roleBindings, clusterRoles, clusterRoleBindings)
+
+	ctrl := gomock.NewController(p.T())
+	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
+	roleTemplateCache.EXPECT().Get(clusterScopedRT.Name).Return(clusterScopedRT, nil).AnyTimes()
+	roleTemplateCache.EXPECT().Get(projectScopedRT.Name).Return(projectScopedRT, nil).AnyTimes()
+	roleTemplateCache.EXPECT().Get(clusterWriteRT.Name).Return(clusterWriteRT, nil).AnyTimes()
+	roleTemplateCache.EXPECT().Get(clusterInheritsScopedRT.Name).Return(clusterInheritsScopedRT, nil).AnyTimes()
+	roleTemplateCache.EXPECT().Get(chainRT.Name).Return(chainRT, nil).AnyTimes()
+	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
+	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
+
+	prtbCache := fake.NewMockCacheInterface[*apisv3.ProjectRoleTemplateBinding](ctrl)
+	prtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any()).Times(2)
+	// existing PRTB in another project of this cluster whose RoleTemplate grants ruleWriteNodes cluster-wide.
+	prtbCache.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(prtbClusterScopedUser, clusterID)).Return([]*apisv3.ProjectRoleTemplateBinding{
+		{UserName: prtbClusterScopedUser, ProjectName: otherProject, RoleTemplateName: clusterScopedRT.Name},
+	}, nil).AnyTimes()
+	// existing PRTB in another project of this cluster whose RoleTemplate grants ruleWriteNodes only in that project.
+	prtbCache.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(prtbProjectRulesUser, clusterID)).Return([]*apisv3.ProjectRoleTemplateBinding{
+		{UserName: prtbProjectRulesUser, ProjectName: otherProject, RoleTemplateName: projectScopedRT.Name},
+	}, nil).AnyTimes()
+	// existing PRTB granting ruleWriteNodes cluster-wide in a different cluster.
+	prtbCache.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(prtbOtherClusterUser, "other-cluster-id")).Return([]*apisv3.ProjectRoleTemplateBinding{
+		{UserName: prtbOtherClusterUser, ProjectName: "other-cluster-id:p-other", RoleTemplateName: clusterScopedRT.Name},
+	}, nil).AnyTimes()
+	prtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	prtbCache.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*apisv3.ProjectRoleTemplateBinding{}, nil).AnyTimes()
+
+	crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
+	crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
+	crtbCache.EXPECT().GetByIndex(gomock.Any(), resolvers.GetUserKey(crtbWriteUser, clusterID)).Return([]*apisv3.ClusterRoleTemplateBinding{crtbWrite}, nil).AnyTimes()
+	crtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+
+	crtbResolver := resolvers.NewCRTBRuleResolver(crtbCache, roleResolver)
+	prtbResolver := resolvers.NewPRTBRuleResolver(prtbCache, roleResolver)
+
+	clusterCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.Cluster](ctrl)
+	clusterCache.EXPECT().Get(clusterID).Return(&apisv3.Cluster{
+		ObjectMeta: metav1.ObjectMeta{Name: clusterID},
+	}, nil).AnyTimes()
+
+	projectCache := fake.NewMockCacheInterface[*apisv3.Project](ctrl)
+	projectCache.EXPECT().Get(clusterID, projectID).Return(&apisv3.Project{
+		ObjectMeta: metav1.ObjectMeta{Namespace: clusterID, Name: projectID},
+		Spec:       apisv3.ProjectSpec{ClusterName: clusterID},
+	}, nil).AnyTimes()
+
+	validator := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, resolvers.NewPRTBClusterScopedRuleResolver(prtbCache, roleResolver), resolver, roleResolver, clusterCache, projectCache, prtbCache)
+
+	tests := []struct {
+		name             string
+		username         string
+		roleTemplateName string
+		allowed          bool
+	}{
+		// cluster admin holds the permission cluster-wide {PASS}.
+		{
+			name:             "cluster admin can grant cluster-scoped rules",
+			username:         adminUser,
+			roleTemplateName: clusterScopedRT.Name,
+			allowed:          true,
+		},
+		// user holds the exact permission at the cluster level {PASS}.
+		{
+			name:             "user with cluster-level permissions can grant cluster-scoped rules",
+			username:         clusterWriteUser,
+			roleTemplateName: clusterScopedRT.Name,
+			allowed:          true,
+		},
+		// user only holds the permission within the project, cluster-scoped rules do not fall back to project {FAIL}.
+		{
+			name:             "user with only project-level permissions cannot grant cluster-scoped rules",
+			username:         projectWriteUser,
+			roleTemplateName: clusterScopedRT.Name,
+			allowed:          false,
+		},
+		// project-scoped rules still fall back to project-level permissions {PASS}.
+		{
+			name:             "user with project-level permissions can grant project-scoped rules",
+			username:         projectWriteUser,
+			roleTemplateName: projectScopedRT.Name,
+			allowed:          true,
+		},
+		// user only holds the permission through a RoleBinding in the cluster namespace, which is not cluster-wide {FAIL}.
+		{
+			name:             "user with only cluster namespace permissions cannot grant cluster-scoped rules",
+			username:         clusterNSWriteUser,
+			roleTemplateName: clusterScopedRT.Name,
+			allowed:          false,
+		},
+		// project-scoped rules can still be authorized by a RoleBinding in the cluster namespace {PASS}.
+		{
+			name:             "user with cluster namespace permissions can grant project-scoped rules",
+			username:         clusterNSWriteUser,
+			roleTemplateName: projectScopedRT.Name,
+			allowed:          true,
+		},
+		// user holds the permission through a CRTB for the cluster {PASS}.
+		{
+			name:             "user with CRTB permissions can grant cluster-scoped rules",
+			username:         crtbWriteUser,
+			roleTemplateName: clusterScopedRT.Name,
+			allowed:          true,
+		},
+		// user holds the permission cluster-wide through the cluster-scoped rules of a PRTB in another project of this cluster {PASS}.
+		{
+			name:             "user with cluster-scoped rules from an existing PRTB in the cluster can grant them",
+			username:         prtbClusterScopedUser,
+			roleTemplateName: clusterScopedRT.Name,
+			allowed:          true,
+		},
+		// user only holds the permission as project rules of a PRTB in another project, which are not cluster-wide {FAIL}.
+		{
+			name:             "project rules from an existing PRTB are not treated as cluster-wide",
+			username:         prtbProjectRulesUser,
+			roleTemplateName: clusterScopedRT.Name,
+			allowed:          false,
+		},
+		// user only holds the permission cluster-wide in a different cluster {FAIL}.
+		{
+			name:             "cluster-scoped rules from a PRTB in another cluster are not counted",
+			username:         prtbOtherClusterUser,
+			roleTemplateName: clusterScopedRT.Name,
+			allowed:          false,
+		},
+		// the binding grants nothing: cluster-scoped rules inherited through a cluster RoleTemplate are not granted {PASS}.
+		{
+			name:             "cluster-scoped rules inherited through a cluster RoleTemplate are not required",
+			username:         noPermsUser,
+			roleTemplateName: chainRT.Name,
+			allowed:          true,
+		},
+		// control: without the cluster template in between, the cluster-scoped rules are required {FAIL}.
+		{
+			name:             "user without permissions cannot grant cluster-scoped rules",
+			username:         noPermsUser,
+			roleTemplateName: clusterScopedRT.Name,
+			allowed:          false,
+		},
+	}
+
+	for i := range tests {
+		test := tests[i]
+		p.Run(test.name, func() {
+			p.T().Parallel()
+			newPRTB := newBasePRTB()
+			newPRTB.RoleTemplateName = test.roleTemplateName
+			req := createPRTBRequest(p.T(), nil, newPRTB, test.username)
+			admitters := validator.Admitters()
+			p.Len(admitters, 1)
+			resp, err := admitters[0].Admit(req)
+			p.NoError(err, "Admit failed")
+			if resp.Allowed != test.allowed {
+				p.Failf("Response was incorrectly validated", "Wanted response.Allowed = '%v' got %v: result=%+v", test.allowed, resp.Allowed, resp.Result)
+			}
+		})
+	}
+}
+
 func (p *ProjectRoleTemplateBindingSuite) TestValidationOnUpdate() {
 	const (
 		adminUser    = "admin-userid"
@@ -372,7 +618,7 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnUpdate() {
 	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
 	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
 	prtbCache := fake.NewMockCacheInterface[*apisv3.ProjectRoleTemplateBinding](ctrl)
-	prtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
+	prtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any()).Times(2)
 	prtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 	crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
 	crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
@@ -397,7 +643,7 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnUpdate() {
 		},
 	}, nil).AnyTimes()
 
-	validator := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, resolver, roleResolver, clusterCache, projectCache, prtbCache)
+	validator := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, resolvers.NewPRTBClusterScopedRuleResolver(prtbCache, roleResolver), resolver, roleResolver, clusterCache, projectCache, prtbCache)
 	type args struct {
 		oldPRTB  func() *apisv3.ProjectRoleTemplateBinding
 		newPRTB  func() *apisv3.ProjectRoleTemplateBinding
@@ -768,7 +1014,7 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnCreate() {
 		roleTemplateCache.EXPECT().Get("").Return(nil, errExpected).AnyTimes()
 		roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, state.clusterRoleCacheMock)
 		prtbCache := fake.NewMockCacheInterface[*apisv3.ProjectRoleTemplateBinding](ctrl)
-		prtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
+		prtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any()).Times(2)
 		prtbCache.EXPECT().GetByIndex(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 		prtbCache.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*apisv3.ProjectRoleTemplateBinding{}, nil).AnyTimes()
 		crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
@@ -817,7 +1063,7 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidationOnCreate() {
 			},
 		}, nil).AnyTimes()
 
-		return projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, resolver, roleResolver, clusterCache, projectCache, prtbCache)
+		return projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, resolvers.NewPRTBClusterScopedRuleResolver(prtbCache, roleResolver), resolver, roleResolver, clusterCache, projectCache, prtbCache)
 	}
 
 	type args struct {
@@ -1313,7 +1559,7 @@ func (p *ProjectRoleTemplateBindingSuite) TestValidateDuplicates() {
 			prtbResolver := resolvers.NewPRTBRuleResolver(prtbCache, roleResolver)
 
 			dummyDefaultResolver, _ := validation.NewTestRuleResolver(nil, nil, nil, nil)
-			validator := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, dummyDefaultResolver, roleResolver, clusterCache, projectCache, prtbCache)
+			validator := projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, resolvers.NewPRTBClusterScopedRuleResolver(prtbCache, roleResolver), dummyDefaultResolver, roleResolver, clusterCache, projectCache, prtbCache)
 
 			req := createPRTBRequest(p.T(), nil, test.newPRTB, adminUser)
 			admitters := validator.Admitters()

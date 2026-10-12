@@ -30,14 +30,18 @@ var gvr = schema.GroupVersionResource{
 }
 
 // NewValidator returns a new validator used for validation PRTB.
-func NewValidator(prtb *resolvers.PRTBRuleResolver, crtb *resolvers.CRTBRuleResolver,
+func NewValidator(prtb *resolvers.PRTBRuleResolver, crtb *resolvers.CRTBRuleResolver, prtbClusterScoped *resolvers.PRTBClusterScopedRuleResolver,
 	defaultResolver k8validation.AuthorizationRuleResolver, roleTemplateResolver *auth.RoleTemplateResolver,
 	clusterCache v3.ClusterCache, projectCache v3.ProjectCache, prtbCache v3.ProjectRoleTemplateBindingCache) *Validator {
 	clusterResolver := resolvers.NewAggregateRuleResolver(defaultResolver, crtb)
+	// CRTBs and the cluster-scoped rules of existing PRTBs are indexed by cluster name, so those resolvers still receive
+	// the cluster namespace, but the default resolver must not consider RoleBindings in that namespace.
+	clusterWideResolver := resolvers.NewAggregateRuleResolver(resolvers.NewClusterWideRuleResolver(defaultResolver), crtb, prtbClusterScoped)
 	projectResolver := resolvers.NewAggregateRuleResolver(defaultResolver, prtb)
 	return &Validator{
 		admitter: admitter{
 			clusterResolver:      clusterResolver,
+			clusterWideResolver:  clusterWideResolver,
 			projectResolver:      projectResolver,
 			roleTemplateResolver: roleTemplateResolver,
 			clusterCache:         clusterCache,
@@ -74,6 +78,7 @@ func (v *Validator) Admitters() []admission.Admitter {
 
 type admitter struct {
 	clusterResolver      k8validation.AuthorizationRuleResolver
+	clusterWideResolver  k8validation.AuthorizationRuleResolver
 	projectResolver      k8validation.AuthorizationRuleResolver
 	roleTemplateResolver *auth.RoleTemplateResolver
 	clusterCache         v3.ClusterCache
@@ -135,10 +140,24 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, fmt.Errorf("failed to get rules from referenced roleTemplate '%s': %w", roleTemplate.Name, err)
 	}
 
+	clusterScopedRules, err := a.roleTemplateResolver.ClusterScopedRulesFromTemplate(roleTemplate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cluster-scoped rules from referenced roleTemplate '%s': %w", roleTemplate.Name, err)
+	}
+
 	clusterNS, projectNS := clusterAndProjectID(prtb.ProjectName)
-	err = auth.ConfirmNoEscalation(request, rules, clusterNS, a.clusterResolver)
-	if err == nil {
-		return &admissionv1.AdmissionResponse{Allowed: true}, nil
+
+	// ClusterScopedRules are granted cluster-wide, so they can only be authorized by the user's
+	// cluster-wide permissions (ClusterRoleBindings, CRTBs, and the ClusterScopedRules of their PRTBs in
+	// this cluster). They must not be satisfied by RoleBindings in the cluster namespace or fall back to
+	// the project resolver.
+	if err := auth.ConfirmNoEscalation(request, clusterScopedRules, clusterNS, a.clusterWideResolver); err != nil {
+		return admission.ResponseFailedEscalation(err.Error()), nil
+	}
+
+	// Project rules can be authorized by the user's permissions at either the cluster or project level.
+	if err := auth.ConfirmNoEscalation(request, rules, clusterNS, a.clusterResolver); err == nil {
+		return admission.ResponseAllowed(), nil
 	}
 
 	response := &admissionv1.AdmissionResponse{}

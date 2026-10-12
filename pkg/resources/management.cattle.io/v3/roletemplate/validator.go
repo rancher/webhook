@@ -149,6 +149,15 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return admission.ResponseBadRequest(err.Error()), nil
 	}
 
+	clusterScopedRules, err := a.roleTemplateResolver.ClusterScopedRulesFromTemplate(newRT)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all cluster-scoped rules for '%s': %w", newRT.Name, err)
+	}
+
+	if err := common.ValidateRules(clusterScopedRules, false, fldPath.Child("clusterScopedRules")); err != nil {
+		return admission.ResponseBadRequest(err.Error()), nil
+	}
+
 	allowed, err := auth.RequestUserHasVerb(request, gvr, a.sar, escalateVerb, "", "")
 	if err != nil {
 		logrus.Warnf("Failed to check for the 'escalate' verb on RoleTemplates: %v", err)
@@ -162,6 +171,12 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 	}
 
 	err = auth.ConfirmNoEscalation(request, rules, "", a.resolver)
+	if err != nil {
+		return admission.ResponseFailedEscalation(err.Error()), nil
+	}
+
+	// ClusterScopedRules are distributed by bindings just like rules, so the user must already hold them.
+	err = auth.ConfirmNoEscalation(request, clusterScopedRules, "", a.resolver)
 	if err != nil {
 		return admission.ResponseFailedEscalation(err.Error()), nil
 	}
@@ -209,6 +224,9 @@ func validateCreateFields(newRole *v3.RoleTemplate, fldPath *field.Path) *field.
 func validateContextValue(newRole *v3.RoleTemplate, fldPath *field.Path) *field.Error {
 	if newRole.Context != projectContext && newRole.ProjectCreatorDefault {
 		return field.Forbidden(fldPath.Child("context"), "RoleTemplate context must be project when projectCreatorDefault=true")
+	}
+	if newRole.Context != projectContext && len(newRole.ClusterScopedRules) > 0 {
+		return field.Forbidden(fldPath.Child("clusterScopedRules"), "ClusterScopedRules can only be set for project context RoleTemplates")
 	}
 	if newRole.Administrative && newRole.Context != clusterContext {
 		return field.Forbidden(fldPath.Child("administrative"), "only cluster roles can be administrative")
