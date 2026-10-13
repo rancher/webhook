@@ -9,3 +9,11 @@ docs.md
 /pkg/generated/
 /pkg/codegen/
 /pkg/server/handlers.go
+
+# Owned by another team, do not require frameworks team approval
+/pkg/auth/
+/pkg/resolvers/
+
+# Dependency bumps, do not require frameworks team approval (lets Renovate auto-approve/merge)
+/go.mod
+/go.sum
