@@ -278,20 +278,7 @@ func (a *admitter) isLocalAuthProviderHidden() (bool, error) {
 // is enabled. A missing feature resource is treated as disabled — this can
 // occur when a newer webhook runs against an older Rancher backend.
 func (a *admitter) isHideLocalAuthProviderPolicyEnabled() (bool, error) {
-	feature, err := a.featureCache.Get(common.HideLocalAuthProvider)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("failed to determine status of '%s' feature: %w", common.HideLocalAuthProvider, err)
-	}
-
-	enabled := feature.Status.Default
-	if feature.Spec.Value != nil {
-		enabled = *feature.Spec.Value
-	}
-
-	return enabled, nil
+	return common.IsFeatureEnabled(a.featureCache, common.HideLocalAuthProvider)
 }
 
 // getGroupsFromUserAttributes gets the list of group principals from a UserAttribute.

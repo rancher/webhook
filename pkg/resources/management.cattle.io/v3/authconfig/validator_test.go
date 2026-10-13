@@ -7,11 +7,15 @@ import (
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
+	"github.com/rancher/webhook/pkg/resources/common"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/authconfig"
+	"github.com/rancher/wrangler/v3/pkg/generic/fake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -219,13 +223,23 @@ func TestValidateLdapConfig(t *testing.T) {
 		},
 	}
 
-	validator := authconfig.NewValidator()
-
 	for _, provider := range []string{"openldap", "freeipa"} {
 		for _, op := range []v1.Operation{v1.Create, v1.Update} {
 			for _, test := range tests {
 				name := provider + "_" + string(op) + "_" + test.desc
 				t.Run(name, func(t *testing.T) {
+					ctrl := gomock.NewController(t)
+					t.Cleanup(ctrl.Finish)
+					ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
+					fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+
+					if !test.disabled {
+						fc.EXPECT().Get(common.MultipleAuthConfigs).Return(&v3.Feature{Status: v3.FeatureStatus{Default: false}}, nil)
+						ac.EXPECT().List(labels.Everything()).Return([]*v3.AuthConfig{}, nil)
+					}
+
+					validator := authconfig.NewValidator(fc, ac)
+
 					fields := fields
 					if test.fields != nil {
 						fields = test.fields()
@@ -429,16 +443,26 @@ func TestValidateActiveDirectoryConfig(t *testing.T) {
 		},
 	}
 
-	validator := authconfig.NewValidator()
-
 	for _, op := range []v1.Operation{v1.Create, v1.Update} {
 		for _, test := range tests {
 			name := string(op) + "_" + test.desc
 			t.Run(name, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				t.Cleanup(ctrl.Finish)
+
+				ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
+				fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+
 				config := config
 				if test.config != nil {
 					config = test.config()
 				}
+
+				if config.Enabled {
+					fc.EXPECT().Get(common.MultipleAuthConfigs).Return(&v3.Feature{Spec: v3.FeatureSpec{Value: new(false)}, Status: v3.FeatureStatus{Default: false}}, nil)
+					ac.EXPECT().List(labels.Everything()).Return([]*v3.AuthConfig{}, nil)
+				}
+				validator := authconfig.NewValidator(fc, ac)
 				testActiveDirectoryAdmit(t, validator, op, config, test.idAttrs, test.allowed)
 			})
 		}
@@ -447,7 +471,6 @@ func TestValidateActiveDirectoryConfig(t *testing.T) {
 
 func TestIDAttributeImmutability(t *testing.T) {
 	t.Parallel()
-	validator := authconfig.NewValidator()
 
 	type state struct {
 		enabled bool
@@ -535,10 +558,21 @@ func TestIDAttributeImmutability(t *testing.T) {
 		for _, test := range tests {
 			t.Run(provider.name+"_"+test.desc, func(t *testing.T) {
 				t.Parallel()
+				ctrl := gomock.NewController(t)
+				t.Cleanup(ctrl.Finish)
+
+				ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
+				fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+				allowed := test.allowed || provider.nested
+				if test.new.enabled && allowed {
+					fc.EXPECT().Get(common.MultipleAuthConfigs).Return(&v3.Feature{Status: v3.FeatureStatus{Default: false}}, nil)
+					ac.EXPECT().List(labels.Everything()).Return([]*v3.AuthConfig{}, nil)
+				}
+
+				validator := authconfig.NewValidator(fc, ac)
+
 				oldConfig := withFields(t, provider.config(test.old.enabled), fields(test.old))
 				newConfig := withFields(t, provider.config(test.new.enabled), fields(test.new))
-				// SAML principal IDs come from the assertion, so the LDAP search attributes stay editable.
-				allowed := test.allowed || provider.nested
 				testAdmit(t, validator, v1.Update, oldConfig, newConfig, allowed)
 			})
 		}
@@ -588,7 +622,6 @@ var ldapBasedProviders = []struct {
 
 func TestSamlLdapSearchIDAttributes(t *testing.T) {
 	t.Parallel()
-	validator := authconfig.NewValidator()
 
 	tests := []struct {
 		desc    string
@@ -611,6 +644,19 @@ func TestSamlLdapSearchIDAttributes(t *testing.T) {
 			for _, test := range tests {
 				t.Run(provider.name+"_"+string(op)+"_"+test.desc, func(t *testing.T) {
 					t.Parallel()
+
+					ctrl := gomock.NewController(t)
+					t.Cleanup(ctrl.Finish)
+					ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
+					fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+
+					if test.enabled {
+						fc.EXPECT().Get(common.MultipleAuthConfigs).Return(&v3.Feature{Status: v3.FeatureStatus{Default: false}}, nil)
+						ac.EXPECT().List(labels.Everything()).Return([]*v3.AuthConfig{}, nil)
+					}
+
+					validator := authconfig.NewValidator(fc, ac)
+
 					oldConfig := provider.config(false)
 					newConfig := provider.config(test.enabled)
 					if test.attrs != nil {
@@ -688,6 +734,164 @@ func testLdapAdmit(t *testing.T, validator *authconfig.Validator, provider strin
 	}
 
 	testAdmit(t, validator, op, oldConfig, withFields(t, newConfig, idAttrs), allowed)
+}
+
+func TestValidateEnablingAuthConfigs(t *testing.T) {
+	t.Parallel()
+	config := v3.GithubConfig{
+		AuthConfig: v3.AuthConfig{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "AuthConfig",
+				APIVersion: "management.cattle.io/v3",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "github",
+			},
+			Type:       "githubConfig",
+			Enabled:    true,
+			AccessMode: "required",
+			AllowedPrincipalIDs: []string{
+				"github_user://12345",
+			},
+		},
+		ClientID:     "not-a-real-client-id",
+		ClientSecret: "not-a-real-client-secret",
+		Hostname:     "github.com",
+		TLS:          true,
+	}
+
+	tests := []struct {
+		desc                  string
+		admit                 any
+		existing              []*v3.AuthConfig
+		multipleAuthConfigsOn bool
+		allowed               bool
+	}{
+		{
+			desc:     "no authconfigs",
+			admit:    config,
+			existing: []*v3.AuthConfig{},
+			allowed:  true,
+		},
+		{
+			desc:  "with enabled local authconfig",
+			admit: config,
+			existing: []*v3.AuthConfig{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "local"},
+					Type:       "localConfig",
+					Enabled:    true,
+				},
+			},
+			allowed: true,
+		},
+		{
+			desc:  "no enabled authconfigs",
+			admit: config,
+			existing: []*v3.AuthConfig{
+				{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "AuthConfig",
+						APIVersion: "management.cattle.io/v3",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "github-two",
+					},
+					Type:    "githubConfig",
+					Enabled: false,
+					AllowedPrincipalIDs: []string{
+						"github_user://12345",
+					},
+				},
+			},
+			allowed: true,
+		},
+		{
+			desc:  "with enabled authconfigs",
+			admit: config,
+			existing: []*v3.AuthConfig{
+				{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "AuthConfig",
+						APIVersion: "management.cattle.io/v3",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "github-two",
+					},
+					Type:    "githubConfig",
+					Enabled: true,
+					AllowedPrincipalIDs: []string{
+						"github_user://12345",
+					},
+				},
+			},
+			allowed: false,
+		},
+		{
+			desc:                  "with enabled authconfigs when multiple auth configs feature is on",
+			admit:                 config,
+			multipleAuthConfigsOn: true,
+			existing: []*v3.AuthConfig{
+				{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "AuthConfig",
+						APIVersion: "management.cattle.io/v3",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "github-two",
+					},
+					Type:    "githubConfig",
+					Enabled: true,
+					AllowedPrincipalIDs: []string{
+						"github_user://12345",
+					},
+				},
+			},
+			allowed: true,
+		},
+		{
+			desc:  "with enabled local and other authconfigs",
+			admit: config,
+			existing: []*v3.AuthConfig{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "local"},
+					Type:       "localConfig",
+					Enabled:    true,
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "github-two"},
+					Type:       "githubConfig",
+					Enabled:    true,
+				},
+			},
+			allowed: false,
+		},
+	}
+
+	for _, op := range []v1.Operation{v1.Create, v1.Update} {
+		for _, test := range tests {
+			name := string(op) + "_" + test.desc
+			t.Run(name, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				t.Cleanup(ctrl.Finish)
+
+				ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
+				fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+				feature := &v3.Feature{Status: v3.FeatureStatus{Default: false}}
+				if test.multipleAuthConfigsOn {
+					feature.Spec.Value = new(true)
+				} else {
+					feature.Spec.Value = new(false)
+					ac.EXPECT().List(labels.Everything()).Return(test.existing, nil)
+				}
+				fc.EXPECT().Get(common.MultipleAuthConfigs).Return(feature, nil)
+
+				validator := authconfig.NewValidator(fc, ac)
+
+				testAdmit(t, validator, op, v3.GithubConfig{}, config, test.allowed)
+			})
+		}
+	}
 }
 
 func testActiveDirectoryAdmit(t *testing.T, validator *authconfig.Validator, op v1.Operation, newConfig v3.ActiveDirectoryConfig, idAttrs map[string]any, allowed bool) {
