@@ -14,6 +14,7 @@ docs.md
 /pkg/auth/
 /pkg/resolvers/
 
-# Dependency bumps, do not require frameworks team approval (lets Renovate auto-approve/merge)
+# Dependency bumps and Dockerfile, do not require frameworks team approval (lets Renovate auto-approve/merge)
 /go.mod
 /go.sum
+/package/Dockerfile
