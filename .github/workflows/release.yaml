@@ -53,7 +53,7 @@ jobs:
 
     - name: Upload artifacts
       # https://github.com/actions/upload-artifact/commit/65462800fd760344b1a7b4382951275a0abb4808
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: webhook-artifacts-${{ matrix.arch }}
         path: |
@@ -78,14 +78,14 @@ jobs:
       run: make package-helm
 
     - name: Download the amd64 artifacts
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
       # https://github.com/actions/download-artifact/releases/tag/v4.1.7
       with:
         name: webhook-artifacts-amd64
         path: dist/artifacts
 
     - name: Download the arm64 artifacts
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
       # https://github.com/actions/download-artifact/releases/tag/v4.1.7
       with:
         name: webhook-artifacts-arm64
@@ -123,7 +123,7 @@ jobs:
             secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials password | PRIME_STG_REGISTRY_PASSWORD
 
       - name: Publish image
-        uses: rancher/ecm-distro-tools/actions/publish-image@290d2621a24dab79c3c54c57965d4257cb1ee2b8 # v0.77.5
+        uses: rancher/ecm-distro-tools/actions/publish-image@630ca306812f1ea9b1e81357592ce54a4256555d # v0.77.8
         with:
           image: rancher-webhook
           tag: ${{ github.ref_name }}
