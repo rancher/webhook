@@ -35,7 +35,7 @@ require (
 	github.com/evanphx/json-patch v5.9.11+incompatible
 	github.com/go-ldap/ldap/v3 v3.4.13
 	github.com/google/uuid v1.6.0
-	github.com/rancher/dynamiclistener v0.9.3
+	github.com/rancher/dynamiclistener v0.9.4
 	github.com/rancher/jsonpath v0.0.0-20260423141252-c4e0c565a09f
 	github.com/rancher/lasso v0.2.10
 	github.com/rancher/rancher/pkg/apis v0.0.0-20261016064444-44b22a74abc0
