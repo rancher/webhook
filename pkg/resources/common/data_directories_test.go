@@ -185,6 +185,26 @@ func TestValidateDataDirectoryFormat(t *testing.T) {
 			expected: false,
 		},
 		{
+			name:     "zero-width space",
+			dir:      "/tmp/x\u200bevil",
+			expected: false,
+		},
+		{
+			name:     "bidi override",
+			dir:      "/tmp/x\u202eevil",
+			expected: false,
+		},
+		{
+			name:     "non-breaking space",
+			dir:      "/tmp/x\u00a0evil",
+			expected: false,
+		},
+		{
+			name:     "line separator",
+			dir:      "/tmp/x\u2028evil",
+			expected: false,
+		},
+		{
 			name:     "backslash",
 			dir:      "/tmp/x\\evil",
 			expected: false,
@@ -192,6 +212,11 @@ func TestValidateDataDirectoryFormat(t *testing.T) {
 		{
 			name:     "valid path with exclamation mark",
 			dir:      "/data/a!b",
+			expected: true,
+		},
+		{
+			name:     "valid path with non-ASCII letters",
+			dir:      "/data/données/数据",
 			expected: true,
 		},
 		{

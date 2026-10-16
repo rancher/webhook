@@ -11,7 +11,7 @@ import (
 )
 
 // ValidateDataDirectoryFormat ensures that no data directory contains a relative path, environment variables,
-// shell expressions, whitespace, control characters, backslashes, or references to the current or
+// shell expressions, whitespace, non-printing characters, backslashes, or references to the current or
 // parent directory via use of "./" and "../" respectively.
 // dir is the path of the data directory, and name corresponds to a print friendly name for this data directory.
 func ValidateDataDirectoryFormat(dir, name string) *admissionv1.AdmissionResponse {
@@ -27,10 +27,12 @@ func ValidateDataDirectoryFormat(dir, name string) *admissionv1.AdmissionRespons
 			fmt.Sprintf("%s data directory cannot contain shell expressions", name))
 	}
 	if strings.ContainsFunc(dir, func(r rune) bool {
-		return unicode.IsControl(r) || unicode.IsSpace(r) || r == '\\'
+		// unicode.IsPrint accepts only graphic characters and the ASCII space, so it rejects control, format
+		// (e.g. zero-width space, bidi override), and non-ASCII space characters.
+		return !unicode.IsPrint(r) || r == ' ' || r == '\\'
 	}) {
 		return admission.ResponseBadRequest(
-			fmt.Sprintf("%s data directory cannot contain whitespace, control characters, or backslashes", name))
+			fmt.Sprintf("%s data directory cannot contain whitespace, non-printing characters, or backslashes", name))
 	}
 	if filepath.Clean(dir) != dir {
 		return admission.ResponseBadRequest(
