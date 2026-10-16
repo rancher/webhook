@@ -45,7 +45,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/rancher/dynamiclistener v0.6.5
 	github.com/rancher/lasso v0.2.4
-	github.com/rancher/rancher/pkg/apis v0.0.0-20261009045830-24152511ef34
+	github.com/rancher/rancher/pkg/apis v0.0.0-20261013133315-801faa1271c1
 	github.com/rancher/rke v1.8.12
 	github.com/rancher/wrangler/v3 v3.2.4
 	github.com/robfig/cron v1.2.0
@@ -73,7 +73,6 @@ require (
 	github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
-	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
