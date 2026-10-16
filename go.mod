@@ -5,7 +5,7 @@ go 1.26.9
 replace (
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.36.5
 	k8s.io/cli-runtime => k8s.io/cli-runtime v0.36.5
-	k8s.io/client-go => k8s.io/client-go v0.36.5
+	k8s.io/client-go => k8s.io/client-go v0.37.0
 	k8s.io/cloud-provider => k8s.io/cloud-provider v0.36.5
 	k8s.io/cluster-bootstrap => k8s.io/cluster-bootstrap v0.36.5
 	k8s.io/code-generator => k8s.io/code-generator v0.36.5
@@ -60,23 +60,29 @@ require (
 )
 
 require (
+	cel.dev/expr v0.25.1 // indirect
+	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.43.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.317.0 // indirect
 	github.com/aws/smithy-go v1.27.3 // indirect
 	github.com/go-openapi/swag/cmdutils v0.27.1 // indirect
 	github.com/go-openapi/swag/conv v0.27.1 // indirect
 	github.com/go-openapi/swag/fileutils v0.27.1 // indirect
-	github.com/go-openapi/swag/jsonname v0.25.4 // indirect
 	github.com/go-openapi/swag/jsonutils v0.27.1 // indirect
 	github.com/go-openapi/swag/loading v0.27.1 // indirect
 	github.com/go-openapi/swag/mangling v0.27.1 // indirect
 	github.com/go-openapi/swag/netutils v0.27.1 // indirect
+	github.com/go-openapi/swag/pools v0.27.1 // indirect
 	github.com/go-openapi/swag/stringutils v0.27.1 // indirect
 	github.com/go-openapi/swag/typeutils v0.27.1 // indirect
 	github.com/go-openapi/swag/yamlutils v0.27.1 // indirect
+	github.com/google/cel-go v0.29.2 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/renameio/v2 v2.0.2 // indirect
 	github.com/onsi/gomega v1.42.1 // indirect
+	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260724162435-b2f20204f0df // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 )
 
