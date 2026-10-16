@@ -290,6 +290,11 @@ func (p *provisioningAdmitter) validateDataDirectories(request *admission.Reques
 	distro := newCluster.Spec.RKEConfig.DataDirectories.K8sDistro
 	provisioning := newCluster.Spec.RKEConfig.DataDirectories.Provisioning
 	systemAgent := newCluster.Spec.RKEConfig.DataDirectories.SystemAgent
+	dataDirectories := map[string]string{
+		"Distro":       distro,
+		"Provisioning": provisioning,
+		"System Agent": systemAgent,
+	}
 	// cannot set "CATTLE_AGENT_VAR_DIR" on create anymore, but still valid as a field until cluster is migrated.
 	if request.Operation == admissionv1.Create {
 		if slices.ContainsFunc(newCluster.Spec.AgentEnvVars, func(envVar rkev1.EnvVar) bool {
@@ -297,11 +302,6 @@ func (p *provisioningAdmitter) validateDataDirectories(request *admission.Reques
 		}) {
 			return admission.ResponseBadRequest(
 				fmt.Sprintf(`"%s" cannot be set within "cluster.Spec.RKEConfig.AgentEnvVars": use "cluster.Spec.RKEConfig.DataDirectories.SystemAgent"`, systemAgentVarDirEnvVar))
-		}
-		dataDirectories := map[string]string{
-			"Distro":       distro,
-			"Provisioning": provisioning,
-			"System Agent": systemAgent,
 		}
 		for name, dir := range dataDirectories {
 			response := common.ValidateDataDirectoryFormat(dir, name)
@@ -320,6 +320,13 @@ func (p *provisioningAdmitter) validateDataDirectories(request *admission.Reques
 	}
 	// possible in the harvester case, as rkeConfig is patched to be non-nil.
 	if oldCluster.Spec.RKEConfig == nil {
+		// The data directories are new in this case, so their format must be validated.
+		for name, dir := range dataDirectories {
+			response := common.ValidateDataDirectoryFormat(dir, name)
+			if !response.Allowed {
+				return response
+			}
+		}
 		return admission.ResponseAllowed()
 	}
 

@@ -37,10 +37,11 @@ following:
 - Is not an absolute path (i.e. does not start with `/`)
 - Attempts to include environment variables (e.g. `$VARIABLE` or `${VARIABLE}`)
 - Attempts to include shell expressions (e.g. `$(command)` or `` `command` ``)
+- Contains whitespace, control characters (e.g. a newline), or a backslash
 - Equal to another data directory
 - Attempts to nest another data directory
 
-If the action is an update, and the old cluster had a `nil` `.spec.rkeConfig`, accept the request, since this is how rancherd operates, and is required for harvester installations.
+If the action is an update, and the old cluster had a `nil` `.spec.rkeConfig`, accept the request if the data directories are valid, since this is how rancherd operates, and is required for harvester installations. Data directories are validated for format only in this case.
 
 #### Etcd S3 CloudCredential Secret
 

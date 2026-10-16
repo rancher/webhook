@@ -155,6 +155,71 @@ func TestValidateDataDirectoryFormat(t *testing.T) {
 			expected: false,
 		},
 		{
+			name:     "newline",
+			dir:      "/tmp/x\nchmod 4755 /bin/sh\n/y",
+			expected: false,
+		},
+		{
+			name:     "trailing newline",
+			dir:      "/tmp/x\n",
+			expected: false,
+		},
+		{
+			name:     "carriage return",
+			dir:      "/tmp/x\revil",
+			expected: false,
+		},
+		{
+			name:     "tab",
+			dir:      "/tmp/x\tevil",
+			expected: false,
+		},
+		{
+			name:     "space",
+			dir:      "/tmp/x /etc",
+			expected: false,
+		},
+		{
+			name:     "null byte",
+			dir:      "/tmp/x\x00evil",
+			expected: false,
+		},
+		{
+			name:     "backslash",
+			dir:      "/tmp/x\\evil",
+			expected: false,
+		},
+		{
+			name:     "valid path with exclamation mark",
+			dir:      "/data/a!b",
+			expected: true,
+		},
+		{
+			name:     "valid path with plus",
+			dir:      "/opt/rke2+data",
+			expected: true,
+		},
+		{
+			name:     "valid path with at sign",
+			dir:      "/data/a@b",
+			expected: true,
+		},
+		{
+			name:     "valid path with comma",
+			dir:      "/data/a,b",
+			expected: true,
+		},
+		{
+			name:     "valid path with colon",
+			dir:      "/data/a:b",
+			expected: true,
+		},
+		{
+			name:     "valid path with dash underscore and dot",
+			dir:      "/data/a-b_c.d",
+			expected: true,
+		},
+		{
 			name:     "valid absolute path",
 			dir:      "/tmp",
 			expected: true,
