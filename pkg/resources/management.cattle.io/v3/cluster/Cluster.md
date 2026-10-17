@@ -17,6 +17,15 @@ When a cluster is updated `field.cattle.io/creator-principal-name` and `field.ca
 If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` cannot be set.
 
 
+### Display name, local cluster auth endpoint, and agent environment variable validation
+
+When a cluster is created, or when its value changes on update, the following fields are validated. An unchanged value is not validated, so existing clusters can still be updated. An empty value is valid.
+
+- `spec.displayName` must have at most 253 characters. It must not contain control characters (e.g. a newline), line or paragraph separators (U+2028 and U+2029), double quotes, single quotes, or backslashes. Spaces and Unicode letters are allowed.
+- `spec.localClusterAuthEndpoint.fqdn` must be a valid DNS name as defined by RFC 1123 (e.g. `rancher.example.com`), optionally followed by a port between `1` and `65535` (e.g. `rancher.example.com:6443`). Upper case letters are allowed.
+- `spec.agentEnvVars` names must start with a letter or `_`, and contain only letters, digits, and `_`. Rancher skips other names when it renders the node registration commands and the Windows install script. A name can have the `$env:` prefix. Only a name that is not in the old object is validated.
+
+
 #### Feature: version management on imported RKE2/K3s cluster
 
  - When a cluster is created or updated, the `rancher.io/imported-cluster-version-management` annotation must be set with a valid value (true, false, or system-default). 
@@ -39,7 +48,7 @@ The `schedulingCustomization.PodDisruptionBudget` field contains two attributes
 + `minAvailable`: This is a string value that indicates the minimum number of agent replicas that must be running at a given time.
 + `maxUnavailable`: This is a string value that indicates the maximum number of agent replicas that can be unavailable at a given time.
 
-Both `minAvailable` and `maxUnavailable` must be a string which represents a non-negative whole number, or a whole number percentage greater than or equal to `0%` and less than or equal to `100%`. Only one of the two fields can have a non-zero or empty value at a given time. These fields use the following regex when assessing if a given percentage value is valid:
+Both `minAvailable` and `maxUnavailable` must be a string which represents a non-negative whole number without a sign and no larger than `2147483647` (the Kubernetes `int32` limit), or a whole number percentage greater than or equal to `0%` and less than or equal to `100%`. Only one of the two fields can have a non-zero or empty value at a given time. These fields use the following regex when assessing if a given percentage value is valid:
 ```regex
 ^([0-9]|[1-9][0-9]|100)%$
 ```
@@ -54,7 +63,7 @@ The `WebhookDeploymentCustomization` field configures the rancher-webhook deploy
   ([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]
   ```
 - `overrideAffinity`: Node affinity `nodeSelectorTerms` are validated via label name validation. Pod affinity and pod anti-affinity are validated via label selectors using the [apimachinery label selector validation](https://github.com/kubernetes/apimachinery/blob/02a41040d88da08de6765573ae2b1a51f424e1ca/pkg/apis/meta/v1/validation/validation.go#L56).
-- `podDisruptionBudget.minAvailable` and `podDisruptionBudget.maxUnavailable`: Each must be a non-negative whole integer or a whole number percentage between `0%` and `100%`. Only one of the two fields can have a non-zero or non-empty value at a given time. These fields use the following regex when assessing if a given percentage value is valid:
+- `podDisruptionBudget.minAvailable` and `podDisruptionBudget.maxUnavailable`: Each must be a non-negative whole integer without a sign and no larger than `2147483647`, or a whole number percentage between `0%` and `100%`. Only one of the two fields can have a non-zero or non-empty value at a given time. These fields use the following regex when assessing if a given percentage value is valid:
   ```regex
   ^([0-9]|[1-9][0-9]|100)%$
   ```

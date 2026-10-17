@@ -164,6 +164,10 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 			return response, nil
 		}
 
+		if response := validateFreeFormFields(oldCluster, cluster); !response.Allowed {
+			return response, nil
+		}
+
 		if response.Result = common.ErrorListToStatus(validateAgentDeploymentCustomization(cluster.Spec.ClusterAgentDeploymentCustomization,
 			field.NewPath("spec", "clusterAgentDeploymentCustomization"))); response.Result != nil {
 			return response, nil
@@ -290,6 +294,11 @@ func (p *provisioningAdmitter) validateDataDirectories(request *admission.Reques
 	distro := newCluster.Spec.RKEConfig.DataDirectories.K8sDistro
 	provisioning := newCluster.Spec.RKEConfig.DataDirectories.Provisioning
 	systemAgent := newCluster.Spec.RKEConfig.DataDirectories.SystemAgent
+	dataDirectories := map[string]string{
+		"Distro":       distro,
+		"Provisioning": provisioning,
+		"System Agent": systemAgent,
+	}
 	// cannot set "CATTLE_AGENT_VAR_DIR" on create anymore, but still valid as a field until cluster is migrated.
 	if request.Operation == admissionv1.Create {
 		if slices.ContainsFunc(newCluster.Spec.AgentEnvVars, func(envVar rkev1.EnvVar) bool {
@@ -297,11 +306,6 @@ func (p *provisioningAdmitter) validateDataDirectories(request *admission.Reques
 		}) {
 			return admission.ResponseBadRequest(
 				fmt.Sprintf(`"%s" cannot be set within "cluster.Spec.RKEConfig.AgentEnvVars": use "cluster.Spec.RKEConfig.DataDirectories.SystemAgent"`, systemAgentVarDirEnvVar))
-		}
-		dataDirectories := map[string]string{
-			"Distro":       distro,
-			"Provisioning": provisioning,
-			"System Agent": systemAgent,
 		}
 		for name, dir := range dataDirectories {
 			response := common.ValidateDataDirectoryFormat(dir, name)
@@ -320,6 +324,13 @@ func (p *provisioningAdmitter) validateDataDirectories(request *admission.Reques
 	}
 	// possible in the harvester case, as rkeConfig is patched to be non-nil.
 	if oldCluster.Spec.RKEConfig == nil {
+		// The data directories are new in this case, so their format must be validated.
+		for name, dir := range dataDirectories {
+			response := common.ValidateDataDirectoryFormat(dir, name)
+			if !response.Allowed {
+				return response
+			}
+		}
 		return admission.ResponseAllowed()
 	}
 
@@ -982,6 +993,14 @@ func (p *provisioningAdmitter) validateSinglePodDisruptionBudget(oldCluster, clu
 		return admission.ResponseBadRequest("maxUnavailable cannot be set to a negative integer"), nil
 	}
 
+	if !minAvailIsString && minAvailStr != "" && !common.IsValidPDBInteger(minAvailStr) {
+		return admission.ResponseBadRequest(fmt.Sprintf("minAvailable %s '%s'", "must be a non-negative whole integer up to 2147483647 or a percentage value between 0 and 100, regex used is", common.PdbPercentageRegex.String())), nil
+	}
+
+	if !maxUnavailIsString && maxUnavailStr != "" && !common.IsValidPDBInteger(maxUnavailStr) {
+		return admission.ResponseBadRequest(fmt.Sprintf("maxUnavailable %s '%s'", "must be a non-negative whole integer up to 2147483647 or a percentage value between 0 and 100, regex used is", common.PdbPercentageRegex.String())), nil
+	}
+
 	if minAvailIsString && !common.PdbPercentageRegex.Match([]byte(minAvailStr)) {
 		return admission.ResponseBadRequest("minAvailable must be a whole integer or a percentage value between 1 and 100, regex used is '^([1-9]|[1-9][0-9]|100)%$'"), nil
 	}
@@ -1176,6 +1195,39 @@ func validateACEConfig(cluster *v1.Cluster) *metav1.Status {
 	}
 
 	return nil
+}
+
+// validateFreeFormFields validates the format of the FQDN of the local cluster auth endpoint, the names of the agent
+// environment variables, and the keys of the registry configs. A value is only validated if it is new or changed, so
+// existing clusters with an invalid value can still be updated.
+func validateFreeFormFields(oldCluster, cluster *v1.Cluster) *admissionv1.AdmissionResponse {
+	if newFQDN := cluster.Spec.LocalClusterAuthEndpoint.FQDN; newFQDN != oldCluster.Spec.LocalClusterAuthEndpoint.FQDN {
+		if response := common.ValidateFQDN(newFQDN, "spec.localClusterAuthEndpoint.fqdn"); !response.Allowed {
+			return response
+		}
+	}
+
+	oldNames := make([]string, 0, len(oldCluster.Spec.AgentEnvVars))
+	for _, envVar := range oldCluster.Spec.AgentEnvVars {
+		oldNames = append(oldNames, envVar.Name)
+	}
+	newNames := make([]string, 0, len(cluster.Spec.AgentEnvVars))
+	for _, envVar := range cluster.Spec.AgentEnvVars {
+		newNames = append(newNames, envVar.Name)
+	}
+	if response := common.ValidateAgentEnvVarNames(oldNames, newNames, "spec.agentEnvVars"); !response.Allowed {
+		return response
+	}
+
+	if cluster.Spec.RKEConfig == nil || cluster.Spec.RKEConfig.Registries == nil {
+		return admission.ResponseAllowed()
+	}
+	var oldConfigs map[string]rkev1.RegistryConfig
+	if oldCluster.Spec.RKEConfig != nil && oldCluster.Spec.RKEConfig.Registries != nil {
+		oldConfigs = oldCluster.Spec.RKEConfig.Registries.Configs
+	}
+
+	return common.ValidateRegistryConfigKeys(oldConfigs, cluster.Spec.RKEConfig.Registries.Configs)
 }
 
 func isValidName(clusterName, clusterNamespace string, clusterExists bool) bool {

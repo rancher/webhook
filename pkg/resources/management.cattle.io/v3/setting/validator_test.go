@@ -871,6 +871,141 @@ func (s *SettingSuite) TestValidateAgentSchedulingPodDisruptionBudget() {
 }`,
 		},
 		{
+			name:    "invalid update to PDB - plus sign in minAvailable",
+			allowed: false,
+			newValue: `
+{
+	"minAvailable": "+5",
+	"maxUnavailable": "0"
+}`,
+		},
+		{
+			name:    "invalid update to PDB - plus sign in maxUnavailable",
+			allowed: false,
+			newValue: `
+{
+	"minAvailable": "0",
+	"maxUnavailable": "+5"
+}`,
+		},
+		{
+			name:    "invalid update to PDB - negative zero in minAvailable",
+			allowed: false,
+			newValue: `
+{
+	"minAvailable": "-0",
+	"maxUnavailable": "0"
+}`,
+		},
+		{
+			name:    "invalid update to PDB - negative zero in maxUnavailable",
+			allowed: false,
+			newValue: `
+{
+	"minAvailable": "0",
+	"maxUnavailable": "-0"
+}`,
+		},
+		{
+			name:    "invalid update to PDB - plus zero in minAvailable",
+			allowed: false,
+			newValue: `
+{
+	"minAvailable": "+0",
+	"maxUnavailable": "0"
+}`,
+		},
+		{
+			name:    "invalid update to PDB - plus zero in maxUnavailable",
+			allowed: false,
+			newValue: `
+{
+	"minAvailable": "0",
+	"maxUnavailable": "+0"
+}`,
+		},
+		{
+			name:    "invalid update to PDB - above int32 in minAvailable",
+			allowed: false,
+			newValue: `
+{
+	"minAvailable": "2147483648",
+	"maxUnavailable": "0"
+}`,
+		},
+		{
+			name:    "invalid update to PDB - above int32 in maxUnavailable",
+			allowed: false,
+			newValue: `
+{
+	"minAvailable": "0",
+	"maxUnavailable": "2147483648"
+}`,
+		},
+		{
+			name:    "invalid update to PDB - far above int32 in minAvailable",
+			allowed: false,
+			newValue: `
+{
+	"minAvailable": "3000000000",
+	"maxUnavailable": "0"
+}`,
+		},
+		{
+			name:    "invalid update to PDB - far above int32 in maxUnavailable",
+			allowed: false,
+			newValue: `
+{
+	"minAvailable": "0",
+	"maxUnavailable": "3000000000"
+}`,
+		},
+		{
+			name:    "invalid update to PDB - leading space in minAvailable",
+			allowed: false,
+			newValue: `
+{
+	"minAvailable": " 5",
+	"maxUnavailable": "0"
+}`,
+		},
+		{
+			name:    "invalid update to PDB - leading space in maxUnavailable",
+			allowed: false,
+			newValue: `
+{
+	"minAvailable": "0",
+	"maxUnavailable": " 5"
+}`,
+		},
+		{
+			name:    "invalid update to PDB - trailing newline in minAvailable",
+			allowed: false,
+			newValue: `
+{
+	"minAvailable": "5\\n",
+	"maxUnavailable": "0"
+}`,
+		},
+		{
+			name:    "invalid update to PDB - trailing newline in maxUnavailable",
+			allowed: false,
+			newValue: `
+{
+	"minAvailable": "0",
+	"maxUnavailable": "5\\n"
+}`,
+		},
+		{
+			name:    "valid update to PDB - int32 maximum",
+			allowed: true,
+			newValue: `
+{
+	"minAvailable": "0",
+	"maxUnavailable": "2147483647"
+}`,
+		},
+		{
 			name:    "invalid update to PDB - bad object",
 			allowed: false,
 			newValue: `

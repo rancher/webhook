@@ -1795,6 +1795,178 @@ func TestValidateDataDirectories(t *testing.T) {
 			shouldSucceed: true,
 		},
 		{
+			name:    "old no rkeconfig with valid data directories",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								K8sDistro:    "/var/lib/rancher/rke2",
+								Provisioning: "/var/lib/rancher/provisioning",
+								SystemAgent:  "/opt/rancher/system-agent",
+							},
+						},
+					},
+				},
+			},
+			oldCluster:    &v1.Cluster{},
+			shouldSucceed: true,
+		},
+		{
+			name:    "old no rkeconfig with distro data dir containing newline",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								K8sDistro: "/a\nchmod 4755 /bin/sh\n/b",
+							},
+						},
+					},
+				},
+			},
+			oldCluster:    &v1.Cluster{},
+			shouldSucceed: false,
+		},
+		{
+			name:    "old no rkeconfig with distro data dir containing space",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								K8sDistro: "/a /etc",
+							},
+						},
+					},
+				},
+			},
+			oldCluster:    &v1.Cluster{},
+			shouldSucceed: false,
+		},
+		{
+			name:    "old no rkeconfig with distro data dir that is relative",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								K8sDistro: "a",
+							},
+						},
+					},
+				},
+			},
+			oldCluster:    &v1.Cluster{},
+			shouldSucceed: false,
+		},
+		{
+			name:    "old no rkeconfig with provisioning data dir containing newline",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								Provisioning: "/a\nchmod 4755 /bin/sh\n/b",
+							},
+						},
+					},
+				},
+			},
+			oldCluster:    &v1.Cluster{},
+			shouldSucceed: false,
+		},
+		{
+			name:    "old no rkeconfig with provisioning data dir containing space",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								Provisioning: "/a /etc",
+							},
+						},
+					},
+				},
+			},
+			oldCluster:    &v1.Cluster{},
+			shouldSucceed: false,
+		},
+		{
+			name:    "old no rkeconfig with provisioning data dir that is relative",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								Provisioning: "a",
+							},
+						},
+					},
+				},
+			},
+			oldCluster:    &v1.Cluster{},
+			shouldSucceed: false,
+		},
+		{
+			name:    "old no rkeconfig with system agent data dir containing newline",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								SystemAgent: "/a\nchmod 4755 /bin/sh\n/b",
+							},
+						},
+					},
+				},
+			},
+			oldCluster:    &v1.Cluster{},
+			shouldSucceed: false,
+		},
+		{
+			name:    "old no rkeconfig with system agent data dir containing space",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								SystemAgent: "/a /etc",
+							},
+						},
+					},
+				},
+			},
+			oldCluster:    &v1.Cluster{},
+			shouldSucceed: false,
+		},
+		{
+			name:    "old no rkeconfig with system agent data dir that is relative",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								SystemAgent: "a",
+							},
+						},
+					},
+				},
+			},
+			oldCluster:    &v1.Cluster{},
+			shouldSucceed: false,
+		},
+		{
 			name:    "Create",
 			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
 			cluster: &v1.Cluster{
@@ -1881,6 +2053,246 @@ func TestValidateDataDirectories(t *testing.T) {
 						ClusterConfiguration: rkev1.ClusterConfiguration{
 							DataDirectories: rkev1.DataDirectories{
 								SystemAgent: "a",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE distro data dir contains newline",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								K8sDistro: "/a\nchmod 4755 /bin/sh\n/b",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE distro data dir contains carriage return",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								K8sDistro: "/a\revil",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE distro data dir contains tab",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								K8sDistro: "/a\tevil",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE distro data dir contains space",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								K8sDistro: "/a /etc",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE distro data dir contains backslash",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								K8sDistro: "/a\\evil",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE provisioning data dir contains newline",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								Provisioning: "/a\nchmod 4755 /bin/sh\n/b",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE provisioning data dir contains carriage return",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								Provisioning: "/a\revil",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE provisioning data dir contains tab",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								Provisioning: "/a\tevil",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE provisioning data dir contains space",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								Provisioning: "/a /etc",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE provisioning data dir contains backslash",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								Provisioning: "/a\\evil",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE system agent data dir contains newline",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								SystemAgent: "/a\nchmod 4755 /bin/sh\n/b",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE system agent data dir contains carriage return",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								SystemAgent: "/a\revil",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE system agent data dir contains tab",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								SystemAgent: "/a\tevil",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE system agent data dir contains space",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								SystemAgent: "/a /etc",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE system agent data dir contains backslash",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								SystemAgent: "/a\\evil",
 							},
 						},
 					},
@@ -2995,6 +3407,182 @@ func Test_validateAgentSchedulingCustomizationPodDisruptionBudget(t *testing.T) 
 			},
 		},
 		{
+			name:           "invalid PDB configuration - trailing newline in min available",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "5\n",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - trailing newline after percentage in min available",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "50%\n",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - newline in min available",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "\n",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - trailing newline in max unavailable",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MaxUnavailable: "5\n",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - trailing newline after percentage in max unavailable",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MaxUnavailable: "50%\n",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - newline in max unavailable",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MaxUnavailable: "\n",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - plus sign in min available",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "+5",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - negative zero in min available",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "-0",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - plus zero in min available",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "+0",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - above int32 in min available",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "2147483648",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - far above int32 in min available",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "3000000000",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - leading space in min available",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: " 5",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - trailing newline in min available",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "5\n",
+			},
+		},
+		{
+			name:           "valid PDB configuration - int32 maximum in min available",
+			shouldSucceed:  true,
+			featureEnabled: true,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MinAvailable: "2147483647",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - plus sign in max unavailable",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MaxUnavailable: "+5",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - negative zero in max unavailable",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MaxUnavailable: "-0",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - plus zero in max unavailable",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MaxUnavailable: "+0",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - above int32 in max unavailable",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MaxUnavailable: "2147483648",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - far above int32 in max unavailable",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MaxUnavailable: "3000000000",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - leading space in max unavailable",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MaxUnavailable: " 5",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - trailing newline in max unavailable",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MaxUnavailable: "5\n",
+			},
+		},
+		{
+			name:           "valid PDB configuration - int32 maximum in max unavailable",
+			shouldSucceed:  true,
+			featureEnabled: true,
+			pdb: &v1.PodDisruptionBudgetSpec{
+				MaxUnavailable: "2147483647",
+			},
+		},
+		{
 			name:           "valid PDB reconfiguration - field is removed while feature is disabled",
 			shouldSucceed:  true,
 			featureEnabled: false,
@@ -4034,6 +4622,204 @@ func Test_validateWebhookDeploymentCustomization(t *testing.T) {
 			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
 		},
 		{
+			name: "PDB trailing newline in min available",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MinAvailable: "5\n",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.minAvailable"}),
+		},
+		{
+			name: "PDB trailing newline after percentage in min available",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MinAvailable: "50%\n",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.minAvailable"}),
+		},
+		{
+			name: "PDB newline in min available",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MinAvailable: "\n",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.minAvailable"}),
+		},
+		{
+			name: "PDB trailing newline in max unavailable",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MaxUnavailable: "5\n",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
+		},
+		{
+			name: "PDB trailing newline after percentage in max unavailable",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MaxUnavailable: "50%\n",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
+		},
+		{
+			name: "PDB newline in max unavailable",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MaxUnavailable: "\n",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
+		},
+		{
+			name: "PDB plus sign in min available",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MinAvailable: "+5",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.minAvailable"}),
+		},
+		{
+			name: "PDB negative zero in min available",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MinAvailable: "-0",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.minAvailable"}),
+		},
+		{
+			name: "PDB plus zero in min available",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MinAvailable: "+0",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.minAvailable"}),
+		},
+		{
+			name: "PDB above int32 in min available",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MinAvailable: "2147483648",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.minAvailable"}),
+		},
+		{
+			name: "PDB far above int32 in min available",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MinAvailable: "3000000000",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.minAvailable"}),
+		},
+		{
+			name: "PDB leading space in min available",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MinAvailable: " 5",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.minAvailable"}),
+		},
+		{
+			name: "PDB trailing newline in min available",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MinAvailable: "5\n",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.minAvailable"}),
+		},
+		{
+			name: "PDB int32 maximum in min available",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MinAvailable: "2147483647",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{}),
+		},
+		{
+			name: "PDB plus sign in max unavailable",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MaxUnavailable: "+5",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
+		},
+		{
+			name: "PDB negative zero in max unavailable",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MaxUnavailable: "-0",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
+		},
+		{
+			name: "PDB plus zero in max unavailable",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MaxUnavailable: "+0",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
+		},
+		{
+			name: "PDB above int32 in max unavailable",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MaxUnavailable: "2147483648",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
+		},
+		{
+			name: "PDB far above int32 in max unavailable",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MaxUnavailable: "3000000000",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
+		},
+		{
+			name: "PDB leading space in max unavailable",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MaxUnavailable: " 5",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
+		},
+		{
+			name: "PDB trailing newline in max unavailable",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MaxUnavailable: "5\n",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
+		},
+		{
+			name: "PDB int32 maximum in max unavailable",
+			customization: &v1.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v1.PodDisruptionBudgetSpec{
+					MaxUnavailable: "2147483647",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{}),
+		},
+		{
 			name: "full valid customization",
 			customization: &v1.WebhookDeploymentCustomization{
 				ReplicaCount: replicaCount(3),
@@ -4553,4 +5339,133 @@ func TestAdmitRejectsChangesAfterManagementClusterNameCheck(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.False(t, response.Allowed)
+}
+
+func Test_validateFreeFormFields(t *testing.T) {
+	t.Parallel()
+
+	withFQDN := func(fqdn string) *v1.Cluster {
+		return &v1.Cluster{Spec: v1.ClusterSpec{LocalClusterAuthEndpoint: rkev1.LocalClusterAuthEndpoint{FQDN: fqdn}}}
+	}
+	withEnvVars := func(names ...string) *v1.Cluster {
+		cluster := &v1.Cluster{}
+		for _, name := range names {
+			cluster.Spec.AgentEnvVars = append(cluster.Spec.AgentEnvVars, rkev1.EnvVar{Name: name, Value: "v"})
+		}
+		return cluster
+	}
+	withRegistries := func(keys ...string) *v1.Cluster {
+		configs := map[string]rkev1.RegistryConfig{}
+		for _, key := range keys {
+			configs[key] = rkev1.RegistryConfig{}
+		}
+		return &v1.Cluster{Spec: v1.ClusterSpec{RKEConfig: &v1.RKEConfig{
+			ClusterConfiguration: rkev1.ClusterConfiguration{Registries: &rkev1.Registry{Configs: configs}},
+		}}}
+	}
+
+	tests := []struct {
+		name         string
+		oldCluster   *v1.Cluster
+		newCluster   *v1.Cluster
+		wantAllowed  bool
+		wantContains string
+	}{
+		{name: "create with no free-form fields", oldCluster: &v1.Cluster{}, newCluster: &v1.Cluster{}, wantAllowed: true},
+		{name: "create with valid fqdn", oldCluster: &v1.Cluster{}, newCluster: withFQDN("rancher.example.com"), wantAllowed: true},
+		{name: "create with newline in fqdn", oldCluster: &v1.Cluster{}, newCluster: withFQDN("a.example.com\nb"), wantContains: "fqdn"},
+		{name: "create with trailing newline in fqdn", oldCluster: &v1.Cluster{}, newCluster: withFQDN("a.example.com\n"), wantContains: "fqdn"},
+		{name: "create with quote in fqdn", oldCluster: &v1.Cluster{}, newCluster: withFQDN(`a"b.example.com`), wantContains: "fqdn"},
+		{name: "create with backslash in fqdn", oldCluster: &v1.Cluster{}, newCluster: withFQDN(`a\b.example.com`), wantContains: "fqdn"},
+		{name: "create with traversal in fqdn", oldCluster: &v1.Cluster{}, newCluster: withFQDN("../etc"), wantContains: "fqdn"},
+		{name: "create with port in fqdn", oldCluster: &v1.Cluster{}, newCluster: withFQDN("rancher.example.com:6443"), wantAllowed: true},
+		{name: "create with invalid port in fqdn", oldCluster: &v1.Cluster{}, newCluster: withFQDN("rancher.example.com:99999"), wantContains: "fqdn"},
+		{name: "update with unchanged invalid fqdn", oldCluster: withFQDN("a.example.com\nb"), newCluster: withFQDN("a.example.com\nb"), wantAllowed: true},
+		{name: "update with changed invalid fqdn", oldCluster: withFQDN("rancher.example.com"), newCluster: withFQDN("a.example.com\nb"), wantContains: "fqdn"},
+		{name: "update clears invalid fqdn", oldCluster: withFQDN("a.example.com\nb"), newCluster: withFQDN(""), wantAllowed: true},
+		{name: "create with valid registry keys", oldCluster: &v1.Cluster{}, newCluster: withRegistries("registry.example.com", "10.0.0.1:5000"), wantAllowed: true},
+		{name: "create with newline in registry key", oldCluster: &v1.Cluster{}, newCluster: withRegistries("a\nb"), wantContains: "registry config key"},
+		{name: "create with quote in registry key", oldCluster: &v1.Cluster{}, newCluster: withRegistries(`a"b`), wantContains: "registry config key"},
+		{name: "create with backslash in registry key", oldCluster: &v1.Cluster{}, newCluster: withRegistries(`a\b`), wantContains: "registry config key"},
+		{name: "create with traversal in registry key", oldCluster: &v1.Cluster{}, newCluster: withRegistries("../../etc"), wantContains: "registry config key"},
+		{name: "create with leading slash in registry key", oldCluster: &v1.Cluster{}, newCluster: withRegistries("/etc"), wantContains: "registry config key"},
+		{name: "update with unchanged invalid registry key", oldCluster: withRegistries("../x"), newCluster: withRegistries("../x"), wantAllowed: true},
+		{name: "update with new invalid registry key", oldCluster: withRegistries("registry.example.com"), newCluster: withRegistries("registry.example.com", "../x"), wantContains: "registry config key"},
+		{name: "update from nil rkeConfig with invalid registry key", oldCluster: &v1.Cluster{}, newCluster: withRegistries("a b"), wantContains: "registry config key"},
+		{name: "create with valid agent env var names", oldCluster: &v1.Cluster{}, newCluster: withEnvVars("HTTP_PROXY", "$env:NO_PROXY"), wantAllowed: true},
+		{name: "create with newline in agent env var name", oldCluster: &v1.Cluster{}, newCluster: withEnvVars("A\nB"), wantContains: "spec.agentEnvVars"},
+		{name: "create with trailing newline in agent env var name", oldCluster: &v1.Cluster{}, newCluster: withEnvVars("A\n"), wantContains: "spec.agentEnvVars"},
+		{name: "create with space in agent env var name", oldCluster: &v1.Cluster{}, newCluster: withEnvVars("A B"), wantContains: "spec.agentEnvVars"},
+		{name: "create with quote in agent env var name", oldCluster: &v1.Cluster{}, newCluster: withEnvVars(`A"B`), wantContains: "spec.agentEnvVars"},
+		{name: "create with backslash in agent env var name", oldCluster: &v1.Cluster{}, newCluster: withEnvVars(`A\B`), wantContains: "spec.agentEnvVars"},
+		{name: "create with traversal in agent env var name", oldCluster: &v1.Cluster{}, newCluster: withEnvVars("../A"), wantContains: "spec.agentEnvVars"},
+		{name: "update with unchanged invalid agent env var name", oldCluster: withEnvVars("MY-VAR"), newCluster: withEnvVars("MY-VAR"), wantAllowed: true},
+		{name: "update with new invalid agent env var name", oldCluster: withEnvVars("MY-VAR"), newCluster: withEnvVars("MY-VAR", "A\nB"), wantContains: "spec.agentEnvVars"},
+		{name: "nil registries", oldCluster: withRegistries("a b"), newCluster: &v1.Cluster{Spec: v1.ClusterSpec{RKEConfig: &v1.RKEConfig{}}}, wantAllowed: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			response := validateFreeFormFields(tt.oldCluster, tt.newCluster)
+			assert.Equal(t, tt.wantAllowed, response.Allowed)
+			if !tt.wantAllowed {
+				assert.Contains(t, response.Result.Message, tt.wantContains)
+			}
+		})
+	}
+}
+
+// TestAdmitRejectsInvalidFreeFormFields ensures that Admit runs the free-form field validation on create and update.
+func TestAdmitRejectsInvalidFreeFormFields(t *testing.T) {
+	t.Parallel()
+
+	toRaw := func(cluster *v1.Cluster) runtime.RawExtension {
+		raw, err := json.Marshal(cluster)
+		require.NoError(t, err)
+		return runtime.RawExtension{Raw: raw}
+	}
+	newCluster := func(fqdn string, registryKeys ...string) *v1.Cluster {
+		cluster := &v1.Cluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "my-cluster", Namespace: "fleet-default"},
+			Spec:       v1.ClusterSpec{LocalClusterAuthEndpoint: rkev1.LocalClusterAuthEndpoint{FQDN: fqdn}},
+		}
+		if len(registryKeys) > 0 {
+			configs := map[string]rkev1.RegistryConfig{}
+			for _, key := range registryKeys {
+				configs[key] = rkev1.RegistryConfig{}
+			}
+			cluster.Spec.RKEConfig = &v1.RKEConfig{ClusterConfiguration: rkev1.ClusterConfiguration{Registries: &rkev1.Registry{Configs: configs}}}
+		}
+		return cluster
+	}
+
+	tests := []struct {
+		name         string
+		operation    admissionv1.Operation
+		oldCluster   *v1.Cluster
+		cluster      *v1.Cluster
+		wantContains string
+	}{
+		{name: "create with invalid fqdn", operation: admissionv1.Create, cluster: newCluster("a.example.com\nb"), wantContains: "spec.localClusterAuthEndpoint.fqdn"},
+		{name: "update with changed invalid fqdn", operation: admissionv1.Update, oldCluster: newCluster("a.example.com"), cluster: newCluster("a.example.com\nb"), wantContains: "spec.localClusterAuthEndpoint.fqdn"},
+		{name: "create with invalid registry key", operation: admissionv1.Create, cluster: newCluster("", "../x"), wantContains: "registry config key"},
+		{name: "update with new invalid registry key", operation: admissionv1.Update, oldCluster: newCluster("", "registry.example.com"), cluster: newCluster("", "registry.example.com", "a\nb"), wantContains: "registry config key"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			ctrl := gomock.NewController(t)
+			mgmt := fake.NewMockNonNamespacedClientInterface[*v3.Cluster, *v3.ClusterList](ctrl)
+			mgmt.EXPECT().Get(gomock.Any(), gomock.Any()).Return(nil, apierrors.NewNotFound(schema.GroupResource{}, "my-cluster")).AnyTimes()
+
+			request := admissionv1.AdmissionRequest{Operation: tt.operation, Object: toRaw(tt.cluster)}
+			if tt.oldCluster != nil {
+				request.OldObject = toRaw(tt.oldCluster)
+			}
+			response, err := (&provisioningAdmitter{mgmtClusterClient: mgmt}).Admit(&admission.Request{AdmissionRequest: request})
+			require.NoError(t, err)
+			require.False(t, response.Allowed)
+			assert.Contains(t, response.Result.Message, tt.wantContains)
+		})
+	}
 }

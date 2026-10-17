@@ -66,7 +66,20 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, fmt.Errorf("failed to get RKEControlPlane from request: %w", err)
 	}
 
+	// The old object is only used to skip the validation of registry config keys that did not change.
+	oldControlPlane := &rkev1.RKEControlPlane{}
+	if request.Operation == admissionv1.Update && len(request.OldObject.Raw) > 0 {
+		oldControlPlane, _, err = v1.RKEControlPlaneOldAndNewFromRequest(&request.AdmissionRequest)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get old RKEControlPlane from request: %w", err)
+		}
+	}
+
 	if response := validateDataDirectories(newControlPlane); !response.Allowed {
+		return response, nil
+	}
+
+	if response := validateRegistryConfigKeys(oldControlPlane, newControlPlane); !response.Allowed {
 		return response, nil
 	}
 
@@ -87,4 +100,18 @@ func validateDataDirectories(cp *rkev1.RKEControlPlane) *admissionv1.AdmissionRe
 	}
 
 	return common.ValidateDataDirectoryHierarchy(dataDirectories)
+}
+
+// validateRegistryConfigKeys validates the format of the keys of the registry configs. A key is only validated if it is
+// new, so existing objects with an invalid key can still be updated.
+func validateRegistryConfigKeys(oldCP, cp *rkev1.RKEControlPlane) *admissionv1.AdmissionResponse {
+	if cp.Spec.Registries == nil {
+		return admission.ResponseAllowed()
+	}
+	var oldConfigs map[string]rkev1.RegistryConfig
+	if oldCP.Spec.Registries != nil {
+		oldConfigs = oldCP.Spec.Registries.Configs
+	}
+
+	return common.ValidateRegistryConfigKeys(oldConfigs, cp.Spec.Registries.Configs)
 }

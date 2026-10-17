@@ -598,6 +598,14 @@ func (a *admitter) validateAgentPodDisruptionBudget(newSetting *v3.Setting) erro
 		return fmt.Errorf("maxUnavailable cannot be set to a negative integer")
 	}
 
+	if !minAvailIsString && !common.IsValidPDBInteger(minAvailStr) {
+		return fmt.Errorf("minAvailable %s '%s'", "must be a non-negative whole integer up to 2147483647 or a percentage value between 0 and 100, regex used is", common.PdbPercentageRegex.String())
+	}
+
+	if !maxUnavailIsString && !common.IsValidPDBInteger(maxUnavailStr) {
+		return fmt.Errorf("maxUnavailable %s '%s'", "must be a non-negative whole integer up to 2147483647 or a percentage value between 0 and 100, regex used is", common.PdbPercentageRegex.String())
+	}
+
 	if minAvailIsString && !common.PdbPercentageRegex.Match([]byte(minAvailStr)) {
 		return fmt.Errorf("minAvailable must be a non-negative whole integer or a percentage value between 0 and 100, regex used is '%s'", common.PdbPercentageRegex.String())
 	}

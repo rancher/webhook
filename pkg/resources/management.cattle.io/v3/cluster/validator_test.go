@@ -822,6 +822,182 @@ func Test_validateAgentSchedulingCustomizationPodDisruptionBudget(t *testing.T) 
 			},
 		},
 		{
+			name:           "invalid PDB configuration - trailing newline in min available",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v3.PodDisruptionBudgetSpec{
+				MinAvailable: "5\n",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - trailing newline after percentage in min available",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v3.PodDisruptionBudgetSpec{
+				MinAvailable: "50%\n",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - newline in min available",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v3.PodDisruptionBudgetSpec{
+				MinAvailable: "\n",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - trailing newline in max unavailable",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v3.PodDisruptionBudgetSpec{
+				MaxUnavailable: "5\n",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - trailing newline after percentage in max unavailable",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v3.PodDisruptionBudgetSpec{
+				MaxUnavailable: "50%\n",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - newline in max unavailable",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v3.PodDisruptionBudgetSpec{
+				MaxUnavailable: "\n",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - plus sign in min available",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v3.PodDisruptionBudgetSpec{
+				MinAvailable: "+5",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - negative zero in min available",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v3.PodDisruptionBudgetSpec{
+				MinAvailable: "-0",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - plus zero in min available",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v3.PodDisruptionBudgetSpec{
+				MinAvailable: "+0",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - above int32 in min available",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v3.PodDisruptionBudgetSpec{
+				MinAvailable: "2147483648",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - far above int32 in min available",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v3.PodDisruptionBudgetSpec{
+				MinAvailable: "3000000000",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - leading space in min available",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v3.PodDisruptionBudgetSpec{
+				MinAvailable: " 5",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - trailing newline in min available",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v3.PodDisruptionBudgetSpec{
+				MinAvailable: "5\n",
+			},
+		},
+		{
+			name:           "valid PDB configuration - int32 maximum in min available",
+			shouldSucceed:  true,
+			featureEnabled: true,
+			pdb: &v3.PodDisruptionBudgetSpec{
+				MinAvailable: "2147483647",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - plus sign in max unavailable",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v3.PodDisruptionBudgetSpec{
+				MaxUnavailable: "+5",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - negative zero in max unavailable",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v3.PodDisruptionBudgetSpec{
+				MaxUnavailable: "-0",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - plus zero in max unavailable",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v3.PodDisruptionBudgetSpec{
+				MaxUnavailable: "+0",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - above int32 in max unavailable",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v3.PodDisruptionBudgetSpec{
+				MaxUnavailable: "2147483648",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - far above int32 in max unavailable",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v3.PodDisruptionBudgetSpec{
+				MaxUnavailable: "3000000000",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - leading space in max unavailable",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v3.PodDisruptionBudgetSpec{
+				MaxUnavailable: " 5",
+			},
+		},
+		{
+			name:           "invalid PDB configuration - trailing newline in max unavailable",
+			shouldSucceed:  false,
+			featureEnabled: true,
+			pdb: &v3.PodDisruptionBudgetSpec{
+				MaxUnavailable: "5\n",
+			},
+		},
+		{
+			name:           "valid PDB configuration - int32 maximum in max unavailable",
+			shouldSucceed:  true,
+			featureEnabled: true,
+			pdb: &v3.PodDisruptionBudgetSpec{
+				MaxUnavailable: "2147483647",
+			},
+		},
+		{
 			name:           "valid PDB reconfiguration - field is removed while feature is disabled",
 			shouldSucceed:  true,
 			featureEnabled: false,
@@ -1291,6 +1467,204 @@ func Test_validateWebhookDeploymentCustomization(t *testing.T) {
 			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
 		},
 		{
+			name: "PDB trailing newline in min available",
+			customization: &v3.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v3.PodDisruptionBudgetSpec{
+					MinAvailable: "5\n",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.minAvailable"}),
+		},
+		{
+			name: "PDB trailing newline after percentage in min available",
+			customization: &v3.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v3.PodDisruptionBudgetSpec{
+					MinAvailable: "50%\n",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.minAvailable"}),
+		},
+		{
+			name: "PDB newline in min available",
+			customization: &v3.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v3.PodDisruptionBudgetSpec{
+					MinAvailable: "\n",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.minAvailable"}),
+		},
+		{
+			name: "PDB trailing newline in max unavailable",
+			customization: &v3.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v3.PodDisruptionBudgetSpec{
+					MaxUnavailable: "5\n",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
+		},
+		{
+			name: "PDB trailing newline after percentage in max unavailable",
+			customization: &v3.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v3.PodDisruptionBudgetSpec{
+					MaxUnavailable: "50%\n",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
+		},
+		{
+			name: "PDB newline in max unavailable",
+			customization: &v3.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v3.PodDisruptionBudgetSpec{
+					MaxUnavailable: "\n",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
+		},
+		{
+			name: "PDB plus sign in min available",
+			customization: &v3.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v3.PodDisruptionBudgetSpec{
+					MinAvailable: "+5",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.minAvailable"}),
+		},
+		{
+			name: "PDB negative zero in min available",
+			customization: &v3.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v3.PodDisruptionBudgetSpec{
+					MinAvailable: "-0",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.minAvailable"}),
+		},
+		{
+			name: "PDB plus zero in min available",
+			customization: &v3.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v3.PodDisruptionBudgetSpec{
+					MinAvailable: "+0",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.minAvailable"}),
+		},
+		{
+			name: "PDB above int32 in min available",
+			customization: &v3.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v3.PodDisruptionBudgetSpec{
+					MinAvailable: "2147483648",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.minAvailable"}),
+		},
+		{
+			name: "PDB far above int32 in min available",
+			customization: &v3.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v3.PodDisruptionBudgetSpec{
+					MinAvailable: "3000000000",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.minAvailable"}),
+		},
+		{
+			name: "PDB leading space in min available",
+			customization: &v3.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v3.PodDisruptionBudgetSpec{
+					MinAvailable: " 5",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.minAvailable"}),
+		},
+		{
+			name: "PDB trailing newline in min available",
+			customization: &v3.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v3.PodDisruptionBudgetSpec{
+					MinAvailable: "5\n",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.minAvailable"}),
+		},
+		{
+			name: "PDB int32 maximum in min available",
+			customization: &v3.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v3.PodDisruptionBudgetSpec{
+					MinAvailable: "2147483647",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{}),
+		},
+		{
+			name: "PDB plus sign in max unavailable",
+			customization: &v3.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v3.PodDisruptionBudgetSpec{
+					MaxUnavailable: "+5",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
+		},
+		{
+			name: "PDB negative zero in max unavailable",
+			customization: &v3.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v3.PodDisruptionBudgetSpec{
+					MaxUnavailable: "-0",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
+		},
+		{
+			name: "PDB plus zero in max unavailable",
+			customization: &v3.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v3.PodDisruptionBudgetSpec{
+					MaxUnavailable: "+0",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
+		},
+		{
+			name: "PDB above int32 in max unavailable",
+			customization: &v3.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v3.PodDisruptionBudgetSpec{
+					MaxUnavailable: "2147483648",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
+		},
+		{
+			name: "PDB far above int32 in max unavailable",
+			customization: &v3.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v3.PodDisruptionBudgetSpec{
+					MaxUnavailable: "3000000000",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
+		},
+		{
+			name: "PDB leading space in max unavailable",
+			customization: &v3.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v3.PodDisruptionBudgetSpec{
+					MaxUnavailable: " 5",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
+		},
+		{
+			name: "PDB trailing newline in max unavailable",
+			customization: &v3.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v3.PodDisruptionBudgetSpec{
+					MaxUnavailable: "5\n",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{"test.podDisruptionBudget.maxUnavailable"}),
+		},
+		{
+			name: "PDB int32 maximum in max unavailable",
+			customization: &v3.WebhookDeploymentCustomization{
+				PodDisruptionBudget: &v3.PodDisruptionBudgetSpec{
+					MaxUnavailable: "2147483647",
+				},
+			},
+			validateFunc: validateFailedPaths([]string{}),
+		},
+		{
 			name: "full valid customization",
 			customization: &v3.WebhookDeploymentCustomization{
 				ReplicaCount: replicaCount(3),
@@ -1339,6 +1713,99 @@ func Test_validateWebhookDeploymentCustomization(t *testing.T) {
 			}
 			got := common.ValidateWebhookDeploymentCustomization(replicaCount, tolerations, affinity, pdb, field.NewPath("test"))
 			tt.validateFunc(t, got)
+		})
+	}
+}
+
+func TestAdmitFreeFormFields(t *testing.T) {
+	t.Parallel()
+
+	newCluster := func(displayName, fqdn string) v3.Cluster {
+		return v3.Cluster{Spec: v3.ClusterSpec{
+			DisplayName:     displayName,
+			ClusterSpecBase: v3.ClusterSpecBase{LocalClusterAuthEndpoint: v3.LocalClusterAuthEndpoint{FQDN: fqdn}},
+		}}
+	}
+
+	tests := []struct {
+		name         string
+		operation    admissionv1.Operation
+		oldCluster   v3.Cluster
+		newCluster   v3.Cluster
+		wantAllowed  bool
+		wantContains string
+	}{
+		{name: "create with valid display name", operation: admissionv1.Create, newCluster: newCluster("My Café Cluster 数据 (prod)", ""), wantAllowed: true},
+		{name: "create with max length display name", operation: admissionv1.Create, newCluster: newCluster(strings.Repeat("a", 253), ""), wantAllowed: true},
+		{name: "create with too long display name", operation: admissionv1.Create, newCluster: newCluster(strings.Repeat("a", 254), ""), wantContains: "spec.displayName"},
+		{name: "create with newline in display name", operation: admissionv1.Create, newCluster: newCluster("a\nkey: value", ""), wantContains: "spec.displayName"},
+		{name: "create with trailing newline in display name", operation: admissionv1.Create, newCluster: newCluster("a\n", ""), wantContains: "spec.displayName"},
+		{name: "create with double quote in display name", operation: admissionv1.Create, newCluster: newCluster(`a"b`, ""), wantContains: "spec.displayName"},
+		{name: "create with single quote in display name", operation: admissionv1.Create, newCluster: newCluster("a'b", ""), wantContains: "spec.displayName"},
+		{name: "create with backslash in display name", operation: admissionv1.Create, newCluster: newCluster(`a\b`, ""), wantContains: "spec.displayName"},
+		{name: "update with unchanged invalid display name", operation: admissionv1.Update, oldCluster: newCluster("a\nb", ""), newCluster: newCluster("a\nb", ""), wantAllowed: true},
+		{name: "update with changed invalid display name", operation: admissionv1.Update, oldCluster: newCluster("ab", ""), newCluster: newCluster("a\nb", ""), wantContains: "spec.displayName"},
+		{name: "update clears invalid display name", operation: admissionv1.Update, oldCluster: newCluster("a\nb", ""), newCluster: newCluster("", ""), wantAllowed: true},
+		{name: "create with valid fqdn", operation: admissionv1.Create, newCluster: newCluster("", "rancher.example.com"), wantAllowed: true},
+		{name: "create with newline in fqdn", operation: admissionv1.Create, newCluster: newCluster("", "a.example.com\nb"), wantContains: "spec.localClusterAuthEndpoint.fqdn"},
+		{name: "create with trailing newline in fqdn", operation: admissionv1.Create, newCluster: newCluster("", "a.example.com\n"), wantContains: "spec.localClusterAuthEndpoint.fqdn"},
+		{name: "create with quote in fqdn", operation: admissionv1.Create, newCluster: newCluster("", `a"b.example.com`), wantContains: "spec.localClusterAuthEndpoint.fqdn"},
+		{name: "create with backslash in fqdn", operation: admissionv1.Create, newCluster: newCluster("", `a\b.example.com`), wantContains: "spec.localClusterAuthEndpoint.fqdn"},
+		{name: "create with traversal in fqdn", operation: admissionv1.Create, newCluster: newCluster("", "../etc"), wantContains: "spec.localClusterAuthEndpoint.fqdn"},
+		{name: "create with port in fqdn", operation: admissionv1.Create, newCluster: newCluster("", "rancher.example.com:6443"), wantAllowed: true},
+		{name: "create with invalid port in fqdn", operation: admissionv1.Create, newCluster: newCluster("", "rancher.example.com:99999"), wantContains: "spec.localClusterAuthEndpoint.fqdn"},
+		{name: "update with unchanged invalid fqdn", operation: admissionv1.Update, oldCluster: newCluster("", "a.example.com:abc"), newCluster: newCluster("", "a.example.com:abc"), wantAllowed: true},
+		{name: "update with changed invalid fqdn", operation: admissionv1.Update, oldCluster: newCluster("", "a.example.com"), newCluster: newCluster("", "a.example.com:abc"), wantContains: "spec.localClusterAuthEndpoint.fqdn"},
+		{name: "delete with invalid values", operation: admissionv1.Delete, oldCluster: newCluster("a\nb", "a:abc"), wantAllowed: true},
+	}
+	envVarCluster := func(names ...string) v3.Cluster {
+		c := v3.Cluster{}
+		for _, name := range names {
+			c.Spec.AgentEnvVars = append(c.Spec.AgentEnvVars, k8sv1.EnvVar{Name: name, Value: "v"})
+		}
+		return c
+	}
+	tests = append(tests, []struct {
+		name         string
+		operation    admissionv1.Operation
+		oldCluster   v3.Cluster
+		newCluster   v3.Cluster
+		wantAllowed  bool
+		wantContains string
+	}{
+		{name: "create with valid agent env var names", operation: admissionv1.Create, newCluster: envVarCluster("HTTP_PROXY", "$env:NO_PROXY"), wantAllowed: true},
+		{name: "create with newline in agent env var name", operation: admissionv1.Create, newCluster: envVarCluster("A\nB"), wantContains: "spec.agentEnvVars"},
+		{name: "create with space in agent env var name", operation: admissionv1.Create, newCluster: envVarCluster("A B"), wantContains: "spec.agentEnvVars"},
+		{name: "create with quote in agent env var name", operation: admissionv1.Create, newCluster: envVarCluster(`A"B`), wantContains: "spec.agentEnvVars"},
+		{name: "create with backslash in agent env var name", operation: admissionv1.Create, newCluster: envVarCluster(`A\B`), wantContains: "spec.agentEnvVars"},
+		{name: "create with traversal in agent env var name", operation: admissionv1.Create, newCluster: envVarCluster("../A"), wantContains: "spec.agentEnvVars"},
+		{name: "update with unchanged invalid agent env var name", operation: admissionv1.Update, oldCluster: envVarCluster("MY-VAR"), newCluster: envVarCluster("MY-VAR"), wantAllowed: true},
+		{name: "update with new invalid agent env var name", operation: admissionv1.Update, oldCluster: envVarCluster("MY-VAR"), newCluster: envVarCluster("MY-VAR", "A\nB"), wantContains: "spec.agentEnvVars"},
+	}...)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			a := admitter{sar: &mockReviewer{}}
+
+			oldClusterBytes, err := json.Marshal(tt.oldCluster)
+			assert.NoError(t, err)
+			newClusterBytes, err := json.Marshal(tt.newCluster)
+			assert.NoError(t, err)
+
+			res, err := a.Admit(&admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Object:    runtime.RawExtension{Raw: newClusterBytes},
+					OldObject: runtime.RawExtension{Raw: oldClusterBytes},
+					Operation: tt.operation,
+				},
+			})
+			assert.NoError(t, err)
+			assert.Equal(t, tt.wantAllowed, res.Allowed)
+			if !tt.wantAllowed {
+				assert.Equal(t, metav1.StatusReasonBadRequest, res.Result.Reason)
+				assert.Contains(t, res.Result.Message, tt.wantContains)
+			}
 		})
 	}
 }
