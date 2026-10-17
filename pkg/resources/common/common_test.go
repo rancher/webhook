@@ -564,3 +564,40 @@ func TestOldAndNewFromRequest(t *testing.T) {
 		})
 	}
 }
+
+// TestIsValidPDBInteger follows the Kubernetes validation of a Pod Disruption Budget (apps/validation
+// ValidatePositiveIntOrPercent). An integer value is read as an int32 and cannot be negative.
+func TestIsValidPDBInteger(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		value    string
+		expected bool
+	}{
+		{name: "zero", value: "0", expected: true},
+		{name: "positive", value: "5", expected: true},
+		{name: "int32 maximum", value: "2147483647", expected: true},
+		{name: "leading zero", value: "05", expected: true},
+		{name: "empty", value: "", expected: false},
+		{name: "above int32", value: "2147483648", expected: false},
+		{name: "above int64", value: "99999999999999999999", expected: false},
+		{name: "plus sign", value: "+5", expected: false},
+		{name: "plus zero", value: "+0", expected: false},
+		{name: "negative", value: "-5", expected: false},
+		{name: "negative zero", value: "-0", expected: false},
+		{name: "leading space", value: " 5", expected: false},
+		{name: "trailing newline", value: "5\n", expected: false},
+		{name: "underscore separator", value: "1_000", expected: false},
+		{name: "hexadecimal", value: "0x10", expected: false},
+		{name: "decimal", value: "5.5", expected: false},
+		{name: "percent", value: "5%", expected: false},
+		{name: "unicode digit", value: "٥", expected: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tt.expected, IsValidPDBInteger(tt.value))
+		})
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/auth"
@@ -40,6 +41,22 @@ const (
 // PdbPercentageRegex ensures that a given string is a properly formatted percentage value
 // between 0% and 100% so that it can be used in a Pod Disruption Budget
 var PdbPercentageRegex = regexp.MustCompile("^([0-9]|[1-9][0-9]|100)%$")
+
+// IsValidPDBInteger returns true if s is a whole number that Kubernetes accepts as an integer value of a Pod
+// Disruption Budget. Kubernetes reads the value as an int32 and rejects a negative number. strconv.Atoi also accepts
+// a sign and numbers larger than an int32, so it cannot validate the value alone.
+func IsValidPDBInteger(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	_, err := strconv.ParseInt(s, 10, 32)
+	return err == nil
+}
 
 type AgentType string
 

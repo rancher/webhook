@@ -43,6 +43,14 @@ following:
 
 If the action is an update, and the old cluster had a `nil` `.spec.rkeConfig`, accept the request if the data directories are valid, since this is how rancherd operates, and is required for harvester installations. Data directories are validated for format only in this case.
 
+#### Local Cluster Auth Endpoint FQDN, Agent Environment Variables, and Registry Config Keys
+
+Prevent the creation of new objects with an invalid `spec.localClusterAuthEndpoint.fqdn`, an invalid name in `spec.agentEnvVars`, or an invalid key in `spec.rkeConfig.registries.configs`:
+- The `fqdn` must be a valid DNS name as defined by RFC 1123 (e.g. `rancher.example.com`), optionally followed by a port between `1` and `65535` (e.g. `rancher.example.com:6443`). An empty value is valid.
+- Each name in `spec.agentEnvVars` must start with a letter or `_`, and contain only letters, digits, and `_`. Rancher skips other names when it renders the node registration commands and the Windows install script. A name can have the `$env:` prefix.
+- A registry config key must be a registry host in the form of `host` or `host:port`, optionally followed by a path (e.g. `registry.example.com/team`). The host is a host name, an IPv4 address, or an IPv6 address in square brackets, and the port is between `1` and `65535`. A path has non-empty segments of letters, digits, `.`, `_`, and `-`.
+- A registry config key must not be empty, contain whitespace or control characters (e.g. a newline), contain `..`, or start with `/`.
+
 #### Etcd S3 CloudCredential Secret
 
 Prevent the creation of objects if the secret specified in `.spec.rkeConfig.etcd.s3.cloudCredentialName` does not exist.
@@ -105,6 +113,10 @@ section. A secondary validator will ensure that the effective data directory for
 from the one chosen during cluster creation. Additionally, the changing of a data directory for the `system-agent`, 
 kubernetes distro (RKE2/K3s), and CAPR components is also prohibited.
 
+#### Local Cluster Auth Endpoint FQDN, Agent Environment Variables, and Registry Config Keys
+
+Prevent updating `spec.localClusterAuthEndpoint.fqdn` to an invalid value, and prevent adding an invalid name to `spec.agentEnvVars` or an invalid key to `spec.rkeConfig.registries.configs`. The rules are the same as on create. An unchanged `fqdn`, an existing environment variable name, and an existing registry config key are not validated, so existing clusters can still be updated.
+
 #### cluster.spec.clusterAgentDeploymentCustomization and cluster.spec.fleetAgentDeploymentCustomization
 
 The `DeploymentCustomization` fields are of 3 types:
@@ -134,7 +146,7 @@ The `schedulingCustomization.PodDisruptionBudget` field contains two attributes
 + `minAvailable`: This is a string value that indicates the minimum number of agent replicas that must be running at a given time.
 + `maxUnavailable`: This is a string value that indicates the maximum number of agent replicas that can be unavailable at a given time.
 
-Both `minAvailable` and `maxUnavailable` must be a string which represents a non-negative whole number, or a whole number percentage greater than or equal to `0%` and less than or equal to `100%`. Only one of the two fields can have a non-zero or empty value at a given time. These fields use the following regex when assessing if a given percentage value is valid:
+Both `minAvailable` and `maxUnavailable` must be a string which represents a non-negative whole number without a sign and no larger than `2147483647` (the Kubernetes `int32` limit), or a whole number percentage greater than or equal to `0%` and less than or equal to `100%`. Only one of the two fields can have a non-zero or empty value at a given time. These fields use the following regex when assessing if a given percentage value is valid:
 ```regex
 ^([0-9]|[1-9][0-9]|100)%$
 ```
@@ -149,7 +161,7 @@ The `WebhookDeploymentCustomization` field configures the rancher-webhook deploy
   ([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]
   ```
 - `overrideAffinity`: Node affinity `nodeSelectorTerms` are validated via label name validation. Pod affinity and pod anti-affinity are validated via label selectors using the [apimachinery label selector validation](https://github.com/kubernetes/apimachinery/blob/02a41040d88da08de6765573ae2b1a51f424e1ca/pkg/apis/meta/v1/validation/validation.go#L56).
-- `podDisruptionBudget.minAvailable` and `podDisruptionBudget.maxUnavailable`: Each must be a non-negative whole integer or a whole number percentage between `0%` and `100%`. Only one of the two fields can have a non-zero or non-empty value at a given time. These fields use the following regex when assessing if a given percentage value is valid:
+- `podDisruptionBudget.minAvailable` and `podDisruptionBudget.maxUnavailable`: Each must be a non-negative whole integer without a sign and no larger than `2147483647`, or a whole number percentage between `0%` and `100%`. Only one of the two fields can have a non-zero or non-empty value at a given time. These fields use the following regex when assessing if a given percentage value is valid:
   ```regex
   ^([0-9]|[1-9][0-9]|100)%$
   ```

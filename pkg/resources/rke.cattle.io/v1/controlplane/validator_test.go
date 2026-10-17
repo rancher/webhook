@@ -345,6 +345,76 @@ func TestValidator_Admit_UnsafeCharacters(t *testing.T) {
 	}
 }
 
+func TestValidator_Admit_RegistryConfigKeys(t *testing.T) {
+	t.Parallel()
+
+	withRegistries := func(keys ...string) *rkev1.RKEControlPlane {
+		configs := map[string]rkev1.RegistryConfig{}
+		for _, key := range keys {
+			configs[key] = rkev1.RegistryConfig{}
+		}
+		return &rkev1.RKEControlPlane{Spec: rkev1.RKEControlPlaneSpec{
+			ClusterConfiguration: rkev1.ClusterConfiguration{Registries: &rkev1.Registry{Configs: configs}},
+		}}
+	}
+
+	tests := []struct {
+		name        string
+		oldCP       *rkev1.RKEControlPlane
+		newCP       *rkev1.RKEControlPlane
+		operation   admissionv1.Operation
+		wantAllowed bool
+	}{
+		{name: "create with no registries", newCP: &rkev1.RKEControlPlane{}, operation: admissionv1.Create, wantAllowed: true},
+		{name: "create with valid keys", newCP: withRegistries("registry.example.com", "10.0.0.1:5000"), operation: admissionv1.Create, wantAllowed: true},
+		{name: "create with newline", newCP: withRegistries("a\nb"), operation: admissionv1.Create},
+		{name: "create with trailing newline", newCP: withRegistries("registry.example.com\n"), operation: admissionv1.Create},
+		{name: "create with double quote", newCP: withRegistries(`a"b`), operation: admissionv1.Create},
+		{name: "create with single quote", newCP: withRegistries("a'b"), operation: admissionv1.Create},
+		{name: "create with backslash", newCP: withRegistries(`a\b`), operation: admissionv1.Create},
+		{name: "create with traversal", newCP: withRegistries("../../etc"), operation: admissionv1.Create},
+		{name: "create with leading slash", newCP: withRegistries("/etc"), operation: admissionv1.Create},
+		{name: "update with new invalid key", oldCP: withRegistries("registry.example.com"), newCP: withRegistries("registry.example.com", "../x"), operation: admissionv1.Update},
+		{name: "update with unchanged invalid key", oldCP: withRegistries("../x"), newCP: withRegistries("../x"), operation: admissionv1.Update, wantAllowed: true},
+		{name: "update with unchanged invalid key and new valid key", oldCP: withRegistries("../x"), newCP: withRegistries("../x", "registry.example.com"), operation: admissionv1.Update, wantAllowed: true},
+		{name: "update without old object validates all keys", newCP: withRegistries("../x"), operation: admissionv1.Update},
+		{name: "delete is allowed", oldCP: withRegistries("../x"), operation: admissionv1.Delete, wantAllowed: true},
+	}
+
+	admitter := NewValidator().Admitters()[0]
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			cp := tt.newCP
+			if tt.operation == admissionv1.Delete {
+				cp = tt.oldCP
+			}
+			req, err := createRKEControlPlaneRequest(cp, tt.operation)
+			require.NoError(t, err)
+			if tt.operation == admissionv1.Update && tt.oldCP != nil {
+				req.OldObject.Raw, err = json.Marshal(tt.oldCP)
+				require.NoError(t, err)
+			}
+
+			response, err := admitter.Admit(req)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantAllowed, response.Allowed)
+		})
+	}
+}
+
+func TestValidator_Admit_UpdateOldObjectUnmarshalError(t *testing.T) {
+	t.Parallel()
+
+	req, err := createRKEControlPlaneRequest(&rkev1.RKEControlPlane{}, admissionv1.Update)
+	require.NoError(t, err)
+	req.OldObject.Raw = []byte(`{invalid-json`)
+
+	response, err := NewValidator().Admitters()[0].Admit(req)
+	assert.Error(t, err)
+	assert.Nil(t, response)
+}
+
 func createRKEControlPlaneRequest(cp *rkev1.RKEControlPlane, op admissionv1.Operation) (*admission.Request, error) {
 	req := &admission.Request{
 		Context: context.Background(),

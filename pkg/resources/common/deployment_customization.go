@@ -62,6 +62,9 @@ func ValidatePDB(pdb *PDB, path *field.Path) field.ErrorList {
 			}
 		} else if minAvailInt < 0 {
 			errList = append(errList, field.Invalid(path.Child("minAvailable"), minAvailStr, "cannot be a negative integer"))
+		} else if !IsValidPDBInteger(minAvailStr) {
+			errList = append(errList, field.Invalid(path.Child("minAvailable"), minAvailStr,
+				"must be a whole integer without a sign, no larger than 2147483647"))
 		}
 	}
 
@@ -74,6 +77,9 @@ func ValidatePDB(pdb *PDB, path *field.Path) field.ErrorList {
 			}
 		} else if maxUnavailInt < 0 {
 			errList = append(errList, field.Invalid(path.Child("maxUnavailable"), maxUnavailStr, "cannot be a negative integer"))
+		} else if !IsValidPDBInteger(maxUnavailStr) {
+			errList = append(errList, field.Invalid(path.Child("maxUnavailable"), maxUnavailStr,
+				"must be a whole integer without a sign, no larger than 2147483647"))
 		}
 	}
 

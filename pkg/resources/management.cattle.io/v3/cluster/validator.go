@@ -94,6 +94,10 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return admission.ResponseBadRequest("local cluster may not be deleted"), nil
 	}
 
+	if response := validateFreeFormFields(request, oldCluster, newCluster); !response.Allowed {
+		return response, nil
+	}
+
 	response, err := a.validateFleetPermissions(request, oldCluster, newCluster)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate fleet permissions: %w", err)
@@ -291,6 +295,37 @@ func (a *admitter) validateSinglePriorityClass(oldPC, newPC *apisv3.PriorityClas
 	return admission.ResponseAllowed(), nil
 }
 
+// validateFreeFormFields validates the format of the display name, the FQDN of the local cluster auth endpoint, and the
+// names of the agent environment variables. A value is only validated if it is new or changed, so existing clusters
+// with an invalid value can still be updated.
+func validateFreeFormFields(request *admission.Request, oldCluster, newCluster *apisv3.Cluster) *admissionv1.AdmissionResponse {
+	if request.Operation != admissionv1.Create && request.Operation != admissionv1.Update {
+		return admission.ResponseAllowed()
+	}
+
+	if newCluster.Spec.DisplayName != oldCluster.Spec.DisplayName {
+		if response := common.ValidateDisplayName(newCluster.Spec.DisplayName, "spec.displayName"); !response.Allowed {
+			return response
+		}
+	}
+	if newFQDN := newCluster.Spec.LocalClusterAuthEndpoint.FQDN; newFQDN != oldCluster.Spec.LocalClusterAuthEndpoint.FQDN {
+		if response := common.ValidateFQDN(newFQDN, "spec.localClusterAuthEndpoint.fqdn"); !response.Allowed {
+			return response
+		}
+	}
+
+	oldNames := make([]string, 0, len(oldCluster.Spec.AgentEnvVars))
+	for _, envVar := range oldCluster.Spec.AgentEnvVars {
+		oldNames = append(oldNames, envVar.Name)
+	}
+	newNames := make([]string, 0, len(newCluster.Spec.AgentEnvVars))
+	for _, envVar := range newCluster.Spec.AgentEnvVars {
+		newNames = append(newNames, envVar.Name)
+	}
+
+	return common.ValidateAgentEnvVarNames(oldNames, newNames, "spec.agentEnvVars")
+}
+
 // validatePodDisruptionBudget validates that the Pod Disruption Budget defined in the cluster SchedulingCustomization field is properly
 // configured. The cluster-agent-scheduling-customization feature must be enabled to configure a Pod Disruption Budget, however an existing
 // Pod Disruption Budget may be deleted even if the feature is disabled.
@@ -379,6 +414,14 @@ func (a *admitter) validateSinglePodDisruptionBudget(oldPDB, newPDB *apisv3.PodD
 
 	if !maxUnavailIsString && maxUnavailInt < 0 {
 		return admission.ResponseBadRequest("maxUnavailable cannot be set to a negative integer"), nil
+	}
+
+	if !minAvailIsString && minAvailStr != "" && !common.IsValidPDBInteger(minAvailStr) {
+		return admission.ResponseBadRequest(fmt.Sprintf("minAvailable %s '%s'", "must be a non-negative whole integer up to 2147483647 or a percentage value between 0 and 100, regex used is", common.PdbPercentageRegex.String())), nil
+	}
+
+	if !maxUnavailIsString && maxUnavailStr != "" && !common.IsValidPDBInteger(maxUnavailStr) {
+		return admission.ResponseBadRequest(fmt.Sprintf("maxUnavailable %s '%s'", "must be a non-negative whole integer up to 2147483647 or a percentage value between 0 and 100, regex used is", common.PdbPercentageRegex.String())), nil
 	}
 
 	if minAvailIsString && !common.PdbPercentageRegex.Match([]byte(minAvailStr)) {
