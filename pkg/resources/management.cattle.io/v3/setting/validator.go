@@ -133,7 +133,9 @@ var ReadOnlySettings = []string{
 }
 
 func (a *admitter) admitUpdate(oldSetting, newSetting *v3.Setting, username string) (*admissionv1.AdmissionResponse, error) {
-	if oldSetting.Source == "env" && newSetting.Source != "env" {
+	// Rancher resets a setting to its default (empty source and value) once the env var that configured it is removed.
+	resetToDefault := newSetting.Source == "" && newSetting.Value == ""
+	if oldSetting.Source == "env" && newSetting.Source != "env" && !resetToDefault {
 		return admission.ResponseBadRequest(fmt.Sprintf("setting with source \"%s\" cannot update setting with source \"env\"", newSetting.Source)), nil
 	}
 

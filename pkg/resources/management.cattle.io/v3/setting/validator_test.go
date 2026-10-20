@@ -70,6 +70,30 @@ func (s *SettingSuite) TestAdmitUpdateGuards() {
 			allowed: true,
 		},
 		{
+			name: "allow update on setting with source env when it is reset to its default",
+			oldSetting: &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{Name: setting.UserRetentionCron},
+				Value:      "0 0 * * *",
+				Source:     "env",
+			},
+			newSetting: &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{Name: setting.UserRetentionCron},
+			},
+			allowed: true,
+		},
+		{
+			name: "reject update on setting with source env when only the source is cleared",
+			oldSetting: &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{Name: setting.UserRetentionCron},
+				Value:      "0 0 * * *",
+				Source:     "env",
+			},
+			newSetting: &v3.Setting{
+				ObjectMeta: metav1.ObjectMeta{Name: setting.UserRetentionCron},
+				Value:      "0 0 * * *",
+			},
+		},
+		{
 			name: "reject read-only setting",
 			oldSetting: &v3.Setting{
 				ObjectMeta: metav1.ObjectMeta{Name: "cacerts"},
