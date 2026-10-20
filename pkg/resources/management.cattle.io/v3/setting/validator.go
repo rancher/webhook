@@ -136,7 +136,7 @@ func (a *admitter) admitUpdate(oldSetting, newSetting *v3.Setting, username stri
 	// Rancher resets a setting to its default (empty source and value) once the env var that configured it is removed.
 	resetToDefault := newSetting.Source == "" && newSetting.Value == ""
 	if oldSetting.Source == "env" && newSetting.Source != "env" && !resetToDefault {
-			return admission.ResponseBadRequest(fmt.Sprintf("setting with source \"%s\" cannot update setting with source \"env\"", newSetting.Source)), nil
+		return admission.ResponseBadRequest(fmt.Sprintf("setting with source \"%s\" cannot update setting with source \"env\"", newSetting.Source)), nil
 	}
 
 	if slices.Contains(ReadOnlySettings, oldSetting.Name) && username != bypassServiceAccount {
