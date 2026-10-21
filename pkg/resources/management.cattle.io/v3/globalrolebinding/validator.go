@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/webhook/pkg/resources/common"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -124,9 +125,6 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, err
 	}
 
-	fwResourceRules := a.grResolver.FleetWorkspacePermissionsResourceRulesFromRole(globalRole)
-	fwWorkspaceVerbsRules := a.grResolver.FleetWorkspacePermissionsWorkspaceVerbsFromRole(globalRole)
-	globalRules := a.grResolver.GlobalRulesFromRole(globalRole)
 	clusterRules, err := a.grResolver.ClusterRulesFromRole(globalRole)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -136,38 +134,37 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, fmt.Errorf("unable to get global rules from role %s: %w", globalRole.Name, err)
 	}
 
-	// Collect all escalations to return to user
-	var returnError error
-	bindChecker := common.NewCachedVerbChecker(request, globalRole.Name, a.sar, globalRoleGvr, bindVerb)
-
-	returnError = bindChecker.IsRulesAllowed(clusterRules, a.grbResolvers.ICRResolver, "")
-	if bindChecker.HasVerb() {
-		return admission.ResponseAllowed(), nil
-	}
-	returnError = errors.Join(returnError, bindChecker.IsRulesAllowed(globalRules, a.resolver, ""))
-	if bindChecker.HasVerb() {
-		return admission.ResponseAllowed(), nil
-	}
-	returnError = errors.Join(returnError, bindChecker.IsRulesAllowed(fwResourceRules, a.grbResolvers.FWRulesResolver, ""))
-	if bindChecker.HasVerb() {
-		return admission.ResponseAllowed(), nil
-	}
-	returnError = errors.Join(returnError, bindChecker.IsRulesAllowed(fwWorkspaceVerbsRules, a.grbResolvers.FWVerbsResolver, ""))
-	if bindChecker.HasVerb() {
-		return admission.ResponseAllowed(), nil
-	}
-
-	for namespace, rules := range globalRole.NamespacedRules {
-		returnError = errors.Join(returnError, bindChecker.IsRulesAllowed(rules, a.resolver, namespace))
-		if bindChecker.HasVerb() {
-			return admission.ResponseAllowed(), nil
-		}
-	}
-	if returnError != nil {
-		return admission.ResponseFailedEscalation(fmt.Sprintf("errors due to escalation: %v", returnError)), nil
+	err = a.validateEscalations(request, globalRole, clusterRules)
+	if err != nil {
+		return admission.ResponseFailedEscalation(fmt.Sprintf("errors due to escalation: %v", err)), nil
 	}
 
 	return admission.ResponseAllowed(), nil
+}
+
+func (a *admitter) validateEscalations(request *admission.Request, globalRole *v3.GlobalRole, clusterRules []rbacv1.PolicyRule) error {
+	var returnError error
+	globalRules := a.grResolver.GlobalRulesFromRole(globalRole)
+	fwResourceRules := a.grResolver.FleetWorkspacePermissionsResourceRulesFromRole(globalRole)
+	fwWorkspaceVerbsRules := a.grResolver.FleetWorkspacePermissionsWorkspaceVerbsFromRole(globalRole)
+	bindChecker := common.NewCachedVerbChecker(request, globalRole.Name, a.sar, globalRoleGvr, bindVerb)
+	if bindChecker.HasVerb() {
+		return nil
+	}
+
+	returnError = errors.Join(returnError,
+		bindChecker.IsRulesAllowed(clusterRules, a.grbResolvers.ICRResolver, ""),
+		bindChecker.IsRulesAllowed(globalRules, a.resolver, ""),
+		bindChecker.IsRulesAllowed(fwResourceRules, a.grbResolvers.FWRulesResolver, ""),
+		bindChecker.IsRulesAllowed(fwWorkspaceVerbsRules, a.grbResolvers.FWVerbsResolver, ""))
+
+	for namespace, rules := range globalRole.NamespacedRules {
+		returnError = errors.Join(returnError, bindChecker.IsRulesAllowed(rules, a.resolver, namespace))
+	}
+	for namespace, rules := range globalRole.InheritedNamespacedRules {
+		returnError = errors.Join(returnError, bindChecker.IsRulesAllowed(rules, a.grbResolvers.INRResolver, namespace))
+	}
+	return returnError
 }
 
 // validUpdateFields checks if the fields being changed are valid update fields.
