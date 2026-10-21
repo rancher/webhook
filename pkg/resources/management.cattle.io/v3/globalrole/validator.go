@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/webhook/pkg/resources/common"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -120,66 +121,19 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		return nil, err
 	}
 
-	// Validate the global and namespaced rules of the new GR
-	globalRules := a.grResolver.GlobalRulesFromRole(newGR)
-	returnError := common.ValidateRules(globalRules, false, fldPath.Child("rules"))
-
-	nsrPath := fldPath.Child("namespacedRules")
-	for index, rules := range newGR.NamespacedRules {
-		returnError = errors.Join(returnError, common.ValidateRules(rules, true,
-			nsrPath.Child(index)))
-	}
-	// Validate fleet workspace rules
-	if newGR.InheritedFleetWorkspacePermissions != nil && newGR.InheritedFleetWorkspacePermissions.ResourceRules != nil {
-		fleetWorkspaceRules := newGR.InheritedFleetWorkspacePermissions.ResourceRules
-		fwrPath := fldPath.Child("inheritedFleetWorkspacePermissions").Child("resourceRules")
-		returnError = errors.Join(returnError, common.ValidateRules(fleetWorkspaceRules, true, fwrPath))
-	}
-	// Validate fleet workspace verbs
-	if newGR.InheritedFleetWorkspacePermissions != nil && newGR.InheritedFleetWorkspacePermissions.WorkspaceVerbs != nil {
-		fleetWorkspaceVerbs := newGR.InheritedFleetWorkspacePermissions.WorkspaceVerbs
-		if len(fleetWorkspaceVerbs) == 0 {
-			returnError = errors.Join(returnError, fmt.Errorf("InheritedFleetWorkspacePermissions.WorkspaceVerbs can't be empty"))
-		}
+	err = a.validateRules(newGR, fldPath)
+	if err != nil {
+		return admission.ResponseBadRequest(err.Error()), nil
 	}
 
-	if returnError != nil {
-		return admission.ResponseBadRequest(returnError.Error()), nil
-	}
-
-	// Check for escalations in the rules
 	clusterRules, err := a.grResolver.ClusterRulesFromRole(newGR)
 	if err != nil {
 		return nil, fmt.Errorf("unable to resolve rules for new global role: %w", err)
 	}
-	fwResourceRules := a.grResolver.FleetWorkspacePermissionsResourceRulesFromRole(newGR)
-	fwWorkspaceVerbsRules := a.grResolver.FleetWorkspacePermissionsWorkspaceVerbsFromRole(newGR)
 
-	escalateChecker := common.NewCachedVerbChecker(request, newGR.Name, a.sar, gvr, escalateVerb)
-	returnError = errors.Join(returnError, escalateChecker.IsRulesAllowed(clusterRules, a.grbResolvers.ICRResolver, ""))
-	if escalateChecker.HasVerb() {
-		return admission.ResponseAllowed(), nil
-	}
-	returnError = errors.Join(returnError, escalateChecker.IsRulesAllowed(globalRules, a.resolver, ""))
-	if escalateChecker.HasVerb() {
-		return admission.ResponseAllowed(), nil
-	}
-	returnError = errors.Join(returnError, escalateChecker.IsRulesAllowed(fwResourceRules, a.grbResolvers.FWRulesResolver, ""))
-	if escalateChecker.HasVerb() {
-		return admission.ResponseAllowed(), nil
-	}
-	returnError = errors.Join(returnError, escalateChecker.IsRulesAllowed(fwWorkspaceVerbsRules, a.grbResolvers.FWVerbsResolver, ""))
-	if escalateChecker.HasVerb() {
-		return admission.ResponseAllowed(), nil
-	}
-	for namespace, rules := range newGR.NamespacedRules {
-		returnError = errors.Join(returnError, escalateChecker.IsRulesAllowed(rules, a.resolver, namespace))
-		if escalateChecker.HasVerb() {
-			return admission.ResponseAllowed(), nil
-		}
-	}
-	if returnError != nil {
-		return admission.ResponseFailedEscalation(fmt.Sprintf("errors due to escalation: %v", returnError)), nil
+	err = a.validateEscalations(newGR, request, clusterRules)
+	if err != nil {
+		return admission.ResponseFailedEscalation(fmt.Sprintf("errors due to escalation: %v", err)), nil
 	}
 
 	return admission.ResponseAllowed(), nil
@@ -274,4 +228,64 @@ func (a *admitter) validateUpdateFields(oldRole, newRole *v3.GlobalRole, fldPath
 		return field.Forbidden(fldPath, "updates to builtIn GlobalRoles for fields other than 'newUserDefault' are forbidden")
 	}
 	return nil
+}
+
+func (a *admitter) validateRules(newGR *v3.GlobalRole, fldPath *field.Path) error {
+	// Validate the global and namespaced rules of the new GR
+	globalRules := a.grResolver.GlobalRulesFromRole(newGR)
+	returnError := common.ValidateRules(globalRules, false, fldPath.Child("rules"))
+
+	nsrPath := fldPath.Child("namespacedRules")
+	for index, rules := range newGR.NamespacedRules {
+		returnError = errors.Join(returnError, common.ValidateRules(rules, true,
+			nsrPath.Child(index)))
+	}
+
+	// Validate the inherited namespaced rules of the new GR
+	inrPath := fldPath.Child("inheritedNamespacedRules")
+	for index, rules := range newGR.InheritedNamespacedRules {
+		returnError = errors.Join(returnError, common.ValidateRules(rules, true,
+			inrPath.Child(index)))
+	}
+
+	// Validate fleet workspace rules
+	if newGR.InheritedFleetWorkspacePermissions != nil && newGR.InheritedFleetWorkspacePermissions.ResourceRules != nil {
+		fleetWorkspaceRules := newGR.InheritedFleetWorkspacePermissions.ResourceRules
+		fwrPath := fldPath.Child("inheritedFleetWorkspacePermissions").Child("resourceRules")
+		returnError = errors.Join(returnError, common.ValidateRules(fleetWorkspaceRules, true, fwrPath))
+	}
+	// Validate fleet workspace verbs
+	if newGR.InheritedFleetWorkspacePermissions != nil && newGR.InheritedFleetWorkspacePermissions.WorkspaceVerbs != nil {
+		fleetWorkspaceVerbs := newGR.InheritedFleetWorkspacePermissions.WorkspaceVerbs
+		if len(fleetWorkspaceVerbs) == 0 {
+			returnError = errors.Join(returnError, fmt.Errorf("InheritedFleetWorkspacePermissions.WorkspaceVerbs can't be empty"))
+		}
+	}
+	return returnError
+}
+
+func (a *admitter) validateEscalations(newGR *v3.GlobalRole, request *admission.Request, clusterRules []rbacv1.PolicyRule) error {
+	var returnError error
+	// Check for escalations in the rules
+	globalRules := a.grResolver.GlobalRulesFromRole(newGR)
+	fwResourceRules := a.grResolver.FleetWorkspacePermissionsResourceRulesFromRole(newGR)
+	fwWorkspaceVerbsRules := a.grResolver.FleetWorkspacePermissionsWorkspaceVerbsFromRole(newGR)
+
+	escalateChecker := common.NewCachedVerbChecker(request, newGR.Name, a.sar, gvr, escalateVerb)
+	if escalateChecker.HasVerb() {
+		return nil
+	}
+	returnError = errors.Join(returnError,
+		escalateChecker.IsRulesAllowed(clusterRules, a.grbResolvers.ICRResolver, ""),
+		escalateChecker.IsRulesAllowed(globalRules, a.resolver, ""),
+		escalateChecker.IsRulesAllowed(fwResourceRules, a.grbResolvers.FWRulesResolver, ""),
+		escalateChecker.IsRulesAllowed(fwWorkspaceVerbsRules, a.grbResolvers.FWVerbsResolver, ""))
+
+	for namespace, rules := range newGR.NamespacedRules {
+		returnError = errors.Join(returnError, escalateChecker.IsRulesAllowed(rules, a.resolver, namespace))
+	}
+	for namespace, rules := range newGR.InheritedNamespacedRules {
+		returnError = errors.Join(returnError, escalateChecker.IsRulesAllowed(rules, a.grbResolvers.INRResolver, namespace))
+	}
+	return returnError
 }

@@ -274,6 +274,20 @@ var (
 			},
 		},
 	}
+	inheritedNamespacedRulesGR = v3.GlobalRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "inheritedNamespacedRules-gr",
+		},
+		InheritedNamespacedRules: map[string][]rbacv1.PolicyRule{
+			"ns1": {
+				{
+					APIGroups: []string{""},
+					Resources: []string{"configmaps"},
+					Verbs:     []string{"*"},
+				},
+			},
+		},
+	}
 	fwResourceRules = []rbacv1.PolicyRule{
 		{
 			APIGroups: []string{"fleet.cattle.io"},
