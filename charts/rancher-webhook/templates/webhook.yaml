@@ -725,10 +725,38 @@ webhooks:
       port: 443
   failurePolicy: Fail
   matchPolicy: Equivalent
-  name: rancher.cattle.io.clusterroles.rbac.authorization.k8s.io
+  name: rancher.cattle.io.clusterroles.rbac.authorization.k8s.io.gr-owner
   objectSelector:
     matchExpressions:
     - key: authz.management.cattle.io/gr-owner
+      operator: Exists
+  rules:
+  - apiGroups:
+    - rbac.authorization.k8s.io
+    apiVersions:
+    - v1
+    operations:
+    - UPDATE
+    resources:
+    - clusterroles
+    scope: Cluster
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    caBundle: {{ .Values.caBundle | default "" }}
+    service:
+      name: rancher-webhook
+      namespace: cattle-system
+      path: /v1/webhook/validation/clusterroles.rbac.authorization.k8s.io
+      port: 443
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: rancher.cattle.io.clusterroles.rbac.authorization.k8s.io.install-uuid
+  objectSelector:
+    matchExpressions:
+    - key: authz.cluster.cattle.io/clusterrole-owner-install-uuid
       operator: Exists
   rules:
   - apiGroups:
