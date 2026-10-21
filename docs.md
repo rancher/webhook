@@ -307,6 +307,7 @@ When an LDAP (`openldap`, `freeipa`) or ActiveDirectory (`activedirectory`) auth
   - `userSearchFilter`
   - `groupSearchFilter`
 
+
 When a SAML authconfig with LDAP search (`shibboleth`, `okta`, `adfs`) is created or updated, the following fields of the embedded `openLdapConfig` should have valid LDAP attribute names according to RFC4512 if set:
 
 - `userIDAttribute`
@@ -322,6 +323,8 @@ When an enabled LDAP or ActiveDirectory authconfig is updated and remains enable
 - `groupIDAttribute`
 
 Those providers build principal IDs from the attribute at login, so changing it would orphan every binding that references the old principal names. Disabling the provider with the default cleanup annotation removes its users, tokens, and bindings, so re-enabling with a different identifier attribute is a clean start. With the `user-locked` cleanup annotation, cleanup is skipped and the preserved users and bindings keep principal IDs that no longer resolve after the change.
+
+Only local and one other provider can be enabled without the `multiple-auth-providers` feature in Rancher being enabled.
 
 ## Cluster
 
@@ -785,7 +788,8 @@ When settings are created or updated, the following common checks take place:
 
 When settings are updated, the following additional checks take place:
 
-- Settings with a source of `env` may not be updated
+- Settings with a source of `env` may not be updated, unless they are being reset to their default (both `source` and
+  `value` are cleared), which Rancher does when the env var that configured the setting is removed.
 
 - Read only settings like `cacerts` must not be updated.
 
