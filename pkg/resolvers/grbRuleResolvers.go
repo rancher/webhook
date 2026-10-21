@@ -28,6 +28,8 @@ type GRBRuleResolvers struct {
 	FWRulesResolver *GRBRuleResolver
 	// FWVerbsResolver resolves rules for GlobalRole rules defined in InheritedFleetWorkspacePermissions.WorkspaceVerbs.
 	FWVerbsResolver *GRBRuleResolver
+	// INRResolver resolves rules for GlobalRole rules defined in InheritedNamespacedRules.
+	INRResolver *GRBRuleResolver
 }
 
 // GRBRuleResolver implements the rbacv1.AuthorizationRuleResolver interface. Provides rule resolution
@@ -71,11 +73,22 @@ func NewGRBRuleResolvers(grbCache v3.GlobalRoleBindingCache, grResolver *auth.Gl
 			return grResolver.FleetWorkspacePermissionsWorkspaceVerbsFromRole(gr), nil
 		},
 	}
+	inheritedNamespacedRulesResolver := &GRBRuleResolver{
+		gbrCache:   grbCache,
+		grResolver: grResolver,
+		ruleResolver: func(namespace string, gr *apisv3.GlobalRole, _ *auth.GlobalRoleResolver) ([]rbacv1.PolicyRule, error) {
+			if gr == nil || gr.InheritedNamespacedRules == nil {
+				return nil, nil
+			}
+			return gr.InheritedNamespacedRules[namespace], nil
+		},
+	}
 
 	return &GRBRuleResolvers{
 		ICRResolver:     inheritedClusterRoleResolver,
 		FWVerbsResolver: fleetWorkspaceVerbsResolver,
 		FWRulesResolver: fleetWorkspaceResourceRulesResolver,
+		INRResolver:     inheritedNamespacedRulesResolver,
 	}
 }
 
