@@ -581,6 +581,40 @@ func TestAdmit(t *testing.T) {
 			allowed: true,
 		},
 		{
+			name: "creating with escalation in InheritedNamespacedRules",
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedNamespacedRules = map[string][]v1.PolicyRule{
+						"ns1": {ruleAdmin},
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					setSarResponse(false, nil, testUser, newDefaultGR().Name, state.fakeClient)
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "creating with escalation in InheritedNamespacedRules, escalate allowed",
+			args: args{
+				username: testUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedNamespacedRules = map[string][]v1.PolicyRule{
+						"ns1": {ruleAdmin},
+					}
+					return baseGR
+				},
+				stateSetup: func(state testState) {
+					setSarResponse(true, nil, testUser, newDefaultGR().Name, state.fakeClient)
+				},
+			},
+			allowed: true,
+		},
+		{
 			name: "creating with allowed NamespacedRules",
 			args: args{
 				username: testUser,
@@ -705,6 +739,24 @@ func TestAdmit(t *testing.T) {
 				newGR: func() *v3.GlobalRole {
 					baseGR := newDefaultGR()
 					baseGR.NamespacedRules = map[string][]v1.PolicyRule{
+						"ns1": {{
+							APIGroups: []string{""},
+							Resources: []string{"pods"},
+							Verbs:     []string{},
+						}},
+					}
+					return baseGR
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "inheritedNamespacedRules contains PolicyRule that is invalid",
+			args: args{
+				username: adminUser,
+				newGR: func() *v3.GlobalRole {
+					baseGR := newDefaultGR()
+					baseGR.InheritedNamespacedRules = map[string][]v1.PolicyRule{
 						"ns1": {{
 							APIGroups: []string{""},
 							Resources: []string{"pods"},
