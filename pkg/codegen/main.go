@@ -87,6 +87,7 @@ func main() {
 				&v3.Feature{},
 				&v3.FleetWorkspace{},
 				&v3.PodSecurityAdmissionConfigurationTemplate{},
+				&v3.ProxyEndpoint{},
 				&v3.GlobalRole{},
 				&v3.GlobalRoleBinding{},
 				&v3.RoleTemplate{},
