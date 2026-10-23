@@ -130,19 +130,29 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		}
 	}
 
+	// If the PRTB is being deleted and its RoleTemplate, or a RoleTemplate or ClusterRole it references,
+	// no longer exists, the escalation check can't be performed. Admit the update so that finalizers can be removed.
+	deleting := request.Operation == admissionv1.Update && prtb.DeletionTimestamp != nil
+
 	roleTemplate, err := a.roleTemplateResolver.RoleTemplateCache().Get(prtb.RoleTemplateName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get referenced roleTemplate '%s' for PRTB: %w", roleTemplate.Name, err)
+		if deleting && apierrors.IsNotFound(err) {
+			return admission.ResponseAllowed(), nil
+		}
+		return nil, fmt.Errorf("failed to get referenced roleTemplate '%s' for PRTB: %w", prtb.RoleTemplateName, err)
 	}
 
 	rules, err := a.roleTemplateResolver.RulesFromTemplate(roleTemplate)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get rules from referenced roleTemplate '%s': %w", roleTemplate.Name, err)
+		if deleting && apierrors.IsNotFound(err) {
+			return admission.ResponseAllowed(), nil
+		}
+		return nil, fmt.Errorf("failed to get rules from referenced roleTemplate '%s': %w", prtb.RoleTemplateName, err)
 	}
 
 	clusterScopedRules, err := a.roleTemplateResolver.ClusterScopedRulesFromTemplate(roleTemplate)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get cluster-scoped rules from referenced roleTemplate '%s': %w", roleTemplate.Name, err)
+		return nil, fmt.Errorf("failed to get cluster-scoped rules from referenced roleTemplate '%s': %w", prtb.RoleTemplateName, err)
 	}
 
 	clusterNS, projectNS := clusterAndProjectID(prtb.ProjectName)
