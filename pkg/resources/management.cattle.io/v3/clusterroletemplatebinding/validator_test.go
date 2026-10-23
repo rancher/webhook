@@ -312,6 +312,13 @@ func (c *ClusterRoleTemplateBindingSuite) Test_UpdateValidation() {
 		newUser      = "newUser-userid"
 		newUserPrinc = "local://newUser"
 		testGroup    = "testGroup"
+		missingRT    = "missing-roletemplate"
+		noRulesUser  = "no-rules-userid"
+
+		inheritsMissingRT = "inherits-missing-roletemplate"
+		errorRT           = "error-roletemplate"
+
+		externalMissingCRRT = "external-missing-clusterrole"
 	)
 	clusterRoles := []*rbacv1.ClusterRole{c.adminCR}
 	clusterRoleBindings := []*rbacv1.ClusterRoleBinding{
@@ -327,8 +334,27 @@ func (c *ClusterRoleTemplateBindingSuite) Test_UpdateValidation() {
 	ctrl := gomock.NewController(c.T())
 	roleTemplateCache := fake.NewMockNonNamespacedCacheInterface[*apisv3.RoleTemplate](ctrl)
 	roleTemplateCache.EXPECT().Get(c.adminRT.Name).Return(c.adminRT, nil).AnyTimes()
+	roleTemplateCache.EXPECT().Get(missingRT).Return(nil, apierrors.NewNotFound(schema.GroupResource{
+		Group:    "management.cattle.io",
+		Resource: "roletemplates",
+	}, missingRT)).AnyTimes()
+	roleTemplateCache.EXPECT().Get(inheritsMissingRT).Return(&apisv3.RoleTemplate{
+		ObjectMeta:        metav1.ObjectMeta{Name: inheritsMissingRT},
+		RoleTemplateNames: []string{missingRT},
+		Context:           c.adminRT.Context,
+	}, nil).AnyTimes()
+	roleTemplateCache.EXPECT().Get(errorRT).Return(nil, fmt.Errorf("expected test error")).AnyTimes()
+	roleTemplateCache.EXPECT().Get(externalMissingCRRT).Return(&apisv3.RoleTemplate{
+		ObjectMeta: metav1.ObjectMeta{Name: externalMissingCRRT},
+		External:   true,
+		Context:    c.adminRT.Context,
+	}, nil).AnyTimes()
 	roleTemplateCache.EXPECT().List(gomock.Any()).Return([]*apisv3.RoleTemplate{c.adminRT}, nil).AnyTimes()
 	clusterRoleCache := fake.NewMockNonNamespacedCacheInterface[*rbacv1.ClusterRole](ctrl)
+	clusterRoleCache.EXPECT().Get(externalMissingCRRT).Return(nil, apierrors.NewNotFound(schema.GroupResource{
+		Group:    "rbac.authorization.k8s.io",
+		Resource: "clusterroles",
+	}, externalMissingCRRT)).AnyTimes()
 	roleResolver := auth.NewRoleTemplateResolver(roleTemplateCache, clusterRoleCache)
 	crtbCache := fake.NewMockCacheInterface[*apisv3.ClusterRoleTemplateBinding](ctrl)
 	crtbCache.EXPECT().AddIndexer(gomock.Any(), gomock.Any())
@@ -633,6 +659,176 @@ func (c *ClusterRoleTemplateBindingSuite) Test_UpdateValidation() {
 			},
 			allowed: false,
 		},
+		{
+			name: "remove finalizer while deleting with missing role template",
+			args: args{
+				username: adminUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.RoleTemplateName = missingRT
+					baseCRTB.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+					baseCRTB.Finalizers = []string{"controller.cattle.io/mgmt-auth-crtb-controller"}
+					return baseCRTB
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.RoleTemplateName = missingRT
+					baseCRTB.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+					return baseCRTB
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "update immutable field while deleting",
+			args: args{
+				username: adminUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+					return baseCRTB
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+					baseCRTB.UserName = newUser
+					return baseCRTB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "update with missing role template",
+			args: args{
+				username: adminUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.RoleTemplateName = missingRT
+					return baseCRTB
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.RoleTemplateName = missingRT
+					baseCRTB.Labels["foo"] = "bar"
+					return baseCRTB
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "remove finalizer while deleting by user with role template rules",
+			args: args{
+				username: adminUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+					baseCRTB.Finalizers = []string{"controller.cattle.io/mgmt-auth-crtb-controller"}
+					return baseCRTB
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+					return baseCRTB
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "remove finalizer while deleting by user without role template rules",
+			args: args{
+				username: noRulesUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+					baseCRTB.Finalizers = []string{"controller.cattle.io/mgmt-auth-crtb-controller"}
+					return baseCRTB
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+					return baseCRTB
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "remove finalizer while deleting with missing inherited role template",
+			args: args{
+				username: noRulesUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.RoleTemplateName = inheritsMissingRT
+					baseCRTB.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+					baseCRTB.Finalizers = []string{"controller.cattle.io/mgmt-auth-crtb-controller"}
+					return baseCRTB
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.RoleTemplateName = inheritsMissingRT
+					baseCRTB.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+					return baseCRTB
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "remove finalizer while deleting with role template lookup error",
+			args: args{
+				username: adminUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.RoleTemplateName = errorRT
+					baseCRTB.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+					baseCRTB.Finalizers = []string{"controller.cattle.io/mgmt-auth-crtb-controller"}
+					return baseCRTB
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.RoleTemplateName = errorRT
+					baseCRTB.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+					return baseCRTB
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "remove finalizer while deleting with missing external cluster role",
+			args: args{
+				username: noRulesUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.RoleTemplateName = externalMissingCRRT
+					baseCRTB.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+					baseCRTB.Finalizers = []string{"controller.cattle.io/mgmt-auth-crtb-controller"}
+					return baseCRTB
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.RoleTemplateName = externalMissingCRRT
+					baseCRTB.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+					return baseCRTB
+				},
+			},
+			allowed: true,
+		},
+		{
+			name: "update with missing external cluster role",
+			args: args{
+				username: adminUser,
+				oldCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.RoleTemplateName = externalMissingCRRT
+					return baseCRTB
+				},
+				newCRTB: func() *apisv3.ClusterRoleTemplateBinding {
+					baseCRTB := newDefaultCRTB()
+					baseCRTB.RoleTemplateName = externalMissingCRRT
+					baseCRTB.Labels = map[string]string{"foo": "bar"}
+					return baseCRTB
+				},
+			},
+			wantErr: true,
+		},
 	}
 
 	for i := range tests {
@@ -643,6 +839,11 @@ func (c *ClusterRoleTemplateBindingSuite) Test_UpdateValidation() {
 			admitters := validator.Admitters()
 			assert.Len(c.T(), admitters, 1)
 			resp, err := admitters[0].Admit(req)
+			if test.wantErr {
+				c.Require().Error(err)
+				c.Require().Nil(resp)
+				return
+			}
 			c.NoError(err, "Admit failed")
 			if resp.Allowed != test.allowed {
 				c.Failf("Response was incorrectly validated", "Wanted response.Allowed = '%v' got %v: result=%+v", test.allowed, resp.Allowed, resp.Result)
