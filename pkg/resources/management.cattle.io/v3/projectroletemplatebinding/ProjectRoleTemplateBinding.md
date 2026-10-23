@@ -42,6 +42,10 @@ changed:
 
 In addition, as in the create validation, both a user subject and a group subject cannot be specified.
 
+If the binding is being deleted (has a non-nil `DeletionTimestamp`) and its RoleTemplate can't be found, updates that pass the
+field checks above skip the escalation check. This also applies to a missing inherited RoleTemplate, and to a missing ClusterRole
+for an external RoleTemplate without `externalRules`. This lets finalizers be removed after the RoleTemplate is deleted.
+
 ### Duplicate ProjectRoleTemplateBinding Prevention
 
 On creation, the webhook prevents the creation of a `ProjectRoleTemplateBinding` if another one already exists with the same subject and role in the same project.
