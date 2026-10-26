@@ -3,6 +3,7 @@ package nodedriver
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/rancher/lasso/pkg/dynamic"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -120,6 +121,10 @@ func (a *admitter) rke2ResourcesDeleted(driver *v3.NodeDriver) (bool, error) {
 	}
 	machines, err := a.dynamic.List(gvk, "", labels.Everything())
 	if err != nil {
+		// special case to allow de-activating a driver that never managed to get activate successfully
+		if strings.Contains(err.Error(), "no matches for kind") {
+			return true, nil
+		}
 		return false, fmt.Errorf("error listing %smachines: %w", driver.Spec.DisplayName, err)
 	}
 
