@@ -3,6 +3,7 @@ package nodedriver
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
@@ -26,10 +27,11 @@ func TestNodeDriverValidation(t *testing.T) {
 
 type mockLister struct {
 	toReturn []runtime.Object
+	errorRet error
 }
 
 func (m *mockLister) List(_ schema.GroupVersionKind, _ string, _ labels.Selector) ([]runtime.Object, error) {
-	return m.toReturn, nil
+	return m.toReturn, m.errorRet
 }
 
 func (suite *NodeDriverValidationSuite) TestHappyPath() {
@@ -110,6 +112,38 @@ func (suite *NodeDriverValidationSuite) TestDeleteRKE2Bad() {
 
 	suite.Nil(err)
 	suite.False(resp.Allowed, "admission request was allowed")
+}
+
+func (suite *NodeDriverValidationSuite) TestDeactivateStuckDriver() {
+	a := admitter{
+		dynamic: &mockLister{errorRet: fmt.Errorf("no matches for kind \"custommachine\"")},
+	}
+
+	resp, err := a.Admit(&admission.Request{
+		Context: context.Background(),
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Update,
+			OldObject: runtime.RawExtension{Raw: newNodeDriver(true, nil)},
+			Object:    runtime.RawExtension{Raw: newNodeDriver(false, nil)},
+		}})
+
+	suite.Nil(err)
+	suite.True(resp.Allowed, "admission request was denied")
+}
+
+func (suite *NodeDriverValidationSuite) TestListError() {
+	a := admitter{
+		dynamic: &mockLister{errorRet: fmt.Errorf("list error")},
+	}
+
+	_, err := a.Admit(&admission.Request{
+		Context: context.Background(),
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Delete,
+			OldObject: runtime.RawExtension{Raw: newNodeDriver(true, nil)},
+		}})
+
+	suite.NotNil(err)
 }
 
 func newNodeDriver(active bool, annotations map[string]string) []byte {
