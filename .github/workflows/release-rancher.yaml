@@ -68,7 +68,7 @@ jobs:
           cd rancher
           # Extract dev-v2.9 out of the following line:
           #     ChartDefaultBranch                  = NewSetting("chart-default-branch", "dev-v2.9")
-          charts_branch=$(grep '"chart-default-branch"' pkg/settings/setting.go | cut -d'"' -f4)
+          charts_branch=$(grep '[[:space:]]ChartDefaultBranch' pkg/buildconfig/constants.go | cut --delimiter '"' --fields 2)
           echo "charts_branch=$charts_branch" >> $GITHUB_OUTPUT
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
