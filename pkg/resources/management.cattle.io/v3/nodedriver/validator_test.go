@@ -10,6 +10,7 @@ import (
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/stretchr/testify/suite"
 	admissionv1 "k8s.io/api/admission/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -116,7 +117,10 @@ func (suite *NodeDriverValidationSuite) TestDeleteRKE2Bad() {
 
 func (suite *NodeDriverValidationSuite) TestDeactivateStuckDriver() {
 	a := admitter{
-		dynamic: &mockLister{errorRet: fmt.Errorf("no matches for kind \"custommachine\"")},
+		dynamic: &mockLister{errorRet: &meta.NoKindMatchError{GroupKind: schema.GroupKind{
+			Group: "rke-machine.cattle.io",
+			Kind:  "mydrivermachine",
+		}}},
 	}
 
 	resp, err := a.Admit(&admission.Request{
