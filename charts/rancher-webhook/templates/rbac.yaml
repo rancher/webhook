@@ -57,13 +57,7 @@ rules:
   resources: ["*"]
   verbs: [get, list, watch]
 - apiGroups: ["rke-machine.cattle.io"]
-  resources:
-    - amazonec2machines
-    - azuremachines
-    - digitaloceanmachines
-    - harvestermachines
-    - linodemachines
-    - vmwarevspheremachines
+  resources: ["*"]
   verbs: [get, list, watch]
 - apiGroups: ["catalog.cattle.io"]
   resources: [clusterrepos]
