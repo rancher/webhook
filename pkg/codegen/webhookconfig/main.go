@@ -38,8 +38,7 @@ const (
 	// caBundlePlaceholder is swapped for the Helm template expression after
 	// marshaling, since CABundle is a []byte field and would otherwise be
 	// rendered as an opaque base64 blob.
-	caBundlePlaceholder  = "codegen-cabundle-placeholder"
-	caBundleTemplateExpr = `{{ .Values.caBundle | default "" }}`
+	caBundlePlaceholder = "codegen-cabundle-placeholder"
 
 	mcmEnabledIf  = "{{- if .Values.mcm.enabled }}\n"
 	mcmDisabledIf = "{{- if not .Values.mcm.enabled }}\n"
@@ -116,7 +115,7 @@ func run() error {
 	doc.WriteString("webhooks:\n")
 	doc.WriteString(mergeEntries(enabledMutating, disabledMutating))
 
-	out := caBundleLine.ReplaceAllString(doc.String(), "${1} "+caBundleTemplateExpr)
+	out := caBundleLine.ReplaceAllString(doc.String(), caBundleTemplate)
 	return os.WriteFile(outputPath, []byte(out), 0o644)
 }
 
@@ -124,7 +123,13 @@ func run() error {
 // sigs.k8s.io/yaml renders for the CABundle []byte field, so it can be
 // swapped for the Helm template expression regardless of exact base64 or
 // quoting form.
-var caBundleLine = regexp.MustCompile(`(?m)^(\s*caBundle:).*$`)
+var caBundleLine = regexp.MustCompile(`(?m)^(\s*)caBundle:.*$`)
+
+// caBundleTemplate only renders the caBundle field when .Values.caBundle is
+// set. Rendering `caBundle: ""` would make Helm (server-side apply with
+// force-conflicts) take ownership of the field and blank out the CA that
+// needacert injects at runtime.
+const caBundleTemplate = "${1}{{- with .Values.caBundle }}\n${1}caBundle: {{ . }}\n${1}{{- end }}"
 
 func handlers(ctx context.Context, cfg *rest.Config, mcmEnabled bool) ([]admission.ValidatingAdmissionHandler, []admission.MutatingAdmissionHandler, error) {
 	c, err := clients.NewWithOptions(ctx, cfg, &clients.Options{

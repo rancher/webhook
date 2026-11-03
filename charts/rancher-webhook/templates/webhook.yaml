@@ -7,7 +7,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -31,7 +33,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -57,7 +61,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -82,7 +88,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -114,7 +122,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -138,7 +148,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -168,7 +180,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -198,7 +212,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -223,7 +239,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -248,7 +266,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -275,7 +295,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -303,7 +325,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -329,7 +353,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -353,7 +379,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -379,7 +407,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -405,7 +435,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -430,7 +462,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -455,7 +489,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -480,7 +516,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -506,7 +544,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -535,7 +575,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -560,7 +602,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -586,7 +630,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -614,7 +660,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -642,7 +690,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -667,7 +717,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -692,7 +744,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -717,7 +771,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -745,7 +801,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -773,7 +831,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -801,7 +861,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -826,7 +888,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -852,7 +916,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -876,7 +942,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -901,7 +969,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -926,7 +996,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -951,7 +1023,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -978,7 +1052,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -1010,7 +1086,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -1036,7 +1114,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -1061,7 +1141,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -1086,7 +1168,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -1118,7 +1202,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -1143,7 +1229,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -1167,7 +1255,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
@@ -1191,7 +1281,9 @@ webhooks:
   - v1
   - v1beta1
   clientConfig:
-    caBundle: {{ .Values.caBundle | default "" }}
+    {{- with .Values.caBundle }}
+    caBundle: {{ . }}
+    {{- end }}
     service:
       name: rancher-webhook
       namespace: cattle-system
