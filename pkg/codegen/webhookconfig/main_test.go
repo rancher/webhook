@@ -1,10 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"os"
-	"os/exec"
 	"strings"
 	"testing"
+	"text/template"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,19 +41,24 @@ func TestGeneratedTemplateNeverRendersBareCABundle(t *testing.T) {
 	assert.Equal(t, strings.Count(string(b), "clientConfig:"), found, "every clientConfig needs a conditional caBundle")
 }
 
-func renderChart(t *testing.T, args ...string) []v1.WebhookClientConfig {
+// renderWebhookTemplate renders templates/webhook.yaml with Go's text/template.
+// The file only uses if/with/end, so no Helm engine is needed.
+func renderWebhookTemplate(t *testing.T, caBundle string, mcmEnabled bool) (string, []v1.WebhookClientConfig) {
 	t.Helper()
-	if _, err := exec.LookPath("helm"); err != nil {
-		t.Skip("helm not found in PATH")
+	b, err := os.ReadFile(chartDir + "/templates/webhook.yaml")
+	require.NoError(t, err)
+	tpl, err := template.New("webhook.yaml").Option("missingkey=error").Parse(string(b))
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	values := map[string]any{
+		"caBundle": caBundle,
+		"mcm":      map[string]any{"enabled": mcmEnabled},
 	}
-	out, err := exec.Command("helm", append([]string{"template", "rancher-webhook", chartDir, "-n", "cattle-system"}, args...)...).CombinedOutput()
-	require.NoError(t, err, string(out))
+	require.NoError(t, tpl.Execute(&buf, map[string]any{"Values": values}))
 
 	var configs []v1.WebhookClientConfig
-	for _, doc := range strings.Split(string(out), "\n---") {
-		if !strings.Contains(doc, "WebhookConfiguration") {
-			continue
-		}
+	for _, doc := range strings.Split(buf.String(), "\n---") {
 		var cfg struct {
 			Kind     string `json:"kind"`
 			Webhooks []struct {
@@ -60,29 +66,29 @@ func renderChart(t *testing.T, args ...string) []v1.WebhookClientConfig {
 			} `json:"webhooks"`
 		}
 		require.NoError(t, yaml.Unmarshal([]byte(doc), &cfg), doc)
-		if cfg.Kind != "ValidatingWebhookConfiguration" && cfg.Kind != "MutatingWebhookConfiguration" {
-			continue
-		}
 		for _, w := range cfg.Webhooks {
 			configs = append(configs, w.ClientConfig)
 		}
 	}
 	require.NotEmpty(t, configs)
-	return configs
+	return buf.String(), configs
 }
 
-func TestChartOmitsCABundleByDefault(t *testing.T) {
-	for _, c := range renderChart(t) {
-		assert.Empty(t, c.CABundle)
+func TestTemplateOmitsCABundleByDefault(t *testing.T) {
+	for _, mcm := range []bool{true, false} {
+		out, configs := renderWebhookTemplate(t, "", mcm)
+		assert.NotContains(t, out, "caBundle", "mcm=%v: the field must not be rendered at all, not even as empty", mcm)
+		for _, c := range configs {
+			assert.Empty(t, c.CABundle)
+		}
 	}
-	// The raw output must not contain the field at all, not even as "".
-	out, err := exec.Command("helm", "template", "rancher-webhook", chartDir, "-n", "cattle-system").CombinedOutput()
-	require.NoError(t, err)
-	assert.NotContains(t, string(out), "caBundle")
 }
 
-func TestChartRendersCABundleWhenSet(t *testing.T) {
-	for _, c := range renderChart(t, "--set", "caBundle=Zm9v") {
-		assert.Equal(t, []byte("foo"), c.CABundle)
+func TestTemplateRendersCABundleWhenSet(t *testing.T) {
+	for _, mcm := range []bool{true, false} {
+		_, configs := renderWebhookTemplate(t, "Zm9v", mcm)
+		for _, c := range configs {
+			assert.Equal(t, []byte("foo"), c.CABundle)
+		}
 	}
 }
