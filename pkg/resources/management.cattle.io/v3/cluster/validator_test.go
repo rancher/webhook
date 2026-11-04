@@ -612,7 +612,8 @@ func Test_versionManagementEnabled(t *testing.T) {
 			},
 			expectError:  false,
 			expectResult: true,
-		}, {
+		},
+		{
 			name: "annotation value system-default",
 			cluster: &v3.Cluster{
 				ObjectMeta: metav1.ObjectMeta{
@@ -623,7 +624,8 @@ func Test_versionManagementEnabled(t *testing.T) {
 			},
 			expectError:  false,
 			expectResult: true,
-		}, {
+		},
+		{
 			name: "annotation value invalid",
 			cluster: &v3.Cluster{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1152,6 +1154,8 @@ func Test_validateWebhookDeploymentCustomization(t *testing.T) {
 			customization: &v3.WebhookDeploymentCustomization{
 				AppendTolerations: []k8sv1.Toleration{
 					{Key: "cattle.io/node", Operator: k8sv1.TolerationOpExists},
+					{Key: "size", Operator: k8sv1.TolerationOpGt, Value: "10"},
+					{Key: "limit", Operator: k8sv1.TolerationOpLt, Value: "100"},
 				},
 			},
 			validateFunc: validateFailedPaths([]string{}),
@@ -1160,10 +1164,10 @@ func Test_validateWebhookDeploymentCustomization(t *testing.T) {
 			name: "invalid toleration key",
 			customization: &v3.WebhookDeploymentCustomization{
 				AppendTolerations: []k8sv1.Toleration{
-					{Key: "-invalid-key"},
+					{Key: "-invalid-key", Value: "true"},
 				},
 			},
-			validateFunc: validateFailedPaths([]string{"test.appendTolerations[0]"}),
+			validateFunc: validateFailedPaths([]string{"test.appendTolerations[0].key"}),
 		},
 		{
 			name: "valid affinity",

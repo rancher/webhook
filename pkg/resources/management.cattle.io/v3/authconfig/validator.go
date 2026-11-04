@@ -4,15 +4,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
 
 	ldapv3 "github.com/go-ldap/ldap/v3"
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
+	controllerv3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
 	objectsv3 "github.com/rancher/webhook/pkg/generated/objects/management.cattle.io/v3"
+	"github.com/rancher/webhook/pkg/resources/common"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/trace"
@@ -30,9 +35,12 @@ type Validator struct {
 }
 
 // NewValidator returns a new Validator instance.
-func NewValidator() *Validator {
+func NewValidator(featureCache controllerv3.FeatureCache, authConfigsCache controllerv3.AuthConfigCache) *Validator {
 	return &Validator{
-		admitter: admitter{},
+		admitter: admitter{
+			featureCache:     featureCache,
+			authConfigsCache: authConfigsCache,
+		},
 	}
 }
 
@@ -59,6 +67,8 @@ func (v *Validator) Admitters() []admission.Admitter {
 }
 
 type admitter struct {
+	featureCache     controllerv3.FeatureCache
+	authConfigsCache controllerv3.AuthConfigCache
 }
 
 // Admit handles the webhook admission requests.
@@ -86,7 +96,90 @@ func (a *admitter) admitCreate(request *admission.Request, newAuthConfig *v3.Aut
 }
 
 func (a *admitter) admitUpdate(request *admission.Request, oldAuthConfig, newAuthConfig *v3.AuthConfig) (*admissionv1.AdmissionResponse, error) {
+	if oldAuthConfig.Enabled && newAuthConfig.Enabled {
+		if err := validateIDAttributeImmutability(oldAuthConfig.Type, request); err != nil {
+			return admission.ResponseBadRequest(err.Error()), nil
+		}
+	}
 	return a.admitCommonCreateUpdate(request, oldAuthConfig, newAuthConfig)
+}
+
+// idAttributes holds the principal identifier attributes of LDAP-based authconfigs.
+// They are read from the raw object so the webhook does not depend on the Rancher types carrying them.
+type idAttributes struct {
+	UserIDAttribute  string `json:"userIDAttribute"`
+	GroupIDAttribute string `json:"groupIDAttribute"`
+}
+
+// idAttributesFromRaw returns the identifier attributes for the given authconfig type, and false for types
+// without LDAP search. SAML providers with LDAP search keep them under the embedded openLdapConfig.
+func idAttributesFromRaw(authConfigType string, raw []byte) (idAttributes, bool, error) {
+	switch authConfigType {
+	case "openLdapConfig", "freeIpaConfig", "activeDirectoryConfig":
+		var attrs idAttributes
+		if err := json.Unmarshal(raw, &attrs); err != nil {
+			return idAttributes{}, false, fmt.Errorf("failed to unmarshal identifier attributes: %w", err)
+		}
+		return attrs, true, nil
+	case "shibbolethConfig", "oktaConfig", "adfsConfig":
+		var config struct {
+			OpenLdapConfig idAttributes `json:"openLdapConfig"`
+		}
+		if err := json.Unmarshal(raw, &config); err != nil {
+			return idAttributes{}, false, fmt.Errorf("failed to unmarshal identifier attributes: %w", err)
+		}
+		return config.OpenLdapConfig, true, nil
+	default:
+		return idAttributes{}, false, nil
+	}
+}
+
+func (attrs idAttributes) validate() error {
+	var err error
+	if attrs.UserIDAttribute != "" && !IsValidLdapAttr(attrs.UserIDAttribute) {
+		err = errors.Join(err, field.Forbidden(field.NewPath("userIDAttribute"), "invalid value"))
+	}
+	if attrs.GroupIDAttribute != "" && !IsValidLdapAttr(attrs.GroupIDAttribute) {
+		err = errors.Join(err, field.Forbidden(field.NewPath("groupIDAttribute"), "invalid value"))
+	}
+	return err
+}
+
+// validateIDAttributes checks the format of the principal identifier attributes of an LDAP-based authconfig.
+func validateIDAttributes(authConfigType string, request *admission.Request) error {
+	attrs, ok, err := idAttributesFromRaw(authConfigType, request.Object.Raw)
+	if err != nil || !ok {
+		return err
+	}
+	return attrs.validate()
+}
+
+// validateIDAttributeImmutability rejects changes to the principal identifier attributes of LDAP and
+// ActiveDirectory authconfigs. Those providers build principal IDs from the attribute at login, so changing it
+// would orphan every binding that references the old principal names. SAML providers with LDAP search are
+// exempt: their principal IDs come from the SAML assertion and the LDAP attribute only has to mirror it.
+func validateIDAttributeImmutability(authConfigType string, request *admission.Request) error {
+	switch authConfigType {
+	case "shibbolethConfig", "oktaConfig", "adfsConfig":
+		return nil
+	}
+
+	oldAttrs, ok, err := idAttributesFromRaw(authConfigType, request.OldObject.Raw)
+	if err != nil || !ok {
+		return err
+	}
+	newAttrs, _, err := idAttributesFromRaw(authConfigType, request.Object.Raw)
+	if err != nil {
+		return err
+	}
+
+	if oldAttrs.UserIDAttribute != newAttrs.UserIDAttribute {
+		err = errors.Join(err, field.Invalid(field.NewPath("userIDAttribute"), newAttrs.UserIDAttribute, "field is immutable when the provider is enabled"))
+	}
+	if oldAttrs.GroupIDAttribute != newAttrs.GroupIDAttribute {
+		err = errors.Join(err, field.Invalid(field.NewPath("groupIDAttribute"), newAttrs.GroupIDAttribute, "field is immutable when the provider is enabled"))
+	}
+	return err
 }
 
 func (a *admitter) admitCommonCreateUpdate(request *admission.Request, _, newAuthConfig *v3.AuthConfig) (*admissionv1.AdmissionResponse, error) {
@@ -97,11 +190,35 @@ func (a *admitter) admitCommonCreateUpdate(request *admission.Request, _, newAut
 		return admission.ResponseAllowed(), nil
 	}
 
+	multipleAuthConfigsEnabled, err := a.isMultipleAuthConfigsEnabled()
+	if err != nil {
+		return admission.ResponseBadRequest(err.Error()), nil
+	}
+	if !multipleAuthConfigsEnabled {
+		hasExisting, err := a.hasExistingEnabledAuthConfig()
+		if err != nil {
+			return admission.ResponseBadRequest(err.Error()), nil
+		}
+		if hasExisting {
+			return &admissionv1.AdmissionResponse{
+				Result: &metav1.Status{
+					Status:  "Failure",
+					Message: "AuthConfig already enabled",
+					Reason:  metav1.StatusReasonAlreadyExists,
+					Code:    http.StatusConflict,
+				},
+				Allowed: false,
+			}, nil
+		}
+	}
+
 	switch newAuthConfig.Type {
 	case "openLdapConfig", "freeIpaConfig":
 		err = validateLDAPConfig(request)
 	case "activeDirectoryConfig":
 		err = validateActiveDirectoryConfig(request)
+	case "shibbolethConfig", "oktaConfig", "adfsConfig":
+		err = validateIDAttributes(newAuthConfig.Type, request)
 	default:
 	}
 
@@ -110,6 +227,26 @@ func (a *admitter) admitCommonCreateUpdate(request *admission.Request, _, newAut
 	}
 
 	return admission.ResponseAllowed(), nil
+}
+
+// hasExistingEnabledAuthConfig checks if there is any existing enabled
+// AuthConfig resources other than the local one.
+func (a *admitter) hasExistingEnabledAuthConfig() (bool, error) {
+	existingAuthConfigs, err := a.authConfigsCache.List(labels.Everything())
+	if err != nil {
+		return false, err
+	}
+	for _, config := range existingAuthConfigs {
+		if config.Enabled && config.Name != "local" {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (a *admitter) isMultipleAuthConfigsEnabled() (bool, error) {
+	return common.IsFeatureEnabled(a.featureCache, common.MultipleAuthConfigs)
 }
 
 func validateLDAPConfig(request *admission.Request) error {
@@ -165,6 +302,9 @@ func validateLDAPConfig(request *admission.Request) error {
 	}
 	if config.GroupMemberMappingAttribute != "" && !IsValidLdapAttr(config.GroupMemberMappingAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupMemberMappingAttribute"), "invalid value"))
+	}
+	if attrsErr := validateIDAttributes(config.Type, request); attrsErr != nil {
+		err = errors.Join(err, attrsErr)
 	}
 
 	if config.UserLoginFilter != "" {
@@ -236,6 +376,9 @@ func validateActiveDirectoryConfig(request *admission.Request) error {
 	}
 	if config.GroupMemberMappingAttribute != "" && !IsValidLdapAttr(config.GroupMemberMappingAttribute) {
 		err = errors.Join(err, field.Forbidden(field.NewPath("groupMemberMappingAttribute"), "invalid value"))
+	}
+	if attrsErr := validateIDAttributes(config.Type, request); attrsErr != nil {
+		err = errors.Join(err, attrsErr)
 	}
 
 	if config.UserLoginFilter != "" {

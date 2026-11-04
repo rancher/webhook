@@ -97,6 +97,15 @@ func TestResourceQuotaValidator(t *testing.T) {
 			system:      kubernetesQuotaController,
 		},
 		{
+			name:        "status update of managed by api server is allowed",
+			operation:   admissionv1.Update,
+			subresource: "status",
+			oldRQ:       rqManaged,
+			newRQ:       rqManaged,
+			wantAllowed: true,
+			system:      kubernetesAPIServer,
+		},
+		{
 			name:        "status update promotion to managed is denied",
 			operation:   admissionv1.Update,
 			subresource: "status",

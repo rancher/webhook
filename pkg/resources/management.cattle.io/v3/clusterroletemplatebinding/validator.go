@@ -125,13 +125,23 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 		}
 	}
 
+	// If the CRTB is being deleted and its RoleTemplate, or a RoleTemplate or ClusterRole it references,
+	// no longer exists, the escalation check can't be performed. Admit the update so that finalizers can be removed.
+	deleting := request.Operation == admissionv1.Update && crtb.DeletionTimestamp != nil
+
 	roleTemplate, err := a.roleTemplateResolver.RoleTemplateCache().Get(crtb.RoleTemplateName)
 	if err != nil {
+		if deleting && apierrors.IsNotFound(err) {
+			return admission.ResponseAllowed(), nil
+		}
 		return nil, fmt.Errorf("failed to get roletemplate '%s': %w", crtb.RoleTemplateName, err)
 	}
 
 	rules, err := a.roleTemplateResolver.RulesFromTemplate(roleTemplate)
 	if err != nil {
+		if deleting && apierrors.IsNotFound(err) {
+			return admission.ResponseAllowed(), nil
+		}
 		return nil, fmt.Errorf("failed to resolve rules from roletemplate '%s': %w", crtb.RoleTemplateName, err)
 	}
 	response := &admissionv1.AdmissionResponse{}

@@ -1,7 +1,7 @@
 # ===============
 # Build Stage
 # ===============
-FROM --platform=$BUILDPLATFORM rancher/hardened-build-base:v1.26.7b2@sha256:236e03ea562308e143d2ef9d4060f7b7da785f895aabdb4ba48bdcf871c2c243 AS build
+FROM --platform=$BUILDPLATFORM rancher/hardened-build-base:v1.27.3b1@sha256:7f9ba21deb6ec4f460dd0542d9c805f2855a2a036e186be2a68fa648785d9381 AS build
 
 # Set up build cache
 ENV GOMODCACHE=/root/.cache/go/modcache
@@ -50,11 +50,11 @@ RUN cat coverage.out | awk 'BEGIN {cov=0; stat=0;} $3!="" { cov+=($3==1?$2:0); s
 # ===============
 FROM build AS validate
 # renovate: datasource=github-releases depName=golangci/golangci-lint
-ARG GOLANGCI_LINT_VERSION=2.13.0
-# renovate: datasource=github-release-attachments depName=golangci/golangci-lint digestVersion=v2.13.0
-ARG GOLANGCI_LINT_SUM_amd64=a10e8d8359d76b9e2b41da60f9d98bb26fd53c7a453caa82e0a172d6f72fd2ca
-# renovate: datasource=github-release-attachments depName=golangci/golangci-lint digestVersion=v2.13.0
-ARG GOLANGCI_LINT_SUM_arm64=3a91c7bb9c135099a97858bea431d6dd2f54e4bf68d479c776c2350428d60e41
+ARG GOLANGCI_LINT_VERSION=2.15.0
+# renovate: datasource=github-release-attachments depName=golangci/golangci-lint digestVersion=v2.15.0
+ARG GOLANGCI_LINT_SUM_amd64=9b7fe6a6bf6334b98decf8d86b11415ea7889afdabdd1959fdce23af2a9ebcea
+# renovate: datasource=github-release-attachments depName=golangci/golangci-lint digestVersion=v2.15.0
+ARG GOLANGCI_LINT_SUM_arm64=b4d8f17068b35ee6060cc2f69a16fb48740d706fbba81661c318649c114a6998
 RUN set -e; \
     ARCH=$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/'); \
     TARBALL="golangci-lint-${GOLANGCI_LINT_VERSION}-linux-${ARCH}.tar.gz"; \
@@ -90,7 +90,7 @@ COPY --from=integration-test-build /dist/rancher-webhook-integration.test /ranch
 # ===============
 # Final Stage
 # ===============
-FROM registry.suse.com/bci/bci-micro:16.1@sha256:b714c0dc5f2650c85a646701e80c0df3d54ee907919b23393cfe6fdc284eba47
+FROM registry.suse.com/bci/bci-micro:16.0@sha256:4c0e91ced4b9d153517ce30eaa4d5ce180eae6da1162297aeb6d98eebe46f8ce
 
 ARG user=webhook
 

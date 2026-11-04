@@ -485,6 +485,36 @@ func TestAdmit(t *testing.T) {
 			allowed: true,
 		},
 		{
+			name: "create escalation in GR InheritedNamespacedRules",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.GlobalRoleName = inheritedNamespacedRulesGR.Name
+					return baseGRB
+				},
+				stateSetup: func(ts testState) {
+					ts.grCacheMock.EXPECT().Get(inheritedNamespacedRulesGR.Name).Return(&inheritedNamespacedRulesGR, nil)
+					setSarResponse(false, nil, testUser, inheritedNamespacedRulesGR.Name, ts.fakeClient)
+				},
+			},
+			allowed: false,
+		},
+		{
+			name: "create escalation in GR InheritedNamespacedRules, bind allowed",
+			args: args{
+				newGRB: func() *v3.GlobalRoleBinding {
+					baseGRB := newDefaultGRB()
+					baseGRB.GlobalRoleName = inheritedNamespacedRulesGR.Name
+					return baseGRB
+				},
+				stateSetup: func(ts testState) {
+					ts.grCacheMock.EXPECT().Get(inheritedNamespacedRulesGR.Name).Return(&inheritedNamespacedRulesGR, nil)
+					setSarResponse(true, nil, testUser, inheritedNamespacedRulesGR.Name, ts.fakeClient)
+				},
+			},
+			allowed: true,
+		},
+		{
 			name: "not found error resolving rules",
 			args: args{
 				newGRB: func() *v3.GlobalRoleBinding {

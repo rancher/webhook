@@ -1,0 +1,102 @@
+#!/bin/bash
+# Point the rancher.cattle.io Validating/MutatingWebhookConfigurations at a
+# locally running webhook, or restore them to the in-cluster service.
+#
+# The configurations are owned by the rancher-webhook Helm chart and the webhook
+# no longer has RBAC to edit them, so this must be run by a user with
+# permission to update them (e.g. cluster-admin kubeconfig).
+#
+# Usage:
+#   dev-scripts/set-webhook-url <base-url>   e.g. https://my-webhook.example.com
+#   dev-scripts/set-webhook-url --reset
+#
+# Options:
+#   --ca-bundle-file FILE  PEM CA used by the API server to verify <base-url>.
+#                          Omit when the URL has a publicly trusted certificate
+#                         .
+#   --dry-run              Print the resulting configurations, change nothing.
+#
+# Original clientConfigs are saved in the dev.webhook.cattle.io/original-client-configs
+# annotation so --reset restores them exactly. Anything that re-applies the chart
+# (helm upgrade, Rancher restart) will also revert the change.
+
+set -e
+
+NAME=rancher.cattle.io
+KINDS=(validatingwebhookconfiguration mutatingwebhookconfiguration)
+ANNOTATION=dev.webhook.cattle.io/original-client-configs
+
+usage() {
+    cat <<USAGE
+Usage:
+  $(basename "$0") <base-url> [--ca-bundle-file FILE] [--dry-run]
+  $(basename "$0") --reset [--dry-run]
+
+Point the $NAME Validating/MutatingWebhookConfigurations at <base-url>
+(e.g. https://my-webhook.example.com), or restore the in-cluster service.
+USAGE
+    exit "${1:-1}"
+}
+
+URL=""
+RESET=false
+DRY_RUN=false
+CA_FILE=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --reset) RESET=true ;;
+        --dry-run) DRY_RUN=true ;;
+        --ca-bundle-file) CA_FILE="$2"; shift ;;
+        -h|--help) usage 0 ;;
+        -*) echo "unknown option: $1" >&2; usage ;;
+        *) URL="${1%/}" ;;
+    esac
+    shift
+done
+
+if $RESET; then
+    [ -z "$URL" ] || usage
+else
+    [ -n "$URL" ] || usage
+    case "$URL" in https://*) ;; *) echo "URL must start with https://" >&2; exit 1 ;; esac
+fi
+
+CA_BUNDLE=""
+if [ -n "$CA_FILE" ]; then
+    CA_BUNDLE=$(base64 -w0 < "$CA_FILE")
+fi
+
+# Reads a configuration on stdin, writes the modified one to stdout.
+SET_FILTER='
+  . as $cfg
+  | (($cfg.metadata.annotations[$ann] // null) | if . then fromjson else null end) as $saved
+  | ($saved // ([$cfg.webhooks[] | {key: .name, value: .clientConfig}] | from_entries)) as $orig
+  | .metadata.annotations[$ann] = ($orig | tojson)
+  | .webhooks |= map(
+      .clientConfig = ({url: ($url + $orig[.name].service.path)}
+        + (if $ca != "" then {caBundle: $ca} else {} end)))
+'
+RESET_FILTER='
+  (.metadata.annotations[$ann] // empty | fromjson) as $orig
+  | del(.metadata.annotations[$ann])
+  | .webhooks |= map(.clientConfig = $orig[.name])
+'
+
+for kind in "${KINDS[@]}"; do
+    json=$(kubectl get "$kind" "$NAME" -o json)
+    if $RESET; then
+        if [ "$(jq -r --arg ann "$ANNOTATION" '.metadata.annotations[$ann] // ""' <<<"$json")" = "" ]; then
+            echo "$kind/$NAME: no saved config, nothing to reset"
+            continue
+        fi
+        out=$(jq --arg ann "$ANNOTATION" "$RESET_FILTER" <<<"$json")
+    else
+        out=$(jq --arg ann "$ANNOTATION" --arg url "$URL" --arg ca "$CA_BUNDLE" "$SET_FILTER" <<<"$json")
+    fi
+    if $DRY_RUN; then
+        jq '{kind, name: .metadata.name, clientConfigs: [.webhooks[] | {(.name): .clientConfig}]}' <<<"$out"
+    else
+        kubectl replace -f - <<<"$out" >/dev/null
+        echo "$kind/$NAME: $($RESET && echo restored || echo "now pointing at $URL")"
+    fi
+done

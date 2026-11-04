@@ -31,6 +31,10 @@ const (
 	// hiding of the local auth provider when an external auth provider is
 	// activate
 	HideLocalAuthProvider = "hide-local-auth-provider"
+
+	// MultipleAuthConfigs is enabled to allow multiple auth-providers.
+	// This is a prime-only feature.
+	MultipleAuthConfigs = "multiple-auth-providers"
 )
 
 // PdbPercentageRegex ensures that a given string is a properly formatted percentage value
@@ -61,7 +65,7 @@ func ConvertAuthnExtras(extra map[string]authnv1.ExtraValue) map[string]authzv1.
 	return result
 }
 
-// ValidateLabel checks if a user is removing or modifying a label. If the label is newly added, return false.
+// IsModifyingLabel checks if a user is removing or modifying a label. If the label is newly added, return false.
 func IsModifyingLabel(oldLabels, newLabels map[string]string, label string) bool {
 	var oldValue, newValue string
 	var oldLabelExists, newLabelExists bool

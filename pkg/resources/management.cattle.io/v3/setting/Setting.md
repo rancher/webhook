@@ -19,7 +19,8 @@ When settings are created or updated, the following common checks take place:
 
 When settings are updated, the following additional checks take place:
 
-- Settings with a source of `env` may not be updated
+- Settings with a source of `env` may not be updated, unless they are being reset to their default (both `source` and
+  `value` are cleared), which Rancher does when the env var that configured the setting is removed.
 
 - Read only settings like `cacerts` must not be updated.
 

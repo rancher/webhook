@@ -5,9 +5,11 @@ package resourcequota
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/rancher/webhook/pkg/admission"
 	objectsv1 "github.com/rancher/webhook/pkg/generated/objects/core/v1"
+	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -21,7 +23,15 @@ import (
 const (
 	kubernetesNamespaceController = "system:serviceaccount:kube-system:namespace-controller"
 	kubernetesQuotaController     = "system:serviceaccount:kube-system:resourcequota-controller"
+	kubernetesAPIServer           = "system:apiserver"
 )
+
+// Both kubernetes quota controller and api server are allowed to update the
+// status of quota resources, managed or not.
+var allowedStatusUpdaters = []string{
+	kubernetesQuotaController,
+	kubernetesAPIServer,
+}
 
 // defaultResourceQuotaLabel is the label that Rancher sets on the namespace
 // ResourceQuota it manages.  ResourceQuotas carrying this label cannot be
@@ -113,11 +123,12 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 					"users are forbidden from promoting resources to Rancher management. Remove the marker label",
 				), nil
 			}
-			// The kubernetes quota controller is allowed to update
-			// the status of quota resources, managed or not.
-			if request.UserInfo.Username == kubernetesQuotaController {
+			if slices.Contains(allowedStatusUpdaters, request.UserInfo.Username) {
 				return admission.ResponseAllowed(), nil
 			}
+
+			logrus.Warnf("rejected resource quota status update from %q", request.UserInfo.Username)
+
 			return admission.ResponseBadRequest("status is immutable"), nil
 		}
 		if hasMarkerLabel(oldRq) {

@@ -38,6 +38,7 @@ import (
 	"github.com/rancher/webhook/pkg/resources/rbac.authorization.k8s.io/v1/role"
 	"github.com/rancher/webhook/pkg/resources/rbac.authorization.k8s.io/v1/rolebinding"
 	"github.com/rancher/webhook/pkg/resources/rke-machine-config.cattle.io/v1/machineconfig"
+	"github.com/rancher/webhook/pkg/resources/rke.cattle.io/v1/controlplane"
 )
 
 // Validation returns a list of all ValidatingAdmissionHandlers used by the webhook.
@@ -61,7 +62,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 		feature.NewValidator(),
 		clusters,
 		machineconfig.NewValidator(),
-		nshandler.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews()),
+		nshandler.NewValidator(clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.MultiClusterManagement),
 		clusterrepo.NewValidator(),
 		auditpolicy.NewValidator(),
 		resourcequota.NewValidator(),
@@ -71,6 +72,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 	if clients.MultiClusterManagement {
 		crtbResolver := resolvers.NewCRTBRuleResolver(clients.Management.ClusterRoleTemplateBinding().Cache(), clients.RoleTemplateResolver)
 		prtbResolver := resolvers.NewPRTBRuleResolver(clients.Management.ProjectRoleTemplateBinding().Cache(), clients.RoleTemplateResolver)
+		prtbClusterScopedResolver := resolvers.NewPRTBClusterScopedRuleResolver(clients.Management.ProjectRoleTemplateBinding().Cache(), clients.RoleTemplateResolver)
 		grbResolvers := resolvers.NewGRBRuleResolvers(clients.Management.GlobalRoleBinding().Cache(), clients.GlobalRoleResolver)
 
 		handlers = append(
@@ -80,7 +82,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			podsecurityadmissionconfigurationtemplate.NewValidator(clients.Management.Cluster().Cache(), clients.Provisioning.Cluster().Cache()),
 			globalrole.NewValidator(clients.DefaultResolver, grbResolvers, clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.GlobalRoleResolver),
 			globalrolebinding.NewValidator(clients.DefaultResolver, grbResolvers, clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.GlobalRoleResolver),
-			projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver, clients.Management.Cluster().Cache(), clients.Management.Project().Cache(), clients.Management.ProjectRoleTemplateBinding().Cache()),
+			projectroletemplatebinding.NewValidator(prtbResolver, crtbResolver, prtbClusterScopedResolver, clients.DefaultResolver, clients.RoleTemplateResolver, clients.Management.Cluster().Cache(), clients.Management.Project().Cache(), clients.Management.ProjectRoleTemplateBinding().Cache()),
 			clusterroletemplatebinding.NewValidator(crtbResolver, clients.DefaultResolver, clients.RoleTemplateResolver, clients.Management.GlobalRoleBinding().Cache(), clients.Management.Cluster().Cache(), clients.Management.ClusterRoleTemplateBinding().Cache()),
 			roletemplate.NewValidator(clients.DefaultResolver, clients.RoleTemplateResolver, clients.K8s.AuthorizationV1().SubjectAccessReviews(), clients.Management.GlobalRole().Cache()),
 			secret.NewValidator(clients.RBAC.Role().Cache(), clients.RBAC.RoleBinding().Cache()),
@@ -93,7 +95,10 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			userattribute.NewValidator(),
 			clusterrole.NewValidator(),
 			clusterrolebinding.NewValidator(),
-			authconfig.NewValidator(),
+			authconfig.NewValidator(
+				clients.Management.Feature().Cache(),
+				clients.Management.AuthConfig().Cache(),
+			),
 			users.NewValidator(
 				clients.Management.UserAttribute().Cache(),
 				clients.K8s.AuthorizationV1().SubjectAccessReviews(),
@@ -106,6 +111,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			proxyendpoint.NewValidator(),
 			awscluster.NewValidator(clients.Dynamic, clients.Core.Secret(), clients.K8s.AuthorizationV1().SubjectAccessReviews()),
 			awsclusterstaticidentity.NewValidator(clients.Core.Secret(), clients.K8s.AuthorizationV1().SubjectAccessReviews()),
+			controlplane.NewValidator(),
 		)
 	} else {
 		handlers = append(handlers, clusterauthtoken.NewValidator())

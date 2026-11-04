@@ -7,11 +7,15 @@ import (
 
 	v3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	"github.com/rancher/webhook/pkg/admission"
+	"github.com/rancher/webhook/pkg/resources/common"
 	"github.com/rancher/webhook/pkg/resources/management.cattle.io/v3/authconfig"
+	"github.com/rancher/wrangler/v3/pkg/generic/fake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -49,7 +53,8 @@ func TestValidateLdapConfig(t *testing.T) {
 	tests := []struct {
 		desc     string
 		fields   func() v3.LdapFields
-		disabled bool // Whether the auth provider is disabled.
+		idAttrs  map[string]any // userIDAttribute/groupIDAttribute, set as raw JSON keys.
+		disabled bool           // Whether the auth provider is disabled.
 		allowed  bool
 	}{
 		{
@@ -180,6 +185,19 @@ func TestValidateLdapConfig(t *testing.T) {
 			},
 		},
 		{
+			desc:    "valid UserIDAttribute and GroupIDAttribute",
+			idAttrs: map[string]any{"userIDAttribute": "uid", "groupIDAttribute": "cn"},
+			allowed: true,
+		},
+		{
+			desc:    "invalid UserIDAttribute",
+			idAttrs: map[string]any{"userIDAttribute": invalidAttr},
+		},
+		{
+			desc:    "invalid GroupIDAttribute",
+			idAttrs: map[string]any{"groupIDAttribute": invalidAttr},
+		},
+		{
 			desc: "invalid UserLoginFilter",
 			fields: func() v3.LdapFields {
 				fields := fields
@@ -205,18 +223,28 @@ func TestValidateLdapConfig(t *testing.T) {
 		},
 	}
 
-	validator := authconfig.NewValidator()
-
 	for _, provider := range []string{"openldap", "freeipa"} {
 		for _, op := range []v1.Operation{v1.Create, v1.Update} {
 			for _, test := range tests {
 				name := provider + "_" + string(op) + "_" + test.desc
 				t.Run(name, func(t *testing.T) {
+					ctrl := gomock.NewController(t)
+					t.Cleanup(ctrl.Finish)
+					ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
+					fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+
+					if !test.disabled {
+						fc.EXPECT().Get(common.MultipleAuthConfigs).Return(&v3.Feature{Status: v3.FeatureStatus{Default: false}}, nil)
+						ac.EXPECT().List(labels.Everything()).Return([]*v3.AuthConfig{}, nil)
+					}
+
+					validator := authconfig.NewValidator(fc, ac)
+
 					fields := fields
 					if test.fields != nil {
 						fields = test.fields()
 					}
-					testLdapAdmit(t, validator, provider, op, fields, !test.disabled, test.allowed)
+					testLdapAdmit(t, validator, provider, op, fields, test.idAttrs, !test.disabled, test.allowed)
 				})
 			}
 		}
@@ -254,6 +282,7 @@ func TestValidateActiveDirectoryConfig(t *testing.T) {
 	tests := []struct {
 		desc    string
 		config  func() v3.ActiveDirectoryConfig
+		idAttrs map[string]any // userIDAttribute/groupIDAttribute, set as raw JSON keys.
 		allowed bool
 	}{
 		{
@@ -376,6 +405,19 @@ func TestValidateActiveDirectoryConfig(t *testing.T) {
 			},
 		},
 		{
+			desc:    "valid UserIDAttribute and GroupIDAttribute",
+			idAttrs: map[string]any{"userIDAttribute": "sAMAccountName", "groupIDAttribute": "objectSid"},
+			allowed: true,
+		},
+		{
+			desc:    "invalid UserIDAttribute",
+			idAttrs: map[string]any{"userIDAttribute": invalidAttr},
+		},
+		{
+			desc:    "invalid GroupIDAttribute",
+			idAttrs: map[string]any{"groupIDAttribute": invalidAttr},
+		},
+		{
 			desc: "invalid UserLoginFilter",
 			config: func() v3.ActiveDirectoryConfig {
 				config := config
@@ -401,18 +443,228 @@ func TestValidateActiveDirectoryConfig(t *testing.T) {
 		},
 	}
 
-	validator := authconfig.NewValidator()
-
 	for _, op := range []v1.Operation{v1.Create, v1.Update} {
 		for _, test := range tests {
 			name := string(op) + "_" + test.desc
 			t.Run(name, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				t.Cleanup(ctrl.Finish)
+
+				ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
+				fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+
 				config := config
 				if test.config != nil {
 					config = test.config()
 				}
-				testActiveDirectoryAdmit(t, validator, op, config, test.allowed)
+
+				if config.Enabled {
+					fc.EXPECT().Get(common.MultipleAuthConfigs).Return(&v3.Feature{Spec: v3.FeatureSpec{Value: new(false)}, Status: v3.FeatureStatus{Default: false}}, nil)
+					ac.EXPECT().List(labels.Everything()).Return([]*v3.AuthConfig{}, nil)
+				}
+				validator := authconfig.NewValidator(fc, ac)
+				testActiveDirectoryAdmit(t, validator, op, config, test.idAttrs, test.allowed)
 			})
+		}
+	}
+}
+
+func TestIDAttributeImmutability(t *testing.T) {
+	t.Parallel()
+
+	type state struct {
+		enabled bool
+		user    string
+		group   string
+	}
+
+	tests := []struct {
+		desc    string
+		old     state
+		new     state
+		allowed bool
+	}{
+		{
+			desc:    "set on first enable",
+			old:     state{enabled: false},
+			new:     state{enabled: true, user: "uid", group: "cn"},
+			allowed: true,
+		},
+		{
+			desc:    "unchanged on enabled provider",
+			old:     state{enabled: true, user: "uid", group: "cn"},
+			new:     state{enabled: true, user: "uid", group: "cn"},
+			allowed: true,
+		},
+		{
+			desc: "user attribute changed on enabled provider",
+			old:  state{enabled: true, user: "uid", group: "cn"},
+			new:  state{enabled: true, user: "entryUUID", group: "cn"},
+		},
+		{
+			desc: "group attribute changed on enabled provider",
+			old:  state{enabled: true, user: "uid", group: "cn"},
+			new:  state{enabled: true, user: "uid", group: "gidNumber"},
+		},
+		{
+			desc: "user attribute cleared on enabled provider",
+			old:  state{enabled: true, user: "uid", group: "cn"},
+			new:  state{enabled: true, group: "cn"},
+		},
+		{
+			desc: "group attribute cleared on enabled provider",
+			old:  state{enabled: true, user: "uid", group: "cn"},
+			new:  state{enabled: true, user: "uid"},
+		},
+		{
+			desc: "user attribute set on enabled provider",
+			old:  state{enabled: true},
+			new:  state{enabled: true, user: "uid"},
+		},
+		{
+			desc:    "changed while disabling provider",
+			old:     state{enabled: true, user: "uid", group: "cn"},
+			new:     state{enabled: false, user: "entryUUID", group: "gidNumber"},
+			allowed: true,
+		},
+		{
+			desc:    "changed on disabled provider",
+			old:     state{enabled: false, user: "uid", group: "cn"},
+			new:     state{enabled: false, user: "entryUUID", group: "gidNumber"},
+			allowed: true,
+		},
+	}
+
+	idAttrs := func(st state) map[string]any {
+		attrs := map[string]any{}
+		if st.user != "" {
+			attrs["userIDAttribute"] = st.user
+		}
+		if st.group != "" {
+			attrs["groupIDAttribute"] = st.group
+		}
+		return attrs
+	}
+	// SAML providers with LDAP search keep the attributes under openLdapConfig.
+	nestedIDAttrs := func(st state) map[string]any {
+		return map[string]any{"openLdapConfig": idAttrs(st)}
+	}
+
+	for _, provider := range ldapBasedProviders {
+		fields := idAttrs
+		if provider.nested {
+			fields = nestedIDAttrs
+		}
+		for _, test := range tests {
+			t.Run(provider.name+"_"+test.desc, func(t *testing.T) {
+				t.Parallel()
+				ctrl := gomock.NewController(t)
+				t.Cleanup(ctrl.Finish)
+
+				ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
+				fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+				allowed := test.allowed || provider.nested
+				if test.new.enabled && allowed {
+					fc.EXPECT().Get(common.MultipleAuthConfigs).Return(&v3.Feature{Status: v3.FeatureStatus{Default: false}}, nil)
+					ac.EXPECT().List(labels.Everything()).Return([]*v3.AuthConfig{}, nil)
+				}
+
+				validator := authconfig.NewValidator(fc, ac)
+
+				oldConfig := withFields(t, provider.config(test.old.enabled), fields(test.old))
+				newConfig := withFields(t, provider.config(test.new.enabled), fields(test.new))
+				testAdmit(t, validator, v1.Update, oldConfig, newConfig, allowed)
+			})
+		}
+	}
+}
+
+// ldapBasedProviders lists every authconfig type carrying LDAP principal identifier attributes,
+// with a minimal config that passes the other validation checks when enabled.
+var ldapBasedProviders = []struct {
+	name   string
+	nested bool
+	config func(enabled bool) any
+}{
+	{"activedirectory", false, func(enabled bool) any {
+		c := v3.ActiveDirectoryConfig{Servers: []string{"ad.example.com"}}
+		c.Name, c.Type, c.Enabled = "activedirectory", "activeDirectoryConfig", enabled
+		return c
+	}},
+	{"openldap", false, func(enabled bool) any {
+		c := v3.OpenLdapConfig{}
+		c.Name, c.Type, c.Enabled = "openldap", "openLdapConfig", enabled
+		c.Servers = []string{"ldap.example.com"}
+		return c
+	}},
+	{"freeipa", false, func(enabled bool) any {
+		c := v3.OpenLdapConfig{}
+		c.Name, c.Type, c.Enabled = "freeipa", "freeIpaConfig", enabled
+		c.Servers = []string{"ldap.example.com"}
+		return c
+	}},
+	{"shibboleth", true, func(enabled bool) any {
+		c := v3.ShibbolethConfig{}
+		c.Name, c.Type, c.Enabled = "shibboleth", "shibbolethConfig", enabled
+		return c
+	}},
+	{"okta", true, func(enabled bool) any {
+		c := v3.OKTAConfig{}
+		c.Name, c.Type, c.Enabled = "okta", "oktaConfig", enabled
+		return c
+	}},
+	{"adfs", true, func(enabled bool) any {
+		c := v3.ADFSConfig{}
+		c.Name, c.Type, c.Enabled = "adfs", "adfsConfig", enabled
+		return c
+	}},
+}
+
+func TestSamlLdapSearchIDAttributes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		desc    string
+		attrs   map[string]any
+		enabled bool
+		allowed bool
+	}{
+		{desc: "no ldap search", enabled: true, allowed: true},
+		{desc: "valid attributes", attrs: map[string]any{"userIDAttribute": "uid", "groupIDAttribute": "cn"}, enabled: true, allowed: true},
+		{desc: "invalid user attribute", attrs: map[string]any{"userIDAttribute": "1foo"}, enabled: true},
+		{desc: "invalid group attribute", attrs: map[string]any{"groupIDAttribute": "1foo"}, enabled: true},
+		{desc: "invalid attribute on disabled provider", attrs: map[string]any{"userIDAttribute": "1foo"}, allowed: true},
+	}
+
+	for _, provider := range ldapBasedProviders {
+		if !provider.nested {
+			continue
+		}
+		for _, op := range []v1.Operation{v1.Create, v1.Update} {
+			for _, test := range tests {
+				t.Run(provider.name+"_"+string(op)+"_"+test.desc, func(t *testing.T) {
+					t.Parallel()
+
+					ctrl := gomock.NewController(t)
+					t.Cleanup(ctrl.Finish)
+					ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
+					fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+
+					if test.enabled {
+						fc.EXPECT().Get(common.MultipleAuthConfigs).Return(&v3.Feature{Status: v3.FeatureStatus{Default: false}}, nil)
+						ac.EXPECT().List(labels.Everything()).Return([]*v3.AuthConfig{}, nil)
+					}
+
+					validator := authconfig.NewValidator(fc, ac)
+
+					oldConfig := provider.config(false)
+					newConfig := provider.config(test.enabled)
+					if test.attrs != nil {
+						newConfig = withFields(t, newConfig, map[string]any{"openLdapConfig": test.attrs})
+					}
+					testAdmit(t, validator, op, oldConfig, newConfig, test.allowed)
+				})
+			}
 		}
 	}
 }
@@ -460,7 +712,7 @@ func TestIsValidLdapAttr(t *testing.T) {
 	}
 }
 
-func testLdapAdmit(t *testing.T, validator *authconfig.Validator, provider string, op v1.Operation, fields v3.LdapFields, enabled, allowed bool) {
+func testLdapAdmit(t *testing.T, validator *authconfig.Validator, provider string, op v1.Operation, fields v3.LdapFields, idAttrs map[string]any, enabled, allowed bool) {
 	var oldConfig, newConfig any
 	switch provider {
 	case "openldap":
@@ -481,14 +733,186 @@ func testLdapAdmit(t *testing.T, validator *authconfig.Validator, provider strin
 		oldConfig, newConfig = o, n
 	}
 
-	testAdmit(t, validator, op, oldConfig, newConfig, allowed)
+	testAdmit(t, validator, op, oldConfig, withFields(t, newConfig, idAttrs), allowed)
 }
 
-func testActiveDirectoryAdmit(t *testing.T, validator *authconfig.Validator, op v1.Operation, newConfig v3.ActiveDirectoryConfig, allowed bool) {
+func TestValidateEnablingAuthConfigs(t *testing.T) {
+	t.Parallel()
+	config := v3.GithubConfig{
+		AuthConfig: v3.AuthConfig{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "AuthConfig",
+				APIVersion: "management.cattle.io/v3",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "github",
+			},
+			Type:       "githubConfig",
+			Enabled:    true,
+			AccessMode: "required",
+			AllowedPrincipalIDs: []string{
+				"github_user://12345",
+			},
+		},
+		ClientID:     "not-a-real-client-id",
+		ClientSecret: "not-a-real-client-secret",
+		Hostname:     "github.com",
+		TLS:          true,
+	}
+
+	tests := []struct {
+		desc                  string
+		admit                 any
+		existing              []*v3.AuthConfig
+		multipleAuthConfigsOn bool
+		allowed               bool
+	}{
+		{
+			desc:     "no authconfigs",
+			admit:    config,
+			existing: []*v3.AuthConfig{},
+			allowed:  true,
+		},
+		{
+			desc:  "with enabled local authconfig",
+			admit: config,
+			existing: []*v3.AuthConfig{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "local"},
+					Type:       "localConfig",
+					Enabled:    true,
+				},
+			},
+			allowed: true,
+		},
+		{
+			desc:  "no enabled authconfigs",
+			admit: config,
+			existing: []*v3.AuthConfig{
+				{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "AuthConfig",
+						APIVersion: "management.cattle.io/v3",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "github-two",
+					},
+					Type:    "githubConfig",
+					Enabled: false,
+					AllowedPrincipalIDs: []string{
+						"github_user://12345",
+					},
+				},
+			},
+			allowed: true,
+		},
+		{
+			desc:  "with enabled authconfigs",
+			admit: config,
+			existing: []*v3.AuthConfig{
+				{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "AuthConfig",
+						APIVersion: "management.cattle.io/v3",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "github-two",
+					},
+					Type:    "githubConfig",
+					Enabled: true,
+					AllowedPrincipalIDs: []string{
+						"github_user://12345",
+					},
+				},
+			},
+			allowed: false,
+		},
+		{
+			desc:                  "with enabled authconfigs when multiple auth configs feature is on",
+			admit:                 config,
+			multipleAuthConfigsOn: true,
+			existing: []*v3.AuthConfig{
+				{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "AuthConfig",
+						APIVersion: "management.cattle.io/v3",
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "github-two",
+					},
+					Type:    "githubConfig",
+					Enabled: true,
+					AllowedPrincipalIDs: []string{
+						"github_user://12345",
+					},
+				},
+			},
+			allowed: true,
+		},
+		{
+			desc:  "with enabled local and other authconfigs",
+			admit: config,
+			existing: []*v3.AuthConfig{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "local"},
+					Type:       "localConfig",
+					Enabled:    true,
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "github-two"},
+					Type:       "githubConfig",
+					Enabled:    true,
+				},
+			},
+			allowed: false,
+		},
+	}
+
+	for _, op := range []v1.Operation{v1.Create, v1.Update} {
+		for _, test := range tests {
+			name := string(op) + "_" + test.desc
+			t.Run(name, func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				t.Cleanup(ctrl.Finish)
+
+				ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
+				fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+				feature := &v3.Feature{Status: v3.FeatureStatus{Default: false}}
+				if test.multipleAuthConfigsOn {
+					feature.Spec.Value = new(true)
+				} else {
+					feature.Spec.Value = new(false)
+					ac.EXPECT().List(labels.Everything()).Return(test.existing, nil)
+				}
+				fc.EXPECT().Get(common.MultipleAuthConfigs).Return(feature, nil)
+
+				validator := authconfig.NewValidator(fc, ac)
+
+				testAdmit(t, validator, op, v3.GithubConfig{}, config, test.allowed)
+			})
+		}
+	}
+}
+
+func testActiveDirectoryAdmit(t *testing.T, validator *authconfig.Validator, op v1.Operation, newConfig v3.ActiveDirectoryConfig, idAttrs map[string]any, allowed bool) {
 	oldConfig := v3.ActiveDirectoryConfig{}
 	oldConfig.Name = newConfig.Name
 	oldConfig.Type = newConfig.Type
-	testAdmit(t, validator, op, oldConfig, newConfig, allowed)
+	testAdmit(t, validator, op, oldConfig, withFields(t, newConfig, idAttrs), allowed)
+}
+
+// withFields marshals config and overlays extra JSON fields. The webhook reads the principal identifier
+// attributes from the raw object, so tests set them without depending on the Rancher types carrying them.
+func withFields(t *testing.T, config any, extra map[string]any) map[string]any {
+	raw, err := json.Marshal(config)
+	require.NoError(t, err, "failed to marshal config")
+
+	var obj map[string]any
+	require.NoError(t, json.Unmarshal(raw, &obj), "failed to unmarshal config")
+	for k, v := range extra {
+		obj[k] = v
+	}
+	return obj
 }
 
 func testAdmit(t *testing.T, validator *authconfig.Validator, op v1.Operation, oldConfig, newConfig any, allowed bool) {

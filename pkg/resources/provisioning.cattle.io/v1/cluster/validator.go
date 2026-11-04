@@ -5,19 +5,20 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"reflect"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 
+	mgmtv3 "github.com/rancher/rancher/pkg/apis/management.cattle.io/v3"
 	v1 "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
 	"github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1/snapshotutil"
 	rkev1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
 	"github.com/rancher/webhook/pkg/admission"
 	"github.com/rancher/webhook/pkg/clients"
 	v3 "github.com/rancher/webhook/pkg/generated/controllers/management.cattle.io/v3"
+	provcontrollers "github.com/rancher/webhook/pkg/generated/controllers/provisioning.cattle.io/v1"
 	rkecontrollers "github.com/rancher/webhook/pkg/generated/controllers/rke.cattle.io/v1"
 	psa "github.com/rancher/webhook/pkg/podsecurityadmission"
 	"github.com/rancher/webhook/pkg/resources/common"
@@ -32,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/apiserver/pkg/authorization/authorizer"
 	authorizationv1 "k8s.io/client-go/kubernetes/typed/authorization/v1"
 	"k8s.io/utils/trace"
 )
@@ -41,20 +43,41 @@ const (
 	systemAgentVarDirEnvVar = "CATTLE_AGENT_VAR_DIR"
 	failureStatus           = "Failure"
 	localCluster            = "local"
+
+	// mgmtClusterNameAnn is the annotation that a user sets on a provisioning cluster to choose the name of the
+	// management cluster that Rancher generates for it.
+	mgmtClusterNameAnn = "provisioning.cattle.io/management-cluster-name"
+
+	// mgmtClusterNameIndex is the name of the provisioning cluster cache index. It maps a management cluster name
+	// to the provisioning clusters that request it in mgmtClusterNameAnn or use it in status.clusterName.
+	mgmtClusterNameIndex = "mgmt-cluster-name"
+
+	// authorizedObjectSelectorAnnotation mirrors capr.AuthorizedObjectSelectorAnnotation in rancher/rancher.
+	authorizedObjectSelectorAnnotation = "rke.cattle.io/object-authorized-for-clusters-selector"
 )
 
 var (
 	mgmtNameRegex  = regexp.MustCompile("^c-[a-z0-9]{5}$")
 	fleetNameRegex = regexp.MustCompile("^[^-][-a-z0-9]+$")
+
+	// requestedMgmtNameRegex matches the format `c-m-<8-char>`, where the 8-character string contains only
+	// lowercase letters and numbers.
+	requestedMgmtNameRegex = regexp.MustCompile("^c-m-[a-z0-9]{8}$")
+
+	annotationsFieldPath = field.NewPath("metadata", "annotations")
 )
 
 // NewProvisioningClusterValidator returns a new validator for provisioning clusters
 func NewProvisioningClusterValidator(client *clients.Clients) *ProvisioningClusterValidator {
+	client.Provisioning.Cluster().Cache().AddIndexer(mgmtClusterNameIndex, provClusterByMgmtClusterName)
 	return &ProvisioningClusterValidator{
 		admitter: provisioningAdmitter{
 			sar:               client.K8s.AuthorizationV1().SubjectAccessReviews(),
+			sourceAuthorizer:  client.Authorizer,
 			mgmtClusterClient: client.Management.Cluster(),
+			provClusterCache:  client.Provisioning.Cluster().Cache(),
 			secretClient:      client.Core.Secret(),
+			configMapClient:   client.Core.ConfigMap(),
 			secretCache:       client.Core.Secret().Cache(),
 			psactCache:        client.Management.PodSecurityAdmissionConfigurationTemplate().Cache(),
 			featureCache:      client.Management.Feature().Cache(),
@@ -89,8 +112,11 @@ func (p *ProvisioningClusterValidator) Admitters() []admission.Admitter {
 
 type provisioningAdmitter struct {
 	sar               authorizationv1.SubjectAccessReviewInterface
+	sourceAuthorizer  authorizer.Authorizer
 	mgmtClusterClient v3.ClusterClient
+	provClusterCache  provcontrollers.ClusterCache
 	secretClient      corev1controller.SecretController
+	configMapClient   corev1controller.ConfigMapController
 	secretCache       corev1controller.SecretCache
 	psactCache        v3.PodSecurityAdmissionConfigurationTemplateCache
 	featureCache      v3.FeatureCache
@@ -115,6 +141,10 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 	response := &admissionv1.AdmissionResponse{}
 	if request.Operation == admissionv1.Create || request.Operation == admissionv1.Update {
 		if err := p.validateClusterName(request, response, cluster); err != nil || response.Result != nil {
+			return response, err
+		}
+
+		if response, err := p.validateManagementClusterName(request, oldCluster, cluster); err != nil || !response.Allowed {
 			return response, err
 		}
 
@@ -149,6 +179,10 @@ func (p *provisioningAdmitter) Admit(request *admission.Request) (*admissionv1.A
 		}
 
 		if err := p.validateCloudCredentialAccess(request, response, oldCluster, cluster); err != nil || response.Result != nil {
+			return response, err
+		}
+
+		if err := p.validateMachineSelectorFilesAccess(request, response, oldCluster, cluster); err != nil || response.Result != nil {
 			return response, err
 		}
 
@@ -270,12 +304,12 @@ func (p *provisioningAdmitter) validateDataDirectories(request *admission.Reques
 			"System Agent": systemAgent,
 		}
 		for name, dir := range dataDirectories {
-			response := validateDataDirectoryFormat(dir, name)
+			response := common.ValidateDataDirectoryFormat(dir, name)
 			if !response.Allowed {
 				return response
 			}
 		}
-		response := validateDataDirectoryHierarchy(dataDirectories)
+		response := common.ValidateDataDirectoryHierarchy(dataDirectories)
 		if !response.Allowed {
 			return response
 		}
@@ -297,82 +331,6 @@ func (p *provisioningAdmitter) validateDataDirectories(request *admission.Reques
 	}
 	if oldCluster.Spec.RKEConfig.DataDirectories.Provisioning != provisioning {
 		return admission.ResponseBadRequest("Provisioning data directory cannot be changed after cluster creation")
-	}
-
-	return admission.ResponseAllowed()
-}
-
-// validateDataDirectoryFormat ensures that no data directory contains a relative path, environment variables,
-// shell expressions, or references to the current or parent directory via use of "./" and "../" respectively.
-// dir is the path of the data directory, and name corresponds to a print friendly name for this data directory.
-func validateDataDirectoryFormat(dir, name string) *admissionv1.AdmissionResponse {
-	if dir == "" {
-		return admission.ResponseAllowed()
-	}
-	if !filepath.IsAbs(dir) {
-		return admission.ResponseBadRequest(
-			fmt.Sprintf("%s data directory must be an absolute path", name))
-	}
-	if strings.ContainsAny(dir, "\"'`*?#~=%$|&;<>{}[]()") {
-		return admission.ResponseBadRequest(
-			fmt.Sprintf("%s data directory cannot contain shell expressions", name))
-	}
-	if filepath.Clean(dir) != dir {
-		return admission.ResponseBadRequest(
-			fmt.Sprintf("%s data directory is not clean", name))
-	}
-
-	return admission.ResponseAllowed()
-}
-
-// validateDataDirectoryHierarchy ensures that no directories are equal, and no directories include other directories.
-// dataDirs is a map with keys corresponding to print friendly names for these data directories, and values representing
-// the specific data directories.
-func validateDataDirectoryHierarchy(dataDirs map[string]string) *admissionv1.AdmissionResponse {
-	paths := make([]struct {
-		name string
-		path string
-	}, 0, len(dataDirs))
-	for name, dir := range dataDirs {
-		// do not attempt to validate empty directory
-		if dir == "" {
-			continue
-		}
-		paths = append(paths, struct {
-			name string
-			path string
-		}{
-			name: name,
-			path: dir,
-		})
-	}
-
-	for i := range paths {
-		for j := i + 1; j < len(paths); j++ {
-			path1 := paths[i]
-			path2 := paths[j]
-
-			if path1.path == path2.path {
-				return admission.ResponseBadRequest(
-					fmt.Sprintf("%s data directory cannot be equal to %s data directory", path1.name, path2.name))
-			}
-
-			// check if paths contain one another
-			if matched, err := filepath.Match(fmt.Sprintf("%s%c*", path1.path, filepath.Separator), path2.path); err != nil {
-				return admission.ResponseBadRequest(
-					fmt.Sprintf("error determining if %s data directory is nested inside %s data directory: %s", path2.name, path1.name, err.Error()))
-			} else if matched {
-				return admission.ResponseBadRequest(
-					fmt.Sprintf("%s data directory cannot be nested inside %s data directory", path2.name, path1.name))
-			}
-			if matched, err := filepath.Match(fmt.Sprintf("%s%c*", path2.path, filepath.Separator), path1.path); err != nil {
-				return admission.ResponseBadRequest(
-					fmt.Sprintf("error determining if %s data directory is nested inside %s data directory: %s", path1.name, path2.name, err.Error()))
-			} else if matched {
-				return admission.ResponseBadRequest(
-					fmt.Sprintf("%s data directory cannot be nested inside %s data directory", path1.name, path2.name))
-			}
-		}
 	}
 
 	return admission.ResponseAllowed()
@@ -419,6 +377,164 @@ func (p *provisioningAdmitter) validateCloudCredentialAccess(request *admission.
 	return nil
 }
 
+// machineSelectorFileSource identifies a source by resource type and name.
+// Adding fields changes map-key equality and deduplication.
+type machineSelectorFileSource struct {
+	resource string
+	name     string
+}
+
+// validateMachineSelectorFilesAccess requires get permission for new or changed entries and,
+// when cluster labels change, unchanged sources carrying the cluster selector annotation.
+func (p *provisioningAdmitter) validateMachineSelectorFilesAccess(request *admission.Request, response *admissionv1.AdmissionResponse, oldCluster, newCluster *v1.Cluster) error {
+	changed, unchanged := splitMachineSelectorFiles(oldCluster, newCluster)
+	labelsChanged := request.Operation == admissionv1.Update &&
+		!equality.Semantic.DeepEqual(oldCluster.Labels, newCluster.Labels)
+	seen := make(map[machineSelectorFileSource]struct{})
+	// Changed sources come first so deduplication preserves their required check.
+	sources := appendDistinctSources(nil, seen, changed)
+	numChanged := len(sources)
+	// Label changes also require examining unchanged sources for the selector annotation.
+	if labelsChanged {
+		sources = appendDistinctSources(sources, seen, unchanged)
+	}
+	// Check sources from new or changed entries directly with SAR. On label changes,
+	// read unchanged sources and check only those with the selector annotation.
+	// Stop at the first error or denial.
+	for i, source := range sources {
+		fromChangedEntry := i < numChanged
+		hasSelector := false
+		if labelsChanged && !fromChangedEntry {
+			var err error
+			hasSelector, err = p.sourceHasClusterSelector(newCluster.Namespace, source)
+			if err != nil {
+				return err
+			}
+		}
+		// Keep unchanged sources without the selector annotation usable without a new access check.
+		if !fromChangedEntry && !hasSelector {
+			continue
+		}
+		decision, _, err := p.sourceAuthorizer.Authorize(request.Context, authorizer.AttributesRecord{
+			User:            request.User(),
+			Verb:            "get",
+			APIVersion:      "v1",
+			Resource:        source.resource,
+			Name:            source.name,
+			Namespace:       newCluster.Namespace, // The planner only reads sources from the cluster's namespace.
+			ResourceRequest: true,
+		})
+		if err != nil {
+			return err
+		}
+		if decision == authorizer.DecisionAllow {
+			continue
+		}
+		message := fmt.Sprintf("user %q does not have GET access to %s %s/%s referenced by machineSelectorFiles",
+			request.UserInfo.Username, source.resource, newCluster.Namespace, source.name)
+		if !fromChangedEntry && hasSelector {
+			message += "; changing cluster labels requires GET access to sources shared by cluster selector"
+		}
+		response.Result = &metav1.Status{
+			Status:  failureStatus,
+			Message: message,
+			Reason:  metav1.StatusReasonForbidden,
+			Code:    http.StatusForbidden,
+		}
+		return nil
+	}
+	return nil
+}
+
+// splitMachineSelectorFiles compares whole entries, including hashes, regardless of list position.
+// On create every entry is changed; the generated PSACT entry is excluded from both lists.
+func splitMachineSelectorFiles(oldCluster, newCluster *v1.Cluster) (changed, unchanged []rkev1.RKEProvisioningFiles) {
+	if newCluster.Spec.RKEConfig == nil || len(newCluster.Spec.RKEConfig.MachineSelectorFiles) == 0 {
+		return nil, nil
+	}
+
+	var oldFiles []rkev1.RKEProvisioningFiles
+	if oldCluster.Spec.RKEConfig != nil {
+		oldFiles = oldCluster.Spec.RKEConfig.MachineSelectorFiles
+	}
+
+	for _, file := range newCluster.Spec.RKEConfig.MachineSelectorFiles {
+		if isPSACTMachineSelectorFile(newCluster, &file) {
+			continue
+		}
+		if slices.ContainsFunc(oldFiles, func(oldFile rkev1.RKEProvisioningFiles) bool {
+			return equality.Semantic.DeepEqual(oldFile, file)
+		}) {
+			unchanged = append(unchanged, file)
+		} else {
+			changed = append(changed, file)
+		}
+	}
+	return changed, unchanged
+}
+
+// appendDistinctSources preserves first-seen order and deduplicates by resource type and name.
+func appendDistinctSources(sources []machineSelectorFileSource, seen map[machineSelectorFileSource]struct{}, files []rkev1.RKEProvisioningFiles) []machineSelectorFileSource {
+	for _, file := range files {
+		for _, source := range file.FileSources {
+			refs := []machineSelectorFileSource{
+				{resource: "secrets", name: source.Secret.Name},
+				{resource: "configmaps", name: source.ConfigMap.Name},
+			}
+			for _, ref := range refs {
+				if ref.name == "" {
+					continue
+				}
+				if _, ok := seen[ref]; ok {
+					continue
+				}
+				seen[ref] = struct{}{}
+				sources = append(sources, ref)
+			}
+		}
+	}
+	return sources
+}
+
+// sourceHasClusterSelector reports whether the source has the cluster selector annotation.
+// A missing source returns false without an error.
+func (p *provisioningAdmitter) sourceHasClusterSelector(namespace string, source machineSelectorFileSource) (bool, error) {
+	var object metav1.Object
+	var err error
+	// Read directly so stale cached annotations cannot cause an access check to be skipped.
+	switch source.resource {
+	case "secrets":
+		object, err = p.secretClient.Get(namespace, source.name, metav1.GetOptions{})
+	case "configmaps":
+		object, err = p.configMapClient.Get(namespace, source.name, metav1.GetOptions{})
+	default:
+		return false, fmt.Errorf("unsupported machineSelectorFiles resource %q", source.resource)
+	}
+	if apierrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to read %s %s/%s: %w", source.resource, namespace, source.name, err)
+	}
+	_, present := object.GetAnnotations()[authorizedObjectSelectorAnnotation]
+	return present, nil
+}
+
+// isPSACTMachineSelectorFile matches the complete generated PSACT entry, ignoring
+// only hashes. A matching secret name alone must not exempt user-defined files.
+// The mutator manages this entry and its Secret, so users do not need read access to it.
+func isPSACTMachineSelectorFile(cluster *v1.Cluster, file *rkev1.RKEProvisioningFiles) bool {
+	if cluster.Spec.DefaultPodSecurityAdmissionConfigurationTemplateName == "" {
+		return false
+	}
+
+	expected := machineSelectorFileForPSA(fmt.Sprintf(secretName, cluster.Name),
+		fmt.Sprintf(mountPath, getRuntime(cluster.Spec.KubernetesVersion)), "")
+	file = file.DeepCopy()
+	cleanupHash(file)
+	return equality.Semantic.DeepEqual(expected, file)
+}
+
 // getCloudCredentialSecretInfo returns the namespace and name of the secret based off the old cloud cred or new style
 // cloud cred
 func getCloudCredentialSecretInfo(namespace, name string) (string, string) {
@@ -451,6 +567,100 @@ func (p *provisioningAdmitter) validateClusterName(request *admission.Request, r
 	}
 
 	return nil
+}
+
+// validateManagementClusterName validates the provisioning.cattle.io/management-cluster-name annotation.
+// On create, the value must be a valid and unused management cluster name.
+// On update, the annotation must not change.
+func (p *provisioningAdmitter) validateManagementClusterName(request *admission.Request, oldCluster, cluster *v1.Cluster) (*admissionv1.AdmissionResponse, error) {
+	switch request.Operation {
+	case admissionv1.Create:
+		return p.validateManagementClusterNameOnCreate(cluster)
+	case admissionv1.Update:
+		return validateManagementClusterNameUnchanged(oldCluster, cluster), nil
+	}
+	return admission.ResponseAllowed(), nil
+}
+
+func (p *provisioningAdmitter) validateManagementClusterNameOnCreate(cluster *v1.Cluster) (*admissionv1.AdmissionResponse, error) {
+	name := cluster.Annotations[mgmtClusterNameAnn]
+	if name == "" {
+		return admission.ResponseAllowed(), nil
+	}
+
+	invalid := func(detail string) *admissionv1.AdmissionResponse {
+		return admission.ResponseBadRequest(field.Invalid(annotationsFieldPath, name, detail).Error())
+	}
+
+	if !requestedMgmtNameRegex.MatchString(name) {
+		return invalid("Management cluster names must use the format `c-m-<8-char>`, " +
+			"where the 8-character string contains only lowercase letters and numbers"), nil
+	}
+
+	// Management clusters are cluster-scoped, so the name must be unique.
+	mgmtCluster, err := p.mgmtClusterClient.Get(name, metav1.GetOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return nil, fmt.Errorf("failed to get management cluster %s: %w", name, err)
+	}
+	if err == nil {
+		// Restoring a backup creates the management cluster before the provisioning cluster. Allow the name if the
+		// management cluster already belongs to this provisioning cluster.
+		if !isManagementClusterOwnedBy(mgmtCluster, cluster) {
+			return invalid("a management cluster with this name already exists"), nil
+		}
+		if mgmtCluster.DeletionTimestamp != nil {
+			return invalid("the management cluster with this name is being deleted"), nil
+		}
+	}
+
+	// Another provisioning cluster must not request the name in its annotation or already use it in its status.
+	// Only clusters that set one of these values are in the index.
+	provClusters, err := p.provClusterCache.GetByIndex(mgmtClusterNameIndex, name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get provisioning clusters by management cluster name %s: %w", name, err)
+	}
+	for _, other := range provClusters {
+		if other.Namespace != cluster.Namespace || other.Name != cluster.Name {
+			return invalid("this management cluster name is already requested or used by another provisioning cluster"), nil
+		}
+	}
+
+	return admission.ResponseAllowed(), nil
+}
+
+// provClusterByMgmtClusterName indexes a provisioning cluster by the management cluster name that it requests in the
+// annotation and by the one that it uses in the status. It skips empty values. The status covers a cluster whose
+// management cluster is gone, because Rancher recreates the management cluster with the name from the status.
+func provClusterByMgmtClusterName(cluster *v1.Cluster) ([]string, error) {
+	var names []string
+	annotationName := cluster.Annotations[mgmtClusterNameAnn]
+	if annotationName != "" {
+		names = append(names, annotationName)
+	}
+	if statusName := cluster.Status.ClusterName; statusName != "" && statusName != annotationName {
+		names = append(names, statusName)
+	}
+	return names, nil
+}
+
+// isManagementClusterOwnedBy returns true if the owner annotations of the management cluster point to the
+// provisioning cluster.
+func isManagementClusterOwnedBy(mgmtCluster *mgmtv3.Cluster, cluster *v1.Cluster) bool {
+	annotations := mgmtCluster.Annotations
+	return annotations["objectset.rio.cattle.io/owner-gvk"] == gvr.GroupVersion().WithKind("Cluster").String() &&
+		annotations["objectset.rio.cattle.io/owner-namespace"] == cluster.Namespace &&
+		annotations["objectset.rio.cattle.io/owner-name"] == cluster.Name
+}
+
+// validateManagementClusterNameUnchanged rejects any change to the management cluster name annotation, including
+// adding and removing it, on updating a provisioning cluster.
+func validateManagementClusterNameUnchanged(oldCluster, cluster *v1.Cluster) *admissionv1.AdmissionResponse {
+	oldValue, oldSet := oldCluster.Annotations[mgmtClusterNameAnn]
+	newValue, newSet := cluster.Annotations[mgmtClusterNameAnn]
+	if oldSet == newSet && oldValue == newValue {
+		return admission.ResponseAllowed()
+	}
+	return admission.ResponseBadRequest(field.Invalid(annotationsFieldPath, mgmtClusterNameAnn, "annotation is immutable").Error())
 }
 
 func validateHTTPNoProxyVariable(request *admission.Request, oldCluster, newCluster *v1.Cluster) *admissionv1.AdmissionResponse {

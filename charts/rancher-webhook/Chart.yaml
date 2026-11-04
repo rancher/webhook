@@ -13,3 +13,6 @@ annotations:
   catalog.cattle.io/rancher-version: ">= 2.16.0-0 < 2.17.0-0"
   catalog.cattle.io/kube-version: "< 1.38.0-0"
   catalog.cattle.io/managed: "true"
+  helm.sh/images: |
+    - name: rancher-webhook
+      image: rancher/rancher-webhook:latest

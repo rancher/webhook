@@ -152,6 +152,14 @@ The following labels are considered relevant for PSA enforcement:
 
 Validation ensures that the limits for cpu/memory must not be less than the requests for cpu/memory.
 
+#### Protected namespace deletion
+
+On the Rancher management (local) cluster, the `local` and `fleet-local` namespaces may not be deleted, as removing
+them corrupts the Rancher installation.
+
+This check is only registered when the webhook runs with multi-cluster management enabled. On downstream clusters
+namespaces with those names belong to the user and can be deleted normally.
+
 ## ResourceQuota
 
 ### Validation Checks
@@ -292,10 +300,31 @@ When an LDAP (`openldap`, `freeipa`) or ActiveDirectory (`activedirectory`) auth
   - `groupDNAttribute`
   - `groupMemberUserAttribute`
   - `groupMemberMappingAttribute`
+  - `userIDAttribute`
+  - `groupIDAttribute`
 - If set, the following fields should have a valid LDAP filter expression according to RFC4515
   - `userLoginFilter`
   - `userSearchFilter`
   - `groupSearchFilter`
+
+
+When a SAML authconfig with LDAP search (`shibboleth`, `okta`, `adfs`) is created or updated, the following fields of the embedded `openLdapConfig` should have valid LDAP attribute names according to RFC4512 if set:
+
+- `userIDAttribute`
+- `groupIDAttribute`
+
+These two fields are not immutable for SAML authconfigs. SAML principal IDs come from the assertion, and the LDAP attributes only have to match the values the identity provider sends in the UID and groups fields, which an admin may need to adjust at any time.
+
+#### Update
+
+When an enabled LDAP or ActiveDirectory authconfig is updated and remains enabled, the following fields cannot be changed:
+
+- `userIDAttribute`
+- `groupIDAttribute`
+
+Those providers build principal IDs from the attribute at login, so changing it would orphan every binding that references the old principal names. Disabling the provider with the default cleanup annotation removes its users, tokens, and bindings, so re-enabling with a different identifier attribute is a clean start. With the `user-locked` cleanup annotation, cleanup is skipped and the preserved users and bindings keep principal IDs that no longer resolve after the change.
+
+Only local and one other provider can be enabled without the `multiple-auth-providers` feature in Rancher being enabled.
 
 ## Cluster
 
@@ -377,6 +406,7 @@ Only 1 clusterproxyconfig per downstream cluster is ever permitted.
 #### Escalation Prevention
 
 Users can only create/update ClusterRoleTemplateBindings which grant permissions to RoleTemplates with rights less than or equal to those they currently possess. This is to prevent privilege escalation.
+`clusterScopedRules` inherited from project RoleTemplates are not granted by ClusterRoleTemplateBindings, so they are neither required nor counted as held.
 For external RoleTemplates (RoleTemplates with `external` set to `true`), if the `external-rules` feature flag is enabled and `ExternalRules` is specified in the roleTemplate in `RoleTemplateName`,
 `ExternalRules` will be used for authorization. Otherwise (if the feature flag is off or `ExternalRules` are nil), the rules from the backing `ClusterRole` in the local cluster will be used.
 
@@ -409,6 +439,10 @@ Users can update the following fields if they have not been set, but after they 
 - GroupPrincipalName
 
 In addition, as in the create validation, both a user subject and a group subject cannot be specified.
+
+If the binding is being deleted (has a non-nil `DeletionTimestamp`) and its RoleTemplate can't be found, updates that pass the
+field checks above skip the escalation check. This also applies to a missing inherited RoleTemplate, and to a missing ClusterRole
+for an external RoleTemplate without `externalRules`. This lets finalizers be removed after the RoleTemplate is deleted.
 
 #### Duplicate ClusterRoleTemplateBinding Prevention
 
@@ -485,7 +519,7 @@ Rules without verbs, resources, or apigroups are not permitted. The `rules` incl
 
  Escalation checks are bypassed if a user has the `escalate` verb on the GlobalRole that they are attempting to update or create. This can also be given through a wildcard permission (i.e. the `*` verb also gives `escalate`).
 
-Users can only change GlobalRoles with rights less than or equal to those they currently possess. This is to prevent privilege escalation. This includes the rules in the RoleTemplates referred to in `inheritedClusterRoles` and the rules in `inheritedFleetWorkspacePermissions`.
+Users can only change GlobalRoles with rights less than or equal to those they currently possess. This is to prevent privilege escalation. This includes the rules in the RoleTemplates referred to in `inheritedClusterRoles` (excluding inherited `clusterScopedRules`, which are not granted on downstream clusters), the rules in `inheritedFleetWorkspacePermissions`, and the rules in `inheritedNamespacedRules`.
 
 Users can only grant rules in the `NamespacedRules` field with rights less than or equal to those they currently possess. This works on a per namespace basis, meaning that the user must have the permission
 in the namespace specified. The `Rules` field apply to every namespace, which means a user can create `NamespacedRules` in any namespace that are equal to or less than the `Rules` they currently possess.
@@ -597,6 +631,7 @@ If the BackingNamespace field is empty, populate the BackingNamespace field with
 
 Users can only create/update ProjectRoleTemplateBindings with rights less than or equal to those they currently possess.
 This is to prevent privilege escalation.
+If the RoleTemplate has `clusterScopedRules` (including those inherited through project-context RoleTemplates; inheritance through a cluster-context RoleTemplate does not grant them), the user must hold those rights cluster-wide, through ClusterRoleBindings, ClusterRoleTemplateBindings for the cluster, or the `clusterScopedRules` of their existing ProjectRoleTemplateBindings in the cluster. Project-level permissions (including the project-scoped rules of existing ProjectRoleTemplateBindings) and RoleBindings in the cluster namespace are not sufficient.
 For external RoleTemplates (RoleTemplates with `external` set to `true`), if the `external-rules` feature flag is enabled and `ExternalRules` is specified in the roleTemplate in `RoleTemplateName`,
 `ExternalRules` will be used for authorization. Otherwise, if `ExternalRules` are nil when the feature flag is on, the rules from the backing `ClusterRole` in the local cluster will be used.
 
@@ -634,6 +669,10 @@ changed:
 - GroupPrincipalName
 
 In addition, as in the create validation, both a user subject and a group subject cannot be specified.
+
+If the binding is being deleted (has a non-nil `DeletionTimestamp`) and its RoleTemplate can't be found, updates that pass the
+field checks above skip the escalation check. This also applies to a missing inherited RoleTemplate, and to a missing ClusterRole
+for an external RoleTemplate without `externalRules`. This lets finalizers be removed after the RoleTemplate is deleted.
 
 #### Duplicate ProjectRoleTemplateBinding Prevention
 
@@ -704,11 +743,12 @@ Circular references to a `RoleTemplate` (a inherits b, b inherits a) are not all
 
 #### Rules Without Verbs, Resources, API groups
 
-Rules without verbs, resources, or apigroups are not permitted. The `rules` and `externalRules` included in a RoleTemplate are of the same type as the rules used by standard Kubernetes RBAC types (such as `Roles` from `rbac.authorization.k8s.io/v1`). Because of this, they inherit the same restrictions as these types, including this one.
+Rules without verbs, resources, or apigroups are not permitted. The `rules`, `clusterScopedRules`, and `externalRules` included in a RoleTemplate are of the same type as the rules used by standard Kubernetes RBAC types (such as `Roles` from `rbac.authorization.k8s.io/v1`). Because of this, they inherit the same restrictions as these types, including this one.
 
 #### Escalation Prevention
 
 Users can only change RoleTemplates with rights less than or equal to those they currently possess. This prevents privilege escalation. 
+This applies to both `rules` and `clusterScopedRules`, including those inherited from other RoleTemplates. Only `clusterScopedRules` inherited through project-context RoleTemplates are considered, since inheritance through a cluster-context RoleTemplate does not grant them.
 Users can't create external RoleTemplates (or update existing RoleTemplates) with `ExternalRules` without having the `escalate` verb on that RoleTemplate.
 
 #### Context Validation
@@ -717,6 +757,8 @@ The `roletemplates.context` field must be one of the following values [`"cluster
 If the `roletemplates.administrative` is set to true the context must equal `"cluster"`.
 
 If the `roletemplate.ProjectCreatorDefault` is true, context must equal `"project"`
+If there are `clusterScopedRules`, context must equal `"project"`
+
 #### Builtin Validation
 
 The `roletemplates.builtin` field is immutable, and new builtIn RoleTemplates cannot be created.
@@ -754,7 +796,8 @@ When settings are created or updated, the following common checks take place:
 
 When settings are updated, the following additional checks take place:
 
-- Settings with a source of `env` may not be updated
+- Settings with a source of `env` may not be updated, unless they are being reset to their default (both `source` and
+  `value` are cleared), which Rancher does when the env var that configured the setting is removed.
 
 - Read only settings like `cacerts` must not be updated.
 
@@ -850,6 +893,22 @@ The annotation `field.cattle.io/creatorId` must be set to the Username of the Us
 
 If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` cannot be set.
 
+##### Management Cluster Name Annotation
+
+The annotation `provisioning.cattle.io/management-cluster-name` sets the name of the management cluster that Rancher creates.
+Rancher ignores an empty value. The webhook accepts an empty value and skips the checks in this section.
+
+If the annotation has a value, all of these conditions must be true:
+- The value has the format `c-m-<8 characters>`. Each of the 8 characters is a lowercase letter or a digit.
+- No other provisioning cluster sets the same value in this annotation or in `status.clusterName`.
+- No management cluster has this name.
+
+If a management cluster has this name, the webhook accepts the request only when both of these conditions are true:
+- The annotations `objectset.rio.cattle.io/owner-gvk`, `objectset.rio.cattle.io/owner-namespace` and `objectset.rio.cattle.io/owner-name` of the management cluster point to the provisioning cluster in the request.
+- The management cluster is not being deleted.
+
+This exception allows a restore from a backup, because the restore creates the management cluster before the provisioning cluster.
+
 ##### NO_PROXY value
 
 Prevent the creation of new objects with an env var (under `spec.agentEnvVars`) with a name of `NO_PROXY` if its value contains one or more spaces. This ensures that the provided value adheres to
@@ -872,6 +931,18 @@ If the action is an update, and the old cluster had a `nil` `.spec.rkeConfig`, a
 
 Prevent the creation of objects if the secret specified in `.spec.rkeConfig.etcd.s3.cloudCredentialName` does not exist.
 
+##### Machine Selector Files
+
+Prevent the creation of objects if the requesting user does not have `get` permission on each Secret or ConfigMap
+referenced by `spec.rkeConfig.machineSelectorFiles` in the cluster's namespace. These checks also apply to
+server-side dry-run requests.
+
+Access check results are cached for up to 10 seconds per user identity and source.
+
+The generated Pod Security Admission Configuration Template (PSACT) file entry is exempt when
+`spec.defaultPodSecurityAdmissionConfigurationTemplateName` is set and the entire entry matches the generated
+entry for this cluster, ignoring only hashes. A matching Secret name alone does not qualify.
+
 ##### Pod Security Admission Configuration Template
 
 When `spec.defaultPodSecurityAdmissionConfigurationTemplateName` is set, the referenced
@@ -889,11 +960,26 @@ The annotation `field.cattle.io/creatorId` cannot be changed, but it can be remo
 
 If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` cannot be set.
 
+##### Management Cluster Name Annotation
+
+The annotation `provisioning.cattle.io/management-cluster-name` cannot be added, changed or removed.
+
 ##### RKEConfig changed
 
 The `spec.rkeConfig` field cannot be changed from `nil`/ not `nil` after creation.
 
 The local cluster is an exemption, as the rancherd use case allows managing the local cluster via this mechanism.
+
+##### Machine Selector Files
+
+The same access checks and PSACT exemption as on create apply to new or changed
+`spec.rkeConfig.machineSelectorFiles` entries. Entries are compared in full, including `machineLabelSelector` and
+item hashes, regardless of their position in the list.
+
+When the cluster's labels change, the same access checks also apply to unchanged entries whose source has the
+`rke.cattle.io/object-authorized-for-clusters-selector` annotation, including an empty value. This applies to any
+cluster label change. Missing unchanged sources are skipped for this additional check; other source lookup
+errors reject the request. New or changed entries still require access checks even when a source is missing.
 
 ##### Data Directories
 
@@ -1015,8 +1101,11 @@ persist.
 ### Validation Checks
 
 #### Invalid Fields - Update
-Users cannot update or remove the following label after it has been added:
-- authz.management.cattle.io/gr-owner
+
+Users cannot update or remove the following labels after they have been added:
+
+  - authz.management.cattle.io/gr-owner
+  - authz.cluster.cattle.io/clusterrole-owner-install-uuid
 
 ## ClusterRoleBinding
 
@@ -1063,3 +1152,35 @@ If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creator
 When a cluster is created `field.cattle.io/creatorId` is set to the Username from the request.
 
 If `field.cattle.io/no-creator-rbac` annotation is set, `field.cattle.io/creatorId` does not get set.
+
+# rke.cattle.io/v1
+
+## RKEControlPlane
+
+### Validation Checks
+
+#### On Create
+
+##### Data Directories
+
+Prevent the creation of new objects with an invalid data directory. An invalid data directory is defined as the
+following:
+- Is not an absolute path (i.e. does not start with `/`)
+- Attempts to include environment variables (e.g. `$VARIABLE` or `${VARIABLE}`)
+- Attempts to include shell expressions (e.g. `$(command)` or `` `command` ``)
+- Is not clean (e.g. contains `.` or `..`)
+- Equal to another data directory
+- Attempts to nest another data directory
+
+#### On Update
+
+##### Data Directories
+
+Prevent updating objects with an invalid data directory. An invalid data directory is defined as the
+following:
+- Is not an absolute path (i.e. does not start with `/`)
+- Attempts to include environment variables (e.g. `$VARIABLE` or `${VARIABLE}`)
+- Attempts to include shell expressions (e.g. `$(command)` or `` `command` ``)
+- Is not clean (e.g. contains `.` or `..`)
+- Equal to another data directory
+- Attempts to nest another data directory
