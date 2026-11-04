@@ -22,11 +22,26 @@ RUN --mount=type=cache,target=/root/.cache,id=rancher go mod download
 
 # ===============
 # Webhook Binary Build Stage
+#
+# The shipped binary is built with registry.rancher.com/rancher/appco-go per
+# RFD 0070. This stage is self-contained (rather than deriving from `build`)
+# because appco-go is a minimal Go toolchain without the extra tooling the
+# test/validate stages rely on.
 # ===============
-FROM --platform=$BUILDPLATFORM build AS webhook-build
+FROM --platform=$BUILDPLATFORM registry.rancher.com/rancher/appco-go:1.27.3@sha256:b2a48dcc45e71506706fc0477280222477f691b70de15ec4082c472c43fc8ab6 AS webhook-build
+ENV GOMODCACHE=/root/.cache/go/modcache
+ENV GOCACHE=/root/.cache/go/cache
+ENV CGO_ENABLED=0
+WORKDIR /src
+ARG VERSION
+ARG COMMIT
+ARG LINKFLAGS="-extldflags -static -s"
+ARG LDFLAGS="-X main.Version=${VERSION} -X main.GitCommit=${COMMIT} ${LINKFLAGS}"
 ARG TARGETOS
 ARG TARGETARCH
-# Copy source and build the webhook binary
+# Download dependencies and build the webhook binary
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/root/.cache,id=rancher go mod download
 COPY pkg/ pkg/
 COPY main.go ./
 RUN --mount=type=cache,target=/root/.cache,id=rancher GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags "${LDFLAGS}" -o /dist/webhook .
@@ -90,18 +105,11 @@ COPY --from=integration-test-build /dist/rancher-webhook-integration.test /ranch
 # ===============
 # Final Stage
 # ===============
-FROM registry.suse.com/bci/bci-micro:16.0@sha256:4c0e91ced4b9d153517ce30eaa4d5ce180eae6da1162297aeb6d98eebe46f8ce
-
-ARG user=webhook
-
-RUN echo "$user:x:1000:1000::/home/$user:/bin/bash" >> /etc/passwd && \
-    echo "$user:x:1000:" >> /etc/group && \
-    mkdir /home/$user && \
-    chown -R $user:$user /home/$user
+FROM registry.suse.com/bci/bci-nano:16.0@sha256:7e8c9850a70b319ecf9f58c01f91cae605a4770cb0c69ae6ee379a14136af4bf
 
 # Copy the compiled binary from the webhook-build stage
 COPY --from=webhook-build /dist/webhook /usr/bin/
 
-USER $user
+USER 1000
 
 CMD ["webhook"]
