@@ -14,6 +14,7 @@ cp -rf charts build/
 sed -i'.bkp' \
     -e 's/^version:.*/version: '${HELM_CHART_VERSION}'/' \
     -e 's/appVersion:.*/appVersion: '${HELM_CHART_VERSION}'/' \
+    -e 's|image: rancher/rancher-webhook:latest|image: rancher/rancher-webhook:'${HELM_TAG}'|' \
     build/charts/rancher-webhook/Chart.yaml
 
 sed -i'.bkb' \
