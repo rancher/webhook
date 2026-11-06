@@ -38,7 +38,7 @@ require (
 	github.com/rancher/dynamiclistener v0.9.3
 	github.com/rancher/jsonpath v0.0.0-20260423141252-c4e0c565a09f
 	github.com/rancher/lasso v0.2.9
-	github.com/rancher/rancher/pkg/apis v0.0.0-20261030135306-4e60347bcb37
+	github.com/rancher/rancher/pkg/apis v0.0.0-20261106163506-db4b4216f76a
 	github.com/rancher/rancher/pkg/plan v0.0.0-20260428222332-2696373f4152
 	github.com/rancher/wrangler/v3 v3.7.2
 	github.com/robfig/cron v1.2.0
@@ -133,7 +133,7 @@ require (
 	gopkg.in/evanphx/json-patch.v5 v5.9.11
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	k8s.io/apiextensions-apiserver v0.36.5 // indirect
+	k8s.io/apiextensions-apiserver v0.36.6 // indirect
 	k8s.io/code-generator v0.36.6 // indirect
 	k8s.io/component-base v0.36.6 // indirect
 	k8s.io/component-helpers v0.36.4 // indirect
