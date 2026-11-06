@@ -54,7 +54,7 @@ jobs:
         run: ./.github/workflows/scripts/setup-cluster.sh
         env:
           CLUSTER_NAME: webhook
-          K3S_VERSION: v1.28.9-k3s1
+          K3S_VERSION: v1.36.6-k3s1
           ARCH: "${{ matrix.archBox.arch }}"
 
       - name: import image
