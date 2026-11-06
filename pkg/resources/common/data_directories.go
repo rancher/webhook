@@ -4,13 +4,15 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/rancher/webhook/pkg/admission"
 	admissionv1 "k8s.io/api/admission/v1"
 )
 
 // ValidateDataDirectoryFormat ensures that no data directory contains a relative path, environment variables,
-// shell expressions, or references to the current or parent directory via use of "./" and "../" respectively.
+// shell expressions, whitespace, non-printing characters, backslashes, or references to the current or
+// parent directory via use of "./" and "../" respectively.
 // dir is the path of the data directory, and name corresponds to a print friendly name for this data directory.
 func ValidateDataDirectoryFormat(dir, name string) *admissionv1.AdmissionResponse {
 	if dir == "" {
@@ -23,6 +25,14 @@ func ValidateDataDirectoryFormat(dir, name string) *admissionv1.AdmissionRespons
 	if strings.ContainsAny(dir, "\"'`*?#~=%$|&;<>{}[]()") {
 		return admission.ResponseBadRequest(
 			fmt.Sprintf("%s data directory cannot contain shell expressions", name))
+	}
+	if strings.ContainsFunc(dir, func(r rune) bool {
+		// unicode.IsPrint accepts only graphic characters and the ASCII space, so it rejects control, format
+		// (e.g. zero-width space, bidi override), and non-ASCII space characters.
+		return !unicode.IsPrint(r) || r == ' ' || r == '\\'
+	}) {
+		return admission.ResponseBadRequest(
+			fmt.Sprintf("%s data directory cannot contain whitespace, non-printing characters, or backslashes", name))
 	}
 	if filepath.Clean(dir) != dir {
 		return admission.ResponseBadRequest(
