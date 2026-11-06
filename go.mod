@@ -101,7 +101,7 @@ require (
 	github.com/rancher/eks-operator v1.12.14 // indirect
 	github.com/rancher/fleet/pkg/apis v0.13.17 // indirect
 	github.com/rancher/gke-operator v1.12.15 // indirect
-	github.com/rancher/norman v0.6.1 // indirect
+	github.com/rancher/norman v0.6.3 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/otel v1.44.0 // indirect
