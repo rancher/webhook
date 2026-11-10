@@ -4,11 +4,11 @@
   ],
   "baseBranchPatterns": [
     "main",
+    "release/v0.12",
     "release/v0.11",
     "release/v0.10",
     "release/v0.9",
     "release/v0.8",
-    "release/v0.7"
   ],
   "prHourlyLimit": 2,
   "enabledManagers": [
