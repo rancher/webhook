@@ -114,7 +114,6 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ needs.release-chart.outputs.version }}
-          TAG: ${{ github.ref_name }}
         run: |
           if [ -z "$VERSION" ]; then
             echo "::error::No chart version from the release-chart job"
@@ -123,6 +122,4 @@ jobs:
           gh api "repos/${CHARTS_REPO}/dispatches" \
             -f event_type=chart-released \
             -f "client_payload[chart]=rancher-webhook" \
-            -f "client_payload[version]=${VERSION}" \
-            -f "client_payload[source_repo]=${GITHUB_REPOSITORY}" \
-            -f "client_payload[source_tag]=${TAG}"
+            -f "client_payload[version]=${VERSION}"
