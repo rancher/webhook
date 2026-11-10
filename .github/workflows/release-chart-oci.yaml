@@ -13,7 +13,7 @@ permissions: {}
 env:
   CARGUEIRO_VERSION: v0.0.4
   CARGUEIRO_SHA256: ad44907f903754ebef801ccc542b1a472708701a648c36d75c0341d40d2b386b
-  CHART_REGISTRY: stgregistry.suse.com/rancher/catalog
+  CHART_REPO: rancher/catalog
 
 jobs:
   release-chart:
@@ -56,6 +56,7 @@ jobs:
         uses: rancher-eio/read-vault-secrets@dfae8acd43a9e170fca5f90168da22f814fe4e9a
         with:
           secrets: |
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials registry | PRIME_STG_REGISTRY ;
             secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials username | CARGUEIRO_USERNAME ;
             secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials password | CARGUEIRO_PASSWORD
 
@@ -63,5 +64,5 @@ jobs:
         env:
           ARCHIVE: ${{ steps.package.outputs.archive }}
         run: |
-          ref=$(cargueiro push "$ARCHIVE" --registry "$CHART_REGISTRY")
+          ref=$(cargueiro push "$ARCHIVE" --registry "${PRIME_STG_REGISTRY}/${CHART_REPO}")
           echo "Pushed $ref" >> "$GITHUB_STEP_SUMMARY"
