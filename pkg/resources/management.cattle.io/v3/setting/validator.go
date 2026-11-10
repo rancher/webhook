@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"time"
@@ -31,6 +32,8 @@ const (
 	AuthUserInfoMaxAgeSeconds             = "auth-user-info-max-age-seconds"
 	AuthUserSessionIdleTTLMinutes         = "auth-user-session-idle-ttl-minutes"
 	AuthUserSessionTTLMinutes             = "auth-user-session-ttl-minutes"
+	AuthTokenDefaultTTLMinutes            = "auth-token-default-ttl-minutes"
+	AuthTokenMaxTTLMinutes                = "auth-token-max-ttl-minutes"
 	CattleClusterAgentPodDisruptionBudget = "cluster-agent-default-pod-disruption-budget"
 	CattleClusterAgentPriorityClass       = "cluster-agent-default-priority-class"
 	CRTDefaultTTL                         = "crt-default-ttl-minutes"
@@ -39,6 +42,8 @@ const (
 	DisableInactiveUserAfter              = "disable-inactive-user-after"
 	FleetAgentPodDisruptionBudget         = "fleet-agent-default-pod-disruption-budget"
 	FleetAgentPriorityClass               = "fleet-agent-default-priority-class"
+	KubeconfigDefaultTokenTTLMinutes      = "kubeconfig-default-token-ttl-minutes"
+	KubeconfigMaxTokenTTLMinutes          = "kubeconfig-max-token-ttl-minutes"
 	UserLastLoginDefault                  = "user-last-login-default"
 	UserRetentionCron                     = "user-retention-cron"
 )
@@ -47,6 +52,11 @@ const (
 // This is introduced to minimize the risk of deleting users accidentally by setting a relatively low value.
 // The admin can still set a lower value if needed by bypassing the webhook.
 const MinDeleteInactiveUserAfter = 24 * 14 * time.Hour // 14 days.
+
+// maxTTLMinutes is the largest number of minutes, positive or negative, that can be
+// represented as a time.Duration. Rancher parses minute based TTL settings into a
+// time.Duration, and fails on values outside of this range.
+const maxTTLMinutes = math.MaxInt64 / int64(time.Minute)
 
 const (
 	minCRTTTLMinutes         = 30 // 30 minutes
@@ -185,6 +195,9 @@ func (a *admitter) admitCommonCreateUpdate(_, newSetting *v3.Setting) (*admissio
 		err = a.validateCRTDefaultTTL(newSetting)
 	case CRTDefaultGracePeriod:
 		err = a.validateCRTDefaultGracePeriod(newSetting)
+	case AuthTokenDefaultTTLMinutes, AuthTokenMaxTTLMinutes,
+		KubeconfigDefaultTokenTTLMinutes, KubeconfigMaxTokenTTLMinutes:
+		err = validateTokenTTLMinutes(newSetting)
 	default:
 	}
 
@@ -193,6 +206,28 @@ func (a *admitter) admitCommonCreateUpdate(_, newSetting *v3.Setting) (*admissio
 	}
 
 	return admission.ResponseAllowed(), nil
+}
+
+// validateTokenTTLMinutes validates the auth-token-{default|max}-ttl-minutes and
+// kubeconfig-{default|max}-token-ttl-minutes settings to make sure they are integers
+// that Rancher can convert to a duration.
+//
+// Negative values are allowed: Rancher treats them as no limit (same as 0) for
+// the max settings, and as a request for no expiry for the default settings,
+// which the applicable max still caps.
+//
+// Default and max settings are not compared against each other, as Rancher
+// clamps the default to the max when a token is created.
+func validateTokenTTLMinutes(s *v3.Setting) error {
+	if s.Value == "" {
+		return nil
+	}
+
+	if _, err := parseMinutes(s.Value); err != nil {
+		return field.TypeInvalid(valuePath, s.Value, err.Error())
+	}
+
+	return nil
 }
 
 // validateAuthUserSessionTTLMinutes validates the auth-user-session-ttl-minutes setting
@@ -505,6 +540,9 @@ func parseMinutes(value string) (time.Duration, error) {
 	minutes, err := strconv.ParseInt(value, 10, 64)
 	if err != nil {
 		return 0, err
+	}
+	if minutes > maxTTLMinutes || minutes < -maxTTLMinutes {
+		return 0, fmt.Errorf("must be between %d and %d minutes", -maxTTLMinutes, maxTTLMinutes)
 	}
 
 	return time.Duration(minutes) * time.Minute, nil

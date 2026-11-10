@@ -14,6 +14,7 @@ When settings are created or updated, the following common checks take place:
 - The `auth-user-info-resync-cron` must be a valid cron expression.
 - If set, `crt-default-ttl-minutes` must be a valid integer no less than `30` and greater than `crt-default-grace-period-minutes` if that value is set.
 - If set, `crt-default-grace-period-minutes` must be a valid integer no less than `10` and less than `crt-default-ttl-minutes` if that value is set.
+- If set, `auth-token-default-ttl-minutes`, `auth-token-max-ttl-minutes`, `kubeconfig-default-token-ttl-minutes` and `kubeconfig-max-token-ttl-minutes` must be valid integers (number of minutes) between `-153722867` and `153722867`, the range that can be represented as a duration. Negative values are allowed: for the max settings, a value of `0` or below means no limit; for the default settings, a negative value requests no expiry, but the applicable max still caps it.
 
 ### Update
 

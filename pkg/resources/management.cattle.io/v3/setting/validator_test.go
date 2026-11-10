@@ -662,6 +662,111 @@ func (s *SettingSuite) validateCRTDefaultGracePeriod(op v1.Operation) {
 	}
 }
 
+func (s *SettingSuite) TestValidateTokenTTLMinutesOnUpdate() {
+	s.validateTokenTTLMinutes(v1.Update)
+}
+
+func (s *SettingSuite) TestValidateTokenTTLMinutesOnCreate() {
+	s.validateTokenTTLMinutes(v1.Create)
+}
+
+func (s *SettingSuite) validateTokenTTLMinutes(op v1.Operation) {
+	names := []string{
+		setting.AuthTokenDefaultTTLMinutes,
+		setting.AuthTokenMaxTTLMinutes,
+		setting.KubeconfigDefaultTokenTTLMinutes,
+		setting.KubeconfigMaxTokenTTLMinutes,
+	}
+
+	tests := []struct {
+		desc    string
+		value   string
+		allowed bool
+	}{
+		{
+			desc:    "empty",
+			allowed: true,
+		},
+		{
+			desc:    "zero",
+			value:   "0",
+			allowed: true,
+		},
+		{
+			desc:    "positive",
+			value:   "129600",
+			allowed: true,
+		},
+		{
+			desc:    "negative",
+			value:   "-1",
+			allowed: true,
+		},
+		{
+			desc:    "max representable duration",
+			value:   "153722867",
+			allowed: true,
+		},
+		{
+			desc:    "min representable duration",
+			value:   "-153722867",
+			allowed: true,
+		},
+		{
+			desc:  "overflows duration",
+			value: "153722868",
+		},
+		{
+			desc:  "underflows duration",
+			value: "-153722868",
+		},
+		{
+			desc:  "overflows int64",
+			value: "9223372036854775808",
+		},
+		{
+			desc:  "not a number",
+			value: "abc",
+		},
+		{
+			desc:  "with unit",
+			value: "60m",
+		},
+		{
+			desc:  "duration expression",
+			value: "1h30",
+		},
+		{
+			desc:  "fractional",
+			value: "1.5",
+		},
+		{
+			desc:  "whitespace",
+			value: " 60",
+		},
+	}
+
+	for _, name := range names {
+		for _, test := range tests {
+			s.T().Run(name+" "+test.desc, func(t *testing.T) {
+				t.Parallel()
+
+				validator := setting.NewValidator(nil, nil)
+				s.testAdmit(t, validator, &v3.Setting{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: name,
+					},
+				}, &v3.Setting{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: name,
+					},
+					Value: test.value,
+				}, op, test.allowed)
+			})
+		}
+	}
+}
+
 func (s *SettingSuite) validateUserLastLoginDefault(op v1.Operation) {
 	tests := []struct {
 		desc    string
@@ -957,6 +1062,10 @@ func (s *SettingSuite) validateAuthUserSessionTTLMinutes(op v1.Operation) {
 			desc:    "reasonable value",
 			value:   "960", // 16h
 			allowed: true,
+		},
+		{
+			desc:  "overflows duration",
+			value: "153722868",
 		},
 		{
 			desc:         "less than disable-inactive-user-after",
