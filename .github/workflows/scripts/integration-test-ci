@@ -101,13 +101,20 @@ upgrade_rancher_webhook() {
 
 try --max 3 --delay 2 --waitmsg "Upgrading Webhook" --failmsg "Failed to upgrade webhook" upgrade_rancher_webhook
 
-x=$(kubectl get pods -n cattle-system -l app=rancher-webhook --no-headers --field-selector='status.phase!=RUNNING' --output custom-columns=NODE:.metadata.name | head -n 1)
+# Look for webhook pods that failed to start. Pod phases are case-sensitive, and
+# old replicas from the rollout restart can still be listed as Succeeded
+# (Completed) while they are deleted, so exclude both. awk reads all of its
+# input, unlike head, so kubectl can't get SIGPIPE under pipefail. The pod can
+# disappear while we inspect it, so the diagnostics must not fail the script.
+x=$(kubectl get pods -n cattle-system -l app=rancher-webhook --no-headers \
+  --field-selector='status.phase!=Running,status.phase!=Succeeded' \
+  --output custom-columns=NAME:.metadata.name | awk 'NR==1')
 if [ -n "$x" ] ; then
   echo "Logs for failed rancher-webhook $x ":
-  kubectl get pods -n cattle-system -l app=rancher-webhook
-  kubectl get pod "$x" -n cattle-system
-  kubectl logs pod/"$x" -n cattle-system
-  kubectl describe pod/"$x" -n cattle-system
+  kubectl get pods -n cattle-system -l app=rancher-webhook || true
+  kubectl get pod "$x" -n cattle-system || true
+  kubectl logs pod/"$x" -n cattle-system || true
+  kubectl describe pod/"$x" -n cattle-system || true
   try --max 4 --failmsg "Couldn't helm upgrade rancher-webhook" upgrade_rancher_webhook
 fi
 
