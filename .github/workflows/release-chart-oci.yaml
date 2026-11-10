@@ -52,13 +52,6 @@ jobs:
           cargueiro check archive "$archive"
           echo "archive=$archive" >> "$GITHUB_OUTPUT"
 
-      - name: Upload the packaged chart
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: rancher-webhook-chart
-          path: ${{ steps.package.outputs.archive }}
-          if-no-files-found: error
-
       - name: Read vault secrets
         uses: rancher-eio/read-vault-secrets@dfae8acd43a9e170fca5f90168da22f814fe4e9a
         with:
