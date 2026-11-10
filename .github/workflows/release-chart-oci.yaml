@@ -5,9 +5,9 @@ name: Release chart (OCI)
 # asset made by release.yaml, so both release paths work at the same time;
 # drop the chart steps of release.yaml once the old path is gone.
 #
-# Once pushed, a `chart-released` repository_dispatch is sent to
-# rancher/charts, whose add-chart-release.yaml workflow adds the version to
-# the staging index.yaml.
+# Once pushed, a `chart-staged` repository_dispatch is sent to rancher/charts,
+# whose chart-staged.yaml workflow ships the chart and adds it to the staging
+# index.yaml.
 
 on:
   workflow_dispatch:
@@ -15,8 +15,8 @@ on:
 permissions: {}
 
 env:
-  CARGUEIRO_VERSION: v0.0.4
-  CARGUEIRO_SHA256: ad44907f903754ebef801ccc542b1a472708701a648c36d75c0341d40d2b386b
+  CARGUEIRO_VERSION: v0.0.5
+  CARGUEIRO_SHA256: 9ac42622ff874ff5a6136d3387deb9ca3405cd2016697da3c77f0a9ff760665d
   CHART_REPO: rancher/catalog
   CHARTS_REPO: rancher/charts
 
@@ -110,7 +110,7 @@ jobs:
           repositories: |
             charts
 
-      - name: Notify rancher/charts of the new chart release
+      - name: Notify rancher/charts that the chart is staged
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ needs.release-chart.outputs.version }}
@@ -120,6 +120,6 @@ jobs:
             exit 1
           fi
           gh api "repos/${CHARTS_REPO}/dispatches" \
-            -f event_type=chart-released \
+            -f event_type=chart-staged \
             -f "client_payload[chart]=rancher-webhook" \
             -f "client_payload[version]=${VERSION}"
