@@ -1,0 +1,74 @@
+name: Release chart (OCI)
+
+# Charts v2: publish the rancher-webhook chart as an OCI artifact to the
+# staging catalog registry with cargueiro. Runs next to the GitHub release
+# asset made by release.yaml, so both release paths work at the same time;
+# drop the chart steps of release.yaml once the old path is gone.
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+env:
+  CARGUEIRO_VERSION: v0.0.4
+  CARGUEIRO_SHA256: ad44907f903754ebef801ccc542b1a472708701a648c36d75c0341d40d2b386b
+  CHART_REGISTRY: stgregistry.suse.com/rancher/catalog
+
+jobs:
+  release-chart:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Required for vault
+    steps:
+      - name: Ensure ref is a tag
+        run: |
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then
+            echo "::error::This workflow must be dispatched on a tag ref (got ${GITHUB_REF_TYPE} '${GITHUB_REF}')"
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install cargueiro
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -fsSL -o "$RUNNER_TEMP/bin/cargueiro" \
+            "https://github.com/nicholasSUSE/cargueiro/releases/download/${CARGUEIRO_VERSION}/cargueiro_linux_amd64"
+          echo "${CARGUEIRO_SHA256}  $RUNNER_TEMP/bin/cargueiro" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/bin/cargueiro"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Stamp, check and package the chart
+        id: package
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          archive=$(./.github/workflows/scripts/stamp-chart.sh "$TAG" dist/oci)
+          cargueiro check archive "$archive"
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the packaged chart
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rancher-webhook-chart
+          path: ${{ steps.package.outputs.archive }}
+          if-no-files-found: error
+
+      - name: Read vault secrets
+        uses: rancher-eio/read-vault-secrets@dfae8acd43a9e170fca5f90168da22f814fe4e9a
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials username | CARGUEIRO_USERNAME ;
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials password | CARGUEIRO_PASSWORD
+
+      - name: Push the chart
+        env:
+          ARCHIVE: ${{ steps.package.outputs.archive }}
+        run: |
+          ref=$(cargueiro push "$ARCHIVE" --registry "$CHART_REGISTRY")
+          echo "Pushed $ref" >> "$GITHUB_STEP_SUMMARY"
