@@ -26,6 +26,8 @@ jobs:
     permissions:
       contents: read
       id-token: write # Required for vault
+    outputs:
+      version: ${{ steps.push.outputs.version }}
     steps:
       - name: Ensure ref is a tag
         run: |
@@ -63,9 +65,7 @@ jobs:
           secrets: |
             secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials registry | PRIME_STG_REGISTRY ;
             secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials username | CARGUEIRO_USERNAME ;
-            secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials password | CARGUEIRO_PASSWORD ;
-            secret/data/github/repo/${{ github.repository }}/github/app-credentials appId | APP_ID ;
-            secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATE_KEY
+            secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials password | CARGUEIRO_PASSWORD
 
       - name: Check the registry is the staging one
         run: |
@@ -84,6 +84,23 @@ jobs:
           version=$(tar -xzOf "$ARCHIVE" rancher-webhook/Chart.yaml | yq -r .version)
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+  # Separate job so that a failed notification can be re-run on its own: the
+  # push can't be re-run, as cargueiro never overwrites a tag in the staging
+  # registry.
+  notify-charts:
+    needs: release-chart
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Required for vault
+    steps:
+      - name: Read vault secrets
+        uses: rancher-eio/read-vault-secrets@dfae8acd43a9e170fca5f90168da22f814fe4e9a
+        with:
+          secrets: |
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials appId | APP_ID ;
+            secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATE_KEY
+
       # Token scoped to rancher/charts only, to send the repository_dispatch.
       - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
         id: app-token
@@ -96,9 +113,13 @@ jobs:
       - name: Notify rancher/charts of the new chart release
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          VERSION: ${{ steps.push.outputs.version }}
+          VERSION: ${{ needs.release-chart.outputs.version }}
           TAG: ${{ github.ref_name }}
         run: |
+          if [ -z "$VERSION" ]; then
+            echo "::error::No chart version from the release-chart job"
+            exit 1
+          fi
           gh api "repos/${CHARTS_REPO}/dispatches" \
             -f event_type=chart-released \
             -f "client_payload[chart]=rancher-webhook" \
