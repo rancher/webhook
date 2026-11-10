@@ -36,7 +36,7 @@ require (
 	github.com/go-ldap/ldap/v3 v3.4.15
 	github.com/rancher/jsonpath v0.0.0-20260423141252-c4e0c565a09f
 	github.com/rancher/lasso v0.2.10
-	github.com/rancher/norman v0.10.2
+	github.com/rancher/norman v0.11.1
 	github.com/rancher/rancher/pkg/apis v0.0.0-20261107012117-aa049bded514
 	github.com/rancher/rancher/pkg/plan v0.0.0-20260828234415-cde38be6980a
 	github.com/rancher/wrangler/v3 v3.8.0
@@ -133,7 +133,7 @@ require (
 	golang.org/x/exp v0.0.0-20260727155853-b88d891fe743 // indirect
 	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/oauth2 v0.37.0 // indirect
-	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/sync v0.25.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/term v0.47.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
