@@ -69,7 +69,10 @@ var gvr = schema.GroupVersionResource{
 	Resource: "settings",
 }
 
-var valuePath = field.NewPath("value")
+var (
+	valuePath   = field.NewPath("value")
+	defaultPath = field.NewPath("default")
+)
 
 // Validator validates settings.
 type Validator struct {
@@ -218,13 +221,25 @@ func (a *admitter) admitCommonCreateUpdate(_, newSetting *v3.Setting) (*admissio
 //
 // Default and max settings are not compared against each other, as Rancher
 // clamps the default to the max when a token is created.
+//
+// Both Value and Default are validated, if set, as Rancher uses Default when
+// Value is empty, and a Default that is invalid would become effective when
+// Value is cleared.
 func validateTokenTTLMinutes(s *v3.Setting) error {
-	if s.Value == "" {
-		return nil
-	}
+	for _, f := range []struct {
+		path  *field.Path
+		value string
+	}{
+		{path: valuePath, value: s.Value},
+		{path: defaultPath, value: s.Default},
+	} {
+		if f.value == "" {
+			continue
+		}
 
-	if _, err := parseMinutes(s.Value); err != nil {
-		return field.TypeInvalid(valuePath, s.Value, err.Error())
+		if _, err := parseMinutes(f.value); err != nil {
+			return field.TypeInvalid(f.path, f.value, err.Error())
+		}
 	}
 
 	return nil
