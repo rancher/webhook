@@ -38,9 +38,13 @@ rm -rf "$CHART_DIR"
 mkdir -p "$OUT_DIR"
 cp -r charts/rancher-webhook "$CHART_DIR"
 
-# stamp sets the version and lists the images in helm.sh/images, but changes
-# neither the appVersion nor the image tag, which are "latest" in the source.
-sed -i -e "s|^appVersion:.*|appVersion: ${APP_VERSION}|" "$CHART_DIR/Chart.yaml"
+# stamp keeps the helm.sh/images annotation that Chart.yaml already has and refuses
+# an image tagged "latest", and it changes neither the appVersion nor the tags of
+# values.yaml. All of them are "latest" in the source, so set them here.
+sed -i \
+  -e "s|^appVersion:.*|appVersion: ${APP_VERSION}|" \
+  -e "s|image: rancher/rancher-webhook:latest|image: rancher/rancher-webhook:${TAG}|" \
+  "$CHART_DIR/Chart.yaml"
 sed -i -e "s|tag: latest|tag: ${TAG}|" "$CHART_DIR/values.yaml"
 
 echo "$CHART_VERSION"
