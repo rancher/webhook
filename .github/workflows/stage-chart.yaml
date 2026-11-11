@@ -44,7 +44,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Stage the chart and notify rancher/charts
-        uses: rancher/charts/.github/actions/ship-staged@feat/ship-staged-action
+        uses: rancher/charts/.github/actions/ship-staged@1ebfdcf3c3923079bf725dae447214c5f366e66e # staging, after rancher/charts#9391
         with:
           chart-dir: ${{ runner.temp }}/chart/rancher-webhook
           version: ${{ steps.prepare.outputs.version }}
