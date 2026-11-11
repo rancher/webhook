@@ -1,0 +1,47 @@
+name: Stage chart (action)
+
+# The same as stage-chart.yaml, with the steps in the ship-staged action of
+# rancher/charts: it stamps, checks, packages and pushes the chart, and then
+# sends a `chart-staged` repository_dispatch to rancher/charts.
+#
+# It is only started by hand, so it never runs together with stage-chart.yaml.
+# Both make the same chart version for a tag and a version is pushed once, so
+# stage a tag with only one of them.
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  stage-chart:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Required for vault
+    steps:
+      - name: Ensure ref is a tag
+        run: |
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then
+            echo "::error::This workflow must be dispatched on a tag ref (got ${GITHUB_REF_TYPE} '${GITHUB_REF}')"
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Prepare the chart
+        id: prepare
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(./.github/workflows/scripts/prepare-chart.sh "$TAG" "$RUNNER_TEMP/chart")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Stage the chart and notify rancher/charts
+        uses: rancher/charts/.github/actions/ship-staged@feat/ship-staged-action
+        with:
+          chart-dir: ${{ runner.temp }}/chart/rancher-webhook
+          version: ${{ steps.prepare.outputs.version }}
