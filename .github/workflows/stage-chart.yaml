@@ -6,7 +6,8 @@ name: Stage chart
 # release paths work at the same time; drop the chart steps of release.yaml
 # once the old path is gone.
 #
-# Once pushed, a `chart-staged` repository_dispatch is sent to rancher/charts,
+# The ship-staged action of rancher/charts stamps, checks, packages and pushes
+# the chart, and then sends a `chart-staged` repository_dispatch to rancher/charts,
 # whose chart-staged.yaml workflow ships the chart and adds it to the staging
 # index.yaml.
 
@@ -15,21 +16,12 @@ on:
 
 permissions: {}
 
-env:
-  # Read by install.sh, which checks the download against the checksums of
-  # that release.
-  CARGUEIRO_VERSION: v0.1.1
-  CHART_REPO: rancher/catalog
-  CHARTS_REPO: rancher/charts
-
 jobs:
   stage-chart:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write # Required for vault
-    outputs:
-      version: ${{ steps.push.outputs.version }}
     steps:
       - name: Ensure ref is a tag
         run: |
@@ -43,79 +35,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install cargueiro
-        run: curl -fsSL https://github.com/rancher/cargueiro/releases/latest/download/install.sh | sh -
-
-      - name: Stamp, check and package the chart
-        id: package
+      - name: Prepare the chart
+        id: prepare
         env:
           TAG: ${{ github.ref_name }}
         run: |
-          archive=$(./.github/workflows/scripts/stamp-chart.sh "$TAG" dist/oci)
-          cargueiro check archive "$archive"
-          echo "archive=$archive" >> "$GITHUB_OUTPUT"
-
-      - name: Read vault secrets
-        uses: rancher-eio/read-vault-secrets@dfae8acd43a9e170fca5f90168da22f814fe4e9a
-        with:
-          secrets: |
-            secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials registry | PRIME_STG_REGISTRY ;
-            secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials username | CARGUEIRO_USERNAME ;
-            secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials password | CARGUEIRO_PASSWORD
-
-      - name: Check the registry is the staging one
-        run: |
-          if [ "$PRIME_STG_REGISTRY" != "stgregistry.suse.com" ]; then
-            echo "::error::PRIME_STG_REGISTRY is not stgregistry.suse.com, so the push protections would not apply"
-            exit 1
-          fi
-
-      - name: Push the chart
-        id: push
-        env:
-          ARCHIVE: ${{ steps.package.outputs.archive }}
-        run: |
-          ref=$(cargueiro push "$ARCHIVE" --registry "${PRIME_STG_REGISTRY}/${CHART_REPO}")
-          echo "Pushed $ref" >> "$GITHUB_STEP_SUMMARY"
-          version=$(tar -xzOf "$ARCHIVE" rancher-webhook/Chart.yaml | yq -r .version)
+          version=$(./.github/workflows/scripts/prepare-chart.sh "$TAG" "$RUNNER_TEMP/chart")
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-  # Separate job so that a failed notification can be re-run on its own: the
-  # push can't be re-run, as cargueiro never overwrites a tag in the staging
-  # registry.
-  notify-charts:
-    needs: stage-chart
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write # Required for vault
-    steps:
-      - name: Read vault secrets
-        uses: rancher-eio/read-vault-secrets@dfae8acd43a9e170fca5f90168da22f814fe4e9a
+      - name: Stage the chart and notify rancher/charts
+        uses: rancher/charts/.github/actions/ship-staged@feat/ship-staged-action
         with:
-          secrets: |
-            secret/data/github/repo/${{ github.repository }}/github/app-credentials appId | APP_ID ;
-            secret/data/github/repo/${{ github.repository }}/github/app-credentials privateKey | PRIVATE_KEY
-
-      # Token scoped to rancher/charts only, to send the repository_dispatch.
-      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
-        id: app-token
-        with:
-          app-id: ${{ env.APP_ID }}
-          private-key: ${{ env.PRIVATE_KEY }}
-          repositories: |
-            charts
-
-      - name: Notify rancher/charts that the chart is staged
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          VERSION: ${{ needs.stage-chart.outputs.version }}
-        run: |
-          if [ -z "$VERSION" ]; then
-            echo "::error::No chart version from the stage-chart job"
-            exit 1
-          fi
-          gh api "repos/${CHARTS_REPO}/dispatches" \
-            -f event_type=chart-staged \
-            -f "client_payload[chart]=rancher-webhook" \
-            -f "client_payload[version]=${VERSION}"
+          chart-dir: ${{ runner.temp }}/chart/rancher-webhook
+          version: ${{ steps.prepare.outputs.version }}
