@@ -1,9 +1,10 @@
-name: Release chart (OCI)
+name: Stage chart
 
-# Charts v2: publish the rancher-webhook chart as an OCI artifact to the
-# staging catalog registry with cargueiro. Runs next to the GitHub release
-# asset made by release.yaml, so both release paths work at the same time;
-# drop the chart steps of release.yaml once the old path is gone.
+# Charts v2: stage the rancher-webhook chart as an OCI artifact in the staging
+# catalog registry with cargueiro. Releasing it is handled on the rancher/charts
+# side. Runs next to the GitHub release asset made by release.yaml, so both
+# release paths work at the same time; drop the chart steps of release.yaml
+# once the old path is gone.
 #
 # Once pushed, a `chart-staged` repository_dispatch is sent to rancher/charts,
 # whose chart-staged.yaml workflow ships the chart and adds it to the staging
@@ -15,13 +16,14 @@ on:
 permissions: {}
 
 env:
-  CARGUEIRO_VERSION: v0.0.5
-  CARGUEIRO_SHA256: 9ac42622ff874ff5a6136d3387deb9ca3405cd2016697da3c77f0a9ff760665d
+  # Read by install.sh, which checks the download against the checksums of
+  # that release.
+  CARGUEIRO_VERSION: v0.1.1
   CHART_REPO: rancher/catalog
   CHARTS_REPO: rancher/charts
 
 jobs:
-  release-chart:
+  stage-chart:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -42,13 +44,7 @@ jobs:
           persist-credentials: false
 
       - name: Install cargueiro
-        run: |
-          mkdir -p "$RUNNER_TEMP/bin"
-          curl -fsSL -o "$RUNNER_TEMP/bin/cargueiro" \
-            "https://github.com/nicholasSUSE/cargueiro/releases/download/${CARGUEIRO_VERSION}/cargueiro_linux_amd64"
-          echo "${CARGUEIRO_SHA256}  $RUNNER_TEMP/bin/cargueiro" | sha256sum -c -
-          chmod +x "$RUNNER_TEMP/bin/cargueiro"
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+        run: curl -fsSL https://github.com/rancher/cargueiro/releases/latest/download/install.sh | sh -
 
       - name: Stamp, check and package the chart
         id: package
@@ -88,7 +84,7 @@ jobs:
   # push can't be re-run, as cargueiro never overwrites a tag in the staging
   # registry.
   notify-charts:
-    needs: release-chart
+    needs: stage-chart
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -113,10 +109,10 @@ jobs:
       - name: Notify rancher/charts that the chart is staged
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          VERSION: ${{ needs.release-chart.outputs.version }}
+          VERSION: ${{ needs.stage-chart.outputs.version }}
         run: |
           if [ -z "$VERSION" ]; then
-            echo "::error::No chart version from the release-chart job"
+            echo "::error::No chart version from the stage-chart job"
             exit 1
           fi
           gh api "repos/${CHARTS_REPO}/dispatches" \

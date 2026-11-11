@@ -117,9 +117,9 @@ jobs:
         run: |
           gh workflow run release.yaml --repo "$GITHUB_REPOSITORY" --ref "$VERSION"
 
-      - name: Trigger Release chart (OCI) workflow
+      - name: Trigger Stage chart workflow
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ inputs.version }}
         run: |
-          gh workflow run release-chart-oci.yaml --repo "$GITHUB_REPOSITORY" --ref "$VERSION"
+          gh workflow run stage-chart.yaml --repo "$GITHUB_REPOSITORY" --ref "$VERSION"
