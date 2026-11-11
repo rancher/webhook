@@ -23,12 +23,12 @@ RUN --mount=type=cache,target=/root/.cache,id=rancher go mod download
 # ===============
 # Webhook Binary Build Stage
 #
-# The shipped binary is built with registry.rancher.com/rancher/appco-go per
+# The shipped binary is built with registry.suse.com/rancher/appco-go per
 # RFD 0070. This stage is self-contained (rather than deriving from `build`)
 # because appco-go is a minimal Go toolchain without the extra tooling the
 # test/validate stages rely on.
 # ===============
-FROM --platform=$BUILDPLATFORM registry.rancher.com/rancher/appco-go:1.27.3@sha256:b2a48dcc45e71506706fc0477280222477f691b70de15ec4082c472c43fc8ab6 AS webhook-build
+FROM --platform=$BUILDPLATFORM registry.suse.com/rancher/appco-go:1.27.3@sha256:b2a48dcc45e71506706fc0477280222477f691b70de15ec4082c472c43fc8ab6 AS webhook-build
 ENV GOMODCACHE=/root/.cache/go/modcache
 ENV GOCACHE=/root/.cache/go/cache
 ENV CGO_ENABLED=0
