@@ -28,7 +28,7 @@ RUN --mount=type=cache,target=/root/.cache,id=rancher go mod download
 # because appco-go is a minimal Go toolchain without the extra tooling the
 # test/validate stages rely on.
 # ===============
-FROM --platform=$BUILDPLATFORM registry.rancher.com/rancher/appco-go:1.27.3@sha256:b2a48dcc45e71506706fc0477280222477f691b70de15ec4082c472c43fc8ab6 AS webhook-build
+FROM --platform=$BUILDPLATFORM registry.rancher.com/rancher/appco-go:1.27.4@sha256:04cfab3b2ab179c1666b7b76b8b792e1ce67063a34b7c91123938f0d831854cb AS webhook-build
 ENV GOMODCACHE=/root/.cache/go/modcache
 ENV GOCACHE=/root/.cache/go/cache
 ENV CGO_ENABLED=0
