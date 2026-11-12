@@ -8,8 +8,11 @@ name: Stage chart
 #
 # The ship-staged action of rancher/charts stamps, checks, packages and pushes
 # the chart, and then sends a `chart-staged` repository_dispatch to rancher/charts,
-# whose chart-staged.yaml workflow ships the chart and adds it to the staging
-# index.yaml.
+# whose chart-staged.yaml workflow ships the chart and opens a pull request that
+# adds it to the index.yaml of the staging branch.
+#
+# The action is pinned to a commit of the chart-owners branch of rancher/charts,
+# which holds only the shared actions, so it moves only when they change.
 
 on:
   workflow_dispatch:
@@ -44,7 +47,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Stage the chart and notify rancher/charts
-        uses: rancher/charts/.github/actions/ship-staged@staging
+        uses: rancher/charts/.github/actions/ship-staged@5e2b6285cd299576930393c1d668cefe670ad006 # chart-owners
         with:
           chart-dir: ${{ runner.temp }}/chart/rancher-webhook
           version: ${{ steps.prepare.outputs.version }}
