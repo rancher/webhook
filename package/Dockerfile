@@ -1,7 +1,7 @@
 # ===============
 # Build Stage
 # ===============
-FROM --platform=$BUILDPLATFORM rancher/hardened-build-base:v1.27.3b1@sha256:7f9ba21deb6ec4f460dd0542d9c805f2855a2a036e186be2a68fa648785d9381 AS build
+FROM --platform=$BUILDPLATFORM rancher/hardened-build-base:v1.27.4b1@sha256:f60da0902378e7c9682de22f7fab5e2aa0bc4ec717ebd97425d1a2e7a77c3993 AS build
 
 # Set up build cache
 ENV GOMODCACHE=/root/.cache/go/modcache
@@ -28,7 +28,7 @@ RUN --mount=type=cache,target=/root/.cache,id=rancher go mod download
 # because appco-go is a minimal Go toolchain without the extra tooling the
 # test/validate stages rely on.
 # ===============
-FROM --platform=$BUILDPLATFORM registry.suse.com/rancher/appco-go:1.27.3@sha256:b2a48dcc45e71506706fc0477280222477f691b70de15ec4082c472c43fc8ab6 AS webhook-build
+FROM --platform=$BUILDPLATFORM registry.suse.com/rancher/appco-go:1.27.4 AS webhook-build
 ENV GOMODCACHE=/root/.cache/go/modcache
 ENV GOCACHE=/root/.cache/go/cache
 ENV CGO_ENABLED=0
