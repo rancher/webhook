@@ -1,6 +1,6 @@
 module github.com/rancher/webhook
 
-go 1.26.10
+go 1.26.11
 
 replace (
 	github.com/google/gnostic-models => github.com/google/gnostic-models v0.6.9
