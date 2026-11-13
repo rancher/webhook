@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	v2prov "github.com/rancher/rancher/pkg/apis/provisioning.cattle.io/v1"
@@ -390,6 +391,113 @@ func (suite *MachineDeploymentValidatorSuite) TestReplicasAlreadyMatch() {
 			Operation: admissionv1.Update,
 			Object:    runtime.RawExtension{Raw: scale},
 			OldObject: runtime.RawExtension{Raw: oldScale},
+		}})
+
+	suite.Nil(err)
+	suite.True(resp.Allowed, "admission request was denied")
+}
+
+// nilQuantitySuite wires the mocks for a provisioning cluster whose machine
+// pool has no quantity set, and returns the cluster client so a test can
+// expect, or not expect, the patch.
+func (suite *MachineDeploymentValidatorSuite) nilQuantityValidator(ctrl *gomock.Controller) (*ReplicaValidator, *fake.MockClientInterface[*v2prov.Cluster, *v2prov.ClusterList]) {
+	mockProvClusterCache := fake.NewMockCacheInterface[*v2prov.Cluster](ctrl)
+	mockProvClusterClient := fake.NewMockClientInterface[*v2prov.Cluster, *v2prov.ClusterList](ctrl)
+	mockDynamic := NewMockDynamicController()
+
+	mockDynamic.SetReturnValue(machineDeploymentGVK, "test-namespace", "test-md", &capi.MachineDeployment{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-md",
+			Namespace: "test-namespace",
+			Labels:    map[string]string{},
+		},
+		Spec: capi.MachineDeploymentSpec{
+			Replicas: admission.Ptr(int32(0)),
+			Template: capi.MachineTemplateSpec{
+				ObjectMeta: capi.ObjectMeta{
+					Labels: map[string]string{
+						capi.ClusterNameLabel:                 "test-cluster",
+						"rke.cattle.io/rke-machine-pool-name": "test-machine-pool",
+					},
+				},
+			},
+		},
+	})
+	mockDynamic.SetReturnValue(capiClusterGVK, "test-namespace", "test-cluster", &capi.Cluster{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-namespace",
+			OwnerReferences: []v1.OwnerReference{
+				{
+					APIVersion: "provisioning.cattle.io/v1",
+					Kind:       "Cluster",
+					Name:       "test-cluster",
+				},
+			},
+		},
+		Spec: capi.ClusterSpec{
+			InfrastructureRef: capi.ContractVersionedObjectReference{
+				Name: "test-cluster",
+			},
+		},
+	})
+	mockProvClusterCache.EXPECT().Get("test-namespace", "test-cluster").Return(&v2prov.Cluster{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-namespace",
+		},
+		Spec: v2prov.ClusterSpec{
+			RKEConfig: &v2prov.RKEConfig{
+				MachinePools: []v2prov.RKEMachinePool{
+					{
+						Name: "test-machine-pool",
+						// Quantity left unset
+					},
+				},
+			},
+		},
+	}, nil).AnyTimes()
+
+	return NewValidator(mockProvClusterCache, mockProvClusterClient, mockDynamic), mockProvClusterClient
+}
+
+// A machine pool without a quantity scaled to a non-zero replica count must
+// be patched, not dereferenced.
+func (suite *MachineDeploymentValidatorSuite) TestNilQuantityScaledUp() {
+	ctrl := gomock.NewController(suite.T())
+	defer ctrl.Finish()
+
+	validator, mockProvClusterClient := suite.nilQuantityValidator(ctrl)
+	patchSetsQuantity := gomock.Cond(func(patch []byte) bool {
+		return strings.Contains(string(patch), `"quantity":3`)
+	})
+	mockProvClusterClient.EXPECT().Patch("test-namespace", "test-cluster", types.MergePatchType, patchSetsQuantity, "").Return(&v2prov.Cluster{}, nil)
+
+	resp, err := validator.Admit(&admission.Request{
+		Context: context.Background(),
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Update,
+			Object:    runtime.RawExtension{Raw: createTestScale("test-namespace", "test-md", 3)},
+			OldObject: runtime.RawExtension{Raw: createTestScale("test-namespace", "test-md", 0)},
+		}})
+
+	suite.Nil(err)
+	suite.True(resp.Allowed, "admission request was denied")
+}
+
+// A machine pool without a quantity already matches a scale to zero.
+func (suite *MachineDeploymentValidatorSuite) TestNilQuantityScaledToZero() {
+	ctrl := gomock.NewController(suite.T())
+	defer ctrl.Finish()
+
+	validator, _ := suite.nilQuantityValidator(ctrl)
+
+	resp, err := validator.Admit(&admission.Request{
+		Context: context.Background(),
+		AdmissionRequest: admissionv1.AdmissionRequest{
+			Operation: admissionv1.Update,
+			Object:    runtime.RawExtension{Raw: createTestScale("test-namespace", "test-md", 0)},
+			OldObject: runtime.RawExtension{Raw: createTestScale("test-namespace", "test-md", 0)},
 		}})
 
 	suite.Nil(err)
