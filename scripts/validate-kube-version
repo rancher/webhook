@@ -23,11 +23,12 @@ if [ -z "$MINOR_VERSION" ]; then
 fi
 
 # Calculate next minor
+LOWER_MINOR=$((MINOR_VERSION - 2))
 NEXT_MINOR=$((MINOR_VERSION + 1))
 
 # Construct expected string
-# "catalog.cattle.io/kube-version: "< 1.35.0-0""
-EXPECTED_STRING="catalog.cattle.io/kube-version: \"< 1.${NEXT_MINOR}.0-0\""
+# "catalog.cattle.io/kube-version: ">= 1.32.0-0 < 1.35.0-0""
+EXPECTED_STRING="catalog.cattle.io/kube-version: \">= 1.$LOWER_MINOR.0-0 < 1.${NEXT_MINOR}.0-0\""
 
 echo "Detected k8s.io/client-go version: $CLIENT_GO_VERSION"
 echo "Expected annotation in Chart.yaml: $EXPECTED_STRING"
