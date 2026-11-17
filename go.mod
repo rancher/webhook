@@ -38,7 +38,7 @@ require (
 	github.com/rancher/dynamiclistener v0.8.4
 	github.com/rancher/jsonpath v0.0.0-20250620213443-ad24535cf0c1
 	github.com/rancher/lasso v0.2.8
-	github.com/rancher/rancher/pkg/apis v0.0.0-20261116081328-94cb9c38c4b1
+	github.com/rancher/rancher/pkg/apis v0.0.0-20261116202402-f80792f5476e
 	github.com/rancher/rke v1.8.6
 	github.com/rancher/wrangler/v3 v3.6.1
 	github.com/robfig/cron v1.2.0
@@ -85,7 +85,7 @@ require (
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-asn1-ber/asn1-ber v1.5.8-0.20250403174932-29230038a667 // indirect
-	github.com/go-logr/logr v1.4.3 // indirect
+	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-openapi/jsonpointer v0.22.4 // indirect
 	github.com/go-openapi/jsonreference v0.21.4 // indirect
 	github.com/go-openapi/swag v0.25.4 // indirect
@@ -111,8 +111,8 @@ require (
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	go.opentelemetry.io/otel v1.44.0 // indirect
-	go.opentelemetry.io/otel/trace v1.44.0 // indirect
+	go.opentelemetry.io/otel v1.47.0 // indirect
+	go.opentelemetry.io/otel/trace v1.47.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.59.0 // indirect
