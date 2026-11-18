@@ -26,7 +26,7 @@ jobs:
     name: Sync dependencies
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/rancher/ci-image/go1.26:1.26.11@sha256:048a21de6121675749f9b5f5623efe8127db0a178d027e6d079d3f5a3d34a6f4
+      image: ghcr.io/rancher/ci-image/go1.26:1.26.11
     steps:
       - uses: rancher-eio/read-vault-secrets@0da85151ad1f19ed7986c41587e45aac1ace74b6 # v3
         with:
