@@ -44,6 +44,8 @@ jobs:
   sync:
     name: Sync dependencies
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/rancher/ci-image/go1.27:1.27.4
     steps:
       - uses: rancher-eio/read-vault-secrets@dfae8acd43a9e170fca5f90168da22f814fe4e9a
         with:
@@ -76,8 +78,9 @@ jobs:
           ref: "${{ env.RANCHER_REF }}"
           path: rancher
 
-      - name: Install dependencies
-        run: sudo snap install yq --channel=v4/stable
+      - name: Git safe directory
+        # Checkouts live in subdirectories owned by the runner user.
+        run: git config --global --add safe.directory '*'
 
       - name: Configure the committer
         run: |
