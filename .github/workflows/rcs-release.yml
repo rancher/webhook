@@ -11,6 +11,10 @@ env:
 jobs:
   unit-tests:
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/rancher/ci-image/go1.27:1.27.4
+      # `make test` drives docker buildx on the runner's Docker daemon.
+      options: --volume /var/run/docker.sock:/var/run/docker.sock
     permissions:
       contents: read
     steps:
