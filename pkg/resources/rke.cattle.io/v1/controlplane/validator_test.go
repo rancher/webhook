@@ -308,6 +308,43 @@ func TestValidator_Admit_UnmarshalError(t *testing.T) {
 	assert.Nil(t, response)
 }
 
+func TestValidator_Admit_UnsafeCharacters(t *testing.T) {
+	t.Parallel()
+
+	unsafeDirs := map[string]string{
+		"newline":         "/tmp/x\nchmod 4755 /bin/sh\n/y",
+		"carriage return": "/tmp/x\revil",
+		"tab":             "/tmp/x\tevil",
+		"space":           "/tmp/x /etc",
+		"backslash":       "/tmp/x\\evil",
+	}
+	setters := map[string]func(dd *rkev1.DataDirectories, dir string){
+		"Distro":       func(dd *rkev1.DataDirectories, dir string) { dd.K8sDistro = dir },
+		"Provisioning": func(dd *rkev1.DataDirectories, dir string) { dd.Provisioning = dir },
+		"System Agent": func(dd *rkev1.DataDirectories, dir string) { dd.SystemAgent = dir },
+	}
+	operations := []admissionv1.Operation{admissionv1.Create, admissionv1.Update}
+
+	admitter := NewValidator().Admitters()[0]
+	for charName, dir := range unsafeDirs {
+		for field, set := range setters {
+			for _, op := range operations {
+				t.Run(string(op)+" "+charName+" in "+field, func(t *testing.T) {
+					t.Parallel()
+					cp := &rkev1.RKEControlPlane{}
+					set(&cp.Spec.DataDirectories, dir)
+					req, err := createRKEControlPlaneRequest(cp, op)
+					require.NoError(t, err)
+
+					response, err := admitter.Admit(req)
+					require.NoError(t, err)
+					assert.False(t, response.Allowed)
+				})
+			}
+		}
+	}
+}
+
 func createRKEControlPlaneRequest(cp *rkev1.RKEControlPlane, op admissionv1.Operation) (*admission.Request, error) {
 	req := &admission.Request{
 		Context: context.Background(),
