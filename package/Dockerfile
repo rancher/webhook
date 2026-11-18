@@ -5,7 +5,7 @@
 # rancher/ci-image per RFD 0070: it bundles golangci-lint and the CLI tools
 # those stages need, which the minimal appco-go image lacks.
 # ===============
-FROM --platform=$BUILDPLATFORM ghcr.io/rancher/ci-image/go1.27:1.27.4@sha256:c2609eb37819cdc40902ed0fe1072a6bdd75805085309ee731247ad82ccae466 AS build
+FROM --platform=$BUILDPLATFORM ghcr.io/rancher/ci-image/go1.27:1.27.4 AS build
 
 # Set up build cache
 ENV GOMODCACHE=/root/.cache/go/modcache
