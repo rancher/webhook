@@ -1,7 +1,11 @@
 # ===============
 # Build Stage
+#
+# Base for the test, validate and integration stages (never shipped). Uses
+# rancher/ci-image per RFD 0070: it bundles golangci-lint and the CLI tools
+# those stages need, which the minimal appco-go image lacks.
 # ===============
-FROM --platform=$BUILDPLATFORM rancher/hardened-build-base:v1.26.11b1@sha256:22cf9af80ad1d59b604013fea4e0f8f95ebed13dbf227b6b8b729f92660b28c5 AS build
+FROM --platform=$BUILDPLATFORM ghcr.io/rancher/ci-image/go1.26:1.26.11 AS build
 
 # Set up build cache
 ENV GOMODCACHE=/root/.cache/go/modcache
@@ -22,6 +26,11 @@ RUN --mount=type=cache,target=/root/.cache,id=rancher go mod download
 
 # ===============
 # Webhook Binary Build Stage
+#
+# The shipped binary is built with registry.suse.com/rancher/appco-go per
+# RFD 0070. This stage is self-contained (rather than deriving from `build`)
+# because appco-go is a minimal Go toolchain without the extra tooling the
+# test/validate stages rely on.
 # ===============
 FROM --platform=$BUILDPLATFORM registry.suse.com/rancher/appco-go:1.26.11 AS webhook-build
 ENV GOMODCACHE=/root/.cache/go/modcache
@@ -59,26 +68,6 @@ RUN cat coverage.out | awk 'BEGIN {cov=0; stat=0;} $3!="" { cov+=($3==1?$2:0); s
 # Validate Stage
 # ===============
 FROM build AS validate
-# renovate: datasource=github-releases depName=golangci/golangci-lint
-ARG GOLANGCI_LINT_VERSION=2.11.4
-# renovate: datasource=github-release-attachments depName=golangci/golangci-lint digestVersion=v2.11.4
-ARG GOLANGCI_LINT_SUM_amd64=200c5b7503f67b59a6743ccf32133026c174e272b930ee79aa2aa6f37aca7ef1
-# renovate: datasource=github-release-attachments depName=golangci/golangci-lint digestVersion=v2.11.4
-ARG GOLANGCI_LINT_SUM_arm64=3bcfa2e6f3d32b2bf5cd75eaa876447507025e0303698633f722a05331988db4
-RUN set -e; \
-    ARCH=$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/'); \
-    TARBALL="golangci-lint-${GOLANGCI_LINT_VERSION}-linux-${ARCH}.tar.gz"; \
-    URL="https://github.com/golangci/golangci-lint/releases/download/v${GOLANGCI_LINT_VERSION}/${TARBALL}"; \
-    case "${ARCH}" in \
-      amd64) SUM="${GOLANGCI_LINT_SUM_amd64}" ;; \
-      arm64) SUM="${GOLANGCI_LINT_SUM_arm64}" ;; \
-      *) echo "Unsupported arch: ${ARCH}" >&2; exit 1 ;; \
-    esac; \
-    curl -sSfL -o "/tmp/${TARBALL}" "${URL}"; \
-    echo "${SUM}  /tmp/${TARBALL}" | sha256sum --check; \
-    tar -xzf "/tmp/${TARBALL}" -C /tmp "golangci-lint-${GOLANGCI_LINT_VERSION}-linux-${ARCH}/golangci-lint"; \
-    mv "/tmp/golangci-lint-${GOLANGCI_LINT_VERSION}-linux-${ARCH}/golangci-lint" /usr/local/bin/golangci-lint; \
-    rm -rf "/tmp/${TARBALL}" "/tmp/golangci-lint-${GOLANGCI_LINT_VERSION}-linux-${ARCH}"
 COPY . .
 RUN --mount=type=cache,target=/root/.cache,id=rancher golangci-lint run
 RUN ./scripts/validate-kube-version
