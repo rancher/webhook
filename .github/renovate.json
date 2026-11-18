@@ -76,10 +76,9 @@
       "separateMajorMinor": false
     },
     {
-      "description": "Group Go dev tooling (Go version, golangci-lint, helm) into a single PR per branch",
+      "description": "Group Go dev tooling (Go version, helm) into a single PR per branch",
       "matchPackageNames": [
         "go",
-        "golangci/golangci-lint",
         "helm/helm"
       ],
       "groupName": "Go dev tools",

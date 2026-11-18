@@ -24,13 +24,16 @@ env:
 jobs:
   create-rancher-pr:
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/rancher/ci-image/go1.26:1.26.11
     permissions:
       contents: read
       # Required for vault
       id-token: write
     steps:
-      - name: Install dependencies
-        run: sudo snap install yq --channel=v4/stable
+      - name: Git safe directory
+        # Checkouts live in subdirectories owned by the runner user.
+        run: git config --global --add safe.directory '*'
 
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
