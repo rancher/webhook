@@ -1,7 +1,11 @@
 # ===============
 # Build Stage
+#
+# Base for the test, validate and integration stages (never shipped). Uses
+# rancher/ci-image per RFD 0070: it bundles golangci-lint and the CLI tools
+# those stages need, which the minimal appco-go image lacks.
 # ===============
-FROM --platform=$BUILDPLATFORM rancher/hardened-build-base:v1.27.4b1@sha256:f60da0902378e7c9682de22f7fab5e2aa0bc4ec717ebd97425d1a2e7a77c3993 AS build
+FROM --platform=$BUILDPLATFORM ghcr.io/rancher/ci-image/go1.27:1.27.4 AS build
 
 # Set up build cache
 ENV GOMODCACHE=/root/.cache/go/modcache
@@ -64,26 +68,6 @@ RUN cat coverage.out | awk 'BEGIN {cov=0; stat=0;} $3!="" { cov+=($3==1?$2:0); s
 # Validate Stage
 # ===============
 FROM build AS validate
-# renovate: datasource=github-releases depName=golangci/golangci-lint
-ARG GOLANGCI_LINT_VERSION=2.15.0
-# renovate: datasource=github-release-attachments depName=golangci/golangci-lint digestVersion=v2.15.0
-ARG GOLANGCI_LINT_SUM_amd64=9b7fe6a6bf6334b98decf8d86b11415ea7889afdabdd1959fdce23af2a9ebcea
-# renovate: datasource=github-release-attachments depName=golangci/golangci-lint digestVersion=v2.15.0
-ARG GOLANGCI_LINT_SUM_arm64=b4d8f17068b35ee6060cc2f69a16fb48740d706fbba81661c318649c114a6998
-RUN set -e; \
-    ARCH=$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/'); \
-    TARBALL="golangci-lint-${GOLANGCI_LINT_VERSION}-linux-${ARCH}.tar.gz"; \
-    URL="https://github.com/golangci/golangci-lint/releases/download/v${GOLANGCI_LINT_VERSION}/${TARBALL}"; \
-    case "${ARCH}" in \
-      amd64) SUM="${GOLANGCI_LINT_SUM_amd64}" ;; \
-      arm64) SUM="${GOLANGCI_LINT_SUM_arm64}" ;; \
-      *) echo "Unsupported arch: ${ARCH}" >&2; exit 1 ;; \
-    esac; \
-    curl -sSfL -o "/tmp/${TARBALL}" "${URL}"; \
-    echo "${SUM}  /tmp/${TARBALL}" | sha256sum --check; \
-    tar -xzf "/tmp/${TARBALL}" -C /tmp "golangci-lint-${GOLANGCI_LINT_VERSION}-linux-${ARCH}/golangci-lint"; \
-    mv "/tmp/golangci-lint-${GOLANGCI_LINT_VERSION}-linux-${ARCH}/golangci-lint" /usr/local/bin/golangci-lint; \
-    rm -rf "/tmp/${TARBALL}" "/tmp/golangci-lint-${GOLANGCI_LINT_VERSION}-linux-${ARCH}"
 COPY . .
 RUN --mount=type=cache,target=/root/.cache,id=rancher golangci-lint run
 RUN ./scripts/validate-kube-version
