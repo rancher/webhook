@@ -98,6 +98,7 @@ func Validation(clients *clients.Clients) ([]admission.ValidatingAdmissionHandle
 			authconfig.NewValidator(
 				clients.Management.Feature().Cache(),
 				clients.Management.AuthConfig().Cache(),
+				clients.Management.Setting().Cache(),
 			),
 			users.NewValidator(
 				clients.Management.UserAttribute().Cache(),

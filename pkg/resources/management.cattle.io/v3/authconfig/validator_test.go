@@ -232,13 +232,14 @@ func TestValidateLdapConfig(t *testing.T) {
 					t.Cleanup(ctrl.Finish)
 					ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
 					fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+					sc := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
 
 					if !test.disabled {
 						fc.EXPECT().Get(common.MultipleAuthConfigs).Return(&v3.Feature{Status: v3.FeatureStatus{Default: false}}, nil)
 						ac.EXPECT().List(labels.Everything()).Return([]*v3.AuthConfig{}, nil)
 					}
 
-					validator := authconfig.NewValidator(fc, ac)
+					validator := authconfig.NewValidator(fc, ac, sc)
 
 					fields := fields
 					if test.fields != nil {
@@ -452,6 +453,7 @@ func TestValidateActiveDirectoryConfig(t *testing.T) {
 
 				ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
 				fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+				sc := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
 
 				config := config
 				if test.config != nil {
@@ -462,7 +464,7 @@ func TestValidateActiveDirectoryConfig(t *testing.T) {
 					fc.EXPECT().Get(common.MultipleAuthConfigs).Return(&v3.Feature{Spec: v3.FeatureSpec{Value: new(false)}, Status: v3.FeatureStatus{Default: false}}, nil)
 					ac.EXPECT().List(labels.Everything()).Return([]*v3.AuthConfig{}, nil)
 				}
-				validator := authconfig.NewValidator(fc, ac)
+				validator := authconfig.NewValidator(fc, ac, sc)
 				testActiveDirectoryAdmit(t, validator, op, config, test.idAttrs, test.allowed)
 			})
 		}
@@ -563,13 +565,14 @@ func TestIDAttributeImmutability(t *testing.T) {
 
 				ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
 				fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+				sc := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
 				allowed := test.allowed || provider.nested
 				if test.new.enabled && allowed {
 					fc.EXPECT().Get(common.MultipleAuthConfigs).Return(&v3.Feature{Status: v3.FeatureStatus{Default: false}}, nil)
 					ac.EXPECT().List(labels.Everything()).Return([]*v3.AuthConfig{}, nil)
 				}
 
-				validator := authconfig.NewValidator(fc, ac)
+				validator := authconfig.NewValidator(fc, ac, sc)
 
 				oldConfig := withFields(t, provider.config(test.old.enabled), fields(test.old))
 				newConfig := withFields(t, provider.config(test.new.enabled), fields(test.new))
@@ -649,13 +652,14 @@ func TestSamlLdapSearchIDAttributes(t *testing.T) {
 					t.Cleanup(ctrl.Finish)
 					ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
 					fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+					sc := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
 
 					if test.enabled {
 						fc.EXPECT().Get(common.MultipleAuthConfigs).Return(&v3.Feature{Status: v3.FeatureStatus{Default: false}}, nil)
 						ac.EXPECT().List(labels.Everything()).Return([]*v3.AuthConfig{}, nil)
 					}
 
-					validator := authconfig.NewValidator(fc, ac)
+					validator := authconfig.NewValidator(fc, ac, sc)
 
 					oldConfig := provider.config(false)
 					newConfig := provider.config(test.enabled)
@@ -765,6 +769,8 @@ func TestValidateEnablingAuthConfigs(t *testing.T) {
 		admit                 any
 		existing              []*v3.AuthConfig
 		multipleAuthConfigsOn bool
+		versionType           string // "prime" when empty and multipleAuthConfigsOn is set
+		skipList              bool   // the existing authconfigs are not listed, as for local
 		allowed               bool
 	}{
 		{
@@ -850,6 +856,67 @@ func TestValidateEnablingAuthConfigs(t *testing.T) {
 			allowed: true,
 		},
 		{
+			desc:                  "with enabled authconfigs when multiple auth configs feature is on but not a prime build",
+			admit:                 config,
+			multipleAuthConfigsOn: true,
+			versionType:           "dev",
+			existing: []*v3.AuthConfig{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "github-two"},
+					Type:       "githubConfig",
+					Enabled:    true,
+				},
+			},
+			allowed: false,
+		},
+		{
+			desc:  "updating the only enabled authconfig",
+			admit: config,
+			existing: []*v3.AuthConfig{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "github"},
+					Type:       "githubConfig",
+					Enabled:    true,
+				},
+			},
+			allowed: true,
+		},
+		{
+			desc:  "updating an enabled authconfig when another is enabled",
+			admit: config,
+			existing: []*v3.AuthConfig{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "github"},
+					Type:       "githubConfig",
+					Enabled:    true,
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "github-two"},
+					Type:       "githubConfig",
+					Enabled:    true,
+				},
+			},
+			allowed: false,
+		},
+		{
+			desc: "updating local when another authconfig is enabled",
+			admit: func() v3.GithubConfig {
+				local := config
+				local.Name = "local"
+				local.Type = "localConfig"
+				return local
+			}(),
+			skipList: true,
+			existing: []*v3.AuthConfig{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: "github-two"},
+					Type:       "githubConfig",
+					Enabled:    true,
+				},
+			},
+			allowed: true,
+		},
+		{
 			desc:  "with enabled local and other authconfigs",
 			admit: config,
 			existing: []*v3.AuthConfig{
@@ -877,18 +944,30 @@ func TestValidateEnablingAuthConfigs(t *testing.T) {
 
 				ac := fake.NewMockNonNamespacedCacheInterface[*v3.AuthConfig](ctrl)
 				fc := fake.NewMockNonNamespacedCacheInterface[*v3.Feature](ctrl)
+				sc := fake.NewMockNonNamespacedCacheInterface[*v3.Setting](ctrl)
 				feature := &v3.Feature{Status: v3.FeatureStatus{Default: false}}
 				if test.multipleAuthConfigsOn {
 					feature.Spec.Value = new(true)
+					// Community Rancher doesn't set a value, and the default is "dev".
+					setting := &v3.Setting{Default: "dev"}
+					if test.versionType == "" || test.versionType == "prime" {
+						setting.Value = "prime"
+					}
+					sc.EXPECT().Get(common.ServerVersionTypeSetting).Return(setting, nil)
+					if test.versionType == "dev" {
+						ac.EXPECT().List(labels.Everything()).Return(test.existing, nil)
+					}
 				} else {
 					feature.Spec.Value = new(false)
-					ac.EXPECT().List(labels.Everything()).Return(test.existing, nil)
+					if !test.skipList {
+						ac.EXPECT().List(labels.Everything()).Return(test.existing, nil)
+					}
 				}
 				fc.EXPECT().Get(common.MultipleAuthConfigs).Return(feature, nil)
 
-				validator := authconfig.NewValidator(fc, ac)
+				validator := authconfig.NewValidator(fc, ac, sc)
 
-				testAdmit(t, validator, op, v3.GithubConfig{}, config, test.allowed)
+				testAdmit(t, validator, op, v3.GithubConfig{}, test.admit, test.allowed)
 			})
 		}
 	}
