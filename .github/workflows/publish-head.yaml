@@ -13,6 +13,10 @@ jobs:
   build:
     name: build and package
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/rancher/ci-image/go1.26:1.26.11
+      # `make build` drives docker buildx on the runner's Docker daemon.
+      options: --volume /var/run/docker.sock:/var/run/docker.sock
     strategy:
       matrix:
         arch:
@@ -21,10 +25,8 @@ jobs:
     steps:
     - name : Checkout repository
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-    - name: Setup Go
-      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
-      with:
-        go-version-file: 'go.mod'
+    - name: Git safe directory
+      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
     - name: Set Version/Commit
       run: |
             source ./scripts/version
