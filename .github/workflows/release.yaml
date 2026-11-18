@@ -24,6 +24,10 @@ jobs:
     needs: guard
     name: build and package
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/rancher/ci-image/go1.26:1.26.11
+      # `make build` drives docker buildx on the runner's Docker daemon.
+      options: --volume /var/run/docker.sock:/var/run/docker.sock
     strategy:
       matrix:
         arch:
@@ -33,6 +37,9 @@ jobs:
 
     - name: Checkout repository
       uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+    - name: Git safe directory
+      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
     - name: Build Binary
       env:
@@ -64,6 +71,8 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/rancher/ci-image/go1.26:1.26.11
     permissions:
       contents: write
     steps:
@@ -71,6 +80,9 @@ jobs:
     - name: Checkout repository
        # https://github.com/actions/checkout/releases/tag/v4.1.1
       uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+    - name: Git safe directory
+      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
     - name: Package Helm Chart
       env:
