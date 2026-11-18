@@ -1889,6 +1889,246 @@ func TestValidateDataDirectories(t *testing.T) {
 			shouldSucceed: false,
 		},
 		{
+			name:    "CREATE distro data dir contains newline",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								K8sDistro: "/a\nchmod 4755 /bin/sh\n/b",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE distro data dir contains carriage return",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								K8sDistro: "/a\revil",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE distro data dir contains tab",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								K8sDistro: "/a\tevil",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE distro data dir contains space",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								K8sDistro: "/a /etc",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE distro data dir contains backslash",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								K8sDistro: "/a\\evil",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE provisioning data dir contains newline",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								Provisioning: "/a\nchmod 4755 /bin/sh\n/b",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE provisioning data dir contains carriage return",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								Provisioning: "/a\revil",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE provisioning data dir contains tab",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								Provisioning: "/a\tevil",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE provisioning data dir contains space",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								Provisioning: "/a /etc",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE provisioning data dir contains backslash",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								Provisioning: "/a\\evil",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE system agent data dir contains newline",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								SystemAgent: "/a\nchmod 4755 /bin/sh\n/b",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE system agent data dir contains carriage return",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								SystemAgent: "/a\revil",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE system agent data dir contains tab",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								SystemAgent: "/a\tevil",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE system agent data dir contains space",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								SystemAgent: "/a /etc",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
+			name:    "CREATE system agent data dir contains backslash",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						ClusterConfiguration: rkev1.ClusterConfiguration{
+							DataDirectories: rkev1.DataDirectories{
+								SystemAgent: "/a\\evil",
+							},
+						},
+					},
+				},
+			},
+			shouldSucceed: false,
+		},
+		{
 			name:    "CREATE distro data dir == provisioning data dir",
 			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Create}},
 			cluster: &v1.Cluster{
