@@ -25,7 +25,7 @@ jobs:
   create-rancher-pr:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/rancher/ci-image/go1.26:1.26.11
+      image: ghcr.io/rancher/ci-image/go1.26:1.26.11@sha256:048a21de6121675749f9b5f5623efe8127db0a178d027e6d079d3f5a3d34a6f4
     permissions:
       contents: read
       # Required for vault
