@@ -24,6 +24,8 @@ env:
 jobs:
   create-charts-pr:
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/rancher/ci-image/go1.26:1.26.11
     permissions:
       contents: read
       # Required for vault
@@ -69,8 +71,9 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           APP_USER: "${{ steps.app-token.outputs.app-slug }}[bot]"
 
-      - name: Install dependencies
-        run: sudo snap install yq --channel=v4/stable
+      - name: Git safe directory
+        # Checkouts live in subdirectories owned by the runner user.
+        run: git config --global --add safe.directory '*'
 
       - name: Run release script
         run: |
