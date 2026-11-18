@@ -105,7 +105,7 @@ COPY --from=integration-test-build /dist/rancher-webhook-integration.test /ranch
 # ===============
 # Final Stage
 # ===============
-FROM registry.suse.com/bci/bci-nano:16.0@sha256:7e8c9850a70b319ecf9f58c01f91cae605a4770cb0c69ae6ee379a14136af4bf
+FROM registry.suse.com/bci/bci-nano:16.0@sha256:bd320c19cdd028e8627847c920561b358813555f2f050a8d7365b08a14feb7e0
 
 # Copy the compiled binary from the webhook-build stage
 COPY --from=webhook-build /dist/webhook /usr/bin/
