@@ -21,6 +21,13 @@ on:
 
 permissions: {}
 
+# Two runs of the same tag must not push at the same time: the check that the
+# version is not in the registry yet and the push are two calls (see "Call the
+# action" in rancher/cargueiro docs/CHART_OWNER.md). The second run waits.
+concurrency:
+  group: stage-rancher-webhook-${{ github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   stage-chart:
     runs-on: ubuntu-latest
