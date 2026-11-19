@@ -188,19 +188,18 @@ func (v *ReplicaValidator) setMachinePoolQuantity(md *capi.MachineDeployment, cl
 			continue
 		}
 
-		// If quantity is nil and targetReplicas is zero, or quantity is non-nil and already
-		// equals targetReplicas, no update is needed.
-		if pool.Quantity == nil && targetReplicas == 0 {
-			return cluster, false
-		} else if *pool.Quantity == targetReplicas {
+		// An unset quantity counts as zero, so no update is needed when it
+		// already equals targetReplicas.
+		current := int32(0)
+		if pool.Quantity != nil {
+			current = *pool.Quantity
+		}
+		if current == targetReplicas {
 			return cluster, false
 		}
 
-		logrus.Debugf("Updating cluster %s/%s machine pool %s quantity from %d to %d", cluster.Namespace, cluster.Name, machinePoolName, *pool.Quantity, targetReplicas)
-		if pool.Quantity == nil {
-			pool.Quantity = new(int32)
-		}
-		*pool.Quantity = targetReplicas
+		logrus.Debugf("Updating cluster %s/%s machine pool %s quantity from %d to %d", cluster.Namespace, cluster.Name, machinePoolName, current, targetReplicas)
+		pool.Quantity = &targetReplicas
 		return cluster, true
 	}
 
