@@ -74,3 +74,44 @@ type featureCacheStub struct {
 func (f featureCacheStub) Get(_ string) (*v3.Feature, error) {
 	return f.feature, f.err
 }
+
+type fakeSettingCache struct {
+	setting *v3.Setting
+	err     error
+}
+
+func (f fakeSettingCache) Get(string) (*v3.Setting, error) { return f.setting, f.err }
+
+func TestIsPrime(t *testing.T) {
+	t.Parallel()
+
+	notFound := apierrors.NewNotFound(schema.GroupResource{Group: "management.cattle.io", Resource: "settings"}, ServerVersionTypeSetting)
+
+	tests := []struct {
+		name    string
+		cache   fakeSettingCache
+		want    bool
+		wantErr bool
+	}{
+		{name: "prime value", cache: fakeSettingCache{setting: &v3.Setting{Value: "prime", Default: "dev"}}, want: true},
+		{name: "prime default with no value", cache: fakeSettingCache{setting: &v3.Setting{Default: "prime"}}, want: true},
+		{name: "community default with no value", cache: fakeSettingCache{setting: &v3.Setting{Default: "dev"}}, want: false},
+		{name: "value overrides default", cache: fakeSettingCache{setting: &v3.Setting{Value: "dev", Default: "prime"}}, want: false},
+		{name: "setting not found", cache: fakeSettingCache{err: notFound}, want: false},
+		{name: "cache error", cache: fakeSettingCache{err: errors.New("boom")}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := IsPrime(tt.cache)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}

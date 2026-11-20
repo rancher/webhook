@@ -35,11 +35,12 @@ type Validator struct {
 }
 
 // NewValidator returns a new Validator instance.
-func NewValidator(featureCache controllerv3.FeatureCache, authConfigsCache controllerv3.AuthConfigCache) *Validator {
+func NewValidator(featureCache controllerv3.FeatureCache, authConfigsCache controllerv3.AuthConfigCache, settingCache controllerv3.SettingCache) *Validator {
 	return &Validator{
 		admitter: admitter{
 			featureCache:     featureCache,
 			authConfigsCache: authConfigsCache,
+			settingCache:     settingCache,
 		},
 	}
 }
@@ -69,6 +70,7 @@ func (v *Validator) Admitters() []admission.Admitter {
 type admitter struct {
 	featureCache     controllerv3.FeatureCache
 	authConfigsCache controllerv3.AuthConfigCache
+	settingCache     controllerv3.SettingCache
 }
 
 // Admit handles the webhook admission requests.
@@ -194,8 +196,9 @@ func (a *admitter) admitCommonCreateUpdate(request *admission.Request, _, newAut
 	if err != nil {
 		return admission.ResponseBadRequest(err.Error()), nil
 	}
-	if !multipleAuthConfigsEnabled {
-		hasExisting, err := a.hasExistingEnabledAuthConfig()
+	// The local auth config doesn't count towards the single provider limit.
+	if !multipleAuthConfigsEnabled && newAuthConfig.Name != "local" {
+		hasExisting, err := a.hasExistingEnabledAuthConfig(newAuthConfig.Name)
 		if err != nil {
 			return admission.ResponseBadRequest(err.Error()), nil
 		}
@@ -230,14 +233,15 @@ func (a *admitter) admitCommonCreateUpdate(request *admission.Request, _, newAut
 }
 
 // hasExistingEnabledAuthConfig checks if there is any existing enabled
-// AuthConfig resources other than the local one.
-func (a *admitter) hasExistingEnabledAuthConfig() (bool, error) {
+// AuthConfig resources other than the local one, and other than the one with
+// the given name, so that an enabled AuthConfig can still be updated.
+func (a *admitter) hasExistingEnabledAuthConfig(name string) (bool, error) {
 	existingAuthConfigs, err := a.authConfigsCache.List(labels.Everything())
 	if err != nil {
 		return false, err
 	}
 	for _, config := range existingAuthConfigs {
-		if config.Enabled && config.Name != "local" {
+		if config.Enabled && config.Name != "local" && config.Name != name {
 			return true, nil
 		}
 	}
@@ -245,8 +249,18 @@ func (a *admitter) hasExistingEnabledAuthConfig() (bool, error) {
 	return false, nil
 }
 
+// isMultipleAuthConfigsEnabled returns true if more than one auth provider can
+// be enabled.
+//
+// This is a Prime-only feature. Rancher doesn't change the Feature resource on
+// non-Prime builds, so the build type must be checked as well as the feature.
 func (a *admitter) isMultipleAuthConfigsEnabled() (bool, error) {
-	return common.IsFeatureEnabled(a.featureCache, common.MultipleAuthConfigs)
+	enabled, err := common.IsFeatureEnabled(a.featureCache, common.MultipleAuthConfigs)
+	if err != nil || !enabled {
+		return false, err
+	}
+
+	return common.IsPrime(a.settingCache)
 }
 
 func validateLDAPConfig(request *admission.Request) error {
