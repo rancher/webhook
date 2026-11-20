@@ -80,6 +80,14 @@ func TestResourceQuotaValidator(t *testing.T) {
 			wantAllowed: false,
 		},
 		{
+			name:        "status update of unmanaged is allowed",
+			operation:   admissionv1.Update,
+			subresource: "status",
+			oldRQ:       rqOld,
+			newRQ:       rq,
+			wantAllowed: true,
+		},
+		{
 			name:        "status update of managed is denied",
 			operation:   admissionv1.Update,
 			subresource: "status",

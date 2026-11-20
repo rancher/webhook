@@ -14,3 +14,6 @@ A rancher-managed resource quota cannot be created or modified by users.
 It can be modified by the `resourcequota-controller` service account.
 
 A resource quota that is not rancher-managed can't be promoted to rancher-managed.
+
+The status of a resource quota that is not rancher-managed can be updated by any user with access to
+`resourcequotas/status`, as in Kubernetes.
