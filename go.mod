@@ -89,11 +89,11 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/rancher/aks-operator v1.13.12-rc.1 // indirect
-	github.com/rancher/ali-operator v1.13.9-rc.1 // indirect
-	github.com/rancher/eks-operator v1.13.12-rc.1 // indirect
+	github.com/rancher/aks-operator v1.13.12 // indirect
+	github.com/rancher/ali-operator v1.13.9 // indirect
+	github.com/rancher/eks-operator v1.13.12 // indirect
 	github.com/rancher/fleet/pkg/apis v0.14.13 // indirect
-	github.com/rancher/gke-operator v1.13.13-rc.1 // indirect
+	github.com/rancher/gke-operator v1.13.13 // indirect
 	//TODO: Replace with a tag during un-rc'ing
 	github.com/rancher/norman v0.7.5 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
