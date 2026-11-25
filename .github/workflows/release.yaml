@@ -1,9 +1,26 @@
 name: On release
 
+# Dispatched by cut-release.yaml on the new tag. Builds the binaries for the
+# GitHub release, publishes and signs the image, and then stages the chart
+# (charts v2): rancher/charts indexes it on its staging branch, which is where
+# Rancher reads its system charts from. There is no rancher/charts pull request
+# to open any more.
+#
+# The chart is staged only after the image is published, because the
+# ship-staged action refuses a chart whose images are not in the registry yet.
+
 on:
   workflow_dispatch:
 
 permissions: {}
+
+# Two runs of the same tag must not stage the chart at the same time: the check
+# that the version is not in the registry yet and the push are two calls (see
+# "Call the action" in rancher/cargueiro docs/CHART_OWNER.md). The second run
+# waits.
+concurrency:
+  group: stage-rancher-webhook-${{ github.ref_name }}
+  cancel-in-progress: false
 
 env:
   REGISTRY: docker.io
@@ -46,11 +63,6 @@ jobs:
         GIT_TAG: ${{ github.ref_name }}
       run: make build ARCH=${{ matrix.arch }}
 
-    - name: Package Helm Chart
-      env:
-        GIT_TAG: ${{ github.ref_name }}
-      run: make package-helm
-
     - name: Prepare Artifacts
       run: |
         mkdir -p dist/artifacts
@@ -66,7 +78,6 @@ jobs:
         path: |
           dist/artifacts/webhook-linux-${{ matrix.arch }}
           dist/artifacts/sha256sum-${{ matrix.arch }}.txt
-          dist/artifacts/rancher-webhook-*.tgz
 
   release:
     needs: build
@@ -83,11 +94,6 @@ jobs:
 
     - name: Git safe directory
       run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-
-    - name: Package Helm Chart
-      env:
-        GIT_TAG: ${{ github.ref_name }}
-      run: make package-helm
 
     - name: Download the amd64 artifacts
       uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -112,7 +118,7 @@ jobs:
         cd dist/artifacts
         flags="--verify-tag --generate-notes"
         [[ "$VERSION" == *-rc* ]] && flags="$flags --prerelease"
-        gh --repo "$GITHUB_REPOSITORY" release create "$VERSION" $flags webhook-linux-* sha256sum-*.txt rancher-webhook*.tgz
+        gh --repo "$GITHUB_REPOSITORY" release create "$VERSION" $flags webhook-linux-* sha256sum-*.txt
 
   publish:
     needs: guard
@@ -153,3 +159,37 @@ jobs:
           prime-registry: ${{ env.PRIME_STG_REGISTRY }}
           prime-username: ${{ env.PRIME_STG_REGISTRY_USERNAME }}
           prime-password: ${{ env.PRIME_STG_REGISTRY_PASSWORD }}
+
+  stage-chart:
+    # After publish: cargueiro checks that every image of the chart is pushed.
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # Required for vault
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Prepare the chart
+        id: prepare
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(./.github/workflows/scripts/prepare-chart.sh "$TAG" "$RUNNER_TEMP/chart")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # Stamps, checks, packages and pushes the chart to the staging catalog
+      # registry, then starts the chart-staged workflow of rancher/charts, which
+      # adds it to the index.yaml of the staging branch.
+      - name: Stage the chart and notify rancher/charts
+        # Please keep this action on the chart-owners branch and do not pin it to a commit.
+        # The branch carries the checks that stop a faulty release, for example that the
+        # images of the chart are pushed before the chart. A commit keeps only the checks
+        # that existed when it was copied.
+        uses: rancher/charts/.github/actions/ship-staged@chart-owners # zizmor: ignore[unpinned-uses] rancher/charts is an internal trusted repository and its chart-owners branch carries the release checks
+        with:
+          chart-dir: ${{ runner.temp }}/chart/rancher-webhook
+          version: ${{ steps.prepare.outputs.version }}

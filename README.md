@@ -240,6 +240,10 @@ Releases are cut by triggering the [Cut release workflow](.github/workflows/cut-
 from the GitHub Actions tab. Select the appropriate release branch (e.g. `release/v0.5`)
 and provide the version (e.g. `v0.5.1`) as input. The workflow validates the version
 against [VERSION.md](VERSION.md), creates the annotated tag, and dispatches the
-[On release workflow](.github/workflows/release.yaml) on the new tag, which builds
-and publishes the binaries, Helm chart, and container image, and creates the GitHub
-release.
+[On release workflow](.github/workflows/release.yaml) on the new tag. That workflow
+builds the binaries and creates the GitHub release, publishes the container image,
+and then stages the Helm chart in rancher/charts (charts v2), which adds it to the
+index of its `staging` branch. The chart is staged after the image because the
+staging action refuses a chart whose images are not pushed yet. Bumping the chart in
+rancher/rancher is done by
+[frameworks-automation](https://github.com/rancher/frameworks-automation).
