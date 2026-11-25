@@ -135,7 +135,7 @@ jobs:
             secret/data/github/repo/${{ github.repository }}/rancher-prime-stg-registry/credentials password | PRIME_STG_REGISTRY_PASSWORD
 
       - name: Publish image
-        uses: rancher/ecm-distro-tools/actions/publish-image@9a6467d0d0f6ed00d45f11510eb8cba30292b3f3 # v0.78.4
+        uses: rancher/ecm-distro-tools/actions/publish-image@c4025043b1e2af0a5a522f74b456b20f04e3d61e # v0.78.5
         with:
           image: rancher-webhook
           tag: ${{ github.ref_name }}
