@@ -699,6 +699,22 @@ func TestDynamicSchemaDrop(t *testing.T) {
 			cluster: &v1.Cluster{},
 		},
 		{
+			name:    "old not v2prov cluster",
+			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
+			cluster: &v1.Cluster{
+				Spec: v1.ClusterSpec{
+					RKEConfig: &v1.RKEConfig{
+						MachinePools: []v1.RKEMachinePool{
+							{
+								Name: "a",
+							},
+						},
+					},
+				},
+			},
+			oldCluster: &v1.Cluster{},
+		},
+		{
 			name:    "no schema present on old or new cluster",
 			request: &admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}},
 			cluster: &v1.Cluster{
