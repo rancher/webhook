@@ -893,6 +893,7 @@ following:
 - Is not an absolute path (i.e. does not start with `/`)
 - Attempts to include environment variables (e.g. `$VARIABLE` or `${VARIABLE}`)
 - Attempts to include shell expressions (e.g. `$(command)` or `` `command` ``)
+- Contains whitespace, non-printing characters (e.g. a newline or a zero-width space), or a backslash
 - Equal to another data directory
 - Attempts to nest another data directory
 
@@ -1113,6 +1114,7 @@ following:
 - Is not an absolute path (i.e. does not start with `/`)
 - Attempts to include environment variables (e.g. `$VARIABLE` or `${VARIABLE}`)
 - Attempts to include shell expressions (e.g. `$(command)` or `` `command` ``)
+- Contains whitespace, non-printing characters (e.g. a newline or a zero-width space), or a backslash
 - Is not clean (e.g. contains `.` or `..`)
 - Equal to another data directory
 - Attempts to nest another data directory
@@ -1126,6 +1128,7 @@ following:
 - Is not an absolute path (i.e. does not start with `/`)
 - Attempts to include environment variables (e.g. `$VARIABLE` or `${VARIABLE}`)
 - Attempts to include shell expressions (e.g. `$(command)` or `` `command` ``)
+- Contains whitespace, non-printing characters (e.g. a newline or a zero-width space), or a backslash
 - Is not clean (e.g. contains `.` or `..`)
 - Equal to another data directory
 - Attempts to nest another data directory
