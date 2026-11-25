@@ -1,10 +1,15 @@
 package auditpolicy
 
 import (
+	"encoding/json"
 	"testing"
 
 	auditlogv1 "github.com/rancher/rancher/pkg/apis/auditlog.cattle.io/v1"
+	"github.com/rancher/webhook/pkg/admission"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	admissionv1 "k8s.io/api/admission/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
@@ -208,6 +213,105 @@ func TestAdmitterValidateFields(t *testing.T) {
 				assert.Failf(t, "expected to receive err '%s'", c.Expected.Error())
 			} else if c.Expected != nil && err != nil {
 				assert.EqualError(t, err, c.Expected.Error())
+			}
+		})
+	}
+}
+
+func TestAdmitter(t *testing.T) {
+	type testCase struct {
+		Name    string
+		Request *admission.Request
+
+		Response *admissionv1.AdmissionResponse
+		Err      string
+	}
+
+	cases := []testCase{
+		{
+			Name: "Valid Create Policy",
+			Request: &admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Operation: admissionv1.Create,
+					Object: runtime.RawExtension{
+						Object: &auditlogv1.AuditPolicy{
+							Spec: auditlogv1.AuditPolicySpec{
+								Filters: []auditlogv1.Filter{
+									{
+										Action:     auditlogv1.FilterActionDeny,
+										RequestURI: ".*",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+
+			Response: admission.ResponseAllowed(),
+		},
+		{
+			Name: "Invalid Create Request",
+			Request: &admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Operation: admissionv1.Create,
+					Object: runtime.RawExtension{
+						Object: &auditlogv1.AuditPolicy{
+							Spec: auditlogv1.AuditPolicySpec{
+								Filters: []auditlogv1.Filter{
+									{
+										Action:     auditlogv1.FilterActionDeny,
+										RequestURI: "*",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+
+			Response: admission.ResponseBadRequest("auditpolicy.spec.filters[0]: Invalid value: \"*\": error parsing regexp: missing argument to repetition operator: `*`"),
+		},
+		{
+			Name: "Invalid Update Request",
+			Request: &admission.Request{
+				AdmissionRequest: admissionv1.AdmissionRequest{
+					Operation: admissionv1.Update,
+					Object: runtime.RawExtension{
+						Object: &auditlogv1.AuditPolicy{
+							Spec: auditlogv1.AuditPolicySpec{
+								Filters: []auditlogv1.Filter{
+									{
+										Action:     auditlogv1.FilterActionDeny,
+										RequestURI: "*",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+
+			Response: admission.ResponseBadRequest("auditpolicy.spec.filters[0]: Invalid value: \"*\": error parsing regexp: missing argument to repetition operator: `*`"),
+		},
+	}
+
+	a := admitter{}
+
+	var err error
+
+	for _, c := range cases {
+		t.Run(c.Name, func(t *testing.T) {
+			c.Request.AdmissionRequest.Object.Raw, err = json.Marshal(c.Request.AdmissionRequest.Object.Object)
+			require.NoError(t, err)
+
+			response, err := a.Admit(c.Request)
+			assert.Equal(t, c.Response, response)
+
+			if c.Err == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.EqualError(t, err, c.Err)
 			}
 		})
 	}
