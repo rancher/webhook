@@ -324,7 +324,9 @@ When an enabled LDAP or ActiveDirectory authconfig is updated and remains enable
 
 Those providers build principal IDs from the attribute at login, so changing it would orphan every binding that references the old principal names. Disabling the provider with the default cleanup annotation removes its users, tokens, and bindings, so re-enabling with a different identifier attribute is a clean start. With the `user-locked` cleanup annotation, cleanup is skipped and the preserved users and bindings keep principal IDs that no longer resolve after the change.
 
-Only local and one other provider can be enabled without the `multiple-auth-providers` feature in Rancher being enabled.
+Only local and one other provider can be enabled unless the `multiple-auth-providers` feature is enabled in a Rancher Prime build. The feature is Prime-only, so on other builds the limit applies even if the feature resource reports it as enabled. The build type is read from the `server-version-type` setting, which must be `prime`.
+
+The limit does not apply to `local`, and it does not prevent updating the provider that is already enabled.
 
 ## Cluster
 
