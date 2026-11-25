@@ -243,7 +243,5 @@ against [VERSION.md](VERSION.md), creates the annotated tag, and dispatches the
 [On release workflow](.github/workflows/release.yaml) on the new tag. That workflow
 builds the binaries and creates the GitHub release, publishes the container image,
 and then stages the Helm chart in rancher/charts (charts v2), which adds it to the
-index of its `staging` branch. The chart is staged after the image because the
-staging action refuses a chart whose images are not pushed yet. Bumping the chart in
-rancher/rancher is done by
+index of its `staging` branch. Bumping the chart in rancher/rancher is done by
 [frameworks-automation](https://github.com/rancher/frameworks-automation).
