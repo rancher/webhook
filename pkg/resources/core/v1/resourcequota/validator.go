@@ -123,6 +123,11 @@ func (a *admitter) Admit(request *admission.Request) (*admissionv1.AdmissionResp
 					"users are forbidden from promoting resources to Rancher management. Remove the marker label",
 				), nil
 			}
+			if !oldHasMarkerLabel {
+				// Neither old nor new is Rancher-managed: status stays writable to
+				// anyone with RBAC on resourcequotas/status, as in Kubernetes.
+				return admission.ResponseAllowed(), nil
+			}
 			if slices.Contains(allowedStatusUpdaters, request.UserInfo.Username) {
 				return admission.ResponseAllowed(), nil
 			}
